@@ -16,7 +16,6 @@ class CBOW(object):
                  X=None,
                  initial_embeddings=None,
                  make_test_fn=False,
-                 use_attention=False,
                  **kwargs):
         """Construct an RNN.
 
@@ -35,7 +34,6 @@ class CBOW(object):
         """
 
         assert model_dim == word_embedding_dim
-        assert not use_attention or use_attention == "None"
 
         self.model_dim = model_dim
         self.word_embedding_dim = word_embedding_dim
