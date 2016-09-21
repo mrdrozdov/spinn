@@ -211,10 +211,8 @@ def build_sentence_pair_model(cls, vocab_size, seq_length, tokens, transitions,
         connect_tracking_comp=FLAGS.connect_tracking_comp,
         context_sensitive_shift=FLAGS.context_sensitive_shift,
         context_sensitive_use_relu=FLAGS.context_sensitive_use_relu,
-        use_attention=FLAGS.use_attention,
         initialize_hyp_tracking_state=FLAGS.initialize_hyp_tracking_state)
 
-    premise_stack_tops = premise_model.stack_tops if FLAGS.use_attention != "None" else None
     premise_tracking_c_state_final = premise_model.tracking_c_state_final if cls not in [spinn.plain_rnn.RNN, 
                                                                                             spinn.cbow.CBOW] else None
     hypothesis_model = cls(
@@ -232,35 +230,26 @@ def build_sentence_pair_model(cls, vocab_size, seq_length, tokens, transitions,
         connect_tracking_comp=FLAGS.connect_tracking_comp,
         context_sensitive_shift=FLAGS.context_sensitive_shift,
         context_sensitive_use_relu=FLAGS.context_sensitive_use_relu,
-        use_attention=FLAGS.use_attention,
-        premise_stack_tops=premise_stack_tops,
         is_hypothesis=True,
         initialize_hyp_tracking_state=FLAGS.initialize_hyp_tracking_state,
         premise_tracking_c_state_final=premise_tracking_c_state_final)
 
     # Extract top element of final stack timestep.
-    if FLAGS.use_attention == "None" or FLAGS.use_difference_feature or FLAGS.use_product_feature:
-        premise_vector = premise_model.final_representations
-        hypothesis_vector = hypothesis_model.final_representations
+    premise_vector = premise_model.final_representations
+    hypothesis_vector = hypothesis_model.final_representations
 
-        if (FLAGS.lstm_composition and cls is not spinn.cbow.CBOW) or cls is spinn.plain_rnn.RNN:
-            premise_vector = premise_vector[:,:FLAGS.model_dim / 2].reshape((-1, FLAGS.model_dim / 2))
-            hypothesis_vector = hypothesis_vector[:,:FLAGS.model_dim / 2].reshape((-1, FLAGS.model_dim / 2))
-            sentence_vector_dim = FLAGS.model_dim / 2
-        else:
-            premise_vector = premise_vector.reshape((-1, FLAGS.model_dim))
-            hypothesis_vector = hypothesis_vector.reshape((-1, FLAGS.model_dim))
-            sentence_vector_dim = FLAGS.model_dim
-
-    if FLAGS.use_attention != "None":
-        # Use the attention weighted representation
-        h_dim = FLAGS.model_dim / 2
-        mlp_input = hypothesis_model.final_weighed_representation.reshape((-1, h_dim))
-        mlp_input_dim = h_dim
+    if (FLAGS.lstm_composition and cls is not spinn.cbow.CBOW) or cls is spinn.plain_rnn.RNN:
+        premise_vector = premise_vector[:,:FLAGS.model_dim / 2].reshape((-1, FLAGS.model_dim / 2))
+        hypothesis_vector = hypothesis_vector[:,:FLAGS.model_dim / 2].reshape((-1, FLAGS.model_dim / 2))
+        sentence_vector_dim = FLAGS.model_dim / 2
     else:
-        # Create standard MLP features
-        mlp_input = T.concatenate([premise_vector, hypothesis_vector], axis=1)
-        mlp_input_dim = 2 * sentence_vector_dim
+        premise_vector = premise_vector.reshape((-1, FLAGS.model_dim))
+        hypothesis_vector = hypothesis_vector.reshape((-1, FLAGS.model_dim))
+        sentence_vector_dim = FLAGS.model_dim
+
+    # Create standard MLP features
+    mlp_input = T.concatenate([premise_vector, hypothesis_vector], axis=1)
+    mlp_input_dim = 2 * sentence_vector_dim
 
     if FLAGS.use_difference_feature:
         mlp_input = T.concatenate([mlp_input, premise_vector - hypothesis_vector], axis=1)
@@ -772,9 +761,6 @@ if __name__ == '__main__':
                           "For models which predict parser actions, use "
                           "both the tracking LSTM hidden and cell values as "
                           "input to the prediction layer")
-    gflags.DEFINE_enum("use_attention", "None",
-                       ["None", "Rocktaschel", "WangJiang", "Thang", "TreeWangJiang", "TreeThang"],
-                       "")
     gflags.DEFINE_boolean("context_sensitive_shift", False,
         "Use LSTM hidden state and word embedding to determine the vector to be pushed")
     gflags.DEFINE_boolean("context_sensitive_use_relu", False,
