@@ -408,24 +408,26 @@ def Momentum(cost, params, lr=0.01, momentum=0.9):
 
     return new_values
 
-
 def RMSprop(cost, params, lr=0.001, rho=0.9, epsilon=1e-6, grads=None):
-    # From:
-    # https://github.com/Newmu/Theano-Tutorials/blob/master/4_modern_net.py
-    if grads is None:
-        grads = T.grad(cost=cost, wrt=params)
-    assert len(grads) == len(params)
+    return cost
 
-    updates = []
-    for p, g in zip(params, grads):
-        acc = theano.shared(np.zeros_like(p.get_value(), dtype=np.float32),
-                            name="%s/rms/acc" % p.name)
-        acc_new = rho * acc + (1 - rho) * g ** 2
-        gradient_scaling = T.sqrt(acc_new + epsilon)
-        g = g / gradient_scaling
-        updates.append((acc, acc_new))
-        updates.append((p, p - lr * g))
-    return updates
+# def RMSprop(cost, params, lr=0.001, rho=0.9, epsilon=1e-6, grads=None):
+#     # From:
+#     # https://github.com/Newmu/Theano-Tutorials/blob/master/4_modern_net.py
+#     if grads is None:
+#         grads = T.grad(cost=cost, wrt=params)
+#     assert len(grads) == len(params)
+
+#     updates = []
+#     for p, g in zip(params, grads):
+#         acc = theano.shared(np.zeros_like(p.get_value(), dtype=np.float32),
+#                             name="%s/rms/acc" % p.name)
+#         acc_new = rho * acc + (1 - rho) * g ** 2
+#         gradient_scaling = T.sqrt(acc_new + epsilon)
+#         g = g / gradient_scaling
+#         updates.append((acc, acc_new))
+#         updates.append((p, p - lr * g))
+#     return updates
 
 
 def BatchNorm(x, input_dim, vs, name, training_mode, axes=[0], momentum=0.9):

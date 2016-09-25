@@ -25,8 +25,8 @@ import pprint
 import sys
 
 import gflags
-from theano import tensor as T
-import theano
+# from theano import tensor as T
+# import theano
 import numpy as np
 
 from spinn import afs_safe_logger
@@ -38,6 +38,16 @@ from spinn.data.snli import load_snli_data
 import spinn.fat_stack
 import spinn.plain_rnn
 import spinn.cbow
+
+# Chainer imports
+# import numpy as np
+import chainer
+from chainer import cuda, Function, gradient_check, report, training, utils, Variable
+from chainer import datasets, iterators, optimizers, serializers
+from chainer import Link, Chain, ChainList
+import chainer.functions as F
+import chainer.links as L
+from chainer.training import extensions
 
 
 FLAGS = gflags.FLAGS
@@ -53,84 +63,27 @@ def build_sentence_model(cls, vocab_size, seq_length, tokens, transitions,
       cls: Hard stack class to use (from e.g. `spinn.fat_stack`)
       vocab_size:
       seq_length: Length of each sequence provided to the stack model
-      tokens: Theano batch (integer matrix), `batch_size * seq_length`
-      transitions: Theano batch (integer matrix), `batch_size * seq_length`
       num_classes: Number of output classes
       training_mode: A Theano scalar indicating whether to act as a training model
         with dropout (1.0) or to act as an eval model with rescaling (0.0).
-      ground_truth_transitions_visible: A Theano scalar. If set (1.0), allow the model access
-        to ground truth transitions. This can be disabled at evaluation time to force Model 1
-        (or 2S) to evaluate in the Model 2 style with predicted transitions. Has no effect on Model 0.
-      vs: Variable store.
     """
 
     # Prepare layer which performs stack element composition.
     if cls is spinn.plain_rnn.RNN:
-        if FLAGS.use_gru:
-            compose_network = partial(util.GRULayer,
-                                          initializer=util.HeKaimingInitializer())
-        else:
-            compose_network = partial(util.LSTMLayer,
-                                          initializer=util.HeKaimingInitializer())
-        embedding_projection_network = None
-    elif cls is spinn.cbow.CBOW:
-        compose_network = None
-        embedding_projection_network = None
+        compose_network = L.LSTM
     else:
-        if FLAGS.lstm_composition:
-            if FLAGS.use_gru:
-                compose_network = partial(util.TreeGRULayer,
-                                      initializer=util.HeKaimingInitializer())
-            else:
-                compose_network = partial(util.TreeLSTMLayer,
-                                          initializer=util.HeKaimingInitializer())
-        else:
-            assert not FLAGS.connect_tracking_comp, "Can only connect tracking and composition unit while using TreeLSTM"
-            compose_network = partial(util.ReLULayer,
-                                      initializer=util.HeKaimingInitializer())
+        raise AssertionError("Need to specify an implemented model.")
 
-        if project_embeddings:
-            embedding_projection_network = util.Linear
-        else:
-            assert FLAGS.word_embedding_dim == FLAGS.model_dim, \
-                "word_embedding_dim must equal model_dim unless a projection layer is used."
-            embedding_projection_network = util.IdentityLayer
-
-    # Build hard stack which scans over input sequence.
-    sentence_model = cls(
-        FLAGS.model_dim, FLAGS.word_embedding_dim, vocab_size, seq_length,
-        compose_network, embedding_projection_network, training_mode, ground_truth_transitions_visible, vs,
-        predict_use_cell=FLAGS.predict_use_cell,
-        use_tracking_lstm=FLAGS.use_tracking_lstm,
-        tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
-        X=tokens,
-        transitions=transitions,
+    classifier_model = cls(FLAGS.model_dim, FLAGS.word_embedding_dim, vocab_size, compose_network,
+        keep_rate=0.5,
+        seq_length=seq_length,
+        num_classes=num_classes,
+        mlp_dim=1024,
         initial_embeddings=initial_embeddings,
-        embedding_dropout_keep_rate=FLAGS.embedding_keep_rate,
-        ss_mask_gen=ss_mask_gen,
-        ss_prob=ss_prob,
-        connect_tracking_comp=FLAGS.connect_tracking_comp,
-        context_sensitive_shift=FLAGS.context_sensitive_shift,
-        context_sensitive_use_relu=FLAGS.context_sensitive_use_relu,
-        use_input_batch_norm=False)
+        use_sentence_pair=False,
+        )
 
-    # Extract top element of final stack timestep.
-    if FLAGS.lstm_composition or cls is spinn.plain_rnn.RNN:
-        sentence_vector = sentence_model.final_representations[:,:FLAGS.model_dim / 2].reshape((-1, FLAGS.model_dim / 2))
-        sentence_vector_dim = FLAGS.model_dim / 2
-    else:
-        sentence_vector = sentence_model.final_representations.reshape((-1, FLAGS.model_dim))
-        sentence_vector_dim = FLAGS.model_dim
-
-    sentence_vector = util.BatchNorm(sentence_vector, sentence_vector_dim, vs, "sentence_vector", training_mode)
-    sentence_vector = util.Dropout(sentence_vector, FLAGS.semantic_classifier_keep_rate, training_mode)
-
-    # Feed forward through a single output layer
-    logits = util.Linear(
-        sentence_vector, sentence_vector_dim, num_classes, vs,
-        name="semantic_classifier", use_bias=True)
-
-    return sentence_model.transitions_pred, logits
+    return classifier_model
 
 
 
@@ -144,186 +97,49 @@ def build_sentence_pair_model(cls, vocab_size, seq_length, tokens, transitions,
       cls: Hard stack class to use (from e.g. `spinn.fat_stack`)
       vocab_size:
       seq_length: Length of each sequence provided to the stack model
-      tokens: Theano batch (integer matrix), `batch_size * seq_length`
-      transitions: Theano batch (integer matrix), `batch_size * seq_length`
       num_classes: Number of output classes
       training_mode: A Theano scalar indicating whether to act as a training model
         with dropout (1.0) or to act as an eval model with rescaling (0.0).
-      ground_truth_transitions_visible: A Theano scalar. If set (1.0), allow the model access
-        to ground truth transitions. This can be disabled at evaluation time to force Model 1
-        (or 2S) to evaluate in the Model 2 style with predicted transitions. Has no effect on Model 0.
-      vs: Variable store.
     """
 
 
     # Prepare layer which performs stack element composition.
     if cls is spinn.plain_rnn.RNN:
-        if FLAGS.use_gru:
-            compose_network = partial(util.GRULayer,
-                                          initializer=util.HeKaimingInitializer())
-        else:
-            compose_network = partial(util.LSTMLayer,
-                                          initializer=util.HeKaimingInitializer())
-        embedding_projection_network = None
-    elif cls is spinn.cbow.CBOW:
-        compose_network = None
-        embedding_projection_network = None
+        compose_network = L.LSTM
     else:
-        if FLAGS.lstm_composition:
-            if FLAGS.use_gru:
-                compose_network = partial(util.TreeGRULayer,
-                                          initializer=util.HeKaimingInitializer())
-            else:
-                compose_network = partial(util.TreeLSTMLayer,
-                                          initializer=util.HeKaimingInitializer())
-        else:
-            assert not FLAGS.connect_tracking_comp, "Can only connect tracking and composition unit while using TreeLSTM"
-            compose_network = partial(util.ReLULayer,
-                                      initializer=util.HeKaimingInitializer())
+        raise AssertionError("Need to specify an implemented model.")
 
-        if project_embeddings:
-            embedding_projection_network = util.Linear
-        else:
-            assert FLAGS.word_embedding_dim == FLAGS.model_dim, \
-                "word_embedding_dim must equal model_dim unless a projection layer is used."
-            embedding_projection_network = util.IdentityLayer
-
-    # Split the two sentences
-    premise_tokens = tokens[:, :, 0]
-    hypothesis_tokens = tokens[:, :, 1]
-
-    premise_transitions = transitions[:, :, 0]
-    hypothesis_transitions = transitions[:, :, 1]
-
-    # Build two hard stack models which scan over input sequences.
-    premise_model = cls(
-        FLAGS.model_dim, FLAGS.word_embedding_dim, vocab_size, seq_length,
-        compose_network, embedding_projection_network, training_mode, ground_truth_transitions_visible, vs,
-        predict_use_cell=FLAGS.predict_use_cell,
-        use_tracking_lstm=FLAGS.use_tracking_lstm,
-        tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
-        X=premise_tokens,
-        transitions=premise_transitions,
+    classifier_model = cls(FLAGS.model_dim, FLAGS.word_embedding_dim, vocab_size, compose_network,
+        keep_rate=0.5,
+        seq_length=seq_length,
+        num_classes=num_classes,
+        mlp_dim=1024,
         initial_embeddings=initial_embeddings,
-        embedding_dropout_keep_rate=FLAGS.embedding_keep_rate,
-        ss_mask_gen=ss_mask_gen,
-        ss_prob=ss_prob,
-        connect_tracking_comp=FLAGS.connect_tracking_comp,
-        context_sensitive_shift=FLAGS.context_sensitive_shift,
-        context_sensitive_use_relu=FLAGS.context_sensitive_use_relu,
-        initialize_hyp_tracking_state=FLAGS.initialize_hyp_tracking_state)
+        use_sentence_pair=True,
+        )
 
-    premise_tracking_c_state_final = premise_model.tracking_c_state_final if cls not in [spinn.plain_rnn.RNN, 
-                                                                                            spinn.cbow.CBOW] else None
-    hypothesis_model = cls(
-        FLAGS.model_dim, FLAGS.word_embedding_dim, vocab_size, seq_length,
-        compose_network, embedding_projection_network, training_mode, ground_truth_transitions_visible, vs,
-        predict_use_cell=FLAGS.predict_use_cell,
-        use_tracking_lstm=FLAGS.use_tracking_lstm,
-        tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
-        X=hypothesis_tokens,
-        transitions=hypothesis_transitions,
-        initial_embeddings=initial_embeddings,
-        embedding_dropout_keep_rate=FLAGS.embedding_keep_rate,
-        ss_mask_gen=ss_mask_gen,
-        ss_prob=ss_prob,
-        connect_tracking_comp=FLAGS.connect_tracking_comp,
-        context_sensitive_shift=FLAGS.context_sensitive_shift,
-        context_sensitive_use_relu=FLAGS.context_sensitive_use_relu,
-        is_hypothesis=True,
-        initialize_hyp_tracking_state=FLAGS.initialize_hyp_tracking_state,
-        premise_tracking_c_state_final=premise_tracking_c_state_final)
-
-    # Extract top element of final stack timestep.
-    premise_vector = premise_model.final_representations
-    hypothesis_vector = hypothesis_model.final_representations
-
-    if (FLAGS.lstm_composition and cls is not spinn.cbow.CBOW) or cls is spinn.plain_rnn.RNN:
-        premise_vector = premise_vector[:,:FLAGS.model_dim / 2].reshape((-1, FLAGS.model_dim / 2))
-        hypothesis_vector = hypothesis_vector[:,:FLAGS.model_dim / 2].reshape((-1, FLAGS.model_dim / 2))
-        sentence_vector_dim = FLAGS.model_dim / 2
-    else:
-        premise_vector = premise_vector.reshape((-1, FLAGS.model_dim))
-        hypothesis_vector = hypothesis_vector.reshape((-1, FLAGS.model_dim))
-        sentence_vector_dim = FLAGS.model_dim
-
-    # Create standard MLP features
-    mlp_input = T.concatenate([premise_vector, hypothesis_vector], axis=1)
-    mlp_input_dim = 2 * sentence_vector_dim
-
-    if FLAGS.use_difference_feature:
-        mlp_input = T.concatenate([mlp_input, premise_vector - hypothesis_vector], axis=1)
-        mlp_input_dim += sentence_vector_dim
-
-    if FLAGS.use_product_feature:
-        mlp_input = T.concatenate([mlp_input, premise_vector * hypothesis_vector], axis=1)
-        mlp_input_dim += sentence_vector_dim
-
-    mlp_input = util.BatchNorm(mlp_input, mlp_input_dim, vs, "sentence_vectors", training_mode)
-    mlp_input = util.Dropout(mlp_input, FLAGS.semantic_classifier_keep_rate, training_mode)
-
-    if FLAGS.classifier_type == "ResNet":
-        features = util.Linear(
-            mlp_input, mlp_input_dim, FLAGS.sentence_pair_combination_layer_dim, vs,
-            name="resnet/linear", use_bias=True)
-        features_dim = FLAGS.sentence_pair_combination_layer_dim
-
-        for layer in range(FLAGS.num_sentence_pair_combination_layers):
-            features = util.HeKaimingResidualLayerSet(features, features_dim, vs, training_mode, name="resnet/" + str(layer), 
-                dropout_keep_rate=FLAGS.semantic_classifier_keep_rate, depth=FLAGS.resnet_unit_depth, 
-                initializer=util.HeKaimingInitializer())
-            features = util.BatchNorm(features, features_dim, vs, "combining_mlp/" + str(layer), training_mode)
-            features = util.Dropout(features, FLAGS.semantic_classifier_keep_rate, training_mode)
-    elif FLAGS.classifier_type == "Highway":
-        features = util.Linear(
-            mlp_input, mlp_input_dim, FLAGS.sentence_pair_combination_layer_dim, vs,
-            name="resnet/linear", use_bias=True)
-        features_dim = FLAGS.sentence_pair_combination_layer_dim
-
-        for layer in range(FLAGS.num_sentence_pair_combination_layers):
-            features = util.HighwayLayer(features, features_dim, vs, training_mode, name="highway/" + str(layer), 
-                dropout_keep_rate=FLAGS.semantic_classifier_keep_rate,
-                initializer=util.HeKaimingInitializer())
-            features = util.BatchNorm(features, features_dim, vs, "combining_mlp/" + str(layer), training_mode)
-            features = util.Dropout(features, FLAGS.semantic_classifier_keep_rate, training_mode)
-    else:    
-        # Apply a combining MLP
-        features = mlp_input
-        features_dim = mlp_input_dim
-        for layer in range(FLAGS.num_sentence_pair_combination_layers):
-            features = util.ReLULayer(features, features_dim, FLAGS.sentence_pair_combination_layer_dim, vs,
-                name="combining_mlp/" + str(layer),
-                initializer=util.HeKaimingInitializer())
-            features_dim = FLAGS.sentence_pair_combination_layer_dim
-
-            features = util.BatchNorm(features, features_dim, vs, "combining_mlp/" + str(layer), training_mode)
-            features = util.Dropout(features, FLAGS.semantic_classifier_keep_rate, training_mode) 
-
-    # Feed forward through a single output layer
-    logits = util.Linear(
-        features, features_dim, num_classes, vs,
-        name="semantic_classifier", use_bias=True)
-
-    return premise_model.transitions_pred, hypothesis_model.transitions_pred, logits
+    return classifier_model
 
 
 def build_cost(logits, targets):
-    """
-    Build a classification cost function.
-    """
-    # Clip gradients coming from the cost function.
-    logits = theano.gradient.grad_clip(
-        logits, -1. * FLAGS.clipping_max_value, FLAGS.clipping_max_value)
+    # """
+    # Build a classification cost function.
+    # """
+    # # Clip gradients coming from the cost function.
+    # logits = theano.gradient.grad_clip(
+    #     logits, -1. * FLAGS.clipping_max_value, FLAGS.clipping_max_value)
 
-    predicted_dist = T.nnet.softmax(logits)
+    # predicted_dist = T.nnet.softmax(logits)
 
-    costs = T.nnet.categorical_crossentropy(predicted_dist, targets)
-    cost = costs.mean()
+    # costs = T.nnet.categorical_crossentropy(predicted_dist, targets)
+    # cost = costs.mean()
 
-    pred = T.argmax(logits, axis=1)
-    acc = 1. - T.mean(T.cast(T.neq(pred, targets), theano.config.floatX))
+    # pred = T.argmax(logits, axis=1)
+    # acc = 1. - T.mean(T.cast(T.neq(pred, targets), theano.config.floatX))
 
-    return cost, acc
+    # return cost, acc
+
+    return (0.0, 0.0)
 
 
 def build_transition_cost(logits, targets, num_transitions):
@@ -365,20 +181,24 @@ def build_transition_cost(logits, targets, num_transitions):
     cost = T.mean(costs)
     return cost, acc
 
-
-def evaluate(eval_fn, eval_set, logger, step):
+def evaluate(classifier_model, eval_set, logger, step):
     # Evaluate
     acc_accum = 0.0
     action_acc_accum = 0.0
     eval_batches = 0.0
-    for (eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch) in eval_set[1]:
-        acc_value, action_acc_value = eval_fn(
-            eval_X_batch, eval_transitions_batch,
-            eval_y_batch, eval_num_transitions_batch, 0.0,  # Eval mode: Don't apply dropout.
-            int(FLAGS.allow_gt_transitions_in_eval),  # Allow GT transitions to be used according to flag.
-            float(FLAGS.allow_gt_transitions_in_eval))  # If flag not set, used scheduled sampling
-                                                        # p(ground truth) = 0.0,
-                                                        # else SS p(ground truth) = 1.0
+    for (X_batch, transitions_batch, y_batch, num_transitions_batch) in eval_set[1]:
+        # Initialize Variables
+        X_batch = Variable(X_batch)
+        transitions_batch = Variable(transitions_batch)
+        y_batch = Variable(y_batch)
+        num_transitions_batch = Variable(num_transitions_batch)
+
+        # Calculate Local Accuracies
+        classifier_model.forward(X_batch, y_batch, train=False, predict=False)
+        acc_value = float(classifier_model.model.accuracy.data)
+        action_acc_value = 0.0
+
+        # Update Aggregate Accuracies
         acc_accum += acc_value
         action_acc_accum += action_acc_value
         eval_batches += 1.0
@@ -551,14 +371,15 @@ def run(only_forward=False):
 
     # Set up the placeholders.
 
-    y = T.vector("y", dtype="int32")
-    lr = T.scalar("lr")
-    training_mode = T.scalar("training_mode")  # 1: Training with dropout, 0: Eval
-    ground_truth_transitions_visible = T.scalar("ground_truth_transitions_visible", dtype="int32")
+    # TODO: Replace Theano variables with Chainer equivalent.
+    # y = T.vector("y", dtype="int32")
+    # lr = T.scalar("lr")
+    # training_mode = T.scalar("training_mode")  # 1: Training with dropout, 0: Eval
+    # ground_truth_transitions_visible = T.scalar("ground_truth_transitions_visible", dtype="int32")
 
     logger.Log("Building model.")
-    vs = util.VariableStore(
-        default_initializer=util.UniformInitializer(FLAGS.init_range), logger=logger)
+    # vs = util.VariableStore(
+    #     default_initializer=util.UniformInitializer(FLAGS.init_range), logger=logger)
 
     if FLAGS.model_type == "CBOW":
         model_cls = spinn.cbow.CBOW
@@ -569,28 +390,37 @@ def run(only_forward=False):
 
     # Generator of mask for scheduled sampling
     numpy_random = np.random.RandomState(1234)
-    ss_mask_gen = T.shared_randomstreams.RandomStreams(numpy_random.randint(999999))
+    # ss_mask_gen = T.shared_randomstreams.RandomStreams(numpy_random.randint(999999))
 
     # Training step number
-    ss_prob = T.scalar("ss_prob")
+    # ss_prob = T.scalar("ss_prob")
+
+    # Dirty Hack: Using 
+    y = None
+    X = None
+    lr = None
+    transitions = None
+    num_transitions = None
+    training_mode = None
+    ground_truth_transitions_visible = None
+    vs = None
+    ss_mask_gen = None
+    ss_prob = None
+
+    predicted_transitions = None
+    predicted_premise_transitions = None
+    predicted_hypothesis_transitions = None
+    logits = None
 
     if data_manager.SENTENCE_PAIR_DATA:
-        X = T.itensor3("X")
-        transitions = T.itensor3("transitions")
-        num_transitions = T.imatrix("num_transitions")
-
-        predicted_premise_transitions, predicted_hypothesis_transitions, logits = build_sentence_pair_model(
+        classifier_model = build_sentence_pair_model(
             model_cls, len(vocabulary), FLAGS.seq_length,
             X, transitions, len(data_manager.LABEL_MAP), training_mode, ground_truth_transitions_visible, vs,
             initial_embeddings=initial_embeddings, project_embeddings=(not train_embeddings),
             ss_mask_gen=ss_mask_gen,
             ss_prob=ss_prob)
     else:
-        X = T.matrix("X", dtype="int32")
-        transitions = T.imatrix("transitions")
-        num_transitions = T.vector("num_transitions", dtype="int32")
-
-        predicted_transitions, logits = build_sentence_model(
+        classifier_model = build_sentence_model(
             model_cls, len(vocabulary), FLAGS.seq_length,
             X, transitions, len(data_manager.LABEL_MAP), training_mode, ground_truth_transitions_visible, vs,
             initial_embeddings=initial_embeddings, project_embeddings=(not train_embeddings),
@@ -601,8 +431,8 @@ def run(only_forward=False):
 
     # Set up L2 regularization.
     l2_cost = 0.0
-    for var in vs.trainable_vars:
-        l2_cost += FLAGS.l2_lambda * T.sum(T.sqr(vs.vars[var]))
+    # for var in vs.trainable_vars:
+    #     l2_cost += FLAGS.l2_lambda * T.sum(T.sqr(vs.vars[var]))
 
     # Compute cross-entropy cost on action predictions.
     if (not data_manager.SENTENCE_PAIR_DATA) and FLAGS.model_type not in ["Model0", "RNN", "CBOW"]:
@@ -615,8 +445,8 @@ def run(only_forward=False):
         transition_cost = p_transition_cost + h_transition_cost
         action_acc = (p_action_acc + h_action_acc) / 2.0  # TODO(SB): Average over transitions, not words.
     else:
-        transition_cost = T.constant(0.0)
-        action_acc = T.constant(0.0)
+        transition_cost = 0.0
+        action_acc = 0.0
     transition_cost = transition_cost * FLAGS.transition_cost_scale
 
     total_cost = xent_cost + l2_cost + transition_cost
@@ -671,53 +501,54 @@ def run(only_forward=False):
                               data_manager.SENTENCE_PAIR_DATA, ind_to_word, FLAGS.model_type not in ["Model0", "RNN", "CBOW"])
     else:
          # Train
-
-        new_values = util.RMSprop(total_cost, vs.trainable_vars.values(), lr)
-        new_values += [(key, vs.nongradient_updates[key]) for key in vs.nongradient_updates]
-        # Training open-vocabulary embeddings is a questionable idea right now. Disabled:
-        # new_values.append(
-        #     util.embedding_SGD(total_cost, embedding_params, embedding_lr))
-
-        # Create training and eval functions.
-        # Unused variable warnings are supressed so that num_transitions can be passed in when training Model 0,
-        # which ignores it. This yields more readable code that is very slightly slower.
-        logger.Log("Building update function.")
-        update_fn = theano.function(
-            [X, transitions, y, num_transitions, lr, training_mode, ground_truth_transitions_visible, ss_prob],
-            [total_cost, xent_cost, transition_cost, action_acc, l2_cost, acc],
-            updates=new_values,
-            on_unused_input='ignore',
-            allow_input_downcast=True)
-        logger.Log("Building eval function.")
-        eval_fn = theano.function([X, transitions, y, num_transitions, training_mode, ground_truth_transitions_visible, ss_prob], [acc, action_acc],
-            on_unused_input='ignore',
-            allow_input_downcast=True)
         logger.Log("Training.")
+        
+        classifier_model.init_optimizer(clip=FLAGS.clipping_max_value, decay=FLAGS.l2_lambda)
 
-        # Main training loop.
+        # New Training Loop
         for step in range(step, FLAGS.training_steps):
             if step % FLAGS.eval_interval_steps == 0:
                 for index, eval_set in enumerate(eval_iterators):
-                    acc = evaluate(eval_fn, eval_set, logger, step)
+                    acc = evaluate(classifier_model, eval_set, logger, step)
                     if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > 1000:
                         best_dev_error = 1 - acc
-                        logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
-                        vs.save_checkpoint(checkpoint_path + "_best", extra_vars=[step, best_dev_error])
-
+                        logger.Log("[TODO: NOT IMPLEMENTED] Checkpointing with new best dev accuracy of %f" % acc)
             X_batch, transitions_batch, y_batch, num_transitions_batch = training_data_iter.next()
             learning_rate = FLAGS.learning_rate * (FLAGS.learning_rate_decay_per_10k_steps ** (step / 10000.0))
-            ret = update_fn(X_batch, transitions_batch, y_batch, num_transitions_batch,
-                            learning_rate, 1.0, 1.0, np.exp(step*np.log(FLAGS.scheduled_sampling_exponent_base)))
-            total_cost_val, xent_cost_val, transition_cost_val, action_acc_val, l2_cost_val, acc_val = ret
+
+            X_batch = Variable(X_batch)
+            transitions_batch = Variable(transitions_batch)
+            y_batch = Variable(y_batch)
+            num_transitions_batch = Variable(num_transitions_batch)
+
+            # Reset hidden states of RNN(s), and reset cached gradients.
+            classifier_model.model.cleargrads()
+
+            # Calculate loss and update parameters.
+            ret = classifier_model.forward(X_batch, y_batch, train=True, predict=False)
+            y, loss, preds = ret
+
+            # Boilerplate for calculating loss.
+            xent_cost_val = loss.data
+            transition_cost_val = 0.0
+
+            ## TODO: This is being using in the optimizer. How to expose the value?
+            l2_cost_val = 0.0 
+
+            total_cost_val = xent_cost_val + transition_cost_val + l2_cost_val
+
+            loss.backward()
+            classifier_model.update()
+
+            # Accumulate accuracy for current interval.
+            action_acc_val = 0.0
+            acc_val = float(classifier_model.model.accuracy.data)
 
             if step % FLAGS.statistics_interval_steps == 0:
                 logger.Log(
                     "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %5f"
                     % (step, acc_val, action_acc_val, total_cost_val, xent_cost_val, transition_cost_val,
                        l2_cost_val))
-
-            if step % FLAGS.ckpt_interval_steps == 0 and step > 0:
-                vs.save_checkpoint(checkpoint_path, extra_vars=[step, best_dev_error])
 
 
 if __name__ == '__main__':
