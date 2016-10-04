@@ -81,6 +81,7 @@ def build_sentence_model(cls, vocab_size, seq_length, tokens, transitions,
         mlp_dim=1024,
         initial_embeddings=initial_embeddings,
         use_sentence_pair=False,
+        gpu=FLAGS.gpu,
         )
 
     return classifier_model
@@ -116,6 +117,7 @@ def build_sentence_pair_model(cls, vocab_size, seq_length, tokens, transitions,
         mlp_dim=1024,
         initial_embeddings=initial_embeddings,
         use_sentence_pair=True,
+        gpu=FLAGS.gpu,
         )
 
     return classifier_model
@@ -574,6 +576,7 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("allow_gt_transitions_in_eval", False,
         "Whether to use ground truth transitions in evaluation when appropriate "
         "(i.e., in Model 1 and Model 2S.)")
+    gflags.DEFINE_integer("gpu", -1, "")
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")
 

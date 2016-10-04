@@ -69,7 +69,7 @@ class RNNChain(Chain):
                  gpu=-1
                  ):
         super(RNNChain, self).__init__(
-            rnn=LSTMChain(word_embedding_dim, model_dim, seq_length)
+            rnn=LSTMChain(word_embedding_dim, model_dim, seq_length, gpu=gpu)
         )
 
         self.__gpu = gpu
@@ -93,9 +93,9 @@ class CrossEntropyClassifier(Chain):
     def _forward(self, y, y_batch, train=True):
         accum_loss = 0 if train else None
         if train:
-            y_batch = Variable(y_batch, volatile=not train)
             if self.__gpu >= 0:
                 y_batch = cuda.to_gpu(y_batch)
+            y_batch = Variable(y_batch, volatile=not train)
             accum_loss = F.softmax_cross_entropy(y, y_batch)
 
         return accum_loss
@@ -135,7 +135,7 @@ class SentenceModel(Chain):
                  ):
         super(SentenceModel, self).__init__(
             x2h=RNNChain(model_dim, word_embedding_dim, vocab_size,
-                    seq_length, initial_embeddings),
+                    seq_length, initial_embeddings, gpu=gpu),
             h2y=MLP(dimensions=[model_dim, mlp_dim, num_classes],
                     keep_rate=keep_rate, gpu=gpu),
             classifier=CrossEntropyClassifier(gpu),
@@ -144,9 +144,6 @@ class SentenceModel(Chain):
         self.__mod = cuda.cupy if gpu >= 0 else np
         self.accFun = accuracy.accuracy
         self.keep_rate = keep_rate
-        if gpu >= 0:
-            cuda.get_device(gpu).use()
-            self.to_gpu()
 
     def _forward(self, x_batch, y_batch=None, train=True):
         h = self.x2h._forward(x_batch, train=train)
@@ -165,9 +162,9 @@ class SentencePairModel(Chain):
                  ):
         super(SentencePairModel, self).__init__(
             x2h_premise=RNNChain(model_dim, word_embedding_dim, vocab_size,
-                    seq_length, initial_embeddings),
+                    seq_length, initial_embeddings, gpu=gpu),
             x2h_hypothesis=RNNChain(model_dim, word_embedding_dim, vocab_size,
-                    seq_length, initial_embeddings),
+                    seq_length, initial_embeddings, gpu=gpu),
             h2y=MLP(dimensions=[model_dim*2, mlp_dim, num_classes],
                     keep_rate=keep_rate, gpu=gpu),
             classifier=CrossEntropyClassifier(gpu),
@@ -176,9 +173,6 @@ class SentencePairModel(Chain):
         self.__mod = cuda.cupy if gpu >= 0 else np
         self.accFun = accuracy.accuracy
         self.keep_rate = keep_rate
-        if gpu >= 0:
-            cuda.get_device(gpu).use()
-            self.to_gpu()
 
     def _forward(self, x_batch, y_batch=None, train=True):
         h_premise = self.x2h_premise._forward(x_batch[:, :, 0:1], train=train)
@@ -186,7 +180,7 @@ class SentencePairModel(Chain):
         h = F.concat([h_premise, h_hypothesis], axis=1)
         y = self.h2y._forward(h, train)
         accum_loss = self.classifier._forward(y, y_batch, train)
-        self.accuracy = self.accFun(y, y_batch)
+        self.accuracy = self.accFun(y, self.__mod.array(y_batch))
         return y, accum_loss
 
 class RNN(object):
@@ -229,17 +223,20 @@ class RNN(object):
                 model_dim, word_embedding_dim, vocab_size, compose_network,
                      seq_length, initial_embeddings, num_classes, mlp_dim,
                      keep_rate,
-                     gpu=-1,
+                     gpu,
                     )
         else:
             self.model = SentenceModel(
                 model_dim, word_embedding_dim, vocab_size, compose_network,
                      seq_length, initial_embeddings, num_classes, mlp_dim,
                      keep_rate,
-                     gpu=-1,
+                     gpu,
                     )
 
         self.init_params()
+        if gpu >= 0:
+            cuda.get_device(gpu).use()
+            self.model.to_gpu()
 
     def init_params(self):
         for name, param in self.model.namedparams():
