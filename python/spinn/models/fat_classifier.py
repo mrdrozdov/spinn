@@ -75,7 +75,7 @@ def build_sentence_model(cls, vocab_size, seq_length, tokens, transitions,
         raise AssertionError("Need to specify an implemented model.")
 
     classifier_model = cls(FLAGS.model_dim, FLAGS.word_embedding_dim, vocab_size, compose_network,
-        keep_rate=0.5,
+        keep_rate=FLAGS.embedding_keep_rate,
         seq_length=seq_length,
         num_classes=num_classes,
         mlp_dim=1024,
@@ -110,7 +110,7 @@ def build_sentence_pair_model(cls, vocab_size, seq_length, tokens, transitions,
         raise AssertionError("Need to specify an implemented model.")
 
     classifier_model = cls(FLAGS.model_dim, FLAGS.word_embedding_dim, vocab_size, compose_network,
-        keep_rate=0.5,
+        keep_rate=FLAGS.embedding_keep_rate,
         seq_length=seq_length,
         num_classes=num_classes,
         mlp_dim=1024,
@@ -187,12 +187,6 @@ def evaluate(classifier_model, eval_set, logger, step):
     action_acc_accum = 0.0
     eval_batches = 0.0
     for (X_batch, transitions_batch, y_batch, num_transitions_batch) in eval_set[1]:
-        # Initialize Variables
-        X_batch = Variable(X_batch)
-        transitions_batch = Variable(transitions_batch)
-        y_batch = Variable(y_batch)
-        num_transitions_batch = Variable(num_transitions_batch)
-
         # Calculate Local Accuracies
         classifier_model.forward(X_batch, y_batch, train=False, predict=False)
         acc_value = float(classifier_model.model.accuracy.data)
@@ -503,11 +497,14 @@ def run(only_forward=False):
          # Train
         logger.Log("Training.")
         
-        classifier_model.init_optimizer(clip=FLAGS.clipping_max_value, decay=FLAGS.l2_lambda)
+        classifier_model.init_optimizer(
+            clip=FLAGS.clipping_max_value, decay=FLAGS.l2_lambda,
+            lr=FLAGS.learning_rate,
+            )
 
         # New Training Loop
         for step in range(step, FLAGS.training_steps):
-            if step % FLAGS.eval_interval_steps == 0:
+            if step > 0 and step % FLAGS.eval_interval_steps == 0:
                 for index, eval_set in enumerate(eval_iterators):
                     acc = evaluate(classifier_model, eval_set, logger, step)
                     if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > 1000:
@@ -515,11 +512,6 @@ def run(only_forward=False):
                         logger.Log("[TODO: NOT IMPLEMENTED] Checkpointing with new best dev accuracy of %f" % acc)
             X_batch, transitions_batch, y_batch, num_transitions_batch = training_data_iter.next()
             learning_rate = FLAGS.learning_rate * (FLAGS.learning_rate_decay_per_10k_steps ** (step / 10000.0))
-
-            X_batch = Variable(X_batch)
-            transitions_batch = Variable(transitions_batch)
-            y_batch = Variable(y_batch)
-            num_transitions_batch = Variable(num_transitions_batch)
 
             # Reset hidden states of RNN(s), and reset cached gradients.
             classifier_model.model.cleargrads()

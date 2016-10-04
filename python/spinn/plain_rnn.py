@@ -1,4 +1,9 @@
-"""Theano-based RNN implementations."""
+""" Chainer-based RNN implementations.
+
+    Important Notes:
+    * setting volatile to OFF during evaluation 
+      is a performance boost.
+"""
 
 import numpy as np
 from spinn import util
@@ -15,7 +20,7 @@ import chainer.links as L
 from chainer.training import extensions
 
 class LSTMChain(Chain):
-    def __init__(self, input_dim, hidden_dim, seq_length, gpu=-1):
+    def __init__(self, input_dim, hidden_dim, seq_length, prefix="LSTMChain", gpu=-1):
         super(LSTMChain, self).__init__(
             i_fwd=L.Linear(input_dim, 4 * hidden_dim, nobias=True),
             h_fwd=L.Linear(hidden_dim, 4 * hidden_dim),
@@ -26,12 +31,14 @@ class LSTMChain(Chain):
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
 
-    def _forward(self, x_batch, keep_hs=False):
+    def _forward(self, x_batch, train=True, keep_hs=False):
         batch_size = x_batch.shape[0]
-        c = h = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
+        c = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
+        h = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
         hs = []
         for _x in range(self.seq_length):
-            x = x_batch[:, _x]
+            x = self.__mod.array(x_batch[:, _x].data)
+            x = Variable(x, volatile=not train)
             ii = self.i_fwd(x)
             hh = self.h_fwd(h)
             ih = ii + hh
@@ -58,6 +65,7 @@ class RNNChain(Chain):
     def __init__(self, model_dim, word_embedding_dim, vocab_size,
                  seq_length,
                  initial_embeddings,
+                 prefix="RNNChain",
                  gpu=-1
                  ):
         super(RNNChain, self).__init__(
@@ -70,9 +78,10 @@ class RNNChain(Chain):
         self.model_dim = model_dim
         self.word_embedding_dim = word_embedding_dim
 
-    def _forward(self, x_batch):
+    def _forward(self, x_batch, train=True):
+        x_batch = Variable(x_batch, volatile=not train)
         x = embed_id.embed_id(x_batch, self.W)
-        c, h, hs = self.rnn._forward(x)
+        c, h, hs = self.rnn._forward(x, train)
         return h
 
 class CrossEntropyClassifier(Chain):
@@ -84,30 +93,36 @@ class CrossEntropyClassifier(Chain):
     def _forward(self, y, y_batch, train=True):
         accum_loss = 0 if train else None
         if train:
+            y_batch = Variable(y_batch, volatile=not train)
             if self.__gpu >= 0:
                 y_batch = cuda.to_gpu(y_batch)
             accum_loss = F.softmax_cross_entropy(y, y_batch)
 
         return accum_loss
 
-class MLP(Chain):
-    def __init__(self, input_dim, hidden_dim, num_classes,
-                 keep_rate,
+class MLP(ChainList):
+    def __init__(self, dimensions,
+                 prefix="MLP",
+                 keep_rate=0.5,
                  gpu=-1,
                  ):
-        super(MLP, self).__init__(
-            l_h0=L.Linear(input_dim, hidden_dim),
-            l_h1=L.Linear(hidden_dim, hidden_dim),
-            l_y=L.Linear(hidden_dim, num_classes),
-        )
+        super(MLP, self).__init__()
         self.keep_rate = keep_rate
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
+        self.layers = []
+
+        assert len(dimensions) >= 2, "Must initialize MLP with 2 or more layers."
+        for l0_dim, l1_dim in zip(dimensions[:-1], dimensions[1:]):
+            self.add_link(L.Linear(l0_dim, l1_dim))
 
     def _forward(self, x_batch, train=True):
-        h0 = F.relu(self.l_h0(x_batch))
-        h1 = F.relu(self.l_h1(h0))
-        y = self.l_y(F.dropout(h1, ratio=(1-self.keep_rate), train=train))
+        layers = self.layers
+        h = x_batch
+        for l0 in self.children(): 
+            h_dropped = F.dropout(h, ratio=(1-self.keep_rate), train=train)
+            h = F.relu(l0(h_dropped))
+        y = h
         return y
 
 class SentenceModel(Chain):
@@ -121,8 +136,8 @@ class SentenceModel(Chain):
         super(SentenceModel, self).__init__(
             x2h=RNNChain(model_dim, word_embedding_dim, vocab_size,
                     seq_length, initial_embeddings),
-            h2y=MLP(model_dim, mlp_dim, num_classes,
-                    keep_rate, gpu),
+            h2y=MLP(dimensions=[model_dim, mlp_dim, num_classes],
+                    keep_rate=keep_rate, gpu=gpu),
             classifier=CrossEntropyClassifier(gpu),
         )
         self.__gpu = gpu
@@ -134,9 +149,8 @@ class SentenceModel(Chain):
             self.to_gpu()
 
     def _forward(self, x_batch, y_batch=None, train=True):
-        h = self.x2h._forward(x_batch)
+        h = self.x2h._forward(x_batch, train=train)
         y = self.h2y._forward(h, train)
-        y = F.dropout(y, ratio=(1-self.keep_rate), train=train)
         accum_loss = self.classifier._forward(y, y_batch, train)
         self.accuracy = self.accFun(y, y_batch)
         return y, accum_loss
@@ -154,8 +168,8 @@ class SentencePairModel(Chain):
                     seq_length, initial_embeddings),
             x2h_hypothesis=RNNChain(model_dim, word_embedding_dim, vocab_size,
                     seq_length, initial_embeddings),
-            h2y=MLP(model_dim*2, mlp_dim, num_classes,
-                    keep_rate, gpu),
+            h2y=MLP(dimensions=[model_dim*2, mlp_dim, num_classes],
+                    keep_rate=keep_rate, gpu=gpu),
             classifier=CrossEntropyClassifier(gpu),
         )
         self.__gpu = gpu
@@ -167,11 +181,10 @@ class SentencePairModel(Chain):
             self.to_gpu()
 
     def _forward(self, x_batch, y_batch=None, train=True):
-        h_premise = self.x2h_premise._forward(x_batch[:, :, 0:1])
-        h_hypothesis = self.x2h_hypothesis._forward(x_batch[:, :, 1:2])
+        h_premise = self.x2h_premise._forward(x_batch[:, :, 0:1], train=train)
+        h_hypothesis = self.x2h_hypothesis._forward(x_batch[:, :, 1:2], train=train)
         h = F.concat([h_premise, h_hypothesis], axis=1)
         y = self.h2y._forward(h, train)
-        y = F.dropout(y, ratio=(1-self.keep_rate), train=train)
         accum_loss = self.classifier._forward(y, y_batch, train)
         self.accuracy = self.accFun(y, y_batch)
         return y, accum_loss
@@ -226,8 +239,16 @@ class RNN(object):
                      gpu=-1,
                     )
 
-    def init_optimizer(self, clip, decay):
-        self.optimizer = optimizers.RMSprop()
+        self.init_params()
+
+    def init_params(self):
+        for name, param in self.model.namedparams():
+            data = param.data
+            print("Init: {}:{}".format(name, data.shape))
+            data[:] = np.random.uniform(-0.1, 0.1, data.shape)
+
+    def init_optimizer(self, clip, decay, lr=0.001, alpha=0.9, eps=1e-6):
+        self.optimizer = optimizers.RMSprop(lr=lr, alpha=alpha, eps=eps)
         self.optimizer.setup(self.model)
 
         # Clip Gradient
@@ -235,7 +256,7 @@ class RNN(object):
         self.optimizer.add_hook(chainer.optimizer.GradientClipping(clip))
 
         # L2 Regularization
-        self.optimizer.add_hook(chainer.optimizer.WeightDecay(decay))
+        # self.optimizer.add_hook(chainer.optimizer.WeightDecay(decay))
 
     def update(self):
         self.optimizer.update()
