@@ -65,6 +65,7 @@ class RNNChain(Chain):
     def __init__(self, model_dim, word_embedding_dim, vocab_size,
                  seq_length,
                  initial_embeddings,
+                 keep_rate,
                  prefix="RNNChain",
                  gpu=-1
                  ):
@@ -74,13 +75,23 @@ class RNNChain(Chain):
 
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
+        self.keep_rate = keep_rate
         self.W = self.__mod.array(initial_embeddings, dtype=self.__mod.float32)
         self.model_dim = model_dim
         self.word_embedding_dim = word_embedding_dim
 
     def _forward(self, x_batch, train=True):
-        x_batch = Variable(x_batch, volatile=not train)
+        ratio = 1 - self.keep_rate
+
+        x_batch = Variable(x_batch, volatile=True)
         x = embed_id.embed_id(x_batch, self.W)
+        x = Variable(x.data, volatile=not train)
+
+        # TODO: We should add batch norm. Should manually
+        # calculate the beta and gamma values.
+        # h = F.batch_normalization(x_batch, ...)
+        x = F.dropout(x, ratio, train)
+
         c, h, hs = self.rnn._forward(x, train)
         return h
 
@@ -117,11 +128,13 @@ class MLP(ChainList):
             self.add_link(L.Linear(l0_dim, l1_dim))
 
     def _forward(self, x_batch, train=True):
+        ratio = 1 - self.keep_rate
         layers = self.layers
         h = x_batch
+
         for l0 in self.children(): 
-            h_dropped = F.dropout(h, ratio=(1-self.keep_rate), train=train)
-            h = F.relu(l0(h_dropped))
+            h = F.dropout(h, ratio, train)
+            h = F.relu(l0(h))
         y = h
         return y
 
@@ -135,7 +148,7 @@ class SentenceModel(Chain):
                  ):
         super(SentenceModel, self).__init__(
             x2h=RNNChain(model_dim, word_embedding_dim, vocab_size,
-                    seq_length, initial_embeddings, gpu=gpu),
+                    seq_length, initial_embeddings, gpu=gpu, keep_rate=keep_rate),
             h2y=MLP(dimensions=[model_dim, mlp_dim, num_classes],
                     keep_rate=keep_rate, gpu=gpu),
             classifier=CrossEntropyClassifier(gpu),
@@ -146,10 +159,15 @@ class SentenceModel(Chain):
         self.keep_rate = keep_rate
 
     def _forward(self, x_batch, y_batch=None, train=True):
-        h = self.x2h._forward(x_batch, train=train)
+        ratio = (1-self.keep_rate)
+        
+        x = x_batch
+        h = self.x2h._forward(x, train=train)
         y = self.h2y._forward(h, train)
+        
         accum_loss = self.classifier._forward(y, y_batch, train)
         self.accuracy = self.accFun(y, y_batch)
+        
         return y, accum_loss
      
 
@@ -162,10 +180,10 @@ class SentencePairModel(Chain):
                  ):
         super(SentencePairModel, self).__init__(
             x2h_premise=RNNChain(model_dim, word_embedding_dim, vocab_size,
-                    seq_length, initial_embeddings, gpu=gpu),
+                    seq_length, initial_embeddings, gpu=gpu, keep_rate=keep_rate),
             x2h_hypothesis=RNNChain(model_dim, word_embedding_dim, vocab_size,
-                    seq_length, initial_embeddings, gpu=gpu),
-            h2y=MLP(dimensions=[model_dim*2, mlp_dim, num_classes],
+                    seq_length, initial_embeddings, gpu=gpu, keep_rate=keep_rate),
+            h2y=MLP(dimensions=[model_dim*2, mlp_dim, mlp_dim/2, num_classes],
                     keep_rate=keep_rate, gpu=gpu),
             classifier=CrossEntropyClassifier(gpu),
         )
@@ -175,12 +193,19 @@ class SentencePairModel(Chain):
         self.keep_rate = keep_rate
 
     def _forward(self, x_batch, y_batch=None, train=True):
+        ratio = 1 - self.keep_rate
+
         h_premise = self.x2h_premise._forward(x_batch[:, :, 0:1], train=train)
         h_hypothesis = self.x2h_hypothesis._forward(x_batch[:, :, 1:2], train=train)
         h = F.concat([h_premise, h_hypothesis], axis=1)
+
+        h = F.dropout(h, ratio, train)
         y = self.h2y._forward(h, train)
+
+        y = F.dropout(y, ratio, train)
         accum_loss = self.classifier._forward(y, y_batch, train)
         self.accuracy = self.accFun(y, self.__mod.array(y_batch))
+
         return y, accum_loss
 
 class RNN(object):
