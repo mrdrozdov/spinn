@@ -1,7 +1,7 @@
 """ Chainer-based RNN implementations.
 
     Important Notes:
-    * setting volatile to OFF during evaluation 
+    * setting volatile to OFF during evaluation
       is a performance boost.
 """
 
@@ -15,9 +15,12 @@ from chainer import datasets, iterators, optimizers, serializers
 from chainer import Link, Chain, ChainList
 import chainer.functions as F
 from chainer.functions.connection import embed_id
+from chainer.functions.normalization.batch_normalization import batch_normalization
 from chainer.functions.evaluation import accuracy
 import chainer.links as L
 from chainer.training import extensions
+
+# import iptb
 
 class LSTMChain(Chain):
     def __init__(self, input_dim, hidden_dim, seq_length, prefix="LSTMChain", gpu=-1):
@@ -87,9 +90,10 @@ class RNNChain(Chain):
         x = embed_id.embed_id(x_batch, self.W)
         x = Variable(x.data, volatile=not train)
 
-        # TODO: We should add batch norm. Should manually
-        # calculate the beta and gamma values.
-        # h = F.batch_normalization(x_batch, ...)
+        gamma = Variable(self.__mod.array(1.0, dtype=self.__mod.float32), volatile=not train, name='gamma')
+        beta = Variable(self.__mod.array(0.0, dtype=self.__mod.float32),volatile=not train, name='beta')
+
+        x = batch_normalization(x, gamma, beta, eps=2e-5, running_mean=None,running_var=None, decay=0.9, use_cudnn=False)
         x = F.dropout(x, ratio, train)
 
         c, h, hs = self.rnn._forward(x, train)
@@ -132,7 +136,7 @@ class MLP(ChainList):
         layers = self.layers
         h = x_batch
 
-        for l0 in self.children(): 
+        for l0 in self.children():
             h = F.dropout(h, ratio, train)
             h = F.relu(l0(h))
         y = h
@@ -160,16 +164,16 @@ class SentenceModel(Chain):
 
     def _forward(self, x_batch, y_batch=None, train=True):
         ratio = (1-self.keep_rate)
-        
+
         x = x_batch
         h = self.x2h._forward(x, train=train)
         y = self.h2y._forward(h, train)
-        
+
         accum_loss = self.classifier._forward(y, y_batch, train)
         self.accuracy = self.accFun(y, y_batch)
-        
+
         return y, accum_loss
-     
+
 
 class SentencePairModel(Chain):
     def __init__(self, model_dim, word_embedding_dim, vocab_size, compose_network,
