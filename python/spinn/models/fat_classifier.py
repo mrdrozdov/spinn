@@ -25,8 +25,6 @@ import pprint
 import sys
 
 import gflags
-# from theano import tensor as T
-# import theano
 import numpy as np
 
 from spinn import afs_safe_logger
@@ -113,66 +111,6 @@ def build_sentence_pair_model(cls, vocab_size, seq_length, tokens, transitions,
 
     return classifier_model
 
-
-def build_cost(logits, targets):
-    # """
-    # Build a classification cost function.
-    # """
-    # # Clip gradients coming from the cost function.
-    # logits = theano.gradient.grad_clip(
-    #     logits, -1. * FLAGS.clipping_max_value, FLAGS.clipping_max_value)
-
-    # predicted_dist = T.nnet.softmax(logits)
-
-    # costs = T.nnet.categorical_crossentropy(predicted_dist, targets)
-    # cost = costs.mean()
-
-    # pred = T.argmax(logits, axis=1)
-    # acc = 1. - T.mean(T.cast(T.neq(pred, targets), theano.config.floatX))
-
-    # return cost, acc
-
-    return (0.0, 0.0)
-
-
-def build_transition_cost(logits, targets, num_transitions):
-    """
-    Build a parse action prediction cost function.
-    """
-
-    # swap seq_length dimension to front so that we can scan per timestep
-    logits = T.swapaxes(logits, 0, 1)
-    targets = targets.T
-
-    def cost_t(logits, tgt, num_transitions):
-        # TODO(jongauthier): Taper down xent cost as we proceed through
-        # sequence?
-        predicted_dist = T.nnet.softmax(logits)
-        cost = T.nnet.categorical_crossentropy(predicted_dist, tgt)
-
-        pred = T.argmax(logits, axis=1)
-        error = T.neq(pred, tgt)
-        return cost, error
-
-    results, _ = theano.scan(cost_t, [logits, targets], non_sequences=[num_transitions])
-    costs, errors = results
-
-    # Create a mask that selects only transitions that involve real data.
-    unrolling_length = T.shape(costs)[0]
-    padding = unrolling_length - num_transitions
-    padding = T.reshape(padding, (1, -1))
-    rng = T.arange(unrolling_length) + 1
-    rng = T.reshape(rng, (-1, 1))
-    mask = T.gt(rng, padding)
-
-    # Compute acc using the mask
-    acc = 1.0 - (T.sum(errors * mask, dtype=theano.config.floatX)
-                 / T.sum(num_transitions, dtype=theano.config.floatX))
-
-    # Compute cost directly, since we *do* want a cost incentive to get the padding
-    # transitions right.
-    cost = T.mean(costs)
-    return cost, acc
 
 def evaluate(classifier_model, eval_set, logger, step):
     # Evaluate
@@ -358,15 +296,7 @@ def run(only_forward=False):
 
     # Set up the placeholders.
 
-    # TODO: Replace Theano variables with Chainer equivalent.
-    # y = T.vector("y", dtype="int32")
-    # lr = T.scalar("lr")
-    # training_mode = T.scalar("training_mode")  # 1: Training with dropout, 0: Eval
-    # ground_truth_transitions_visible = T.scalar("ground_truth_transitions_visible", dtype="int32")
-
     logger.Log("Building model.")
-    # vs = util.VariableStore(
-    #     default_initializer=util.UniformInitializer(FLAGS.init_range), logger=logger)
 
     if FLAGS.model_type == "CBOW":
         model_cls = spinn.cbow.CBOW
@@ -377,10 +307,8 @@ def run(only_forward=False):
 
     # Generator of mask for scheduled sampling
     numpy_random = np.random.RandomState(1234)
-    # ss_mask_gen = T.shared_randomstreams.RandomStreams(numpy_random.randint(999999))
 
     # Training step number
-    # ss_prob = T.scalar("ss_prob")
 
     # Dirty Hack: Using 
     y = None
@@ -414,30 +342,6 @@ def run(only_forward=False):
             ss_mask_gen=ss_mask_gen,
             ss_prob=ss_prob)
 
-    xent_cost, acc = build_cost(logits, y)
-
-    # Set up L2 regularization.
-    l2_cost = 0.0
-    # for var in vs.trainable_vars:
-    #     l2_cost += FLAGS.l2_lambda * T.sum(T.sqr(vs.vars[var]))
-
-    # Compute cross-entropy cost on action predictions.
-    if (not data_manager.SENTENCE_PAIR_DATA) and FLAGS.model_type not in ["Model0", "RNN", "CBOW"]:
-        transition_cost, action_acc = build_transition_cost(predicted_transitions, transitions, num_transitions)
-    elif data_manager.SENTENCE_PAIR_DATA and FLAGS.model_type not in ["Model0", "RNN", "CBOW"]:
-        p_transition_cost, p_action_acc = build_transition_cost(predicted_premise_transitions, transitions[:, :, 0],
-            num_transitions[:, 0])
-        h_transition_cost, h_action_acc = build_transition_cost(predicted_hypothesis_transitions, transitions[:, :, 1],
-            num_transitions[:, 1])
-        transition_cost = p_transition_cost + h_transition_cost
-        action_acc = (p_action_acc + h_action_acc) / 2.0  # TODO(SB): Average over transitions, not words.
-    else:
-        transition_cost = 0.0
-        action_acc = 0.0
-    transition_cost = transition_cost * FLAGS.transition_cost_scale
-
-    total_cost = xent_cost + l2_cost + transition_cost
-
     if ".ckpt" in FLAGS.ckpt_path:
         checkpoint_path = FLAGS.ckpt_path
     else:
@@ -453,39 +357,7 @@ def run(only_forward=False):
 
     # Do an evaluation-only run.
     if only_forward:
-        if FLAGS.eval_output_paths:
-            eval_output_paths = FLAGS.eval_output_paths.strip().split(":")
-            assert len(eval_output_paths) == len(eval_iterators), "Invalid no. of output paths."
-        else:
-            eval_output_paths = [FLAGS.experiment_name + "-" + os.path.split(eval_set[0])[1] + "-parse"
-                                  for eval_set in eval_iterators]
-
-        # Load model from checkpoint.
-        logger.Log("Checkpointed model was trained for %d steps." % (step,))
-
-        # Generate function for forward pass.
-        logger.Log("Building forward pass.")
-        if data_manager.SENTENCE_PAIR_DATA:
-            eval_fn = theano.function(
-                [X, transitions, y, num_transitions, training_mode, ground_truth_transitions_visible, ss_prob],
-                [acc, action_acc, logits, predicted_hypothesis_transitions, predicted_premise_transitions],
-                on_unused_input='ignore',
-                allow_input_downcast=True)
-        else:
-            eval_fn = theano.function(
-                [X, transitions, y, num_transitions, training_mode, ground_truth_transitions_visible, ss_prob],
-                [acc, action_acc, logits, predicted_transitions],
-                on_unused_input='ignore',
-                allow_input_downcast=True)
-
-        # Generate the inverse vocabulary lookup table.
-        ind_to_word = {v : k for k, v in vocabulary.iteritems()}
-
-        # Do a forward pass and write the output to disk.
-        for eval_set, eval_out_path in zip(eval_iterators, eval_output_paths):
-            logger.Log("Writing eval output for %s." % (eval_set[0],))
-            evaluate_expanded(eval_fn, eval_set, eval_out_path, logger, step,
-                              data_manager.SENTENCE_PAIR_DATA, ind_to_word, FLAGS.model_type not in ["Model0", "RNN", "CBOW"])
+        raise Exception("Not implemented for chainer.")
     else:
          # Train
         logger.Log("Training.")
