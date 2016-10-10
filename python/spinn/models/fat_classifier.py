@@ -35,7 +35,7 @@ from spinn.data.snli import load_snli_data
 from spinn.util import chainer_blocks as CB
 
 import spinn.fat_stack
-import spinn.plain_rnn
+import spinn.plain_rnn_chainer
 import spinn.cbow
 
 
@@ -58,7 +58,7 @@ def build_sentence_model(cls, vocab_size, seq_length, tokens, transitions,
     """
 
     # Prepare layer which performs stack element composition.
-    if cls is spinn.plain_rnn.RNN:
+    if cls is spinn.plain_rnn_chainer.RNN:
         compose_network = CB.LSTM
     else:
         raise AssertionError("Need to specify an implemented model.")
@@ -94,7 +94,7 @@ def build_sentence_pair_model(cls, vocab_size, seq_length, tokens, transitions,
 
 
     # Prepare layer which performs stack element composition.
-    if cls is spinn.plain_rnn.RNN:
+    if cls is spinn.plain_rnn_chainer.RNN:
         compose_network = CB.LSTM
     else:
         raise AssertionError("Need to specify an implemented model.")
@@ -301,7 +301,7 @@ def run(only_forward=False):
     if FLAGS.model_type == "CBOW":
         model_cls = spinn.cbow.CBOW
     elif FLAGS.model_type == "RNN":
-        model_cls = spinn.plain_rnn.RNN
+        model_cls = spinn.plain_rnn_chainer.RNN
     else:
         model_cls = getattr(spinn.fat_stack, FLAGS.model_type)
 
