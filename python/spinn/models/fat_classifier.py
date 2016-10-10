@@ -390,7 +390,6 @@ def run(only_forward=False):
             transition_cost_val = 0.0
 
             total_cost_val = xent_cost_val + transition_cost_val
-
             loss.backward()
             classifier_model.update()
 

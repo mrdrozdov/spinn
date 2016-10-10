@@ -55,11 +55,10 @@ class LSTMChain(Chain):
         self.__mod = cuda.cupy if gpu >= 0 else np
 
     def __call__(self, x_batch, train=True, keep_hs=False):
-        batch_size = x_batch.shape[0]
+        batch_size = x_batch.data.shape[0]
         c = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
         h = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
         hs = []
-        x_batch = Variable(self.__mod.array(x_batch, dtype=self.__mod.float32), volatile=not train)
         batches = F.split_axis(x_batch, self.seq_length, axis=1)
         for x in batches:
             ii = self.i_fwd(x)
@@ -93,7 +92,8 @@ class RNNChain(Chain):
                  gpu=-1
                  ):
         super(RNNChain, self).__init__(
-            rnn=LSTMChain(word_embedding_dim, model_dim, seq_length, gpu=gpu)
+            rnn=LSTMChain(word_embedding_dim, model_dim, seq_length, gpu=gpu),
+            batch_norm=L.BatchNormalization(model_dim, model_dim)
         )
 
         self.__gpu = gpu
@@ -108,7 +108,8 @@ class RNNChain(Chain):
         # gamma = Variable(self.__mod.array(1.0, dtype=self.__mod.float32), volatile=not train, name='gamma')
         # beta = Variable(self.__mod.array(0.0, dtype=self.__mod.float32),volatile=not train, name='beta')
         # x = batch_normalization(x, gamma, beta, eps=2e-5, running_mean=None,running_var=None, decay=0.9, use_cudnn=False)
-        # x = F.dropout(x, ratio, train)
+        x = self.batch_norm(x)
+        x = F.dropout(x, ratio, train)
 
         c, h, hs = self.rnn(x, train)
         return h
@@ -156,38 +157,6 @@ class MLP(ChainList):
         y = h
         return y
 
-class SentenceModel(Chain):
-    """docstring for SentenceModel"""
-    def __init__(self, model_dim, word_embedding_dim, vocab_size, compose_network,
-                 seq_length, initial_embeddings, num_classes,
-                 mlp_dim,
-                 keep_rate,
-                 gpu=-1,
-                 ):
-        super(SentenceModel, self).__init__(
-            x2h=RNNChain(model_dim, word_embedding_dim, vocab_size,
-                    seq_length, initial_embeddings, gpu=gpu, keep_rate=keep_rate),
-            h2y=MLP(dimensions=[model_dim, mlp_dim, num_classes],
-                    keep_rate=keep_rate, gpu=gpu),
-            classifier=CrossEntropyClassifier(gpu),
-        )
-        self.__gpu = gpu
-        self.__mod = cuda.cupy if gpu >= 0 else np
-        self.accFun = accuracy.accuracy
-        self.keep_rate = keep_rate
-
-    def __call__(self, x_batch, y_batch=None, train=True):
-        ratio = (1-self.keep_rate)
-
-        x = x_batch
-        h = self.x2h(x, train=train)
-        y = self.h2y(h, train)
-
-        accum_loss = self.classifier(y, y_batch, train)
-        self.accuracy = self.accFun(y, y_batch)
-
-        return y, accum_loss
-
 
 class SentencePairModel(Chain):
     def __init__(self, model_dim, word_embedding_dim, vocab_size, compose_network,
@@ -219,6 +188,9 @@ class SentencePairModel(Chain):
 
         x_prem = self.embed(x_batch[:, :, 0:1])
         x_hyp = self.embed(x_batch[:, :, 1:2])
+
+        x_prem = Variable(self.__mod.array(x_prem, dtype=self.__mod.float32), volatile=not train)
+        x_hyp = Variable(self.__mod.array(x_hyp, dtype=self.__mod.float32), volatile=not train)
 
         h_premise = self.x2h_premise(x_prem, train=train)
         h_hypothesis = self.x2h_hypothesis(x_hyp, train=train)
