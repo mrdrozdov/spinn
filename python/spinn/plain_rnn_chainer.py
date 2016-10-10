@@ -22,6 +22,26 @@ from chainer.training import extensions
 
 # import iptb
 
+class EmbedChain(Chain):
+    def __init__(self, embedding_dim, vocab_size, initial_embeddings, prefix="EmbedChain", gpu=-1):
+        super(EmbedChain, self).__init__()
+        assert initial_embeddings is not None, "Depends on pre-trained embeddings."
+        self.raw_embeddings = initial_embeddings
+        self.embedding_dim = embedding_dim
+        self.vocab_size = vocab_size
+        self.__gpu = gpu
+        self.__mod = cuda.cupy if gpu >= 0 else np
+
+    def __call__(self, x_batch, train=True, keep_hs=False):
+        # x_batch: batch_size * seq_len
+        b, l = x_batch.shape[0], x_batch.shape[1]
+
+        # Perform indexing and reshaping on the CPU.
+        x = self.raw_embeddings.take(x_batch.ravel(), axis=0)
+        x = x.reshape(b, l, -1)
+
+        return x
+
 class LSTMChain(Chain):
     def __init__(self, input_dim, hidden_dim, seq_length, prefix="LSTMChain", gpu=-1):
         super(LSTMChain, self).__init__(
@@ -39,9 +59,9 @@ class LSTMChain(Chain):
         c = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
         h = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
         hs = []
-        for _x in range(self.seq_length):
-            x = self.__mod.array(x_batch[:, _x].data)
-            x = Variable(x, volatile=not train)
+        x_batch = Variable(self.__mod.array(x_batch, dtype=self.__mod.float32), volatile=not train)
+        batches = F.split_axis(x_batch, self.seq_length, axis=1)
+        for x in batches:
             ii = self.i_fwd(x)
             hh = self.h_fwd(h)
             ih = ii + hh
@@ -79,22 +99,16 @@ class RNNChain(Chain):
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
         self.keep_rate = keep_rate
-        self.W = self.__mod.array(initial_embeddings, dtype=self.__mod.float32)
         self.model_dim = model_dim
         self.word_embedding_dim = word_embedding_dim
 
-    def __call__(self, x_batch, train=True):
+    def __call__(self, x, train=True):
         ratio = 1 - self.keep_rate
 
-        x_batch = Variable(x_batch, volatile=True)
-        x = embed_id.embed_id(x_batch, self.W)
-        x = Variable(x.data, volatile=not train)
-
-        gamma = Variable(self.__mod.array(1.0, dtype=self.__mod.float32), volatile=not train, name='gamma')
-        beta = Variable(self.__mod.array(0.0, dtype=self.__mod.float32),volatile=not train, name='beta')
-
-        x = batch_normalization(x, gamma, beta, eps=2e-5, running_mean=None,running_var=None, decay=0.9, use_cudnn=False)
-        x = F.dropout(x, ratio, train)
+        # gamma = Variable(self.__mod.array(1.0, dtype=self.__mod.float32), volatile=not train, name='gamma')
+        # beta = Variable(self.__mod.array(0.0, dtype=self.__mod.float32),volatile=not train, name='beta')
+        # x = batch_normalization(x, gamma, beta, eps=2e-5, running_mean=None,running_var=None, decay=0.9, use_cudnn=False)
+        # x = F.dropout(x, ratio, train)
 
         c, h, hs = self.rnn(x, train)
         return h
@@ -183,6 +197,7 @@ class SentencePairModel(Chain):
                  gpu=-1,
                  ):
         super(SentencePairModel, self).__init__(
+            embed=EmbedChain(word_embedding_dim, vocab_size, initial_embeddings, gpu=gpu),
             x2h_premise=RNNChain(model_dim, word_embedding_dim, vocab_size,
                     seq_length, initial_embeddings, gpu=gpu, keep_rate=keep_rate),
             x2h_hypothesis=RNNChain(model_dim, word_embedding_dim, vocab_size,
@@ -199,8 +214,14 @@ class SentencePairModel(Chain):
     def __call__(self, x_batch, y_batch=None, train=True):
         ratio = 1 - self.keep_rate
 
-        h_premise = self.x2h_premise(x_batch[:, :, 0:1], train=train)
-        h_hypothesis = self.x2h_hypothesis(x_batch[:, :, 1:2], train=train)
+        # x_prem = Variable(self.__mod.array(self.embed(x_batch[:, :, 0:1]), dtype=self.__mod.float32))
+        # x_hyp = Variable(self.__mod.array(self.embed(x_batch[:, :, 1:2]), dtype=self.__mod.float32))
+
+        x_prem = self.embed(x_batch[:, :, 0:1])
+        x_hyp = self.embed(x_batch[:, :, 1:2])
+
+        h_premise = self.x2h_premise(x_prem, train=train)
+        h_hypothesis = self.x2h_hypothesis(x_hyp, train=train)
         h = F.concat([h_premise, h_hypothesis], axis=1)
 
         h = F.dropout(h, ratio, train)
