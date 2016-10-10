@@ -34,20 +34,11 @@ from spinn import util
 from spinn.data.boolean import load_boolean_data
 from spinn.data.sst import load_sst_data
 from spinn.data.snli import load_snli_data
+from spinn.util import chainer_blocks as CB
 
 import spinn.fat_stack
 import spinn.plain_rnn
 import spinn.cbow
-
-# Chainer imports
-# import numpy as np
-import chainer
-from chainer import cuda, Function, gradient_check, report, training, utils, Variable
-from chainer import datasets, iterators, optimizers, serializers
-from chainer import Link, Chain, ChainList
-import chainer.functions as F
-import chainer.links as L
-from chainer.training import extensions
 
 
 FLAGS = gflags.FLAGS
@@ -70,7 +61,7 @@ def build_sentence_model(cls, vocab_size, seq_length, tokens, transitions,
 
     # Prepare layer which performs stack element composition.
     if cls is spinn.plain_rnn.RNN:
-        compose_network = L.LSTM
+        compose_network = CB.LSTM
     else:
         raise AssertionError("Need to specify an implemented model.")
 
@@ -106,7 +97,7 @@ def build_sentence_pair_model(cls, vocab_size, seq_length, tokens, transitions,
 
     # Prepare layer which performs stack element composition.
     if cls is spinn.plain_rnn.RNN:
-        compose_network = L.LSTM
+        compose_network = CB.LSTM
     else:
         raise AssertionError("Need to specify an implemented model.")
 
@@ -526,10 +517,7 @@ def run(only_forward=False):
             xent_cost_val = loss.data
             transition_cost_val = 0.0
 
-            ## TODO: This is being using in the optimizer. How to expose the value?
-            l2_cost_val = 0.0 
-
-            total_cost_val = xent_cost_val + transition_cost_val + l2_cost_val
+            total_cost_val = xent_cost_val + transition_cost_val
 
             loss.backward()
             classifier_model.update()
@@ -540,9 +528,9 @@ def run(only_forward=False):
 
             if step % FLAGS.statistics_interval_steps == 0:
                 logger.Log(
-                    "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %5f"
+                    "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %s"
                     % (step, acc_val, action_acc_val, total_cost_val, xent_cost_val, transition_cost_val,
-                       l2_cost_val))
+                       "l2-not-exposed"))
 
 
 if __name__ == '__main__':

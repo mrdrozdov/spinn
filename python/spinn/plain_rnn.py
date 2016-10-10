@@ -34,7 +34,7 @@ class LSTMChain(Chain):
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
 
-    def _forward(self, x_batch, train=True, keep_hs=False):
+    def __call__(self, x_batch, train=True, keep_hs=False):
         batch_size = x_batch.shape[0]
         c = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
         h = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
@@ -83,7 +83,7 @@ class RNNChain(Chain):
         self.model_dim = model_dim
         self.word_embedding_dim = word_embedding_dim
 
-    def _forward(self, x_batch, train=True):
+    def __call__(self, x_batch, train=True):
         ratio = 1 - self.keep_rate
 
         x_batch = Variable(x_batch, volatile=True)
@@ -96,7 +96,7 @@ class RNNChain(Chain):
         x = batch_normalization(x, gamma, beta, eps=2e-5, running_mean=None,running_var=None, decay=0.9, use_cudnn=False)
         x = F.dropout(x, ratio, train)
 
-        c, h, hs = self.rnn._forward(x, train)
+        c, h, hs = self.rnn(x, train)
         return h
 
 class CrossEntropyClassifier(Chain):
@@ -105,7 +105,7 @@ class CrossEntropyClassifier(Chain):
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
 
-    def _forward(self, y, y_batch, train=True):
+    def __call__(self, y, y_batch, train=True):
         accum_loss = 0 if train else None
         if train:
             if self.__gpu >= 0:
@@ -131,7 +131,7 @@ class MLP(ChainList):
         for l0_dim, l1_dim in zip(dimensions[:-1], dimensions[1:]):
             self.add_link(L.Linear(l0_dim, l1_dim))
 
-    def _forward(self, x_batch, train=True):
+    def __call__(self, x_batch, train=True):
         ratio = 1 - self.keep_rate
         layers = self.layers
         h = x_batch
@@ -162,14 +162,14 @@ class SentenceModel(Chain):
         self.accFun = accuracy.accuracy
         self.keep_rate = keep_rate
 
-    def _forward(self, x_batch, y_batch=None, train=True):
+    def __call__(self, x_batch, y_batch=None, train=True):
         ratio = (1-self.keep_rate)
 
         x = x_batch
-        h = self.x2h._forward(x, train=train)
-        y = self.h2y._forward(h, train)
+        h = self.x2h(x, train=train)
+        y = self.h2y(h, train)
 
-        accum_loss = self.classifier._forward(y, y_batch, train)
+        accum_loss = self.classifier(y, y_batch, train)
         self.accuracy = self.accFun(y, y_batch)
 
         return y, accum_loss
@@ -196,18 +196,18 @@ class SentencePairModel(Chain):
         self.accFun = accuracy.accuracy
         self.keep_rate = keep_rate
 
-    def _forward(self, x_batch, y_batch=None, train=True):
+    def __call__(self, x_batch, y_batch=None, train=True):
         ratio = 1 - self.keep_rate
 
-        h_premise = self.x2h_premise._forward(x_batch[:, :, 0:1], train=train)
-        h_hypothesis = self.x2h_hypothesis._forward(x_batch[:, :, 1:2], train=train)
+        h_premise = self.x2h_premise(x_batch[:, :, 0:1], train=train)
+        h_hypothesis = self.x2h_hypothesis(x_batch[:, :, 1:2], train=train)
         h = F.concat([h_premise, h_hypothesis], axis=1)
 
         h = F.dropout(h, ratio, train)
-        y = self.h2y._forward(h, train)
+        y = self.h2y(h, train)
 
         y = F.dropout(y, ratio, train)
-        accum_loss = self.classifier._forward(y, y_batch, train)
+        accum_loss = self.classifier(y, y_batch, train)
         self.accuracy = self.accFun(y, self.__mod.array(y_batch))
 
         return y, accum_loss
@@ -278,17 +278,16 @@ class RNN(object):
         self.optimizer.setup(self.model)
 
         # Clip Gradient
-        # QUESTION: Should this be applied prior to calculating the loss?
         self.optimizer.add_hook(chainer.optimizer.GradientClipping(clip))
 
         # L2 Regularization
-        # self.optimizer.add_hook(chainer.optimizer.WeightDecay(decay))
+        self.optimizer.add_hook(chainer.optimizer.WeightDecay(decay))
 
     def update(self):
         self.optimizer.update()
 
     def forward(self, x_batch, y_batch=None, train=True, predict=False):
-        y, loss = self.model._forward(x_batch, y_batch, train=train)
+        y, loss = self.model(x_batch, y_batch, train=train)
         if predict:
             preds = self.__mod.argmax(y.data, 1).tolist()
         else:
