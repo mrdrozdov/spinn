@@ -287,7 +287,12 @@ class RNN(object):
         self.optimizer.update()
 
     def forward(self, x_batch, y_batch=None, train=True, predict=False):
-        y, loss = self.model(x_batch, y_batch, train=train)
+        assert "sentences" in x_batch, \
+            "Input must contain dictionary with sentences."
+
+        x = x_batch["sentences"]
+
+        y, loss = self.model(x, y_batch, train=train)
         if predict:
             preds = self.__mod.argmax(y.data, 1).tolist()
         else:

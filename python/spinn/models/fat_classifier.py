@@ -42,41 +42,6 @@ import spinn.cbow
 FLAGS = gflags.FLAGS
 
 
-def build_sentence_model(cls, vocab_size, seq_length, tokens, transitions,
-                         num_classes, training_mode, ground_truth_transitions_visible, vs,
-                         initial_embeddings=None, project_embeddings=False, ss_mask_gen=None, ss_prob=0.0):
-    """
-    Construct a classifier which makes use of some hard-stack model.
-
-    Args:
-      cls: Hard stack class to use (from e.g. `spinn.fat_stack`)
-      vocab_size:
-      seq_length: Length of each sequence provided to the stack model
-      num_classes: Number of output classes
-      training_mode: A Theano scalar indicating whether to act as a training model
-        with dropout (1.0) or to act as an eval model with rescaling (0.0).
-    """
-
-    # Prepare layer which performs stack element composition.
-    if cls is spinn.plain_rnn_chainer.RNN:
-        compose_network = CB.LSTM
-    else:
-        raise AssertionError("Need to specify an implemented model.")
-
-    classifier_model = cls(FLAGS.model_dim, FLAGS.word_embedding_dim, vocab_size, compose_network,
-        keep_rate=FLAGS.embedding_keep_rate,
-        seq_length=seq_length,
-        num_classes=num_classes,
-        mlp_dim=1024,
-        initial_embeddings=initial_embeddings,
-        use_sentence_pair=False,
-        gpu=FLAGS.gpu,
-        )
-
-    return classifier_model
-
-
-
 def build_sentence_pair_model(cls, vocab_size, seq_length, tokens, transitions,
                      num_classes, training_mode, ground_truth_transitions_visible, vs,
                      initial_embeddings=None, project_embeddings=False, ss_mask_gen=None, ss_prob=0.0):
@@ -95,6 +60,8 @@ def build_sentence_pair_model(cls, vocab_size, seq_length, tokens, transitions,
 
     # Prepare layer which performs stack element composition.
     if cls is spinn.plain_rnn_chainer.RNN:
+        compose_network = CB.LSTM
+    elif cls is spinn.fat_stack.TransitionModel:
         compose_network = CB.LSTM
     else:
         raise AssertionError("Need to specify an implemented model.")
@@ -302,8 +269,11 @@ def run(only_forward=False):
         model_cls = spinn.cbow.CBOW
     elif FLAGS.model_type == "RNN":
         model_cls = spinn.plain_rnn_chainer.RNN
+    elif FLAGS.model_type == "SPINN":
+        # model_cls = getattr(spinn.fat_stack, FLAGS.model_type)
+        model_cls = spinn.fat_stack.TransitionModel
     else:
-        model_cls = getattr(spinn.fat_stack, FLAGS.model_type)
+        raise Exception("Requested unimplemented model type %s" % FLAGS.model_type)
 
     # Generator of mask for scheduled sampling
     numpy_random = np.random.RandomState(1234)
@@ -335,12 +305,7 @@ def run(only_forward=False):
             ss_mask_gen=ss_mask_gen,
             ss_prob=ss_prob)
     else:
-        classifier_model = build_sentence_model(
-            model_cls, len(vocabulary), FLAGS.seq_length,
-            X, transitions, len(data_manager.LABEL_MAP), training_mode, ground_truth_transitions_visible, vs,
-            initial_embeddings=initial_embeddings, project_embeddings=(not train_embeddings),
-            ss_mask_gen=ss_mask_gen,
-            ss_prob=ss_prob)
+        raise Exception("Single sentence model not implemented.")
 
     if ".ckpt" in FLAGS.ckpt_path:
         checkpoint_path = FLAGS.ckpt_path
@@ -382,7 +347,10 @@ def run(only_forward=False):
             classifier_model.model.cleargrads()
 
             # Calculate loss and update parameters.
-            ret = classifier_model.forward(X_batch, y_batch, train=True, predict=False)
+            ret = classifier_model.forward({
+                "sentences": X_batch,
+                "transitions": transitions_batch,
+                }, y_batch, train=True, predict=False)
             y, loss, preds = ret
 
             # Boilerplate for calculating loss.
@@ -429,8 +397,8 @@ if __name__ == '__main__':
         "If set, load GloVe-formatted embeddings from here.")
 
     # Model architecture settings.
-    gflags.DEFINE_enum("model_type", "Model0",
-                       ["CBOW", "RNN", "Model0", "Model1", "Model2", "Model2S"],
+    gflags.DEFINE_enum("model_type", "RNN",
+                       ["CBOW", "RNN", "SPINN"],
                        "")
     gflags.DEFINE_boolean("allow_gt_transitions_in_eval", False,
         "Whether to use ground truth transitions in evaluation when appropriate "
