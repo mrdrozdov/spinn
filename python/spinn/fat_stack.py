@@ -49,7 +49,7 @@ Style Guide:
 2. Every ChainList/Chain/Link needs to have assigned a __gpu and __mod.
 3. Each __call__() or forward() should have `train` as a parameter,
    and Variables need to be set to Volatile=True during evaluation.
-4. Each _ should have an accompanying `check_type_forward`
+4. Each __call__() or forward() should have an accompanying `check_type_forward`
    called along the lines of:
 
    ```
@@ -59,7 +59,10 @@ Style Guide:
    ```
 
    This is mimicing the behavior seen in Chainer Functions.
-5. Each _ should have a chainer.Variable as input.
+5. Each __call__() or forward() should have a chainer.Variable as input.
+   There may be slight exceptions to this rule, since at a times
+   especially in this model a list is preferred, but try to stick to
+   this as close as possible.
 
 TODO:
 
@@ -71,9 +74,15 @@ TODO:
 
 """
 
-def tensor_to_lists(inp):
+def tensor_to_lists(inp, reverse=True):
     b, l = inp.shape[0], inp.shape[1]
     out = [F.split_axis(x, l, axis=0, force_tuple=True) for x in inp]
+
+    if reverse:
+        out = [list(reversed(x)) for x in out]
+    else:
+        out = [list(x) for x in out]
+
     return out
 
 class EmbedChain(Chain):
@@ -206,40 +215,62 @@ class LSTM_TI(Chain):
         self.check_type_buffers(buffers)
         # END: Type Check
 
-        import ipdb; ipdb.set_trace()
-
         batch_size = len(buffers)
-        c_prev_l, c_prev_r, b_prev_l, b_prev_r = [self.__mod.zeros(
-            (batch_size, self.hidden_dim), dtype=self.__mod.float32)
-            for _ in range(4)]
+        initial_buff_len = len(buffers[0])
+        # c_prev_l, c_prev_r, h_prev_l, h_prev_r = [Variable(self.__mod.zeros(
+        #     (batch_size, self.hidden_dim), dtype=self.__mod.float32))
+        #     for _ in range(4)]
 
-        transitions = transitions.T[0]
+        transitions = transitions.data.T[0]
 
         # buffers = [[Variable(x) for x in sent] for sent in buffers]
 
         # MAYBE: Initialize stack with None, None in case of initial reduces.
         stacks = [[]] * len(buffers)
 
-        for ts in transitions:
+        def pseudo_reduce(lefts, rights):
+            for l, r in zip(lefts, rights):
+                yield l + r
+
+        for ii, ts in enumerate(transitions):
             lefts = []
             rights = []
-            for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
-                # Setup Actions
-                if t == 0: # shift
+            for i, (_, buf, stack) in enumerate(zip(ts, buffers, stacks)):
+                if len(buf) > 0: # shift
                     stack.append(buf.pop())
-                elif t == 1: # reduce
+                else: # reduce
                     rights.append(stack.pop())
                     lefts.append(stack.pop())
-                else:
-                    raise Exception("This action is not implemented: %s" % t)
+
+            assert len(lefts) == len(rights)
+            if len(rights) > 0:
+                reduced = iter(pseudo_reduce(lefts, rights))
+                for i, (_, buf, stack) in enumerate(zip(ts, buffers, stacks)):
+                    composition = next(reduced)
+                    stack.append(composition)
+
+        import ipdb; ipdb.set_trace()
+
+        for stack in stacks:
+            assert len(stack) == 1
+
+        import ipdb; ipdb.set_trace()
+                # Setup Actions
+                # if t == 0: # shift
+                #     stack.append(buf.pop())
+                # elif t == 1: # reduce
+                #     rights.append(stack.pop())
+                #     lefts.append(stack.pop())
+                # else:
+                #     raise Exception("This action is not implemented: %s" % t)
 
             # Complete Actions
-            if len(rights) > 0:
-                reduced = iter(self.reduce(lefts, rights))
-                for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
-                    if t == 1:
-                        composition = next(reduced)
-                        stack.append(composition)
+            # if len(rights) > 0:
+            #     reduced = iter(self.reduce(lefts, rights))
+            #     for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
+            #         if t == 1:
+            #             composition = next(reduced)
+            #             stack.append(composition)
 
         return c, h, hs
 
