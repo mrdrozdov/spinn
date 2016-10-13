@@ -64,12 +64,14 @@ Style Guide:
 TODO:
 
 - [x] Compute embeddings for initial sequences.
-- [ ] Convert embeddings into list of lists of Chainer Variables.
+- [x] Convert embeddings into list of lists of Chainer Variables.
 
 """
 
-def tensor_to_lists(tensor):
-    pass
+def tensor_to_lists(inp):
+    b, l = inp.shape[0], inp.shape[1]
+    out = [F.split_axis(x, l, axis=0, force_tuple=True) for x in inp]
+    return out
 
 class EmbedChain(Chain):
     def __init__(self, embedding_dim, vocab_size, initial_embeddings, prefix="EmbedChain", gpu=-1):
@@ -109,8 +111,8 @@ class EmbedChain(Chain):
         b, l = x_batch.shape[0], x_batch.shape[1]
 
         # Perform indexing and reshaping on the CPU.
-        x = self.raw_embeddings.take(x_batch.ravel(), axis=0)
-        x = x.reshape(b, l, -1)
+        x = Variable(self.raw_embeddings.take(x_batch.data.ravel(), axis=0))
+        x = F.reshape(x, (b,l,-1))
 
         return x
 
@@ -176,7 +178,28 @@ class LSTM_TI(Chain):
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
 
+    def check_type_forward(self, in_types):
+        type_check.expect(in_types.size() == 1)
+        x_type = in_types[0]
+
+        type_check.expect(
+            x_type.dtype == 'i',
+            x_type.ndim >= 2,
+        )
+
+    def check_type_buffers(self, buffers):
+        import ipdb; ipdb.set_trace()
+        pass
+
     def __call__(self, buffers, transitions, train=True, keep_hs=False):
+        # BEGIN: Type Check
+        in_data = tuple([x.data for x in [transitions]])
+        in_types = type_check.get_types(in_data, 'in_types', False)
+        self.check_type_forward(in_types)
+
+        # Also type check the buffers:
+        self.check_type_buffers(buffers)
+        # END: Type Check
 
         batch_size = len(buffers)
         c_prev_l, c_prev_r, b_prev_l, b_prev_r = [self.__mod.zeros(
@@ -232,13 +255,13 @@ class SPINN(Chain):
         self.model_dim = model_dim
         self.word_embedding_dim = word_embedding_dim
 
-    def __call__(self, x, t, train=True):
+    def __call__(self, buffers, transitions, train=True):
         ratio = 1 - self.keep_rate
 
         # One of our goals or invariants is to maintain lists of lists
         # for sentences rather than a 3D tensor of batch x sent x emb.
-        buffers = [list(Variable(
-            self.__mod.array(xx, dtype=self.__mod.float32))) for xx in x]
+        # buffers = [list(Variable(
+        #     self.__mod.array(xx, dtype=self.__mod.float32))) for xx in x]
 
         # gamma = Variable(self.__mod.array(1.0, dtype=self.__mod.float32), volatile=not train, name='gamma')
         # beta = Variable(self.__mod.array(0.0, dtype=self.__mod.float32),volatile=not train, name='beta')
@@ -246,7 +269,7 @@ class SPINN(Chain):
         # x = self.batch_norm(x)
         # x = F.dropout(x, ratio, train)
 
-        c, h, hs = self.spinn(buffers, t, train)
+        c, h, hs = self.spinn(buffers, transitions, train)
         return h
 
 class SentencePairModel(Chain):
@@ -274,19 +297,22 @@ class SentencePairModel(Chain):
     def __call__(self, sentences, transitions, y_batch=None, train=True):
         ratio = 1 - self.keep_rate
 
+        # Get Embeddings
         x_prem = self.embed(Variable(sentences[:, :, 0:1]))
         x_hyp = self.embed(Variable(sentences[:, :, 1:2]))
 
-        import ipdb; ipdb.set_trace()
+        # Convert Embeddings into List of Lists of Variables
+        x_prem = tensor_to_lists(x_prem)
+        x_hyp = tensor_to_lists(x_hyp)
 
-        t_prem = transitions[:, :, 0:1]
-        t_hyp = transitions[:, :, 1:2]
-
-        # x_prem = Variable(self.__mod.array(x_prem, dtype=self.__mod.float32), volatile=not train)
-        # x_hyp = Variable(self.__mod.array(x_hyp, dtype=self.__mod.float32), volatile=not train)
+        t_prem = Variable(transitions[:, :, 0:1])
+        t_hyp = Variable(transitions[:, :, 1:2])
 
         h_premise = self.x2h_premise(x_prem, t_prem, train=train)
         h_hypothesis = self.x2h_hypothesis(x_hyp, t_hyp, train=train)
+        
+        import ipdb; ipdb.set_trace()
+        
         h = F.concat([h_premise, h_hypothesis], axis=1)
 
         h = F.dropout(h, ratio, train)
