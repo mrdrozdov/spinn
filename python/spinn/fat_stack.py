@@ -26,12 +26,93 @@ from chainer.functions.evaluation import accuracy
 import chainer.links as L
 from chainer.training import extensions
 
+from chainer.functions.activation import slstm
+from chainer.utils import type_check
 
 import spinn.util.chainer_blocks as CB
 
-from spinn.util.chainer_blocks import EmbedChain, LSTM, LSTMChain, RNNChain
+from spinn.util.chainer_blocks import LSTM, LSTMChain, RNNChain
 from spinn.util.chainer_blocks import MLP
 from spinn.util.chainer_blocks import CrossEntropyClassifier
+
+"""
+Documentation Symbols:
+
+B: Batch Size
+S: Sequence Length
+E: Embedding Size
+
+Style Guide:
+
+1. Each __call__() or forward() should be documented with its
+   input and output types/dimensions.
+2. Every ChainList/Chain/Link needs to have assigned a __gpu and __mod.
+3. Each __call__() or forward() should have `train` as a parameter,
+   and Variables need to be set to Volatile=True during evaluation.
+4. Each _ should have an accompanying `check_type_forward`
+   called along the lines of:
+
+   ```
+   in_data = tuple([x.data for x in [input_1, input_2]])
+   in_types = type_check.get_types(in_data, 'in_types', False)
+   self.check_type_forward(in_types)
+   ```
+
+   This is mimicing the behavior seen in Chainer Functions.
+5. Each _ should have a chainer.Variable as input.
+
+TODO:
+
+- [x] Compute embeddings for initial sequences.
+- [ ] Convert embeddings into list of lists of Chainer Variables.
+
+"""
+
+def tensor_to_lists(tensor):
+    pass
+
+class EmbedChain(Chain):
+    def __init__(self, embedding_dim, vocab_size, initial_embeddings, prefix="EmbedChain", gpu=-1):
+        super(EmbedChain, self).__init__()
+        assert initial_embeddings is not None, "Depends on pre-trained embeddings."
+        self.raw_embeddings = initial_embeddings
+        self.embedding_dim = embedding_dim
+        self.vocab_size = vocab_size
+        self.__gpu = gpu
+        self.__mod = cuda.cupy if gpu >= 0 else np
+
+    def check_type_forward(self, in_types):
+        type_check.expect(in_types.size() == 1)
+        x_type = in_types[0]
+
+        type_check.expect(
+            x_type.dtype == 'i',
+            x_type.ndim >= 2,
+        )
+
+    def __call__(self, x_batch, train=True):
+        """
+        Compute an integer lookup on an embedding matrix.
+
+        Args:
+            x_batch: Tensor of B x S
+        Returns:
+            x_emb:   Tensor of B x S x E
+        """
+
+        # BEGIN: Type Check
+        in_data = tuple([x.data for x in [x_batch]])
+        in_types = type_check.get_types(in_data, 'in_types', False)
+        self.check_type_forward(in_types)
+        # END: Type Check
+
+        b, l = x_batch.shape[0], x_batch.shape[1]
+
+        # Perform indexing and reshaping on the CPU.
+        x = self.raw_embeddings.take(x_batch.ravel(), axis=0)
+        x = x.reshape(b, l, -1)
+
+        return x
 
 class SLSTMChain(Chain):
     def __init__(self, input_dim, hidden_dim, seq_length, prefix="LSTMChain", gpu=-1):
@@ -51,30 +132,34 @@ class SLSTMChain(Chain):
         self.h_l, self.h_r = None, None
 
     def __call__(self, left_x, right_x, train=True, keep_hs=False):
+        assert len(left_x[0]) == len(right_x[0])
+        batch_size = len(left_x[0])
 
-        batch_size = len(left_x)
+        # TODO: Keep states between batches. Need to use some crazy pointer
+        # system in order to have dynamic batch sizes.
+        c_l = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
+        c_r = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
+        h_l = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
+        h_r = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
 
-        if self.c_l is None:
-            self.c_l = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
-        if self.c_r is None:
-            self.c_r = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
-        if self.h_l is None:
-            self.h_l = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
-        if self.h_l is None:
-            self.h_l = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
+        left = F.reshape(F.concat(left_x, axis=0), (-1, self.input_dim))
+        right = F.reshape(F.concat(right_x, axis=0), (-1, self.input_dim))
+        # left_x = self.__mod.array(left_x, dtype=self.__mod.float32)
+        # right_x = self.__mod.array(right_x, dtype=self.__mod.float32)
 
-        left_x = F.split_axis(np.array(left_x), self.seq_length, axis=1)
-        right_x = F.split_axis(np.array(right_x), self.seq_length, axis=1)
-        for x_l, x_r in zip(left_x, right_x):
-            il = self.i_l_fwd(x_l)
-            ir = self.i_r_fwd(x_r)
-            hl = self.h_l_fwd(h_l)
-            hr = self.h_r_fwd(h_r)
-            ihl = il + hl
-            ihr = ir + hr
-            self.c_l, self.c_r, self.h_l, self.h_r = F.slstm(hl, hr, il, ir)
+        if left.shape != right.shape:
+            import ipdb; ipdb.set_trace()
+            pass
 
-        return c, h, hs
+        il = self.i_l_fwd(left)
+        ir = self.i_r_fwd(right)
+        hl = self.h_l_fwd(h_l)
+        hr = self.h_r_fwd(h_r)
+        ihl = il + hl
+        ihr = ir + hr
+        c, h = F.slstm(c_l, c_r, ihl, ihr)
+
+        return c, h
 
     def reset_state(self):
         self.c_l, self.c_r = None, None
@@ -91,23 +176,19 @@ class LSTM_TI(Chain):
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
 
-    def __call__(self, sentences, transitions, train=True, keep_hs=False):
+    def __call__(self, buffers, transitions, train=True, keep_hs=False):
 
-        batch_size = sentences.data.shape[0]
+        batch_size = len(buffers)
         c_prev_l, c_prev_r, b_prev_l, b_prev_r = [self.__mod.zeros(
             (batch_size, self.hidden_dim), dtype=self.__mod.float32)
             for _ in range(4)]
 
-        buffers = F.split_axis(sentences, batch_size, axis=0)
-        buffers = [x.data[0].tolist() for x in buffers]
+        transitions = transitions.T[0]
 
-        sentences = F.split_axis(sentences, self.seq_length, axis=1)
-        transitions = F.split_axis(transitions, self.seq_length, axis=1)
-        transitions = [x.data[0][0] for x in transitions]
+        # buffers = [[Variable(x) for x in sent] for sent in buffers]
 
         # MAYBE: Initialize stack with None, None in case of initial reduces.
         stacks = [[]] * len(buffers)
-
 
         for ts in transitions:
             lefts = []
@@ -125,13 +206,10 @@ class LSTM_TI(Chain):
             # Complete Actions
             if len(rights) > 0:
                 reduced = iter(self.reduce(lefts, rights))
-                for i, t, buf, stack in enumerate(zip(ts, bufs, stacks)):
+                for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
                     if t == 1:
                         composition = next(reduced)
-                        import ipdb; ipdb.set_trace()
                         stack.append(composition)
-
-        import ipdb; ipdb.set_trace()
 
         return c, h, hs
 
@@ -157,13 +235,18 @@ class SPINN(Chain):
     def __call__(self, x, t, train=True):
         ratio = 1 - self.keep_rate
 
+        # One of our goals or invariants is to maintain lists of lists
+        # for sentences rather than a 3D tensor of batch x sent x emb.
+        buffers = [list(Variable(
+            self.__mod.array(xx, dtype=self.__mod.float32))) for xx in x]
+
         # gamma = Variable(self.__mod.array(1.0, dtype=self.__mod.float32), volatile=not train, name='gamma')
         # beta = Variable(self.__mod.array(0.0, dtype=self.__mod.float32),volatile=not train, name='beta')
         # x = batch_normalization(x, gamma, beta, eps=2e-5, running_mean=None,running_var=None, decay=0.9, use_cudnn=False)
         # x = self.batch_norm(x)
         # x = F.dropout(x, ratio, train)
 
-        c, h, hs = self.spinn(x, t, train)
+        c, h, hs = self.spinn(buffers, t, train)
         return h
 
 class SentencePairModel(Chain):
@@ -191,14 +274,16 @@ class SentencePairModel(Chain):
     def __call__(self, sentences, transitions, y_batch=None, train=True):
         ratio = 1 - self.keep_rate
 
-        x_prem = self.embed(sentences[:, :, 0:1])
-        x_hyp = self.embed(sentences[:, :, 1:2])
+        x_prem = self.embed(Variable(sentences[:, :, 0:1]))
+        x_hyp = self.embed(Variable(sentences[:, :, 1:2]))
+
+        import ipdb; ipdb.set_trace()
 
         t_prem = transitions[:, :, 0:1]
         t_hyp = transitions[:, :, 1:2]
 
-        x_prem = Variable(self.__mod.array(x_prem, dtype=self.__mod.float32), volatile=not train)
-        x_hyp = Variable(self.__mod.array(x_hyp, dtype=self.__mod.float32), volatile=not train)
+        # x_prem = Variable(self.__mod.array(x_prem, dtype=self.__mod.float32), volatile=not train)
+        # x_hyp = Variable(self.__mod.array(x_hyp, dtype=self.__mod.float32), volatile=not train)
 
         h_premise = self.x2h_premise(x_prem, t_prem, train=train)
         h_hypothesis = self.x2h_hypothesis(x_hyp, t_hyp, train=train)
