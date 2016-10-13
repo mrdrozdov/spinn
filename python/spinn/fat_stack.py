@@ -65,6 +65,9 @@ TODO:
 
 - [x] Compute embeddings for initial sequences.
 - [x] Convert embeddings into list of lists of Chainer Variables.
+- [ ] Simply loop over transitions, adding to stack until buffer is empty,
+      then reduce until stack is size=1. NOTE: This is not the expected
+      behavior, but is a step in the right direction.
 
 """
 
@@ -188,8 +191,10 @@ class LSTM_TI(Chain):
         )
 
     def check_type_buffers(self, buffers):
-        import ipdb; ipdb.set_trace()
-        pass
+        # Hacky way to determine that buffers is a list of lists of Variables.
+        assert isinstance(buffers, list) or isinstance(buffers, tuple)
+        assert isinstance(buffers[0], list) or isinstance(buffers[0], tuple)
+        assert isinstance(buffers[0][0], Variable)
 
     def __call__(self, buffers, transitions, train=True, keep_hs=False):
         # BEGIN: Type Check
@@ -200,6 +205,8 @@ class LSTM_TI(Chain):
         # Also type check the buffers:
         self.check_type_buffers(buffers)
         # END: Type Check
+
+        import ipdb; ipdb.set_trace()
 
         batch_size = len(buffers)
         c_prev_l, c_prev_r, b_prev_l, b_prev_r = [self.__mod.zeros(
