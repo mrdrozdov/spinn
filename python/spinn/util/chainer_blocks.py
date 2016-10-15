@@ -12,6 +12,8 @@ from chainer.functions.evaluation import accuracy
 import chainer.links as L
 from chainer.training import extensions
 
+from chainer.utils import type_check
+
 LSTM = F.lstm
 
 class EmbedChain(Chain):
@@ -112,12 +114,31 @@ class CrossEntropyClassifier(Chain):
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
 
+    def check_type_forward(self, in_types):
+        type_check.expect(in_types.size() == 2)
+        pred_type, y_type = in_types
+
+        type_check.expect(
+            pred_type.dtype == 'f',
+            pred_type.ndim >= 1,
+        )
+
+        type_check.expect(
+            y_type.dtype == 'i',
+            y_type.ndim >= 1,
+        )
+
     def __call__(self, y, y_batch, train=True):
+        # BEGIN: Type Check
+        in_data = tuple([x.data for x in [y, y_batch]])
+        in_types = type_check.get_types(in_data, 'in_types', False)
+        self.check_type_forward(in_types)
+        # END: Type Check
+
         accum_loss = 0 if train else None
         if train:
             if self.__gpu >= 0:
                 y_batch = cuda.to_gpu(y_batch)
-            y_batch = Variable(y_batch, volatile=not train)
             accum_loss = F.softmax_cross_entropy(y, y_batch)
 
         return accum_loss

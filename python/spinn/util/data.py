@@ -126,6 +126,11 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
     t_hyp   = [NaiveCropAndPad(example["hypothesis_transitions"], seq_length) for example in dataset]
     y = [data_manager.LABEL_MAP[example["label"]] for example in dataset]
 
+    # TODO: These types should probably set more elegantly.
+    t_prem = [np.array(t, dtype=np.int32) for t in t_prem]
+    t_hyp = [np.array(t, dtype=np.int32) for t in t_hyp]
+    y = [np.array(t, dtype=np.int32) for t in y]
+
     return X_prem, X_hyp, t_prem, t_hyp, y, nt_prem, nt_hyp
 
 

@@ -39,9 +39,11 @@ from spinn.util.chainer_blocks import CrossEntropyClassifier
 Documentation Symbols:
 
 B: Batch Size
+B*: Dynamic Batch Size
 S: Sequence Length
-S*: Non-uniform Sequence Length
+S*: Dynamic Sequence Length
 E: Embedding Size
+H: Output Size of Current Module
 
 Style Guide:
 
@@ -73,7 +75,18 @@ TODO:
       necessary using ``PseudoReduce''.
       NOTE: In this implementation, we pad the transitions
       with `-1` to indicate ``skip''.
-- [ ] Use TreeLSTM reduce in place of PseudoReduce.
+- [x] Add projection layer to convert embeddings into proper
+      dimensions for the TreeLSTM.
+- [x] Use TreeLSTM reduce in place of PseudoReduce.
+- [ ] Debug NoneType that is coming out of gradient. You probably
+      have to pad the sentences.
+- [ ] Use the right C and H units for the TreeLSTM.
+
+Questions:
+
+- [ ] Is the Projection layer implemented correctly? Efficiently?
+- [ ] Is the composition with TreeLSTM implemented correctly? Efficiently?
+- [ ] What should the types of Transitions and Y labels be? np.int64?
 
 """
 
@@ -89,14 +102,16 @@ def tensor_to_lists(inp, reverse=True):
     return out
 
 class EmbedChain(Chain):
-    def __init__(self, embedding_dim, vocab_size, initial_embeddings, prefix="EmbedChain", gpu=-1):
-        super(EmbedChain, self).__init__()
+    def __init__(self, embedding_dim, vocab_size, initial_embeddings, model_dim, prefix="EmbedChain", gpu=-1):
+        super(EmbedChain, self).__init__(
+            projection=L.Linear(embedding_dim, model_dim)
+            )
         assert initial_embeddings is not None, "Depends on pre-trained embeddings."
-        self.raw_embeddings = initial_embeddings
         self.embedding_dim = embedding_dim
         self.vocab_size = vocab_size
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
+        self.raw_embeddings = self.__mod.array(initial_embeddings, dtype=self.__mod.float32)
 
     def check_type_forward(self, in_types):
         type_check.expect(in_types.size() == 1)
@@ -123,22 +138,40 @@ class EmbedChain(Chain):
         self.check_type_forward(in_types)
         # END: Type Check
 
+        # Keep lengths to convert back to sentences later.
+        sent_lengths = [len(sent) for sent in x_batch.data]
+
         # Convert sentences to word vectors one by one. Done sequentially on CPU.
         x = [self.raw_embeddings.take(sent, axis=0) for sent in x_batch.data]
-        x = Variable(np.array(x))
 
-        return x
+        # Pass embeddings through projection layer, so that they match
+        # the dimensions in the output of the compose/reduce function.
+        x = self.projection(F.concat(x, axis=0))
+
+        # THIS CODE IS SINFUL.
+        # Convert back into heterogenous lengths of sentences.
+        # outp = []
+        # cursor = 0
+        # for l in sent_lengths:
+        #     outp.append(x.data[cursor:cursor+l])
+        #     cursor += l
+        # outp = Variable(np.array(outp))
+
+        outp = F.reshape(x, (batch_size, seq_length))
+
+        import ipdb; ipdb.set_trace()
+
+        return outp
 
 class SLSTMChain(Chain):
-    def __init__(self, input_dim, hidden_dim, seq_length, prefix="LSTMChain", gpu=-1):
+    def __init__(self, input_dim, hidden_dim, seq_length, prefix="SLSTMChain", gpu=-1):
         super(SLSTMChain, self).__init__(
-            i_l_fwd=L.Linear(input_dim, 4 * hidden_dim, nobias=True),
+            i_l_fwd=L.Linear(hidden_dim, 4 * hidden_dim, nobias=True),
             h_l_fwd=L.Linear(hidden_dim, 4 * hidden_dim),
-            i_r_fwd=L.Linear(input_dim, 4 * hidden_dim, nobias=True),
+            i_r_fwd=L.Linear(hidden_dim, 4 * hidden_dim, nobias=True),
             h_r_fwd=L.Linear(hidden_dim, 4 * hidden_dim),
         )
         self.seq_length = seq_length
-        self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
@@ -146,9 +179,35 @@ class SLSTMChain(Chain):
         self.c_l, self.c_r = None, None
         self.h_l, self.h_r = None, None
 
+    def check_type_forward(self, in_types):
+        type_check.expect(in_types.size() == 2)
+        left_type, right_type = in_types
+
+        type_check.expect(
+            left_type.dtype == 'f',
+            left_type.ndim >= 1,
+            right_type.dtype == 'f',
+            right_type.ndim >= 1,
+        )
+
     def __call__(self, left_x, right_x, train=True, keep_hs=False):
-        assert len(left_x[0]) == len(right_x[0])
-        batch_size = len(left_x[0])
+        """
+        Args:
+            left_x:  B* x E
+            right_x: B* x E
+        Returns:
+            final_state: B* x H
+        """
+
+        # BEGIN: Type Check
+        for l, r in zip(left_x, right_x):
+            in_data = tuple([x.data for x in [l, r]])
+            in_types = type_check.get_types(in_data, 'in_types', False)
+            self.check_type_forward(in_types)
+        # END: Type Check
+
+        assert len(left_x) == len(right_x)
+        batch_size = len(left_x)
 
         # TODO: Keep states between batches. Need to use some crazy pointer
         # system in order to have dynamic batch sizes.
@@ -157,10 +216,8 @@ class SLSTMChain(Chain):
         h_l = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
         h_r = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
 
-        left = F.reshape(F.concat(left_x, axis=0), (-1, self.input_dim))
-        right = F.reshape(F.concat(right_x, axis=0), (-1, self.input_dim))
-        # left_x = self.__mod.array(left_x, dtype=self.__mod.float32)
-        # right_x = self.__mod.array(right_x, dtype=self.__mod.float32)
+        left = F.reshape(F.concat(left_x, axis=0), (-1, self.hidden_dim))
+        right = F.reshape(F.concat(right_x, axis=0), (-1, self.hidden_dim))
 
         if left.shape != right.shape:
             import ipdb; ipdb.set_trace()
@@ -198,7 +255,7 @@ class LSTM_TI(Chain):
         type_check.expect(
             buff_type.dtype == 'object',
             buff_type.ndim >= 1,
-            trans_type.dtype == 'int64',
+            trans_type.dtype == 'i',
             trans_type.ndim >= 1,
         )
 
@@ -230,11 +287,16 @@ class LSTM_TI(Chain):
 
         # MAYBE: Initialize stack with None, None in case of initial reduces.
         stacks = [[] for _ in range(len(buffers))]
-        buffers = [list(b) for b in buffers.data]
+        buffers = [list(Variable(b)) for b in buffers.data]
 
         def pseudo_reduce(lefts, rights):
             for l, r in zip(lefts, rights):
                 yield l + r
+
+        def better_reduce(lefts, rights):
+            c, h = self.reduce(lefts, rights, train=train)
+            for hh in h:
+                yield hh
 
         for ii, ts in enumerate(transitions):
             lefts = []
@@ -252,17 +314,13 @@ class LSTM_TI(Chain):
 
             assert len(lefts) == len(rights)
             if len(rights) > 0:
-                reduced = iter(pseudo_reduce(lefts, rights))
+                reduced = iter(better_reduce(lefts, rights))
                 for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
                     if t == -1 or t == 0:
                         continue
                     elif t == 1:
-                        try:
-                            composition = next(reduced)
-                            stack.append(composition)
-                        except:
-                            import ipdb; ipdb.set_trace()
-                            pass
+                        composition = next(reduced)
+                        stack.append(composition)
                     else:
                         raise Exception("Action not implemented: {}".format(t))
 
@@ -271,8 +329,16 @@ class LSTM_TI(Chain):
         for stack in stacks:
             assert len(stack) == 1
 
+        # Flatten List of Lists.
+        # Goes from 3-D:`B x 1 x H` to 1-D:`(B * H)`
+        stacks = F.concat(zip(*stacks)[0], axis=0)
+
+        # Goes from 1-D:`(B * H)` to 2-D:`B x H`
+        stacks = F.reshape(stacks, (batch_size, self.hidden_dim))
+
         c = None
-        h = self.__mod.array(stacks)
+        # h = self.__mod.array(stacks)
+        h = stacks
         hs = None
 
         return c, h, hs
@@ -287,8 +353,8 @@ class SPINN(Chain):
                  ):
         super(SPINN, self).__init__(
             spinn=LSTM_TI(word_embedding_dim, model_dim, seq_length, gpu=gpu),
-            batch_norm=L.BatchNormalization(model_dim, model_dim)
         )
+            # batch_norm=L.BatchNormalization(model_dim, model_dim)
 
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
@@ -321,15 +387,15 @@ class SentencePairModel(Chain):
                  gpu=-1,
                  ):
         super(SentencePairModel, self).__init__(
-            embed=EmbedChain(word_embedding_dim, vocab_size, initial_embeddings, gpu=gpu),
+            embed=EmbedChain(word_embedding_dim, vocab_size, initial_embeddings, model_dim, gpu=gpu),
             x2h_premise=SPINN(model_dim, word_embedding_dim, vocab_size,
                     seq_length, initial_embeddings, gpu=gpu, keep_rate=keep_rate),
             x2h_hypothesis=SPINN(model_dim, word_embedding_dim, vocab_size,
                     seq_length, initial_embeddings, gpu=gpu, keep_rate=keep_rate),
             h2y=MLP(dimensions=[model_dim*2, mlp_dim, mlp_dim/2, num_classes],
                     keep_rate=keep_rate, gpu=gpu),
-            classifier=CrossEntropyClassifier(gpu),
         )
+        self.classifier = CrossEntropyClassifier(gpu)
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
         self.accFun = accuracy.accuracy
@@ -352,15 +418,13 @@ class SentencePairModel(Chain):
         h_premise = self.x2h_premise(x_prem, t_prem, train=train)
         h_hypothesis = self.x2h_hypothesis(x_hyp, t_hyp, train=train)
         
-        import ipdb; ipdb.set_trace()
-        
         h = F.concat([h_premise, h_hypothesis], axis=1)
 
         h = F.dropout(h, ratio, train)
         y = self.h2y(h, train)
 
         y = F.dropout(y, ratio, train)
-        accum_loss = self.classifier(y, y_batch, train)
+        accum_loss = self.classifier(y, Variable(y_batch), train)
         self.accuracy = self.accFun(y, self.__mod.array(y_batch))
 
         return y, accum_loss
@@ -411,10 +475,10 @@ class TransitionModel(object):
         self.optimizer.setup(self.model)
 
         # Clip Gradient
-        self.optimizer.add_hook(chainer.optimizer.GradientClipping(clip))
+        # self.optimizer.add_hook(chainer.optimizer.GradientClipping(clip))
 
         # L2 Regularization
-        self.optimizer.add_hook(chainer.optimizer.WeightDecay(decay))
+        # self.optimizer.add_hook(chainer.optimizer.WeightDecay(decay))
 
     def update(self):
         self.optimizer.update()
