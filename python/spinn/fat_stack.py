@@ -78,8 +78,11 @@ TODO:
 - [x] Add projection layer to convert embeddings into proper
       dimensions for the TreeLSTM.
 - [x] Use TreeLSTM reduce in place of PseudoReduce.
-- [ ] Debug NoneType that is coming out of gradient. You probably
-      have to pad the sentences.
+- [x] Debug NoneType that is coming out of gradient. You probably
+      have to pad the sentences. SOLVED: The gradient was not
+      being generated for the projection layer because of a
+      redundant called to Variable().
+- [ ] Enable evaluation. Currently crashing.
 - [ ] Use the right C and H units for the TreeLSTM.
 
 Questions:
@@ -102,12 +105,13 @@ def tensor_to_lists(inp, reverse=True):
     return out
 
 class EmbedChain(Chain):
-    def __init__(self, embedding_dim, vocab_size, initial_embeddings, model_dim, prefix="EmbedChain", gpu=-1):
+    def __init__(self, embedding_dim, vocab_size, initial_embeddings, projection_dim, prefix="EmbedChain", gpu=-1):
         super(EmbedChain, self).__init__(
-            projection=L.Linear(embedding_dim, model_dim)
+            projection=L.Linear(embedding_dim, projection_dim)
             )
         assert initial_embeddings is not None, "Depends on pre-trained embeddings."
         self.embedding_dim = embedding_dim
+        self.projection_dim = projection_dim
         self.vocab_size = vocab_size
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
@@ -118,7 +122,7 @@ class EmbedChain(Chain):
         x_type = in_types[0]
 
         type_check.expect(
-            x_type.dtype == 'object',
+            x_type.dtype == 'i',
             x_type.ndim >= 1,
         )
 
@@ -138,15 +142,18 @@ class EmbedChain(Chain):
         self.check_type_forward(in_types)
         # END: Type Check
 
+        batch_size, seq_length = x_batch.shape[0], x_batch.shape[1]
+
         # Keep lengths to convert back to sentences later.
         sent_lengths = [len(sent) for sent in x_batch.data]
 
-        # Convert sentences to word vectors one by one. Done sequentially on CPU.
-        x = [self.raw_embeddings.take(sent, axis=0) for sent in x_batch.data]
+        x = self.raw_embeddings.take(x_batch.data, axis=0)
 
         # Pass embeddings through projection layer, so that they match
         # the dimensions in the output of the compose/reduce function.
-        x = self.projection(F.concat(x, axis=0))
+        x = F.reshape(x, (batch_size * seq_length, self.embedding_dim))
+        x = self.projection(x)
+        x = F.reshape(x, (batch_size, seq_length, self.projection_dim))
 
         # THIS CODE IS SINFUL.
         # Convert back into heterogenous lengths of sentences.
@@ -157,11 +164,9 @@ class EmbedChain(Chain):
         #     cursor += l
         # outp = Variable(np.array(outp))
 
-        outp = F.reshape(x, (batch_size, seq_length))
+        # import ipdb; ipdb.set_trace()
 
-        import ipdb; ipdb.set_trace()
-
-        return outp
+        return x
 
 class SLSTMChain(Chain):
     def __init__(self, input_dim, hidden_dim, seq_length, prefix="SLSTMChain", gpu=-1):
@@ -253,7 +258,7 @@ class LSTM_TI(Chain):
         buff_type, trans_type = in_types
 
         type_check.expect(
-            buff_type.dtype == 'object',
+            buff_type.dtype == 'f',
             buff_type.ndim >= 1,
             trans_type.dtype == 'i',
             trans_type.ndim >= 1,
@@ -277,8 +282,7 @@ class LSTM_TI(Chain):
         self.check_type_forward(in_types)
         # END: Type Check
 
-        batch_size = len(buffers)
-        initial_buff_len = len(buffers[0])
+        batch_size, seq_length = buffers.shape[0], buffers.shape[1]
         # c_prev_l, c_prev_r, h_prev_l, h_prev_r = [Variable(self.__mod.zeros(
         #     (batch_size, self.hidden_dim), dtype=self.__mod.float32))
         #     for _ in range(4)]
@@ -286,8 +290,8 @@ class LSTM_TI(Chain):
         transitions = transitions.data.T
 
         # MAYBE: Initialize stack with None, None in case of initial reduces.
-        stacks = [[] for _ in range(len(buffers))]
-        buffers = [list(Variable(b)) for b in buffers.data]
+        stacks = [[] for _ in range(batch_size)]
+        buffers = [list(b) for b in buffers]
 
         def pseudo_reduce(lefts, rights):
             for l, r in zip(lefts, rights):

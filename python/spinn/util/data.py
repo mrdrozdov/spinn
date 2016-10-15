@@ -104,13 +104,13 @@ def MakeEvalIterator(sources, batch_size):
     return data_iter
 
 
-def NaiveCropAndPad(example, length):
+def NaiveCropAndPad(example, length, symbol=-1):
     example_len = len(example)
     diff_len = length - len(example)
     if diff_len <= 0:
         return example[:example_len]
     else:
-        return [-1] * diff_len + example
+        return [symbol] * diff_len + example
 
 
 def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=False, logger=None,
@@ -118,8 +118,8 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
     dataset = TrimDataset(dataset, seq_length, eval_mode=eval_mode, sentence_pair_data=sentence_pair_data)
     dataset = TokensToIDs(vocabulary, dataset, sentence_pair_data=sentence_pair_data)
 
-    X_prem = [example["premise_tokens"] for example in dataset]
-    X_hyp  = [example["hypothesis_tokens"] for example in dataset]
+    X_prem = [NaiveCropAndPad(example["premise_tokens"], seq_length, symbol=0) for example in dataset]
+    X_hyp  = [NaiveCropAndPad(example["hypothesis_tokens"], seq_length, symbol=0) for example in dataset]
     nt_prem = [len(example["premise_transitions"]) for example in dataset]
     nt_hyp  = [len(example["hypothesis_transitions"]) for example in dataset]
     t_prem  = [NaiveCropAndPad(example["premise_transitions"], seq_length) for example in dataset]
@@ -127,6 +127,8 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
     y = [data_manager.LABEL_MAP[example["label"]] for example in dataset]
 
     # TODO: These types should probably set more elegantly.
+    X_prem = [np.array(t, dtype=np.int32) for t in X_prem]
+    X_hyp = [np.array(t, dtype=np.int32) for t in X_hyp]
     t_prem = [np.array(t, dtype=np.int32) for t in t_prem]
     t_hyp = [np.array(t, dtype=np.int32) for t in t_hyp]
     y = [np.array(t, dtype=np.int32) for t in y]
