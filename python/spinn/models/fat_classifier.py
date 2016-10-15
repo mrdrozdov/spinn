@@ -254,12 +254,12 @@ def run(only_forward=False):
     eval_iterators = []
     for filename, raw_eval_set in raw_eval_sets:
         logger.Log("Preprocessing eval data: " + filename)
-        e_X, e_transitions, e_y, e_num_transitions = util.PreprocessDataset(
+        e_X_prem, e_X_hyp, e_t_prem, e_t_hyp, e_y, e_prem_num_transitions, e_hyp_num_transitions = util.PreprocessDataset(
             raw_eval_set, vocabulary, FLAGS.seq_length, data_manager, eval_mode=True, logger=logger,
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             for_rnn=FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW")
         eval_iterators.append((filename,
-            util.MakeEvalIterator((e_X, e_transitions, e_y, e_num_transitions), FLAGS.batch_size)))
+            util.MakeEvalIterator((e_X_prem, e_X_hyp, e_t_prem, e_t_hyp, e_y, e_prem_num_transitions, e_hyp_num_transitions), FLAGS.batch_size)))
 
     # Set up the placeholders.
 
@@ -340,7 +340,8 @@ def run(only_forward=False):
                     if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > 1000:
                         best_dev_error = 1 - acc
                         logger.Log("[TODO: NOT IMPLEMENTED] Checkpointing with new best dev accuracy of %f" % acc)
-            X_batch, transitions_batch, y_batch, num_transitions_batch = training_data_iter.next()
+            X_prem, X_hyp, t_prem, t_hyp, y_batch, nt_prem, nt_hyp = training_data_iter.next()
+            # X_batch, transitions_batch, y_batch, num_transitions_batch = training_data_iter.next()
             learning_rate = FLAGS.learning_rate * (FLAGS.learning_rate_decay_per_10k_steps ** (step / 10000.0))
 
             # Reset hidden states of RNN(s), and reset cached gradients.
@@ -348,8 +349,8 @@ def run(only_forward=False):
 
             # Calculate loss and update parameters.
             ret = classifier_model.forward({
-                "sentences": X_batch,
-                "transitions": transitions_batch,
+                "sentences": [X_prem, X_hyp],
+                "transitions": [t_prem, t_hyp],
                 }, y_batch, train=True, predict=False)
             y, loss, preds = ret
 

@@ -40,6 +40,7 @@ Documentation Symbols:
 
 B: Batch Size
 S: Sequence Length
+S*: Non-uniform Sequence Length
 E: Embedding Size
 
 Style Guide:
@@ -68,9 +69,11 @@ TODO:
 
 - [x] Compute embeddings for initial sequences.
 - [x] Convert embeddings into list of lists of Chainer Variables.
-- [ ] Simply loop over transitions, adding to stack until buffer is empty,
-      then reduce until stack is size=1. NOTE: This is not the expected
-      behavior, but is a step in the right direction.
+- [x] Loop over transitions, modifying buffer and stack as
+      necessary using ``PseudoReduce''.
+      NOTE: In this implementation, we pad the transitions
+      with `-1` to indicate ``skip''.
+- [ ] Use TreeLSTM reduce in place of PseudoReduce.
 
 """
 
@@ -100,8 +103,8 @@ class EmbedChain(Chain):
         x_type = in_types[0]
 
         type_check.expect(
-            x_type.dtype == 'i',
-            x_type.ndim >= 2,
+            x_type.dtype == 'object',
+            x_type.ndim >= 1,
         )
 
     def __call__(self, x_batch, train=True):
@@ -109,9 +112,9 @@ class EmbedChain(Chain):
         Compute an integer lookup on an embedding matrix.
 
         Args:
-            x_batch: Tensor of B x S
+            x_batch: List of B x S*
         Returns:
-            x_emb:   Tensor of B x S x E
+            x_emb:   List of B x S* x E
         """
 
         # BEGIN: Type Check
@@ -120,11 +123,9 @@ class EmbedChain(Chain):
         self.check_type_forward(in_types)
         # END: Type Check
 
-        b, l = x_batch.shape[0], x_batch.shape[1]
-
-        # Perform indexing and reshaping on the CPU.
-        x = Variable(self.raw_embeddings.take(x_batch.data.ravel(), axis=0))
-        x = F.reshape(x, (b,l,-1))
+        # Convert sentences to word vectors one by one. Done sequentially on CPU.
+        x = [self.raw_embeddings.take(sent, axis=0) for sent in x_batch.data]
+        x = Variable(np.array(x))
 
         return x
 
@@ -191,28 +192,32 @@ class LSTM_TI(Chain):
         self.__mod = cuda.cupy if gpu >= 0 else np
 
     def check_type_forward(self, in_types):
-        type_check.expect(in_types.size() == 1)
-        x_type = in_types[0]
+        type_check.expect(in_types.size() == 2)
+        buff_type, trans_type = in_types
 
         type_check.expect(
-            x_type.dtype == 'i',
-            x_type.ndim >= 2,
+            buff_type.dtype == 'object',
+            buff_type.ndim >= 1,
+            trans_type.dtype == 'int64',
+            trans_type.ndim >= 1,
         )
 
-    def check_type_buffers(self, buffers):
-        # Hacky way to determine that buffers is a list of lists of Variables.
-        assert isinstance(buffers, list) or isinstance(buffers, tuple)
-        assert isinstance(buffers[0], list) or isinstance(buffers[0], tuple)
-        assert isinstance(buffers[0][0], Variable)
-
     def __call__(self, buffers, transitions, train=True, keep_hs=False):
+        """
+        Pass over batches of transitions, modifying their associated
+        buffers at each iteration.
+
+        Args:
+            buffers: List of B x S* x E
+            transitions: List of B x S
+        Returns:
+            final_state: List of B x E
+        """
+
         # BEGIN: Type Check
-        in_data = tuple([x.data for x in [transitions]])
+        in_data = tuple([x.data for x in [buffers, transitions]])
         in_types = type_check.get_types(in_data, 'in_types', False)
         self.check_type_forward(in_types)
-
-        # Also type check the buffers:
-        self.check_type_buffers(buffers)
         # END: Type Check
 
         batch_size = len(buffers)
@@ -221,12 +226,11 @@ class LSTM_TI(Chain):
         #     (batch_size, self.hidden_dim), dtype=self.__mod.float32))
         #     for _ in range(4)]
 
-        transitions = transitions.data.T[0]
-
-        # buffers = [[Variable(x) for x in sent] for sent in buffers]
+        transitions = transitions.data.T
 
         # MAYBE: Initialize stack with None, None in case of initial reduces.
-        stacks = [[]] * len(buffers)
+        stacks = [[] for _ in range(len(buffers))]
+        buffers = [list(b) for b in buffers.data]
 
         def pseudo_reduce(lefts, rights):
             for l, r in zip(lefts, rights):
@@ -235,42 +239,41 @@ class LSTM_TI(Chain):
         for ii, ts in enumerate(transitions):
             lefts = []
             rights = []
-            for i, (_, buf, stack) in enumerate(zip(ts, buffers, stacks)):
-                if len(buf) > 0: # shift
+            for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
+                if t == -1:
+                    continue
+                elif t == 0: # shift
                     stack.append(buf.pop())
-                else: # reduce
+                elif t == 1: # reduce
                     rights.append(stack.pop())
                     lefts.append(stack.pop())
+                else:
+                    raise Exception("Action not implemented: {}".format(t))
 
             assert len(lefts) == len(rights)
             if len(rights) > 0:
                 reduced = iter(pseudo_reduce(lefts, rights))
-                for i, (_, buf, stack) in enumerate(zip(ts, buffers, stacks)):
-                    composition = next(reduced)
-                    stack.append(composition)
+                for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
+                    if t == -1 or t == 0:
+                        continue
+                    elif t == 1:
+                        try:
+                            composition = next(reduced)
+                            stack.append(composition)
+                        except:
+                            import ipdb; ipdb.set_trace()
+                            pass
+                    else:
+                        raise Exception("Action not implemented: {}".format(t))
 
-        import ipdb; ipdb.set_trace()
-
+        # TODO: This assertion is useful for checking, but we should
+        # probably be more robust than this in training.
         for stack in stacks:
             assert len(stack) == 1
 
-        import ipdb; ipdb.set_trace()
-                # Setup Actions
-                # if t == 0: # shift
-                #     stack.append(buf.pop())
-                # elif t == 1: # reduce
-                #     rights.append(stack.pop())
-                #     lefts.append(stack.pop())
-                # else:
-                #     raise Exception("This action is not implemented: %s" % t)
-
-            # Complete Actions
-            # if len(rights) > 0:
-            #     reduced = iter(self.reduce(lefts, rights))
-            #     for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
-            #         if t == 1:
-            #             composition = next(reduced)
-            #             stack.append(composition)
+        c = None
+        h = self.__mod.array(stacks)
+        hs = None
 
         return c, h, hs
 
@@ -336,15 +339,15 @@ class SentencePairModel(Chain):
         ratio = 1 - self.keep_rate
 
         # Get Embeddings
-        x_prem = self.embed(Variable(sentences[:, :, 0:1]))
-        x_hyp = self.embed(Variable(sentences[:, :, 1:2]))
+        x_prem = self.embed(Variable(sentences[0]))
+        x_hyp = self.embed(Variable(sentences[1]))
 
         # Convert Embeddings into List of Lists of Variables
-        x_prem = tensor_to_lists(x_prem)
-        x_hyp = tensor_to_lists(x_hyp)
+        # x_prem = tensor_to_lists(x_prem)
+        # x_hyp = tensor_to_lists(x_hyp)
 
-        t_prem = Variable(transitions[:, :, 0:1])
-        t_hyp = Variable(transitions[:, :, 1:2])
+        t_prem = Variable(transitions[0])
+        t_hyp = Variable(transitions[1])
 
         h_premise = self.x2h_premise(x_prem, t_prem, train=train)
         h_hypothesis = self.x2h_hypothesis(x_hyp, t_hyp, train=train)

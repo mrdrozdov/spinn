@@ -58,65 +58,6 @@ def TokensToIDs(vocabulary, dataset, sentence_pair_data=False):
     return dataset
 
 
-def CropAndPadExample(example, left_padding, target_length, key, logger=None):
-    """
-    Crop/pad a sequence value of the given dict `example`.
-    """
-    if left_padding < 0:
-        # Crop, then pad normally.
-        # TODO: Track how many sentences are cropped, but don't log a message
-        # for every single one.
-        example[key] = example[key][-left_padding:]
-        left_padding = 0
-    right_padding = target_length - (left_padding + len(example[key]))
-    example[key] = ([0] * left_padding) + \
-        example[key] + ([0] * right_padding)
-
-
-def CropAndPad(dataset, length, logger=None, sentence_pair_data=False):
-    # NOTE: This can probably be done faster in NumPy if it winds up making a
-    # difference.
-    # Always make sure that the transitions are aligned at the left edge, so
-    # the final stack top is the root of the tree. If cropping is used, it should
-    # just introduce empty nodes into the tree.
-    if sentence_pair_data:
-        keys = [("premise_transitions", "num_premise_transitions", "premise_tokens"),
-                ("hypothesis_transitions", "num_hypothesis_transitions", "hypothesis_tokens")]
-    else:
-        keys = [("transitions", "num_transitions", "tokens")]
-
-    for example in dataset:
-        for (transitions_key, num_transitions_key, tokens_key) in keys:
-            example[num_transitions_key] = len(example[transitions_key])
-            transitions_left_padding = length - example[num_transitions_key]
-            shifts_before_crop_and_pad = example[transitions_key].count(0)
-            CropAndPadExample(
-                example, transitions_left_padding, length, transitions_key, logger=logger)
-            shifts_after_crop_and_pad = example[transitions_key].count(0)
-            tokens_left_padding = shifts_after_crop_and_pad - \
-                shifts_before_crop_and_pad
-            CropAndPadExample(
-                example, tokens_left_padding, length, tokens_key, logger=logger)
-    return dataset
-
-def CropAndPadForRNN(dataset, length, logger=None, sentence_pair_data=False):
-    # NOTE: This can probably be done faster in NumPy if it winds up making a
-    # difference.
-    if sentence_pair_data:
-        keys = ["premise_tokens",
-                "hypothesis_tokens"]
-    else:
-        keys = ["tokens"]
-
-    for example in dataset:
-        for tokens_key in keys:
-            num_tokens = len(example[tokens_key])
-            tokens_left_padding = length - num_tokens
-            CropAndPadExample(
-                example, tokens_left_padding, length, tokens_key, logger=logger)
-    return dataset
-
-
 def MakeTrainingIterator(sources, batch_size):
     # Make an iterator that exposes a dataset as random minibatches.
 
@@ -133,7 +74,7 @@ def MakeTrainingIterator(sources, batch_size):
                 start = 0
                 random.shuffle(order)
             batch_indices = order[start:start + batch_size]
-            yield tuple(source[batch_indices] for source in sources)
+            yield tuple(np.take(source, batch_indices, axis=0) for source in sources)
     return data_iter()
 
 
@@ -163,45 +104,29 @@ def MakeEvalIterator(sources, batch_size):
     return data_iter
 
 
+def NaiveCropAndPad(example, length):
+    example_len = len(example)
+    diff_len = length - len(example)
+    if diff_len <= 0:
+        return example[:example_len]
+    else:
+        return [-1] * diff_len + example
+
+
 def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=False, logger=None,
                       sentence_pair_data=False, for_rnn=False):
-    # TODO(SB): Simpler version for plain RNN.
     dataset = TrimDataset(dataset, seq_length, eval_mode=eval_mode, sentence_pair_data=sentence_pair_data)
     dataset = TokensToIDs(vocabulary, dataset, sentence_pair_data=sentence_pair_data)
-    if for_rnn:
-        dataset = CropAndPadForRNN(dataset, seq_length, logger=logger, sentence_pair_data=sentence_pair_data)
-    else:
-        dataset = CropAndPad(dataset, seq_length, logger=logger, sentence_pair_data=sentence_pair_data)
 
-    if sentence_pair_data:
-        X = np.transpose(np.array([[example["premise_tokens"] for example in dataset],
-                      [example["hypothesis_tokens"] for example in dataset]],
-                     dtype=np.int32), (1, 2, 0))
-        if for_rnn:
-            # TODO(SB): Extend this clause to the non-pair case.
-            transitions = np.zeros((len(dataset), 2, 0))
-            num_transitions = np.zeros((len(dataset), 2))
-        else:
-            transitions = np.transpose(np.array([[example["premise_transitions"] for example in dataset],
-                                    [example["hypothesis_transitions"] for example in dataset]],
-                                   dtype=np.int32), (1, 2, 0))
-            num_transitions = np.transpose(np.array(
-                [[example["num_premise_transitions"] for example in dataset],
-                 [example["num_hypothesis_transitions"] for example in dataset]],
-                dtype=np.int32), (1, 0))
-    else:
-        X = np.array([example["tokens"] for example in dataset],
-                     dtype=np.int32)
-        transitions = np.array([example["transitions"] for example in dataset],
-                               dtype=np.int32)
-        num_transitions = np.array(
-            [example["num_transitions"] for example in dataset],
-            dtype=np.int32)
-    y = np.array(
-        [data_manager.LABEL_MAP[example["label"]] for example in dataset],
-        dtype=np.int32)
+    X_prem = [example["premise_tokens"] for example in dataset]
+    X_hyp  = [example["hypothesis_tokens"] for example in dataset]
+    nt_prem = [len(example["premise_transitions"]) for example in dataset]
+    nt_hyp  = [len(example["hypothesis_transitions"]) for example in dataset]
+    t_prem  = [NaiveCropAndPad(example["premise_transitions"], seq_length) for example in dataset]
+    t_hyp   = [NaiveCropAndPad(example["hypothesis_transitions"], seq_length) for example in dataset]
+    y = [data_manager.LABEL_MAP[example["label"]] for example in dataset]
 
-    return X, transitions, y, num_transitions
+    return X_prem, X_hyp, t_prem, t_hyp, y, nt_prem, nt_hyp
 
 
 def BuildVocabulary(raw_training_data, raw_eval_sets, embedding_path, logger=None, sentence_pair_data=False):
