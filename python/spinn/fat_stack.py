@@ -82,8 +82,17 @@ TODO:
       have to pad the sentences. SOLVED: The gradient was not
       being generated for the projection layer because of a
       redundant called to Variable().
-- [ ] Enable evaluation. Currently crashing.
+- [x] Enable evaluation. Currently crashing.
+- [ ] Confirm that volatile is working correctly during eval time.
+      Time the eval with and without volatile being set.
 - [ ] Use the right C and H units for the TreeLSTM.
+
+Other Tasks:
+
+- [ ] Enable "transition validation".
+- [ ] Enable TreeGRU as alternative option to TreeLSTM.
+- [ ] Add TrackingLSTM.
+- [ ] Run CBOW and RNN models for comparison.
 
 Questions:
 
@@ -154,17 +163,6 @@ class EmbedChain(Chain):
         x = F.reshape(x, (batch_size * seq_length, self.embedding_dim))
         x = self.projection(x)
         x = F.reshape(x, (batch_size, seq_length, self.projection_dim))
-
-        # THIS CODE IS SINFUL.
-        # Convert back into heterogenous lengths of sentences.
-        # outp = []
-        # cursor = 0
-        # for l in sent_lengths:
-        #     outp.append(x.data[cursor:cursor+l])
-        #     cursor += l
-        # outp = Variable(np.array(outp))
-
-        # import ipdb; ipdb.set_trace()
 
         return x
 
@@ -328,10 +326,10 @@ class LSTM_TI(Chain):
                     else:
                         raise Exception("Action not implemented: {}".format(t))
 
-        # TODO: This assertion is useful for checking, but we should
-        # probably be more robust than this in training.
-        for stack in stacks:
-            assert len(stack) == 1
+        # TODO: It would be good to check that the buffer has been
+        # fully consumed.
+        # for stack in stacks:
+        #     assert len(stack) == 1
 
         # Flatten List of Lists.
         # Goes from 3-D:`B x 1 x H` to 1-D:`(B * H)`
@@ -411,10 +409,6 @@ class SentencePairModel(Chain):
         # Get Embeddings
         x_prem = self.embed(Variable(sentences[0]))
         x_hyp = self.embed(Variable(sentences[1]))
-
-        # Convert Embeddings into List of Lists of Variables
-        # x_prem = tensor_to_lists(x_prem)
-        # x_hyp = tensor_to_lists(x_hyp)
 
         t_prem = Variable(transitions[0])
         t_hyp = Variable(transitions[1])

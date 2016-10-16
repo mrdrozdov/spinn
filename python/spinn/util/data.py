@@ -94,7 +94,8 @@ def MakeEvalIterator(sources, batch_size):
         if start >= dataset_size:
             break
 
-        candidate_batch = tuple(source[start:start + batch_size]
+        batch_indices = range(start, min(start + batch_size, dataset_size))
+        candidate_batch = tuple(np.take(source, batch_indices, axis=0)
                                for source in sources)
 
         if len(candidate_batch[0]) == batch_size:
@@ -108,7 +109,7 @@ def NaiveCropAndPad(example, length, symbol=-1):
     example_len = len(example)
     diff_len = length - len(example)
     if diff_len <= 0:
-        return example[:example_len]
+        return example[:length]
     else:
         return [symbol] * diff_len + example
 

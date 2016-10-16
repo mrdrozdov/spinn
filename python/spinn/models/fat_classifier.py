@@ -84,9 +84,13 @@ def evaluate(classifier_model, eval_set, logger, step):
     acc_accum = 0.0
     action_acc_accum = 0.0
     eval_batches = 0.0
-    for (X_batch, transitions_batch, y_batch, num_transitions_batch) in eval_set[1]:
+    for (X_prem, X_hyp, t_prem, t_hyp, y_batch, num_t_prem, num_t_hyp) in eval_set[1]:
         # Calculate Local Accuracies
-        classifier_model.forward(X_batch, y_batch, train=False, predict=False)
+        ret = classifier_model.forward({
+            "sentences": [X_prem, X_hyp],
+            "transitions": [t_prem, t_hyp],
+            }, y_batch, train=False, predict=False)
+        # y, loss, preds = ret
         acc_value = float(classifier_model.model.accuracy.data)
         action_acc_value = 0.0
 
