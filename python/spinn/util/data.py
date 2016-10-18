@@ -260,7 +260,7 @@ def LoadEmbeddingsFromASCII(vocabulary, embedding_dim, path):
 
     For now, values not found in the file will be set to zero."""
     emb = np.zeros(
-        (len(vocabulary), embedding_dim), dtype=theano.config.floatX)
+        (len(vocabulary), embedding_dim), dtype=np.float32)
     with open(path, 'r') as f:
         for line in f:
             spl = line.split(" ")
