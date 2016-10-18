@@ -83,10 +83,10 @@ TODO:
       being generated for the projection layer because of a
       redundant called to Variable().
 - [x] Enable evaluation. Currently crashing.
+- [x] Use the right C and H units for the TreeLSTM.
 - [ ] Confirm that volatile is working correctly during eval time.
       Time the eval with and without volatile being set. Full eval
       takes about 2m to complete on AD Mac.
-- [ ] Use the right C and H units for the TreeLSTM.
 
 Other Tasks:
 
@@ -180,9 +180,6 @@ class SLSTMChain(Chain):
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
 
-        self.c_l, self.c_r = None, None
-        self.h_l, self.h_r = None, None
-
     def check_type_forward(self, in_types):
         type_check.expect(in_types.size() == 2)
         left_type, right_type = in_types
@@ -197,8 +194,8 @@ class SLSTMChain(Chain):
     def __call__(self, left_x, right_x, train=True, keep_hs=False):
         """
         Args:
-            left_x:  B* x E
-            right_x: B* x E
+            left_x:  B* x H
+            right_x: B* x H
         Returns:
             final_state: B* x H
         """
@@ -213,19 +210,26 @@ class SLSTMChain(Chain):
         assert len(left_x) == len(right_x)
         batch_size = len(left_x)
 
+        # TODO: Check that we have all zeros or None for c/h
+        # on the very first step. In other words, ensure that
+        # states aren't being carried over between batches.
+        for el in left_x + right_x:
+            if not hasattr(el, 'c'):
+                el.c = Variable(self.__mod.zeros((1, self.hidden_dim), dtype=self.__mod.float32))
+            if not hasattr(el, 'h'):
+                el.h = Variable(self.__mod.zeros((1, self.hidden_dim), dtype=self.__mod.float32))
+
         # TODO: Keep states between batches. Need to use some crazy pointer
         # system in order to have dynamic batch sizes.
-        c_l = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
-        c_r = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
-        h_l = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
-        h_r = self.__mod.zeros((batch_size, self.hidden_dim), dtype=self.__mod.float32)
+        c_l = F.concat([el.c for el in left_x], axis=0)
+        c_r = F.concat([el.c for el in right_x], axis=0)
+        h_l = F.concat([el.h for el in left_x], axis=0)
+        h_r = F.concat([el.h for el in right_x], axis=0)
 
         left = F.reshape(F.concat(left_x, axis=0), (-1, self.hidden_dim))
         right = F.reshape(F.concat(right_x, axis=0), (-1, self.hidden_dim))
 
-        if left.shape != right.shape:
-            import ipdb; ipdb.set_trace()
-            pass
+        assert left.shape == right.shape, "Left and Right must match in dimensions."
 
         il = self.i_l_fwd(left)
         ir = self.i_r_fwd(right)
@@ -236,10 +240,6 @@ class SLSTMChain(Chain):
         c, h = F.slstm(c_l, c_r, ihl, ihr)
 
         return c, h
-
-    def reset_state(self):
-        self.c_l, self.c_r = None, None
-        self.h_l, self.h_r = None, None
 
 class LSTM_TI(Chain):
     def __init__(self, input_dim, hidden_dim, seq_length, prefix="LSTM_TI", gpu=-1):

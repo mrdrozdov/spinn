@@ -86,7 +86,7 @@ def evaluate(classifier_model, eval_set, logger, step):
     action_acc_accum = 0.0
     eval_batches = 0.0
     total_batches = len(eval_set[1])
-    progress_bar = SimpleProgressBar(msg="Running eval")
+    progress_bar = SimpleProgressBar(msg="Run Eval")
     progress_bar.step(0, total=total_batches)
     for i, (X_prem, X_hyp, t_prem, t_hyp, y_batch, num_t_prem, num_t_hyp) in enumerate(eval_set[1]):
         # Calculate Local Accuracies
@@ -345,13 +345,8 @@ def run(only_forward=False):
             )
 
         # New Training Loop
+        progress_bar = SimpleProgressBar(msg="Training")
         for step in range(step, FLAGS.training_steps):
-            if step > 0 and step % FLAGS.eval_interval_steps == 0:
-                for index, eval_set in enumerate(eval_iterators):
-                    acc = evaluate(classifier_model, eval_set, logger, step)
-                    if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > 1000:
-                        best_dev_error = 1 - acc
-                        logger.Log("[TODO: NOT IMPLEMENTED] Checkpointing with new best dev accuracy of %f" % acc)
             X_prem, X_hyp, t_prem, t_hyp, y_batch, nt_prem, nt_hyp = training_data_iter.next()
             # X_batch, transitions_batch, y_batch, num_transitions_batch = training_data_iter.next()
             learning_rate = FLAGS.learning_rate * (FLAGS.learning_rate_decay_per_10k_steps ** (step / 10000.0))
@@ -378,11 +373,23 @@ def run(only_forward=False):
             action_acc_val = 0.0
             acc_val = float(classifier_model.model.accuracy.data)
 
+            progress_bar.step(
+                i=max(0, step-1) % FLAGS.statistics_interval_steps + 1,
+                total=FLAGS.statistics_interval_steps)
+
             if step % FLAGS.statistics_interval_steps == 0:
+                progress_bar.finish()
                 logger.Log(
                     "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %s"
                     % (step, acc_val, action_acc_val, total_cost_val, xent_cost_val, transition_cost_val,
                        "l2-not-exposed"))
+
+            if step > 0 and step % FLAGS.eval_interval_steps == 0:
+                for index, eval_set in enumerate(eval_iterators):
+                    acc = evaluate(classifier_model, eval_set, logger, step)
+                    if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > 1000:
+                        best_dev_error = 1 - acc
+                        logger.Log("[TODO: NOT IMPLEMENTED] Checkpointing with new best dev accuracy of %f" % acc)
 
 
 if __name__ == '__main__':

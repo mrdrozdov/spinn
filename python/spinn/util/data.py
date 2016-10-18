@@ -226,6 +226,9 @@ def TransitionsToParse(transitions, words):
 
 
 class SimpleProgressBar(object):
+    """ Simple Progress Bar and Timing Snippet
+    """
+
     def __init__(self, msg=">", bar_length=80):
         super(SimpleProgressBar, self).__init__()
         self.begin = time.time()
@@ -233,14 +236,15 @@ class SimpleProgressBar(object):
         self.msg = msg
         
     def step(self, i, total):
-        # Simple Progress Bar and Timing Snippet
         sys.stdout.write('\r')
         pct = (i / float(total)) * 100
         ii = i * self.bar_length / total
-        fmt = "%s [%-{}s] %d%% %ds".format(self.bar_length)
-        sys.stdout.write(fmt % (self.msg, '='*ii, pct, time.time()-self.begin))
+        fmt = "%s [%-{}s] %d%% %ds / %ds".format(self.bar_length)
+        total_time = time.time()-self.begin
+        expected = total_time / ((i+1e-03) / float(total))
+        sys.stdout.write(fmt % (self.msg, '='*ii, pct, total_time, expected))
         sys.stdout.flush()
 
     def finish(self):
-        # Simple Progress Bar and Timing Snippet
+        self.begin = time.time()
         sys.stdout.write('\n')
