@@ -191,7 +191,7 @@ class SLSTMChain(Chain):
 class LSTM_TI(Chain):
     def __init__(self, input_dim, hidden_dim, seq_length, prefix="LSTM_TI", gpu=-1):
         super(LSTM_TI, self).__init__(
-            reduce=SLSTMChain(input_dim, hidden_dim, seq_length, gpu=gpu),
+            # reduce=SLSTMChain(input_dim, hidden_dim, seq_length, gpu=gpu),
         )
         self.seq_length = seq_length
         self.input_dim = input_dim
@@ -229,15 +229,15 @@ class LSTM_TI(Chain):
         # END: Type Check
 
         batch_size, seq_length = buffers.shape[0], buffers.shape[1]
-        # c_prev_l, c_prev_r, h_prev_l, h_prev_r = [Variable(self.__mod.zeros(
-        #     (batch_size, self.hidden_dim), dtype=self.__mod.float32))
-        #     for _ in range(4)]
 
         transitions = transitions.data.T
 
+        assert len(transitions) == seq_length
+
         # MAYBE: Initialize stack with None, None in case of initial reduces.
-        stacks = [[] for _ in range(batch_size)]
+        # stacks = [[] for _ in range(batch_size)]
         buffers = [list(b) for b in buffers]
+        stacks = [[buf[0], buf[0]] for buf in buffers]
 
         def pseudo_reduce(lefts, rights):
             for l, r in zip(lefts, rights):
@@ -249,22 +249,29 @@ class LSTM_TI(Chain):
                 yield hh
 
         for ii, ts in enumerate(transitions):
+            assert len(ts) == batch_size
+            assert len(ts) == len(buffers)
+            assert len(ts) == len(stacks)
             lefts = []
             rights = []
             for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
-                if t == -1:
-                    continue
-                elif t == 0: # shift
-                    stack.append(buf.pop())
-                elif t == 1: # reduce
-                    rights.append(stack.pop())
-                    lefts.append(stack.pop())
-                else:
-                    raise Exception("Action not implemented: {}".format(t))
+                try:
+                    if t == -1:
+                        continue
+                    elif t == 0: # shift
+                        stack.append(buf.pop())
+                    elif t == 1: # reduce
+                        rights.append(stack.pop())
+                        lefts.append(stack.pop())
+                    else:
+                        raise Exception("Action not implemented: {}".format(t))
+                except:
+                    import ipdb; ipdb.set_trace()
+                    pass
 
             assert len(lefts) == len(rights)
             if len(rights) > 0:
-                reduced = iter(better_reduce(lefts, rights))
+                reduced = iter(pseudo_reduce(lefts, rights))
                 for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
                     if t == -1 or t == 0:
                         continue
@@ -358,8 +365,8 @@ class SentencePairModel(Chain):
         ratio = 1 - self.keep_rate
 
         # Get Embeddings
-        x_prem = self.embed(Variable(sentences[0]))
-        x_hyp = self.embed(Variable(sentences[1]))
+        x_prem = self.embed(Variable(sentences[:,:,0]))
+        x_hyp = self.embed(Variable(sentences[:,:,1]))
 
         batch_size, seq_length = x_prem.shape[0], x_prem.shape[1]
 
@@ -373,8 +380,8 @@ class SentencePairModel(Chain):
         x_hyp = F.reshape(x_hyp, (batch_size, seq_length, self.model_dim))
 
         # Extract Transitions
-        t_prem = Variable(transitions[0])
-        t_hyp = Variable(transitions[1])
+        t_prem = Variable(transitions[:,:,0])
+        t_hyp = Variable(transitions[:,:,1])
 
         # Pass through Sentence Encoders.
         h_premise = self.x2h_premise(x_prem, t_prem, train=train)

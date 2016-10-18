@@ -374,6 +374,7 @@ def run(only_forward=False):
 
             total_cost_val = xent_cost_val + transition_cost_val
             loss.backward()
+            # import ipdb; ipdb.set_trace()
             classifier_trainer.update()
 
             # Accumulate accuracy for current interval.
