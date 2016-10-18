@@ -5,6 +5,8 @@ import itertools
 
 import numpy as np
 import theano
+import time
+import sys
 
 
 # With loaded embedding matrix, the padding vector will be initialized to zero
@@ -60,7 +62,7 @@ def TokensToIDs(vocabulary, dataset, sentence_pair_data=False):
 
 def MakeTrainingIterator(sources, batch_size):
     # Make an iterator that exposes a dataset as random minibatches.
-
+    sources = np.array(sources).T
     def data_iter():
         dataset_size = len(sources[0])
         start = -1 * batch_size
@@ -74,34 +76,39 @@ def MakeTrainingIterator(sources, batch_size):
                 start = 0
                 random.shuffle(order)
             batch_indices = order[start:start + batch_size]
-            yield tuple(np.take(source, batch_indices, axis=0) for source in sources)
+            batch = sources[batch_indices].T.tolist()
+            batch = [np.array(s) for s in batch]
+            yield batch
     return data_iter()
 
 
-def MakeEvalIterator(sources, batch_size):
+def MakeEvalIterator(sources, batch_size, limit=-1):
     # Make a list of minibatches from a dataset to use as an iterator.
     # TODO(SB): Pad out the last few examples in the eval set if they don't
     # form a batch.
 
     print "WARNING: May be discarding eval examples."
 
-    dataset_size = len(sources[0])
+    dataset_size = limit if limit > 0 else len(sources[0])
     data_iter = []
+    sources = np.array(sources).T
+
     start = -batch_size
+
     while True:
         start += batch_size
-
         if start >= dataset_size:
             break
 
-        batch_indices = range(start, min(start + batch_size, dataset_size))
-        candidate_batch = tuple(np.take(source, batch_indices, axis=0)
-                               for source in sources)
+        # batch_indices = range(start, min(start + batch_size, dataset_size))
+        candidate_batch = sources[start:start+batch_size].T.tolist()
+        candidate_batch = [np.array(s) for s in candidate_batch]
 
         if len(candidate_batch[0]) == batch_size:
             data_iter.append(candidate_batch)
         else:
             print "Skipping " + str(len(candidate_batch[0])) + " examples."
+
     return data_iter
 
 
@@ -216,3 +223,24 @@ def TransitionsToParse(transitions, words):
         return stack.pop()
     else:
         return " ".join(words)
+
+
+class SimpleProgressBar(object):
+    def __init__(self, msg=">", bar_length=80):
+        super(SimpleProgressBar, self).__init__()
+        self.begin = time.time()
+        self.bar_length = bar_length
+        self.msg = msg
+        
+    def step(self, i, total):
+        # Simple Progress Bar and Timing Snippet
+        sys.stdout.write('\r')
+        pct = (i / float(total)) * 100
+        ii = i * self.bar_length / total
+        fmt = "%s [%-{}s] %d%% %ds".format(self.bar_length)
+        sys.stdout.write(fmt % (self.msg, '='*ii, pct, time.time()-self.begin))
+        sys.stdout.flush()
+
+    def finish(self):
+        # Simple Progress Bar and Timing Snippet
+        sys.stdout.write('\n')

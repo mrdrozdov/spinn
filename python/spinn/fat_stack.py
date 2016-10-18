@@ -84,7 +84,8 @@ TODO:
       redundant called to Variable().
 - [x] Enable evaluation. Currently crashing.
 - [ ] Confirm that volatile is working correctly during eval time.
-      Time the eval with and without volatile being set.
+      Time the eval with and without volatile being set. Full eval
+      takes about 2m to complete on AD Mac.
 - [ ] Use the right C and H units for the TreeLSTM.
 
 Other Tasks:

@@ -33,6 +33,7 @@ from spinn.data.boolean import load_boolean_data
 from spinn.data.sst import load_sst_data
 from spinn.data.snli import load_snli_data
 from spinn.util import chainer_blocks as CB
+from spinn.util.data import SimpleProgressBar
 
 import spinn.fat_stack
 import spinn.plain_rnn_chainer
@@ -84,7 +85,10 @@ def evaluate(classifier_model, eval_set, logger, step):
     acc_accum = 0.0
     action_acc_accum = 0.0
     eval_batches = 0.0
-    for (X_prem, X_hyp, t_prem, t_hyp, y_batch, num_t_prem, num_t_hyp) in eval_set[1]:
+    total_batches = len(eval_set[1])
+    progress_bar = SimpleProgressBar(msg="Running eval")
+    progress_bar.step(0, total=total_batches)
+    for i, (X_prem, X_hyp, t_prem, t_hyp, y_batch, num_t_prem, num_t_hyp) in enumerate(eval_set[1]):
         # Calculate Local Accuracies
         ret = classifier_model.forward({
             "sentences": [X_prem, X_hyp],
@@ -98,6 +102,10 @@ def evaluate(classifier_model, eval_set, logger, step):
         acc_accum += acc_value
         action_acc_accum += action_acc_value
         eval_batches += 1.0
+
+        # Print Progress
+        progress_bar.step(i+1, total=total_batches)
+    progress_bar.finish()
     logger.Log("Step: %i\tEval acc: %f\t %f\t%s" %
               (step, acc_accum / eval_batches, action_acc_accum / eval_batches, eval_set[0]))
     return acc_accum / eval_batches
@@ -263,7 +271,7 @@ def run(only_forward=False):
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             for_rnn=FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW")
         eval_iterators.append((filename,
-            util.MakeEvalIterator((e_X_prem, e_X_hyp, e_t_prem, e_t_hyp, e_y, e_prem_num_transitions, e_hyp_num_transitions), FLAGS.batch_size)))
+            util.MakeEvalIterator((e_X_prem, e_X_hyp, e_t_prem, e_t_hyp, e_y, e_prem_num_transitions, e_hyp_num_transitions), FLAGS.batch_size, limit=FLAGS.eval_data_limit)))
 
     # Set up the placeholders.
 
@@ -398,6 +406,7 @@ if __name__ == '__main__':
         "when to save the early stopping 'best' checkpoints.")
     gflags.DEFINE_integer("seq_length", 30, "")
     gflags.DEFINE_integer("eval_seq_length", 30, "")
+    gflags.DEFINE_integer("eval_data_limit", -1, "Truncate evaluation set. -1 indicates no truncation.")
     gflags.DEFINE_string("embedding_data_path", None,
         "If set, load GloVe-formatted embeddings from here.")
 
