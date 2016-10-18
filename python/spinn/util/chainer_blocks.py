@@ -169,3 +169,75 @@ class MLP(ChainList):
             h = F.relu(l0(h))
         y = h
         return y
+
+class SentencePairTrainer(object):
+
+    def __init__(self, model, model_dim, word_embedding_dim, vocab_size, compose_network,
+                 seq_length,
+                 num_classes,
+                 mlp_dim,
+                 keep_rate,
+                 initial_embeddings=None,
+                 use_sentence_pair=False,
+                 gpu=-1,
+                 **kwargs):
+
+        self.model_dim = model_dim
+        self.word_embedding_dim = word_embedding_dim
+        self.mlp_dim = mlp_dim
+        self.vocab_size = vocab_size
+        self._compose_network = compose_network
+        self.initial_embeddings = initial_embeddings
+        self.seq_length = seq_length
+        self.keep_rate = keep_rate
+        self.__gpu = gpu
+        self.__mod = cuda.cupy if gpu >= 0 else np
+
+        self.model = model
+
+        # self.init_params()
+        # if gpu >= 0:
+        #     cuda.get_device(gpu).use()
+        #     self.model.to_gpu()
+
+    def init_params(self):
+        for name, param in self.model.namedparams():
+            data = param.data
+            print("Init: {}:{}".format(name, data.shape))
+            data[:] = np.random.uniform(-0.1, 0.1, data.shape)
+
+    def init_optimizer(self, clip, decay, lr=0.001, alpha=0.9, eps=1e-6):
+        self.optimizer = optimizers.RMSprop(lr=lr, alpha=alpha, eps=eps)
+        self.optimizer.setup(self.model)
+
+        # Clip Gradient
+        # self.optimizer.add_hook(chainer.optimizer.GradientClipping(clip))
+
+        # L2 Regularization
+        # self.optimizer.add_hook(chainer.optimizer.WeightDecay(decay))
+
+    def update(self):
+        self.optimizer.update()
+
+    def forward(self, x_batch, y_batch=None, train=True, predict=False):
+        assert "sentences" in x_batch and "transitions" in x_batch, \
+            "Input must contain dictionary of sentences and transitions."
+
+        sentences = x_batch["sentences"]
+        transitions = x_batch["transitions"]
+
+        y, loss = self.model(sentences, transitions, y_batch, train=train)
+        if predict:
+            preds = self.__mod.argmax(y.data, 1).tolist()
+        else:
+            preds = None
+        return y, loss, preds
+
+    def save(self, filename):
+        chainer.serializers.save_npz(filename, self.model)
+
+    @staticmethod
+    def load(filename, n_units, gpu):
+        self = SentenceModel(n_units, gpu)
+        chainer.serializers.load_npz(filename, self.model)
+        return self

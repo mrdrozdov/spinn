@@ -35,6 +35,8 @@ from spinn.data.snli import load_snli_data
 from spinn.util import chainer_blocks as CB
 from spinn.util.data import SimpleProgressBar
 
+from spinn.util.chainer_blocks import SentencePairTrainer
+
 import spinn.fat_stack
 import spinn.plain_rnn_chainer
 import spinn.cbow
@@ -60,14 +62,20 @@ def build_sentence_pair_model(cls, vocab_size, seq_length, tokens, transitions,
 
 
     # Prepare layer which performs stack element composition.
-    if cls is spinn.plain_rnn_chainer.RNN:
+    if cls is spinn.cbow.SentencePairModel:
         compose_network = CB.LSTM
-    elif cls is spinn.fat_stack.TransitionModel:
+    elif cls is spinn.fat_stack.SentencePairModel:
         compose_network = CB.LSTM
     else:
         raise AssertionError("Need to specify an implemented model.")
 
-    classifier_model = cls(FLAGS.model_dim, FLAGS.word_embedding_dim, vocab_size, compose_network,
+    model = cls(FLAGS.model_dim, FLAGS.word_embedding_dim, vocab_size, compose_network,
+             FLAGS.seq_length, initial_embeddings, num_classes, mlp_dim=1024,
+             keep_rate=FLAGS.embedding_keep_rate,
+             gpu=FLAGS.gpu,
+            )
+
+    classifier_trainer = SentencePairTrainer(model, FLAGS.model_dim, FLAGS.word_embedding_dim, vocab_size, compose_network,
         keep_rate=FLAGS.embedding_keep_rate,
         seq_length=seq_length,
         num_classes=num_classes,
@@ -77,10 +85,10 @@ def build_sentence_pair_model(cls, vocab_size, seq_length, tokens, transitions,
         gpu=FLAGS.gpu,
         )
 
-    return classifier_model
+    return classifier_trainer
 
 
-def evaluate(classifier_model, eval_set, logger, step):
+def evaluate(classifier_trainer, eval_set, logger, step):
     # Evaluate
     acc_accum = 0.0
     action_acc_accum = 0.0
@@ -90,12 +98,12 @@ def evaluate(classifier_model, eval_set, logger, step):
     progress_bar.step(0, total=total_batches)
     for i, (X_prem, X_hyp, t_prem, t_hyp, y_batch, num_t_prem, num_t_hyp) in enumerate(eval_set[1]):
         # Calculate Local Accuracies
-        ret = classifier_model.forward({
+        ret = classifier_trainer.forward({
             "sentences": [X_prem, X_hyp],
             "transitions": [t_prem, t_hyp],
             }, y_batch, train=False, predict=False)
         # y, loss, preds = ret
-        acc_value = float(classifier_model.model.accuracy.data)
+        acc_value = float(classifier_trainer.model.accuracy.data)
         action_acc_value = 0.0
 
         # Update Aggregate Accuracies
@@ -278,12 +286,12 @@ def run(only_forward=False):
     logger.Log("Building model.")
 
     if FLAGS.model_type == "CBOW":
-        model_cls = spinn.cbow.CBOW
+        model_cls = spinn.cbow.SentencePairModel
     elif FLAGS.model_type == "RNN":
         model_cls = spinn.plain_rnn_chainer.RNN
     elif FLAGS.model_type == "SPINN":
         # model_cls = getattr(spinn.fat_stack, FLAGS.model_type)
-        model_cls = spinn.fat_stack.TransitionModel
+        model_cls = spinn.fat_stack.SentencePairModel
     else:
         raise Exception("Requested unimplemented model type %s" % FLAGS.model_type)
 
@@ -310,7 +318,7 @@ def run(only_forward=False):
     logits = None
 
     if data_manager.SENTENCE_PAIR_DATA:
-        classifier_model = build_sentence_pair_model(
+        classifier_trainer = build_sentence_pair_model(
             model_cls, len(vocabulary), FLAGS.seq_length,
             X, transitions, len(data_manager.LABEL_MAP), training_mode, ground_truth_transitions_visible, vs,
             initial_embeddings=initial_embeddings, project_embeddings=(not train_embeddings),
@@ -339,7 +347,7 @@ def run(only_forward=False):
          # Train
         logger.Log("Training.")
         
-        classifier_model.init_optimizer(
+        classifier_trainer.init_optimizer(
             clip=FLAGS.clipping_max_value, decay=FLAGS.l2_lambda,
             lr=FLAGS.learning_rate,
             )
@@ -352,10 +360,10 @@ def run(only_forward=False):
             learning_rate = FLAGS.learning_rate * (FLAGS.learning_rate_decay_per_10k_steps ** (step / 10000.0))
 
             # Reset hidden states of RNN(s), and reset cached gradients.
-            classifier_model.model.cleargrads()
+            classifier_trainer.model.cleargrads()
 
             # Calculate loss and update parameters.
-            ret = classifier_model.forward({
+            ret = classifier_trainer.forward({
                 "sentences": [X_prem, X_hyp],
                 "transitions": [t_prem, t_hyp],
                 }, y_batch, train=True, predict=False)
@@ -367,11 +375,11 @@ def run(only_forward=False):
 
             total_cost_val = xent_cost_val + transition_cost_val
             loss.backward()
-            classifier_model.update()
+            classifier_trainer.update()
 
             # Accumulate accuracy for current interval.
             action_acc_val = 0.0
-            acc_val = float(classifier_model.model.accuracy.data)
+            acc_val = float(classifier_trainer.model.accuracy.data)
 
             progress_bar.step(
                 i=max(0, step-1) % FLAGS.statistics_interval_steps + 1,
@@ -386,7 +394,7 @@ def run(only_forward=False):
 
             if step > 0 and step % FLAGS.eval_interval_steps == 0:
                 for index, eval_set in enumerate(eval_iterators):
-                    acc = evaluate(classifier_model, eval_set, logger, step)
+                    acc = evaluate(classifier_trainer, eval_set, logger, step)
                     if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > 1000:
                         best_dev_error = 1 - acc
                         logger.Log("[TODO: NOT IMPLEMENTED] Checkpointing with new best dev accuracy of %f" % acc)

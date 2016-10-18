@@ -7,6 +7,10 @@ from theano import tensor as T
 from spinn import util
 
 
+class SentencePairModel(object):
+    pass
+
+
 class CBOW(object):
     """Plain sum of words encoder implementation.
     """
