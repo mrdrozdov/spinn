@@ -16,25 +16,44 @@ from chainer.utils import type_check
 
 LSTM = F.lstm
 
+
+
 class EmbedChain(Chain):
-    def __init__(self, embedding_dim, vocab_size, initial_embeddings, prefix="EmbedChain", gpu=-1):
+    def __init__(self, embedding_dim, vocab_size, initial_embeddings, projection_dim, prefix="EmbedChain", gpu=-1):
         super(EmbedChain, self).__init__()
         assert initial_embeddings is not None, "Depends on pre-trained embeddings."
-        self.raw_embeddings = initial_embeddings
         self.embedding_dim = embedding_dim
         self.vocab_size = vocab_size
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
+        self.raw_embeddings = self.__mod.array(initial_embeddings, dtype=self.__mod.float32)
 
-    def __call__(self, x_batch, train=True, keep_hs=False):
-        # x_batch: batch_size * seq_len
-        b, l = x_batch.shape[0], x_batch.shape[1]
+    def check_type_forward(self, in_types):
+        type_check.expect(in_types.size() == 1)
+        x_type = in_types[0]
 
-        # Perform indexing and reshaping on the CPU.
-        x = self.raw_embeddings.take(x_batch.ravel(), axis=0)
-        x = x.reshape(b, l, -1)
+        type_check.expect(
+            x_type.dtype == 'i',
+            x_type.ndim >= 1,
+        )
 
-        return x
+    def __call__(self, x_batch, train=True):
+        """
+        Compute an integer lookup on an embedding matrix.
+
+        Args:
+            x_batch: List of B x S
+        Returns:
+            x_emb:   List of flatten embeddings B x S x E
+        """
+
+        # BEGIN: Type Check
+        in_data = tuple([x.data for x in [x_batch]])
+        in_types = type_check.get_types(in_data, 'in_types', False)
+        self.check_type_forward(in_types)
+        # END: Type Check
+
+        return self.raw_embeddings.take(x_batch.data, axis=0)
 
 class LSTMChain(Chain):
     def __init__(self, input_dim, hidden_dim, seq_length, prefix="LSTMChain", gpu=-1):
@@ -206,8 +225,8 @@ class SentencePairTrainer(object):
             print("Init: {}:{}".format(name, data.shape))
             data[:] = np.random.uniform(-0.1, 0.1, data.shape)
 
-    def init_optimizer(self, clip, decay, lr=0.001, alpha=0.9, eps=1e-6):
-        self.optimizer = optimizers.RMSprop(lr=lr, alpha=alpha, eps=eps)
+    def init_optimizer(self, clip, decay, lr=0.01, alpha=0.9, eps=1e-6):
+        self.optimizer = optimizers.SGD(lr=0.01)
         self.optimizer.setup(self.model)
 
         # Clip Gradient

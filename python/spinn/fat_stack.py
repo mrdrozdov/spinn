@@ -31,7 +31,7 @@ from chainer.utils import type_check
 
 import spinn.util.chainer_blocks as CB
 
-from spinn.util.chainer_blocks import LSTM, LSTMChain, RNNChain
+from spinn.util.chainer_blocks import LSTM, LSTMChain, RNNChain, EmbedChain
 from spinn.util.chainer_blocks import MLP
 from spinn.util.chainer_blocks import CrossEntropyClassifier
 
@@ -113,59 +113,6 @@ def tensor_to_lists(inp, reverse=True):
         out = [list(x) for x in out]
 
     return out
-
-class EmbedChain(Chain):
-    def __init__(self, embedding_dim, vocab_size, initial_embeddings, projection_dim, prefix="EmbedChain", gpu=-1):
-        super(EmbedChain, self).__init__(
-            projection=L.Linear(embedding_dim, projection_dim)
-            )
-        assert initial_embeddings is not None, "Depends on pre-trained embeddings."
-        self.embedding_dim = embedding_dim
-        self.projection_dim = projection_dim
-        self.vocab_size = vocab_size
-        self.__gpu = gpu
-        self.__mod = cuda.cupy if gpu >= 0 else np
-        self.raw_embeddings = self.__mod.array(initial_embeddings, dtype=self.__mod.float32)
-
-    def check_type_forward(self, in_types):
-        type_check.expect(in_types.size() == 1)
-        x_type = in_types[0]
-
-        type_check.expect(
-            x_type.dtype == 'i',
-            x_type.ndim >= 1,
-        )
-
-    def __call__(self, x_batch, train=True):
-        """
-        Compute an integer lookup on an embedding matrix.
-
-        Args:
-            x_batch: List of B x S*
-        Returns:
-            x_emb:   List of B x S* x E
-        """
-
-        # BEGIN: Type Check
-        in_data = tuple([x.data for x in [x_batch]])
-        in_types = type_check.get_types(in_data, 'in_types', False)
-        self.check_type_forward(in_types)
-        # END: Type Check
-
-        batch_size, seq_length = x_batch.shape[0], x_batch.shape[1]
-
-        # Keep lengths to convert back to sentences later.
-        sent_lengths = [len(sent) for sent in x_batch.data]
-
-        x = self.raw_embeddings.take(x_batch.data, axis=0)
-
-        # Pass embeddings through projection layer, so that they match
-        # the dimensions in the output of the compose/reduce function.
-        x = F.reshape(x, (batch_size * seq_length, self.embedding_dim))
-        x = self.projection(x)
-        x = F.reshape(x, (batch_size, seq_length, self.projection_dim))
-
-        return x
 
 class SLSTMChain(Chain):
     def __init__(self, input_dim, hidden_dim, seq_length, prefix="SLSTMChain", gpu=-1):
@@ -391,6 +338,7 @@ class SentencePairModel(Chain):
                  ):
         super(SentencePairModel, self).__init__(
             embed=EmbedChain(word_embedding_dim, vocab_size, initial_embeddings, model_dim, gpu=gpu),
+            projection=L.Linear(word_embedding_dim, model_dim),
             x2h_premise=SPINN(model_dim, word_embedding_dim, vocab_size,
                     seq_length, initial_embeddings, gpu=gpu, keep_rate=keep_rate),
             x2h_hypothesis=SPINN(model_dim, word_embedding_dim, vocab_size,
@@ -403,6 +351,8 @@ class SentencePairModel(Chain):
         self.__mod = cuda.cupy if gpu >= 0 else np
         self.accFun = accuracy.accuracy
         self.keep_rate = keep_rate
+        self.word_embedding_dim = word_embedding_dim
+        self.model_dim = model_dim
 
     def __call__(self, sentences, transitions, y_batch=None, train=True):
         ratio = 1 - self.keep_rate
@@ -411,17 +361,31 @@ class SentencePairModel(Chain):
         x_prem = self.embed(Variable(sentences[0]))
         x_hyp = self.embed(Variable(sentences[1]))
 
+        batch_size, seq_length = x_prem.shape[0], x_prem.shape[1]
+
+        # Pass embeddings through projection layer, so that they match
+        # the dimensions in the output of the compose/reduce function.
+        x_prem = F.reshape(x_prem, (batch_size * seq_length, self.word_embedding_dim))
+        x_prem = self.projection(x_prem)
+        x_prem = F.reshape(x_prem, (batch_size, seq_length, self.model_dim))
+        x_hyp = F.reshape(x_hyp, (batch_size * seq_length, self.word_embedding_dim))
+        x_hyp = self.projection(x_hyp)
+        x_hyp = F.reshape(x_hyp, (batch_size, seq_length, self.model_dim))
+
+        # Extract Transitions
         t_prem = Variable(transitions[0])
         t_hyp = Variable(transitions[1])
 
+        # Pass through Sentence Encoders.
         h_premise = self.x2h_premise(x_prem, t_prem, train=train)
         h_hypothesis = self.x2h_hypothesis(x_hyp, t_hyp, train=train)
         
+        # Pass through Classifier.
         h = F.concat([h_premise, h_hypothesis], axis=1)
-
         h = F.dropout(h, ratio, train)
         y = self.h2y(h, train)
 
+        # Calculate Loss & Accuracy.
         y = F.dropout(y, ratio, train)
         accum_loss = self.classifier(y, Variable(y_batch), train)
         self.accuracy = self.accFun(y, self.__mod.array(y_batch))

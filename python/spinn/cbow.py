@@ -1,89 +1,72 @@
 """Theano-based sum-of-words implementations."""
 
 import numpy as np
-import theano
 
-from theano import tensor as T
 from spinn import util
 
+# Chainer imports
+import chainer
+from chainer import cuda, Function, gradient_check, report, training, utils, Variable
+from chainer import datasets, iterators, optimizers, serializers
+from chainer import Link, Chain, ChainList
+import chainer.functions as F
+from chainer.functions.connection import embed_id
+from chainer.functions.normalization.batch_normalization import batch_normalization
+from chainer.functions.evaluation import accuracy
+import chainer.links as L
+from chainer.training import extensions
 
-class SentencePairModel(object):
-    pass
+from chainer.utils import type_check
+
+import spinn.util.chainer_blocks as CB
+
+from chainer.functions.loss import softmax_cross_entropy
+from spinn.util.chainer_blocks import LSTM, LSTMChain, RNNChain, EmbedChain
+from spinn.util.chainer_blocks import MLP
+from spinn.util.chainer_blocks import CrossEntropyClassifier
 
 
-class CBOW(object):
-    """Plain sum of words encoder implementation.
-    """
-
-    def __init__(self, model_dim, word_embedding_dim, vocab_size, _0, _1,
-                 _2, _3, _4, vs, 
-                 X=None,
-                 initial_embeddings=None,
-                 make_test_fn=False,
-                 **kwargs):
-        """Construct an RNN.
-
-        Args:
-            model_dim: Dimensionality of hidden state. Must equal word_embedding_dim.
-            vocab_size: Number of unique tokens in vocabulary.
-            compose_network: Blocks-like function which accepts arguments
-              `prev_hidden_state, inp, inp_dim, hidden_dim, vs, name` (see e.g. `util.LSTMLayer`).
-            training_mode: A Theano scalar indicating whether to act as a training model 
-              with dropout (1.0) or to act as an eval model with rescaling (0.0).
-            vs: VariableStore instance for parameter storage
-            X: Theano batch describing input matrix, or `None` (in which case
-              this instance will make its own batch variable).
-            make_test_fn: If set, create a function to run a scan for testing.
-            kwargs, _0, _1, _2, _3, _4: Ignored. meant to make the signature match the signature of HardStack().
-        """
-
-        assert model_dim == word_embedding_dim
-
-        self.model_dim = model_dim
+class SentencePairModel(Chain):
+    def __init__(self, model_dim, word_embedding_dim, vocab_size, compose_network,
+                 seq_length, initial_embeddings, num_classes,
+                 mlp_dim,
+                 keep_rate,
+                 gpu=-1,
+                 ):
+        super(SentencePairModel, self).__init__(
+            embed=EmbedChain(word_embedding_dim, vocab_size, initial_embeddings, model_dim, gpu=gpu),
+            l0=L.Linear(word_embedding_dim*2, 1024),
+            l1=L.Linear(1024, 512),
+            l2=L.Linear(512, 3),
+        )
+        self.__gpu = gpu
+        self.__mod = cuda.cupy if gpu >= 0 else np
+        self.accFun = accuracy.accuracy
+        self.lossFun = softmax_cross_entropy.softmax_cross_entropy
+        self.keep_rate = keep_rate
         self.word_embedding_dim = word_embedding_dim
+        self.model_dim = model_dim
+        self.num_classes = num_classes
 
-        self.vocab_size = vocab_size
+    def __call__(self, sentences, transitions, y_batch=None, train=True):
+        ratio = 1 - self.keep_rate
 
-        self._vs = vs
+        # Get Embeddings
+        x_prem = self.embed(Variable(sentences[:,:,0]))
+        x_hyp = self.embed(Variable(sentences[:,:,1]))
 
-        self.initial_embeddings = initial_embeddings
+        # Sum and Concatenate both Sentences
+        h_l = F.sum(x_prem, axis=1)
+        h_r = F.sum(x_hyp, axis=1)
+        h = F.concat([h_l, h_r], axis=1)
 
-        self.X = X
-
-        self._make_params()
-        self._make_inputs()
-        self._make_sum()
-
-        if make_test_fn:
-            assert False, "Not implemented."
-
-    def _make_params(self):
-        # Per-token embeddings.
-        if self.initial_embeddings is not None:
-            def EmbeddingInitializer(shape):
-                return self.initial_embeddings
-            self.embeddings = self._vs.add_param(
-                    "embeddings", (self.vocab_size, self.word_embedding_dim), 
-                    initializer=EmbeddingInitializer,
-                    trainable=False,
-                    savable=False)
-        else:
-            self.embeddings = self._vs.add_param(
-                "embeddings", (self.vocab_size, self.word_embedding_dim))
-
-    def _make_inputs(self):
-        self.X = self.X or T.imatrix("X")
-
-    def _make_sum(self):
-        """Build the sequential composition / scan graph."""
-
-        batch_size, seq_length = self.X.shape
-
-        # Look up all of the embeddings that will be used.
-        raw_embeddings = self.embeddings[self.X]  # batch_size * seq_length * emb_dim
-
-        self.final_representations = T.sum(raw_embeddings, axis=1, keepdims=True, dtype="float32", acc_dtype="float32")
-        self.transitions_pred = T.zeros((batch_size, 0))
-        self.predict_transitions = False
-        self.tracking_state_final = None
+        # Pass through Classifier
+        h = F.relu(self.l0(h))
+        h = F.relu(self.l1(h))
+        h = F.relu(self.l2(h))
+        y = h
         
+        accum_loss = self.lossFun(y, y_batch)
+        self.accuracy = self.accFun(y_hat, y_batch)
+
+        return y_hat, accum_loss

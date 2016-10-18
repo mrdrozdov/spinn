@@ -96,12 +96,12 @@ def evaluate(classifier_trainer, eval_set, logger, step):
     total_batches = len(eval_set[1])
     progress_bar = SimpleProgressBar(msg="Run Eval")
     progress_bar.step(0, total=total_batches)
-    for i, (X_prem, X_hyp, t_prem, t_hyp, y_batch, num_t_prem, num_t_hyp) in enumerate(eval_set[1]):
+    for i, (eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch) in enumerate(eval_set[1]):
         # Calculate Local Accuracies
         ret = classifier_trainer.forward({
-            "sentences": [X_prem, X_hyp],
-            "transitions": [t_prem, t_hyp],
-            }, y_batch, train=False, predict=False)
+            "sentences": eval_X_batch,
+            "transitions": eval_transitions_batch,
+            }, eval_y_batch, train=False, predict=False)
         # y, loss, preds = ret
         acc_value = float(classifier_trainer.model.accuracy.data)
         action_acc_value = 0.0
@@ -274,12 +274,12 @@ def run(only_forward=False):
     eval_iterators = []
     for filename, raw_eval_set in raw_eval_sets:
         logger.Log("Preprocessing eval data: " + filename)
-        e_X_prem, e_X_hyp, e_t_prem, e_t_hyp, e_y, e_prem_num_transitions, e_hyp_num_transitions = util.PreprocessDataset(
+        e_X, e_transitions, e_y, e_num_transitions = util.PreprocessDataset(
             raw_eval_set, vocabulary, FLAGS.seq_length, data_manager, eval_mode=True, logger=logger,
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             for_rnn=FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW")
         eval_iterators.append((filename,
-            util.MakeEvalIterator((e_X_prem, e_X_hyp, e_t_prem, e_t_hyp, e_y, e_prem_num_transitions, e_hyp_num_transitions), FLAGS.batch_size, limit=FLAGS.eval_data_limit)))
+            util.MakeEvalIterator((e_X, e_transitions, e_y, e_num_transitions), FLAGS.batch_size)))
 
     # Set up the placeholders.
 
@@ -355,17 +355,16 @@ def run(only_forward=False):
         # New Training Loop
         progress_bar = SimpleProgressBar(msg="Training")
         for step in range(step, FLAGS.training_steps):
-            X_prem, X_hyp, t_prem, t_hyp, y_batch, nt_prem, nt_hyp = training_data_iter.next()
-            # X_batch, transitions_batch, y_batch, num_transitions_batch = training_data_iter.next()
+            X_batch, transitions_batch, y_batch, num_transitions_batch = training_data_iter.next()
             learning_rate = FLAGS.learning_rate * (FLAGS.learning_rate_decay_per_10k_steps ** (step / 10000.0))
 
-            # Reset hidden states of RNN(s), and reset cached gradients.
+            # Reset cached gradients.
             classifier_trainer.model.cleargrads()
 
             # Calculate loss and update parameters.
             ret = classifier_trainer.forward({
-                "sentences": [X_prem, X_hyp],
-                "transitions": [t_prem, t_hyp],
+                "sentences": X_batch,
+                "transitions": transitions_batch,
                 }, y_batch, train=True, predict=False)
             y, loss, preds = ret
 
