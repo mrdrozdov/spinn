@@ -188,6 +188,7 @@ class SLSTMChain(Chain):
 
         return c, h
 
+
 class LSTM_TI(Chain):
     def __init__(self, input_dim, hidden_dim, seq_length, prefix="LSTM_TI", gpu=-1):
         super(LSTM_TI, self).__init__(
@@ -228,16 +229,15 @@ class LSTM_TI(Chain):
         self.check_type_forward(in_types)
         # END: Type Check
 
-        batch_size, seq_length = buffers.shape[0], buffers.shape[1]
+        batch_size, seq_length, hidden_dim = buffers.shape[0], buffers.shape[1], buffers.shape[2]
 
         transitions = transitions.data.T
 
         assert len(transitions) == seq_length
 
         # MAYBE: Initialize stack with None, None in case of initial reduces.
-        # stacks = [[] for _ in range(batch_size)]
+        stacks = [[] for _ in range(batch_size)]
         buffers = [list(b) for b in buffers]
-        stacks = [[buf[0], buf[0]] for buf in buffers]
 
         def pseudo_reduce(lefts, rights):
             for l, r in zip(lefts, rights):
@@ -252,28 +252,29 @@ class LSTM_TI(Chain):
             assert len(ts) == batch_size
             assert len(ts) == len(buffers)
             assert len(ts) == len(stacks)
+
             lefts = []
             rights = []
             for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
-                try:
-                    if t == -1:
-                        continue
-                    elif t == 0: # shift
-                        stack.append(buf.pop())
-                    elif t == 1: # reduce
-                        rights.append(stack.pop())
-                        lefts.append(stack.pop())
-                    else:
-                        raise Exception("Action not implemented: {}".format(t))
-                except:
-                    import ipdb; ipdb.set_trace()
-                    pass
+                if t == 0: # shift
+                    stack.append(buf.pop())
+                elif t == 1: # reduce
+                    for lr in [rights, lefts]:
+                        # If the stack is empty, reduce using a vector of zeros.
+                        # TODO: We should replace these with a NOOP action in
+                        # order to save memory.
+                        if len(stack) > 0:
+                            lr.append(stack.pop())
+                        else:
+                            lr.append(np.zeros((hidden_dim,)))
+                else:
+                    raise Exception("Action not implemented: {}".format(t))
 
             assert len(lefts) == len(rights)
             if len(rights) > 0:
                 reduced = iter(pseudo_reduce(lefts, rights))
                 for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
-                    if t == -1 or t == 0:
+                    if t == 0:
                         continue
                     elif t == 1:
                         composition = next(reduced)
@@ -299,6 +300,7 @@ class LSTM_TI(Chain):
         hs = None
 
         return c, h, hs
+
 
 class SPINN(Chain):
     def __init__(self, model_dim, word_embedding_dim, vocab_size,

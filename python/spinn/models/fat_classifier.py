@@ -279,7 +279,8 @@ def run(only_forward=False):
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             for_rnn=FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW")
         eval_iterators.append((filename,
-            util.MakeEvalIterator((e_X, e_transitions, e_y, e_num_transitions), FLAGS.batch_size)))
+            util.MakeEvalIterator((e_X, e_transitions, e_y, e_num_transitions),
+                FLAGS.batch_size, FLAGS.eval_data_limit)))
 
     # Set up the placeholders.
 

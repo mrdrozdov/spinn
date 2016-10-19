@@ -139,14 +139,14 @@ def MakeTrainingIterator(sources, batch_size):
     return data_iter()
 
 
-def MakeEvalIterator(sources, batch_size):
+def MakeEvalIterator(sources, batch_size, limit=-1):
     # Make a list of minibatches from a dataset to use as an iterator.
     # TODO(SB): Pad out the last few examples in the eval set if they don't
     # form a batch.
 
     print "WARNING: May be discarding eval examples."
 
-    dataset_size = len(sources[0])
+    dataset_size = limit if limit >= 0 else len(sources[0])
     data_iter = []
     start = -batch_size
     while True:
