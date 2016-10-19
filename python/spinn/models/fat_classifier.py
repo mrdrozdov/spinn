@@ -32,7 +32,6 @@ from spinn import util
 from spinn.data.boolean import load_boolean_data
 from spinn.data.sst import load_sst_data
 from spinn.data.snli import load_snli_data
-from spinn.util import chainer_blocks as CB
 from spinn.util.data import SimpleProgressBar
 
 from spinn.util.chainer_blocks import SentencePairTrainer
@@ -60,15 +59,10 @@ def build_sentence_pair_model(cls, vocab_size, seq_length, tokens, transitions,
         with dropout (1.0) or to act as an eval model with rescaling (0.0).
     """
 
+    compose_network = None
+
 
     # Prepare layer which performs stack element composition.
-    if cls is spinn.cbow.SentencePairModel:
-        compose_network = CB.LSTM
-    elif cls is spinn.fat_stack.SentencePairModel:
-        compose_network = CB.LSTM
-    else:
-        raise AssertionError("Need to specify an implemented model.")
-
     model = cls(FLAGS.model_dim, FLAGS.word_embedding_dim, vocab_size, compose_network,
              FLAGS.seq_length, initial_embeddings, num_classes, mlp_dim=1024,
              keep_rate=FLAGS.embedding_keep_rate,

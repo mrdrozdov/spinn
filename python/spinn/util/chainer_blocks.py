@@ -244,7 +244,7 @@ class CrossEntropyClassifier(Chain):
         accum_loss = 0 if train else None
         if train:
             if self.__gpu >= 0:
-                y_batch = cuda.to_gpu(y_batch)
+                y_batch = cuda.to_gpu(y_batch.data)
             accum_loss = F.softmax_cross_entropy(y, y_batch)
 
         return accum_loss
@@ -301,10 +301,10 @@ class SentencePairTrainer(object):
 
         self.model = model
 
-        # self.init_params()
-        # if gpu >= 0:
-        #     cuda.get_device(gpu).use()
-        #     self.model.to_gpu()
+        self.init_params()
+        if gpu >= 0:
+            cuda.get_device(gpu).use()
+            self.model.to_gpu()
 
     def init_params(self):
         for name, param in self.model.namedparams():

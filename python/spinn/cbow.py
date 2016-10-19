@@ -21,7 +21,7 @@ from chainer.utils import type_check
 import spinn.util.chainer_blocks as CB
 
 from chainer.functions.loss import softmax_cross_entropy
-from spinn.util.chainer_blocks import LSTM, LSTMChain, RNNChain, EmbedChain
+from spinn.util.chainer_blocks import LSTMChain, RNNChain, EmbedChain
 from spinn.util.chainer_blocks import MLP
 from spinn.util.chainer_blocks import CrossEntropyClassifier
 

@@ -31,7 +31,7 @@ from chainer.utils import type_check
 
 import spinn.util.chainer_blocks as CB
 
-from spinn.util.chainer_blocks import LSTM, ReduceChain, TreeLSTMChain, LSTMChain, RNNChain, EmbedChain
+from spinn.util.chainer_blocks import ReduceChain, TreeLSTMChain, LSTMChain, RNNChain, EmbedChain
 from spinn.util.chainer_blocks import MLP
 from spinn.util.chainer_blocks import CrossEntropyClassifier
 
@@ -251,6 +251,9 @@ class SentencePairModel(Chain):
         x_hyp = self.embed(Variable(sentences[:,:,1]), train)
 
         batch_size, seq_length = x_prem.shape[0], x_prem.shape[1]
+
+	x_prem = F.cast(x_prem, self.__mod.float32)
+	x_hyp = F.cast(x_hyp, self.__mod.float32)
 
         # Pass embeddings through projection layer, so that they match
         # the dimensions in the output of the compose/reduce function.

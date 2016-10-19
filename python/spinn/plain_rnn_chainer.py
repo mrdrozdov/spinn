@@ -20,7 +20,7 @@ from chainer.functions.evaluation import accuracy
 import chainer.links as L
 from chainer.training import extensions
 
-from spinn.util.chainer_blocks import EmbedChain, LSTM, LSTMChain, RNNChain
+from spinn.util.chainer_blocks import EmbedChain, LSTMChain, RNNChain
 from spinn.util.chainer_blocks import MLP
 from spinn.util.chainer_blocks import CrossEntropyClassifier
 
