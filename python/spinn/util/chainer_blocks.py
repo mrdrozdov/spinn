@@ -58,8 +58,9 @@ class EmbedChain(Chain):
 class TreeLSTMChain(Chain):
     def __init__(self, hidden_dim, prefix="TreeLSTMChain", gpu=-1):
         super(TreeLSTMChain, self).__init__(
-            W_l=L.Linear(hidden_dim, hidden_dim*5),
-            W_r=L.Linear(hidden_dim, hidden_dim*5),
+            W_l=L.Linear(hidden_dim, hidden_dim*5, nobias=True),
+            W_r=L.Linear(hidden_dim, hidden_dim*5, nobias=True),
+            b=L.Bias(axis=1, shape=(hidden_dim*5,)),
             )
         self.hidden_dim = hidden_dim
         self.__gpu = gpu
@@ -70,7 +71,7 @@ class TreeLSTMChain(Chain):
         # weights have intrinsic bias, but this was not the strategy
         # in the previous code base. I think the trick is to use 
         # add_param, and then F.broadcast when doing the addition.
-        gates = self.W_l(h_l) + self.W_r(h_r)
+        gates = self.b(self.W_l(h_l) + self.W_r(h_r))
 
         # Compute and slice gate values
         i_gate, fl_gate, fr_gate, o_gate, cell_inp = \
