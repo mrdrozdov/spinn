@@ -14,8 +14,6 @@ from chainer.training import extensions
 
 from chainer.utils import type_check
 
-LSTM = F.lstm
-
 
 
 class EmbedChain(Chain):
@@ -53,7 +51,96 @@ class EmbedChain(Chain):
         self.check_type_forward(in_types)
         # END: Type Check
 
-        return self.raw_embeddings.take(x_batch.data, axis=0)
+        emb = self.raw_embeddings.take(x_batch.data, axis=0)
+        return emb
+
+
+class TreeLSTMChain(Chain):
+    def __init__(self, hidden_dim, prefix="TreeLSTMChain", gpu=-1):
+        super(TreeLSTMChain, self).__init__(
+            W_l=L.Linear(hidden_dim, hidden_dim*5),
+            W_r=L.Linear(hidden_dim, hidden_dim*5),
+            )
+        self.hidden_dim = hidden_dim
+        self.__gpu = gpu
+        self.__mod = cuda.cupy if gpu >= 0 else np
+
+    def __call__(self, c_l, h_l, c_r, h_r, train=True, keep_hs=False):
+        # TODO: Figure out bias. In this case, both left and right
+        # weights have intrinsic bias, but this was not the strategy
+        # in the previous code base. I think the trick is to use 
+        # add_param, and then F.broadcast when doing the addition.
+        gates = self.W_l(h_l) + self.W_r(h_r)
+
+        # Compute and slice gate values
+        i_gate, fl_gate, fr_gate, o_gate, cell_inp = \
+            F.split_axis(gates, 5, axis=1)
+
+        # Apply nonlinearities
+        i_gate = F.sigmoid(i_gate)
+        fl_gate = F.sigmoid(fl_gate)
+        fr_gate = F.sigmoid(fr_gate)
+        o_gate = F.sigmoid(o_gate)
+        cell_inp = F.tanh(cell_inp)
+
+        # Compute new cell and hidden value
+        c_t = fl_gate * c_l + fr_gate * c_r + i_gate * cell_inp
+        h_t = o_gate * F.tanh(c_t)
+
+        return F.concat([h_t, c_t], axis=1)
+
+
+class ReduceChain(Chain):
+    def __init__(self, hidden_dim, prefix="ReduceChain", gpu=-1):
+        super(ReduceChain, self).__init__(
+            treelstm=TreeLSTMChain(hidden_dim / 2),
+        )
+        self.hidden_dim = hidden_dim
+        self.__gpu = gpu
+        self.__mod = cuda.cupy if gpu >= 0 else np
+
+    def check_type_forward(self, in_types):
+        type_check.expect(in_types.size() == 2)
+        left_type, right_type = in_types
+
+        type_check.expect(
+            left_type.dtype == 'f',
+            left_type.ndim >= 1,
+            right_type.dtype == 'f',
+            right_type.ndim >= 1,
+        )
+
+    def __call__(self, left_x, right_x, train=True, keep_hs=False):
+        """
+        Args:
+            left_x:  B* x H
+            right_x: B* x H
+        Returns:
+            final_state: B* x H
+        """
+
+        # BEGIN: Type Check
+        for l, r in zip(left_x, right_x):
+            in_data = tuple([x.data for x in [l, r]])
+            in_types = type_check.get_types(in_data, 'in_types', False)
+            self.check_type_forward(in_types)
+        # END: Type Check
+
+        assert len(left_x) == len(right_x)
+        batch_size = len(left_x)
+
+        # Concatenate the list of states.
+        left_x = F.stack(left_x, axis=0)
+        right_x = F.stack(right_x, axis=0)
+        assert left_x.shape == right_x.shape, "Left and Right must match in dimensions."
+
+        # Split each state into its c/h representations.
+        c_l, h_l = F.split_axis(left_x, 2, axis=1)
+        c_r, h_r = F.split_axis(right_x, 2, axis=1)
+
+        lstm_state = self.treelstm(c_l, h_l, c_r, h_r)
+        return lstm_state
+
 
 class LSTMChain(Chain):
     def __init__(self, input_dim, hidden_dim, seq_length, prefix="LSTMChain", gpu=-1):

@@ -31,7 +31,7 @@ from chainer.utils import type_check
 
 import spinn.util.chainer_blocks as CB
 
-from spinn.util.chainer_blocks import LSTM, LSTMChain, RNNChain, EmbedChain
+from spinn.util.chainer_blocks import LSTM, ReduceChain, TreeLSTMChain, LSTMChain, RNNChain, EmbedChain
 from spinn.util.chainer_blocks import MLP
 from spinn.util.chainer_blocks import CrossEntropyClassifier
 
@@ -82,18 +82,19 @@ TODO:
       have to pad the sentences. SOLVED: The gradient was not
       being generated for the projection layer because of a
       redundant called to Variable().
-- [x] Enable evaluation. Currently crashing.
 - [x] Use the right C and H units for the TreeLSTM.
+- [x] Enable evaluation. Currently crashing.
 - [ ] Confirm that volatile is working correctly during eval time.
       Time the eval with and without volatile being set. Full eval
       takes about 2m to complete on AD Mac.
 
 Other Tasks:
 
+- [x] Run CBOW. 
 - [ ] Enable "transition validation".
 - [ ] Enable TreeGRU as alternative option to TreeLSTM.
 - [ ] Add TrackingLSTM.
-- [ ] Run CBOW and RNN models for comparison.
+- [ ] Run RNN for comparison.
 
 Questions:
 
@@ -114,88 +115,12 @@ def tensor_to_lists(inp, reverse=True):
 
     return out
 
-class SLSTMChain(Chain):
-    def __init__(self, input_dim, hidden_dim, seq_length, prefix="SLSTMChain", gpu=-1):
-        super(SLSTMChain, self).__init__(
-            i_l_fwd=L.Linear(hidden_dim, 4 * hidden_dim, nobias=True),
-            h_l_fwd=L.Linear(hidden_dim, 4 * hidden_dim),
-            i_r_fwd=L.Linear(hidden_dim, 4 * hidden_dim, nobias=True),
-            h_r_fwd=L.Linear(hidden_dim, 4 * hidden_dim),
+
+class SPINN(Chain):
+    def __init__(self, hidden_dim, keep_rate, prefix="SPINN", gpu=-1):
+        super(SPINN, self).__init__(
+            reduce=ReduceChain(hidden_dim, gpu=gpu),
         )
-        self.seq_length = seq_length
-        self.hidden_dim = hidden_dim
-        self.__gpu = gpu
-        self.__mod = cuda.cupy if gpu >= 0 else np
-
-    def check_type_forward(self, in_types):
-        type_check.expect(in_types.size() == 2)
-        left_type, right_type = in_types
-
-        type_check.expect(
-            left_type.dtype == 'f',
-            left_type.ndim >= 1,
-            right_type.dtype == 'f',
-            right_type.ndim >= 1,
-        )
-
-    def __call__(self, left_x, right_x, train=True, keep_hs=False):
-        """
-        Args:
-            left_x:  B* x H
-            right_x: B* x H
-        Returns:
-            final_state: B* x H
-        """
-
-        # BEGIN: Type Check
-        for l, r in zip(left_x, right_x):
-            in_data = tuple([x.data for x in [l, r]])
-            in_types = type_check.get_types(in_data, 'in_types', False)
-            self.check_type_forward(in_types)
-        # END: Type Check
-
-        assert len(left_x) == len(right_x)
-        batch_size = len(left_x)
-
-        # TODO: Check that we have all zeros or None for c/h
-        # on the very first step. In other words, ensure that
-        # states aren't being carried over between batches.
-        for el in left_x + right_x:
-            if not hasattr(el, 'c'):
-                el.c = Variable(self.__mod.zeros((1, self.hidden_dim), dtype=self.__mod.float32))
-            if not hasattr(el, 'h'):
-                el.h = Variable(self.__mod.zeros((1, self.hidden_dim), dtype=self.__mod.float32))
-
-        # TODO: Keep states between batches. Need to use some crazy pointer
-        # system in order to have dynamic batch sizes.
-        c_l = F.concat([el.c for el in left_x], axis=0)
-        c_r = F.concat([el.c for el in right_x], axis=0)
-        h_l = F.concat([el.h for el in left_x], axis=0)
-        h_r = F.concat([el.h for el in right_x], axis=0)
-
-        left = F.reshape(F.concat(left_x, axis=0), (-1, self.hidden_dim))
-        right = F.reshape(F.concat(right_x, axis=0), (-1, self.hidden_dim))
-
-        assert left.shape == right.shape, "Left and Right must match in dimensions."
-
-        il = self.i_l_fwd(left)
-        ir = self.i_r_fwd(right)
-        hl = self.h_l_fwd(h_l)
-        hr = self.h_r_fwd(h_r)
-        ihl = il + hl
-        ihr = ir + hr
-        c, h = F.slstm(c_l, c_r, ihl, ihr)
-
-        return c, h
-
-
-class LSTM_TI(Chain):
-    def __init__(self, input_dim, hidden_dim, seq_length, prefix="LSTM_TI", gpu=-1):
-        super(LSTM_TI, self).__init__(
-            # reduce=SLSTMChain(input_dim, hidden_dim, seq_length, gpu=gpu),
-        )
-        self.seq_length = seq_length
-        self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
@@ -211,7 +136,7 @@ class LSTM_TI(Chain):
             trans_type.ndim >= 1,
         )
 
-    def __call__(self, buffers, transitions, train=True, keep_hs=False):
+    def __call__(self, buffers, transitions, train=True, keep_hs=False, use_sum=False):
         """
         Pass over batches of transitions, modifying their associated
         buffers at each iteration.
@@ -236,17 +161,20 @@ class LSTM_TI(Chain):
         assert len(transitions) == seq_length
 
         # MAYBE: Initialize stack with None, None in case of initial reduces.
-        stacks = [[] for _ in range(batch_size)]
         buffers = [list(b) for b in buffers]
+
+        # Initialize stack with at least one item, otherwise gradient might
+        # not propogate.
+        stacks = [[] for b in buffers]
 
         def pseudo_reduce(lefts, rights):
             for l, r in zip(lefts, rights):
                 yield l + r
 
         def better_reduce(lefts, rights):
-            c, h = self.reduce(lefts, rights, train=train)
-            for hh in h:
-                yield hh
+            lstm_state = self.reduce(lefts, rights, train=train)
+            for state in lstm_state:
+                yield state
 
         for ii, ts in enumerate(transitions):
             assert len(ts) == batch_size
@@ -266,13 +194,13 @@ class LSTM_TI(Chain):
                         if len(stack) > 0:
                             lr.append(stack.pop())
                         else:
-                            lr.append(np.zeros((hidden_dim,)))
+                            lr.append(Variable(self.__mod.zeros((hidden_dim,), dtype=self.__mod.float32)))
                 else:
                     raise Exception("Action not implemented: {}".format(t))
 
             assert len(lefts) == len(rights)
             if len(rights) > 0:
-                reduced = iter(pseudo_reduce(lefts, rights))
+                reduced = iter(better_reduce(lefts, rights))
                 for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
                     if t == 0:
                         continue
@@ -284,59 +212,13 @@ class LSTM_TI(Chain):
 
         # TODO: It would be good to check that the buffer has been
         # fully consumed.
-        # for stack in stacks:
-        #     assert len(stack) == 1
+        # HACK: By summing the stack, we can guarantee that the gradient
+        # will be fully propogated.
+        stacks = F.vstack([F.sum(F.stack(s),axis=0) for s in stacks])
+        assert stacks.shape == (batch_size, hidden_dim)
 
-        # Flatten List of Lists.
-        # Goes from 3-D:`B x 1 x H` to 1-D:`(B * H)`
-        stacks = F.concat(zip(*stacks)[0], axis=0)
+        return stacks
 
-        # Goes from 1-D:`(B * H)` to 2-D:`B x H`
-        stacks = F.reshape(stacks, (batch_size, self.hidden_dim))
-
-        c = None
-        # h = self.__mod.array(stacks)
-        h = stacks
-        hs = None
-
-        return c, h, hs
-
-
-class SPINN(Chain):
-    def __init__(self, model_dim, word_embedding_dim, vocab_size,
-                 seq_length,
-                 initial_embeddings,
-                 keep_rate,
-                 prefix="SPINN",
-                 gpu=-1
-                 ):
-        super(SPINN, self).__init__(
-            spinn=LSTM_TI(word_embedding_dim, model_dim, seq_length, gpu=gpu),
-        )
-            # batch_norm=L.BatchNormalization(model_dim, model_dim)
-
-        self.__gpu = gpu
-        self.__mod = cuda.cupy if gpu >= 0 else np
-        self.keep_rate = keep_rate
-        self.model_dim = model_dim
-        self.word_embedding_dim = word_embedding_dim
-
-    def __call__(self, buffers, transitions, train=True):
-        ratio = 1 - self.keep_rate
-
-        # One of our goals or invariants is to maintain lists of lists
-        # for sentences rather than a 3D tensor of batch x sent x emb.
-        # buffers = [list(Variable(
-        #     self.__mod.array(xx, dtype=self.__mod.float32))) for xx in x]
-
-        # gamma = Variable(self.__mod.array(1.0, dtype=self.__mod.float32), volatile=not train, name='gamma')
-        # beta = Variable(self.__mod.array(0.0, dtype=self.__mod.float32),volatile=not train, name='beta')
-        # x = batch_normalization(x, gamma, beta, eps=2e-5, running_mean=None,running_var=None, decay=0.9, use_cudnn=False)
-        # x = self.batch_norm(x)
-        # x = F.dropout(x, ratio, train)
-
-        c, h, hs = self.spinn(buffers, transitions, train)
-        return h
 
 class SentencePairModel(Chain):
     def __init__(self, model_dim, word_embedding_dim, vocab_size, compose_network,
@@ -348,10 +230,8 @@ class SentencePairModel(Chain):
         super(SentencePairModel, self).__init__(
             embed=EmbedChain(word_embedding_dim, vocab_size, initial_embeddings, model_dim, gpu=gpu),
             projection=L.Linear(word_embedding_dim, model_dim),
-            x2h_premise=SPINN(model_dim, word_embedding_dim, vocab_size,
-                    seq_length, initial_embeddings, gpu=gpu, keep_rate=keep_rate),
-            x2h_hypothesis=SPINN(model_dim, word_embedding_dim, vocab_size,
-                    seq_length, initial_embeddings, gpu=gpu, keep_rate=keep_rate),
+            x2h_premise=SPINN(model_dim, gpu=gpu, keep_rate=keep_rate),
+            x2h_hypothesis=SPINN(model_dim, gpu=gpu, keep_rate=keep_rate),
             h2y=MLP(dimensions=[model_dim*2, mlp_dim, mlp_dim/2, num_classes],
                     keep_rate=keep_rate, gpu=gpu),
         )
@@ -367,8 +247,8 @@ class SentencePairModel(Chain):
         ratio = 1 - self.keep_rate
 
         # Get Embeddings
-        x_prem = self.embed(Variable(sentences[:,:,0]))
-        x_hyp = self.embed(Variable(sentences[:,:,1]))
+        x_prem = self.embed(Variable(sentences[:,:,0]), train)
+        x_hyp = self.embed(Variable(sentences[:,:,1]), train)
 
         batch_size, seq_length = x_prem.shape[0], x_prem.shape[1]
 

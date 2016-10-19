@@ -6,7 +6,6 @@ import time
 import sys
 
 import numpy as np
-import theano
 
 
 # With loaded embedding matrix, the padding vector will be initialized to zero
