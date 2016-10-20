@@ -91,6 +91,8 @@ TODO:
 Other Tasks:
 
 - [x] Run CBOW. 
+- [ ] Enable Cropping and use longer sequences. Currently will
+      not work as expected.
 - [ ] Enable "transition validation".
 - [ ] Enable TreeGRU as alternative option to TreeLSTM.
 - [ ] Add TrackingLSTM.
@@ -184,7 +186,11 @@ class SPINN(Chain):
             lefts = []
             rights = []
             for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
-                if t == 0: # shift
+                if t == -1: # skip
+                    # Because sentences are padded, we still need to pop here.
+                    # TODO: Remove padding altogether.
+                    buf.pop()
+                elif t == 0: # shift
                     stack.append(buf.pop())
                 elif t == 1: # reduce
                     for lr in [rights, lefts]:
@@ -202,7 +208,7 @@ class SPINN(Chain):
             if len(rights) > 0:
                 reduced = iter(better_reduce(lefts, rights))
                 for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
-                    if t == 0:
+                    if t == -1 or t == 0:
                         continue
                     elif t == 1:
                         composition = next(reduced)
@@ -229,7 +235,7 @@ class SentencePairModel(Chain):
                  ):
         super(SentencePairModel, self).__init__(
             embed=EmbedChain(word_embedding_dim, vocab_size, initial_embeddings, model_dim, gpu=gpu),
-            projection=L.Linear(word_embedding_dim, model_dim),
+            projection=L.Linear(word_embedding_dim, model_dim, nobias=True),
             x2h_premise=SPINN(model_dim, gpu=gpu, keep_rate=keep_rate),
             x2h_hypothesis=SPINN(model_dim, gpu=gpu, keep_rate=keep_rate),
             h2y=MLP(dimensions=[model_dim*2, mlp_dim, mlp_dim/2, num_classes],
@@ -252,8 +258,8 @@ class SentencePairModel(Chain):
 
         batch_size, seq_length = x_prem.shape[0], x_prem.shape[1]
 
-	x_prem = F.cast(x_prem, self.__mod.float32)
-	x_hyp = F.cast(x_hyp, self.__mod.float32)
+        x_prem = F.cast(x_prem, self.__mod.float32)
+        x_hyp = F.cast(x_hyp, self.__mod.float32)
 
         # Pass embeddings through projection layer, so that they match
         # the dimensions in the output of the compose/reduce function.

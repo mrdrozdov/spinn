@@ -17,6 +17,9 @@ PADDING_TOKEN = "*PADDING*"
 # it's a common token that is pretrained, but shouldn't look like any content words.
 UNK_TOKEN = "_"
 
+TRANSITION_PADDING_SYMBOL = -1
+SENTENCE_PADDING_SYMBOL = 0
+
 CORE_VOCABULARY = {PADDING_TOKEN: 0,
                    UNK_TOKEN: 1}
 
@@ -59,7 +62,7 @@ def TokensToIDs(vocabulary, dataset, sentence_pair_data=False):
     return dataset
 
 
-def CropAndPadExample(example, left_padding, target_length, key, logger=None):
+def CropAndPadExample(example, left_padding, target_length, key, symbol=0, logger=None):
     """
     Crop/pad a sequence value of the given dict `example`.
     """
@@ -70,8 +73,8 @@ def CropAndPadExample(example, left_padding, target_length, key, logger=None):
         example[key] = example[key][-left_padding:]
         left_padding = 0
     right_padding = target_length - (left_padding + len(example[key]))
-    example[key] = ([0] * left_padding) + \
-        example[key] + ([0] * right_padding)
+    example[key] = ([symbol] * left_padding) + \
+        example[key] + ([symbol] * right_padding)
 
 
 def CropAndPad(dataset, length, logger=None, sentence_pair_data=False):
@@ -92,12 +95,14 @@ def CropAndPad(dataset, length, logger=None, sentence_pair_data=False):
             transitions_left_padding = length - example[num_transitions_key]
             shifts_before_crop_and_pad = example[transitions_key].count(0)
             CropAndPadExample(
-                example, transitions_left_padding, length, transitions_key, logger=logger)
+                example, transitions_left_padding, length, transitions_key,
+                symbol=TRANSITION_PADDING_SYMBOL, logger=logger)
             shifts_after_crop_and_pad = example[transitions_key].count(0)
             tokens_left_padding = shifts_after_crop_and_pad - \
                 shifts_before_crop_and_pad
             CropAndPadExample(
-                example, tokens_left_padding, length, tokens_key, logger=logger)
+                example, tokens_left_padding, length, tokens_key,
+                symbol=SENTENCE_PADDING_SYMBOL, logger=logger)
     return dataset
 
 def CropAndPadForRNN(dataset, length, logger=None, sentence_pair_data=False):
@@ -114,7 +119,8 @@ def CropAndPadForRNN(dataset, length, logger=None, sentence_pair_data=False):
             num_tokens = len(example[tokens_key])
             tokens_left_padding = length - num_tokens
             CropAndPadExample(
-                example, tokens_left_padding, length, tokens_key, logger=logger)
+                example, tokens_left_padding, length, tokens_key,
+                symbol=SENTENCE_PADDING_SYMBOL, logger=logger)
     return dataset
 
 
