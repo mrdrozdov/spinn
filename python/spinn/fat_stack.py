@@ -200,7 +200,9 @@ class SPINN(Chain):
                         if len(stack) > 0:
                             lr.append(stack.pop())
                         else:
-                            lr.append(Variable(self.__mod.zeros((hidden_dim,), dtype=self.__mod.float32)))
+                            lr.append(Variable(
+                                self.__mod.zeros((hidden_dim,), dtype=self.__mod.float32),
+                                volatile=not train))
                 else:
                     raise Exception("Action not implemented: {}".format(t))
 
@@ -253,8 +255,8 @@ class SentencePairModel(Chain):
         ratio = 1 - self.keep_rate
 
         # Get Embeddings
-        x_prem = self.embed(Variable(sentences[:,:,0]), train)
-        x_hyp = self.embed(Variable(sentences[:,:,1]), train)
+        x_prem = self.embed(Variable(sentences[:,:,0], volatile=not train), train)
+        x_hyp = self.embed(Variable(sentences[:,:,1], volatile=not train), train)
 
         batch_size, seq_length = x_prem.shape[0], x_prem.shape[1]
 
@@ -271,8 +273,8 @@ class SentencePairModel(Chain):
         x_hyp = F.reshape(x_hyp, (batch_size, seq_length, self.model_dim))
 
         # Extract Transitions
-        t_prem = Variable(transitions[:,:,0])
-        t_hyp = Variable(transitions[:,:,1])
+        t_prem = Variable(transitions[:,:,0], volatile=not train)
+        t_hyp = Variable(transitions[:,:,1], volatile=not train)
 
         # Pass through Sentence Encoders.
         h_premise = self.x2h_premise(x_prem, t_prem, train=train)
@@ -285,7 +287,7 @@ class SentencePairModel(Chain):
 
         # Calculate Loss & Accuracy.
         y = F.dropout(y, ratio, train)
-        accum_loss = self.classifier(y, Variable(y_batch), train)
+        accum_loss = self.classifier(y, Variable(y_batch, volatile=not train), train)
         self.accuracy = self.accFun(y, self.__mod.array(y_batch))
 
         return y, accum_loss
