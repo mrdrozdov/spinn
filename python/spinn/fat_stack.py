@@ -128,14 +128,12 @@ class SPINN(Chain):
         self.__mod = cuda.cupy if gpu >= 0 else np
 
     def check_type_forward(self, in_types):
-        type_check.expect(in_types.size() == 2)
-        buff_type, trans_type = in_types
+        type_check.expect(in_types.size() == 1)
+        buff_type = in_types[0]
 
         type_check.expect(
             buff_type.dtype == 'f',
             buff_type.ndim >= 1,
-            trans_type.dtype == 'i',
-            trans_type.ndim >= 1,
         )
 
     def __call__(self, buffers, transitions, train=True, keep_hs=False, use_sum=False):
@@ -151,13 +149,13 @@ class SPINN(Chain):
         """
 
         # BEGIN: Type Check
-        in_data = tuple([x.data for x in [buffers, transitions]])
+        in_data = tuple([x.data for x in [buffers]])
         in_types = type_check.get_types(in_data, 'in_types', False)
         self.check_type_forward(in_types)
         # END: Type Check
 
         batch_size, seq_length, hidden_dim = buffers.shape[0], buffers.shape[1], buffers.shape[2]
-        transitions = transitions.data.T
+        transitions = transitions.T
         assert len(transitions) == seq_length
         buffers = [list(b) for b in buffers]
 
@@ -254,9 +252,9 @@ class SentencePairModel(Chain):
         x = F.reshape(x, (batch_size, seq_length, self.model_dim))
 
         # Extract Transitions
-        t_prem = Variable(transitions[:,:,0], volatile=not train)
-        t_hyp = Variable(transitions[:,:,1], volatile=not train)
-        t = F.concat([t_prem, t_hyp], axis=0)
+        t_prem = transitions[:,:,0]
+        t_hyp = transitions[:,:,1]
+        t = np.concatenate([t_prem, t_hyp], axis=0)
 
         # Pass through Sentence Encoders.
         h_both = self.x2h(x, t, train=train)
