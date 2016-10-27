@@ -157,7 +157,8 @@ class SPINN(Chain):
         batch_size, seq_length, hidden_dim = buffers.shape[0], buffers.shape[1], buffers.shape[2]
         transitions = transitions.T
         assert len(transitions) == seq_length
-        buffers = [list(b) for b in buffers]
+        buffers = [b for b in buffers]
+        buffers_t = [seq_length-1 for _ in buffers]
 
         # Initialize stack with at least one item, otherwise gradient might
         # not propogate.
@@ -182,9 +183,13 @@ class SPINN(Chain):
             for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
                 if t == -1: # skip
                     # Because sentences are padded, we still need to pop here.
-                    buf.pop()
+                    assert buffers_t[i] >= 0
+                    buffers_t[i] -= 1
                 elif t == 0: # shift
-                    stack.append(buf.pop())
+                    new_stack_item = buf[buffers_t[i]]
+                    stack.append(new_stack_item)
+                    assert buffers_t[i] >= 0
+                    buffers_t[i] -= 1
                 elif t == 1: # reduce
                     for lr in [rights, lefts]:
                         if len(stack) > 0:
