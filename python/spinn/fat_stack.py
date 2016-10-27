@@ -228,8 +228,10 @@ class SentencePairModel(Chain):
         super(SentencePairModel, self).__init__(
             projection=L.Linear(word_embedding_dim, model_dim, nobias=True),
             x2h=SPINN(model_dim, gpu=gpu, keep_rate=keep_rate),
-            h2y=MLP(dimensions=[model_dim*2, mlp_dim, mlp_dim/2, num_classes],
-                    keep_rate=keep_rate, gpu=gpu),
+            batch_norm_0=L.BatchNormalization(model_dim*2, model_dim*2),
+            batch_norm_1=L.BatchNormalization(mlp_dim, mlp_dim),
+            l0=L.Linear(model_dim*2, mlp_dim),
+            l1=L.Linear(mlp_dim, num_classes)
         )
         self.classifier = CrossEntropyClassifier(gpu)
         self.__gpu = gpu
@@ -250,6 +252,8 @@ class SentencePairModel(Chain):
 
         batch_size, seq_length = x.shape[0], x.shape[1]
 
+        x = F.dropout(x, ratio=ratio, train=train)
+
         # Pass embeddings through projection layer, so that they match
         # the dimensions in the output of the compose/reduce function.
         x = F.reshape(x, (batch_size * seq_length, self.word_embedding_dim))
@@ -265,13 +269,19 @@ class SentencePairModel(Chain):
         h_both = self.x2h(x, t, train=train)
         h_premise, h_hypothesis = F.split_axis(h_both, 2, axis=0)
         
-        # Pass through Classifier.
+        # Pass through MLP Classifier.
         h = F.concat([h_premise, h_hypothesis], axis=1)
+        h = self.batch_norm_0(h, test=not train)
         h = F.dropout(h, ratio, train)
-        y = self.h2y(h, train)
+        h = F.relu(h)
+        h = self.l0(h)
+        h = self.batch_norm_1(h, test=not train)
+        h = F.dropout(h, ratio, train)
+        h = F.relu(h)
+        h = self.l1(h)
+        y = h
 
         # Calculate Loss & Accuracy.
-        y = F.dropout(y, ratio, train)
         accum_loss = self.classifier(y, Variable(y_batch, volatile=not train), train)
         self.accuracy = self.accFun(y, self.__mod.array(y_batch))
 
