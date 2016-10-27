@@ -170,6 +170,18 @@ def MakeEvalIterator(sources, batch_size, limit=-1):
     return data_iter
 
 
+def PreEmbed(initial_embeddings, X, batch_size=64, dtype=np.float32):
+    vocab_size, emb_size = initial_embeddings.shape
+    len_X, seq_length, num_sents = X.shape
+    results = np.zeros((len_X, seq_length, num_sents, emb_size), dtype=dtype)
+    for i in range(0,len_X,batch_size):
+        end = min(batch_size, len_X - i)
+        x_batch = X[i:i+end]
+        x_emb = initial_embeddings.take(x_batch, axis=0)
+        results[i:i+end] = x_emb
+    return results
+
+
 def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=False, logger=None,
                       sentence_pair_data=False, for_rnn=False):
     # TODO(SB): Simpler version for plain RNN.

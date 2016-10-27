@@ -255,8 +255,8 @@ class SentencePairModel(Chain):
         ratio = 1 - self.keep_rate
 
         # Get Embeddings
-        x_prem = self.embed(Variable(sentences[:,:,0], volatile=not train), train)
-        x_hyp = self.embed(Variable(sentences[:,:,1], volatile=not train), train)
+        x_prem = Variable(sentences[:,:,0], volatile=not train)
+        x_hyp = Variable(sentences[:,:,1], volatile=not train)
 
         batch_size, seq_length = x_prem.shape[0], x_prem.shape[1]
 
