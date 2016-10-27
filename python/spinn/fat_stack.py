@@ -243,6 +243,7 @@ class SentencePairModel(Chain):
         x_prem = Variable(sentences[:,:,0], volatile=not train)
         x_hyp = Variable(sentences[:,:,1], volatile=not train)
         x = F.concat([x_prem, x_hyp], axis=0)
+        x = F.cast(x, self.__mod.float32)
 
         batch_size, seq_length = x.shape[0], x.shape[1]
 
