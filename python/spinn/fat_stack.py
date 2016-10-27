@@ -157,12 +157,8 @@ class SPINN(Chain):
         # END: Type Check
 
         batch_size, seq_length, hidden_dim = buffers.shape[0], buffers.shape[1], buffers.shape[2]
-
         transitions = transitions.data.T
-
         assert len(transitions) == seq_length
-
-        # MAYBE: Initialize stack with None, None in case of initial reduces.
         buffers = [list(b) for b in buffers]
 
         # Initialize stack with at least one item, otherwise gradient might
@@ -188,15 +184,11 @@ class SPINN(Chain):
             for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
                 if t == -1: # skip
                     # Because sentences are padded, we still need to pop here.
-                    # TODO: Remove padding altogether.
                     buf.pop()
                 elif t == 0: # shift
                     stack.append(buf.pop())
                 elif t == 1: # reduce
                     for lr in [rights, lefts]:
-                        # If the stack is empty, reduce using a vector of zeros.
-                        # TODO: We should replace these with a NOOP action in
-                        # order to save memory.
                         if len(stack) > 0:
                             lr.append(stack.pop())
                         else:
@@ -218,14 +210,10 @@ class SPINN(Chain):
                     else:
                         raise Exception("Action not implemented: {}".format(t))
 
-        # TODO: It would be good to check that the buffer has been
-        # fully consumed.
-        # HACK: By summing the stack, we can guarantee that the gradient
-        # will be fully propogated.
-        stacks = F.vstack([F.sum(F.stack(s),axis=0) for s in stacks])
-        assert stacks.shape == (batch_size, hidden_dim)
+        ret = F.stack([s.pop() for s in stacks], axis=0)
+        assert ret.shape == (batch_size, hidden_dim)
 
-        return stacks
+        return ret
 
 
 class SentencePairModel(Chain):
