@@ -236,10 +236,8 @@ class SentencePairModel(Chain):
                  gpu=-1,
                  ):
         super(SentencePairModel, self).__init__(
-            embed=EmbedChain(word_embedding_dim, vocab_size, initial_embeddings, model_dim, gpu=gpu),
             projection=L.Linear(word_embedding_dim, model_dim, nobias=True),
-            x2h_premise=SPINN(model_dim, gpu=gpu, keep_rate=keep_rate),
-            x2h_hypothesis=SPINN(model_dim, gpu=gpu, keep_rate=keep_rate),
+            x2h=SPINN(model_dim, gpu=gpu, keep_rate=keep_rate),
             h2y=MLP(dimensions=[model_dim*2, mlp_dim, mlp_dim/2, num_classes],
                     keep_rate=keep_rate, gpu=gpu),
         )
@@ -257,28 +255,24 @@ class SentencePairModel(Chain):
         # Get Embeddings
         x_prem = Variable(sentences[:,:,0], volatile=not train)
         x_hyp = Variable(sentences[:,:,1], volatile=not train)
+        x = F.concat([x_prem, x_hyp], axis=0)
 
-        batch_size, seq_length = x_prem.shape[0], x_prem.shape[1]
-
-        x_prem = F.cast(x_prem, self.__mod.float32)
-        x_hyp = F.cast(x_hyp, self.__mod.float32)
+        batch_size, seq_length = x.shape[0], x.shape[1]
 
         # Pass embeddings through projection layer, so that they match
         # the dimensions in the output of the compose/reduce function.
-        x_prem = F.reshape(x_prem, (batch_size * seq_length, self.word_embedding_dim))
-        x_prem = self.projection(x_prem)
-        x_prem = F.reshape(x_prem, (batch_size, seq_length, self.model_dim))
-        x_hyp = F.reshape(x_hyp, (batch_size * seq_length, self.word_embedding_dim))
-        x_hyp = self.projection(x_hyp)
-        x_hyp = F.reshape(x_hyp, (batch_size, seq_length, self.model_dim))
+        x = F.reshape(x, (batch_size * seq_length, self.word_embedding_dim))
+        x = self.projection(x)
+        x = F.reshape(x, (batch_size, seq_length, self.model_dim))
 
         # Extract Transitions
         t_prem = Variable(transitions[:,:,0], volatile=not train)
         t_hyp = Variable(transitions[:,:,1], volatile=not train)
+        t = F.concat([t_prem, t_hyp], axis=0)
 
         # Pass through Sentence Encoders.
-        h_premise = self.x2h_premise(x_prem, t_prem, train=train)
-        h_hypothesis = self.x2h_hypothesis(x_hyp, t_hyp, train=train)
+        h_both = self.x2h(x, t, train=train)
+        h_premise, h_hypothesis = F.split_axis(h_both, 2, axis=0)
         
         # Pass through Classifier.
         h = F.concat([h_premise, h_hypothesis], axis=1)
