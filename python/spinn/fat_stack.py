@@ -158,8 +158,9 @@ class SPINN(Chain):
 
         batch_size, seq_length, hidden_dim = buffers.shape[0], buffers.shape[1], buffers.shape[2]
 
-        # transitions = transitions.data.T
-        transitions_t = [0 for _ in buffers]
+        transitions = transitions.data.T
+
+        assert len(transitions) == seq_length
 
         # MAYBE: Initialize stack with None, None in case of initial reduces.
         buffers = [list(b) for b in buffers]
@@ -177,52 +178,45 @@ class SPINN(Chain):
             for state in lstm_state:
                 yield state
 
-        while sum(transitions_t) != batch_size * -1:
+        for ii, ts in enumerate(transitions):
+            assert len(ts) == batch_size
+            assert len(ts) == len(buffers)
+            assert len(ts) == len(stacks)
+
             lefts = []
             rights = []
-            for i, (buf, stack) in enumerate(zip(buffers, stacks)):
-                while transitions_t[i] != -1:
-                    ts = transitions[i]
-                    t = ts[transitions_t[i]].data
-                    transitions_t[i] += 1
-                    if t == -1: # skip
-                        continue
-                    elif t == 0: # shift
-                        stack.append(buf.pop())
-                    elif t == 1: # reduce
-                        for lr in [rights, lefts]:
-                            # If the stack is empty, reduce using a vector of zeros.
-                            # TODO: We should replace these with a NOOP action in
-                            # order to save memory.
-                            if len(stack) > 0:
-                                lr.append(stack.pop())
-                            else:
-                                lr.append(Variable(self.__mod.zeros((hidden_dim,), dtype=self.__mod.float32)))
-                    else:
-                        raise Exception("Action not implemented: {}".format(t))
-                    if t == 1:
-                        break
-                    if transitions_t[i] == seq_length:
-                        transitions_t[i] = -1
+            for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
+                if t == -1: # skip
+                    # Because sentences are padded, we still need to pop here.
+                    # TODO: Remove padding altogether.
+                    buf.pop()
+                elif t == 0: # shift
+                    stack.append(buf.pop())
+                elif t == 1: # reduce
+                    for lr in [rights, lefts]:
+                        # If the stack is empty, reduce using a vector of zeros.
+                        # TODO: We should replace these with a NOOP action in
+                        # order to save memory.
+                        if len(stack) > 0:
+                            lr.append(stack.pop())
+                        else:
+                            lr.append(Variable(
+                                self.__mod.zeros((hidden_dim,), dtype=self.__mod.float32),
+                                volatile=not train))
+                else:
+                    raise Exception("Action not implemented: {}".format(t))
 
             assert len(lefts) == len(rights)
             if len(rights) > 0:
                 reduced = iter(better_reduce(lefts, rights))
-                for i, (buf, stack) in enumerate(zip(buffers, stacks)):
-                    if transitions_t[i] == -1:
-                        continue
-                    ts = transitions[i]
-                    t = ts[transitions_t[i]-1].data
+                for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
                     if t == -1 or t == 0:
                         continue
                     elif t == 1:
                         composition = next(reduced)
                         stack.append(composition)
                     else:
-                        import ipdb; ipdb.set_trace()
                         raise Exception("Action not implemented: {}".format(t))
-                    if transitions_t[i] == seq_length:
-                        transitions_t[i] = -1
 
         # TODO: It would be good to check that the buffer has been
         # fully consumed.
