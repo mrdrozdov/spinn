@@ -277,9 +277,10 @@ class MLP(ChainList):
         y = h
         return y
 
+
 class SentencePairTrainer(object):
 
-    def __init__(self, model, model_dim, word_embedding_dim, vocab_size, compose_network,
+    def __init__(self, model, model_dim, word_embedding_dim,
                  seq_length,
                  num_classes,
                  mlp_dim,
@@ -292,8 +293,6 @@ class SentencePairTrainer(object):
         self.model_dim = model_dim
         self.word_embedding_dim = word_embedding_dim
         self.mlp_dim = mlp_dim
-        self.vocab_size = vocab_size
-        self._compose_network = compose_network
         self.initial_embeddings = initial_embeddings
         self.seq_length = seq_length
         self.keep_rate = keep_rate

@@ -44,39 +44,23 @@ import spinn.cbow
 FLAGS = gflags.FLAGS
 
 
-def build_sentence_pair_model(cls, vocab_size, seq_length, tokens, transitions,
-                     num_classes, training_mode, ground_truth_transitions_visible, vs,
-                     initial_embeddings=None, project_embeddings=False, ss_mask_gen=None, ss_prob=0.0):
-    """
-    Construct a classifier which makes use of some hard-stack model.
-
-    Args:
-      cls: Hard stack class to use (from e.g. `spinn.fat_stack`)
-      vocab_size:
-      seq_length: Length of each sequence provided to the stack model
-      num_classes: Number of output classes
-      training_mode: A Theano scalar indicating whether to act as a training model
-        with dropout (1.0) or to act as an eval model with rescaling (0.0).
-    """
-
-    compose_network = None
-
-
-    # Prepare layer which performs stack element composition.
-    model = cls(FLAGS.model_dim, FLAGS.word_embedding_dim, vocab_size, compose_network,
-             FLAGS.seq_length, initial_embeddings, num_classes, mlp_dim=1024,
-             keep_rate=FLAGS.embedding_keep_rate,
-             gpu=FLAGS.gpu,
+def build_sentence_pair_model(cls, model_dim, word_embedding_dim,
+                              seq_length, num_classes, initial_embeddings,
+                              keep_rate, gpu):
+    model = cls(model_dim, word_embedding_dim,
+             seq_length, initial_embeddings, num_classes, mlp_dim=1024,
+             keep_rate=keep_rate,
+             gpu=gpu,
             )
 
-    classifier_trainer = SentencePairTrainer(model, FLAGS.model_dim, FLAGS.word_embedding_dim, vocab_size, compose_network,
-        keep_rate=FLAGS.embedding_keep_rate,
+    classifier_trainer = SentencePairTrainer(model, model_dim, word_embedding_dim,
+        keep_rate=keep_rate,
         seq_length=seq_length,
         num_classes=num_classes,
         mlp_dim=1024,
         initial_embeddings=initial_embeddings,
         use_sentence_pair=True,
-        gpu=FLAGS.gpu,
+        gpu=gpu,
         )
 
     return classifier_trainer
@@ -111,101 +95,6 @@ def evaluate(classifier_trainer, eval_set, logger, step):
     logger.Log("Step: %i\tEval acc: %f\t %f\t%s" %
               (step, acc_accum / eval_batches, action_acc_accum / eval_batches, eval_set[0]))
     return acc_accum / eval_batches
-
-
-def evaluate_expanded(eval_fn, eval_set, eval_path, logger, step, sentence_pair_data, ind_to_word, predict_transitions):
-    """
-    Write the  gold parses and predicted parses in the files <eval_out_path>.gld and <eval_out_path>.tst
-    respectively. These files can be given as inputs to Evalb to evaluate parsing performance -
-
-        evalb -p evalb_spinn.prm <eval_out_path>.gld  <eval_out_path>.tst
-
-    TODO(SB): Set up for RNN and Model0 on non-sentence-pair data; port support to classifier.py.
-    """
-    # TODO: Prune out redundant code, make usable on Model0 as well.
-    acc_accum = 0.0
-    action_acc_accum = 0.0
-    eval_batches = 0.0
-    eval_gold_path = eval_path + ".gld"
-    eval_out_path = eval_path + ".tst"
-    eval_lbl_path = eval_path + ".lbl"
-    with open(eval_gold_path, "w") as eval_gold, open(eval_out_path, "w") as eval_out:
-        if FLAGS.write_predicted_label:
-            label_out = open(eval_lbl_path, "w")
-        if sentence_pair_data:
-            for (eval_X_batch, eval_transitions_batch, eval_y_batch,
-                    eval_num_transitions_batch) in eval_set[1]:
-                acc_value, action_acc_value, sem_logit_values, logits_pred_hyp, logits_pred_prem = eval_fn(
-                    eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch,
-                    0.0,  # Eval mode: Don't apply dropout.
-                    int(FLAGS.allow_gt_transitions_in_eval),  # Allow GT transitions to be used according to flag.
-                    float(FLAGS.allow_gt_transitions_in_eval)) # adjust visibility of GT
-
-                acc_accum += acc_value
-                action_acc_accum += action_acc_value
-                eval_batches += 1.0
-
-                # write each predicted transition to file
-                for orig_transitions, pred_logit_hyp, pred_logit_prem, tokens, true_class, example_sem_logits \
-                        in zip(eval_transitions_batch, logits_pred_hyp,
-                               logits_pred_prem, eval_X_batch, eval_y_batch, sem_logit_values):
-                    if predict_transitions:
-                        orig_hyp_transitions, orig_prem_transitions = orig_transitions.T
-                        pred_hyp_transitions = pred_logit_hyp.argmax(axis=1)
-                        pred_prem_transitions = pred_logit_prem.argmax(axis=1)
-                    else:
-                        orig_hyp_transitions = orig_prem_transitions = pred_hyp_transitions = pred_prem_transitions = None
-
-                    hyp_tokens, prem_tokens = tokens.T
-                    hyp_words = [ind_to_word[t] for t in hyp_tokens]
-                    prem_words = [ind_to_word[t] for t in prem_tokens]
-                    eval_gold.write(util.TransitionsToParse(orig_hyp_transitions, hyp_words) + "\n")
-                    eval_out.write(util.TransitionsToParse(pred_hyp_transitions, hyp_words) + "\n")
-                    eval_gold.write(util.TransitionsToParse(orig_prem_transitions, prem_words) + "\n")
-                    eval_out.write(util.TransitionsToParse(pred_prem_transitions, prem_words) + "\n")
-
-                    predicted_class = np.argmax(example_sem_logits)
-                    exp_logit_values = np.exp(example_sem_logits)
-                    class_probs = exp_logit_values / np.sum(exp_logit_values)
-                    class_probs_repr = "\t".join(map(lambda p : "%.8f" % (p,), class_probs))
-                    if FLAGS.write_predicted_label:
-                        label_out.write(str(true_class == predicted_class) + "\t" + str(true_class)
-                                  + "\t" + str(predicted_class) + "\t" + class_probs_repr + "\n")
-        else:
-            for (eval_X_batch, eval_transitions_batch, eval_y_batch,
-                 eval_num_transitions_batch) in eval_set[1]:
-                acc_value, action_acc_value, sem_logit_values, logits_pred = eval_fn(
-                    eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch,
-                    0.0,  # Eval mode: Don't apply dropout.
-                    int(FLAGS.allow_gt_transitions_in_eval),  # Allow GT transitions to be used according to flag.
-                    float(FLAGS.allow_gt_transitions_in_eval)) # adjust visibility of GT
-
-                acc_accum += acc_value
-                action_acc_accum += action_acc_value
-                eval_batches += 1.0
-
-                # write each predicted transition to file
-                for orig_transitions, pred_logit, tokens, true_class, example_sem_logits \
-                    in zip(eval_transitions_batch, logits_pred, eval_X_batch, eval_y_batch, sem_logit_values):
-                    words = [ind_to_word[t] for t in tokens]
-                    eval_gold.write(util.TransitionsToParse(orig_transitions, words) + "\n")
-                    eval_out.write(util.TransitionsToParse(pred_logit.argmax(axis=1), words) + "\n")
-
-                    predicted_class = np.argmax(example_sem_logits)
-                    exp_logit_values = np.exp(example_sem_logits)
-                    class_probs = exp_logit_values / np.sum(exp_logit_values)
-                    class_probs_repr = "\t".join(map(lambda p : "%.3f" % (p,), class_probs))
-                    if FLAGS.write_predicted_label:
-                        label_out.write(str(true_class == predicted_class) + "\t" + str(true_class)
-                                    + "\t" + str(predicted_class) + "\t" + class_probs_repr + "\n")
-
-    logger.Log("Written gold parses in %s" % (eval_gold_path))
-    logger.Log("Written predicted parses in %s" % (eval_out_path))
-    if FLAGS.write_predicted_label:
-        logger.Log("Written predicted labels in %s" % (eval_lbl_path))
-        label_out.close()
-    logger.Log("Step: %i\tEval acc: %f\t %f\t%s" %
-               (step, acc_accum / eval_batches, action_acc_accum / eval_batches, eval_set[0]))
 
 
 def run(only_forward=False):
@@ -295,35 +184,12 @@ def run(only_forward=False):
     else:
         raise Exception("Requested unimplemented model type %s" % FLAGS.model_type)
 
-    # Generator of mask for scheduled sampling
-    numpy_random = np.random.RandomState(1234)
-
-    # Training step number
-
-    # Dirty Hack: Using 
-    y = None
-    X = None
-    lr = None
-    transitions = None
-    num_transitions = None
-    training_mode = None
-    ground_truth_transitions_visible = None
-    vs = None
-    ss_mask_gen = None
-    ss_prob = None
-
-    predicted_transitions = None
-    predicted_premise_transitions = None
-    predicted_hypothesis_transitions = None
-    logits = None
 
     if data_manager.SENTENCE_PAIR_DATA:
-        classifier_trainer = build_sentence_pair_model(
-            model_cls, len(vocabulary), FLAGS.seq_length,
-            X, transitions, len(data_manager.LABEL_MAP), training_mode, ground_truth_transitions_visible, vs,
-            initial_embeddings=initial_embeddings, project_embeddings=(not train_embeddings),
-            ss_mask_gen=ss_mask_gen,
-            ss_prob=ss_prob)
+        num_classes = len(data_manager.LABEL_MAP)
+        classifier_trainer = build_sentence_pair_model(model_cls, FLAGS.model_dim, FLAGS.word_embedding_dim,
+                              FLAGS.seq_length, num_classes, initial_embeddings,
+                              FLAGS.embedding_keep_rate, FLAGS.gpu)
     else:
         raise Exception("Single sentence model not implemented.")
 

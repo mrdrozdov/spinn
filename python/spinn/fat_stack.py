@@ -229,12 +229,11 @@ class SPINN(Chain):
 
 
 class SentencePairModel(Chain):
-    def __init__(self, model_dim, word_embedding_dim, vocab_size, compose_network,
-                 seq_length, initial_embeddings, num_classes,
-                 mlp_dim,
+    def __init__(self, model_dim, word_embedding_dim,
+                 seq_length, initial_embeddings, num_classes, mlp_dim,
                  keep_rate,
                  gpu=-1,
-                 ):
+                ):
         super(SentencePairModel, self).__init__(
             projection=L.Linear(word_embedding_dim, model_dim, nobias=True),
             x2h=SPINN(model_dim, gpu=gpu, keep_rate=keep_rate),
