@@ -312,6 +312,9 @@ class SimpleProgressBar(object):
         sys.stdout.write(fmt % (self.msg, '='*ii, pct, total_time, expected))
         sys.stdout.flush()
 
-    def finish(self):
+    def reset(self):
         self.begin = time.time()
+
+    def finish(self):
+        self.reset()
         sys.stdout.write('\n')

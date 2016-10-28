@@ -262,6 +262,7 @@ def run(only_forward=False):
                     if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > 1000:
                         best_dev_error = 1 - acc
                         logger.Log("[TODO: NOT IMPLEMENTED] Checkpointing with new best dev accuracy of %f" % acc)
+                progress_bar.reset()
 
 
 if __name__ == '__main__':
