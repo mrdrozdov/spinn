@@ -237,6 +237,7 @@ class SentencePairModel(Chain):
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
         self.accFun = accuracy.accuracy
+        self.initial_embeddings = initial_embeddings
         self.keep_rate = keep_rate
         self.word_embedding_dim = word_embedding_dim
         self.model_dim = model_dim
@@ -245,10 +246,14 @@ class SentencePairModel(Chain):
         ratio = 1 - self.keep_rate
 
         # Get Embeddings
-        x_prem = Variable(sentences[:,:,0], volatile=not train)
-        x_hyp = Variable(sentences[:,:,1], volatile=not train)
-        x = F.concat([x_prem, x_hyp], axis=0)
-        x = F.cast(x, self.__mod.float32)
+        sentences = self.initial_embeddings.take(sentences, axis=0
+            ).astype(np.float32)
+
+        # Reshape sentences
+        x_prem = sentences[:,:,0]
+        x_hyp = sentences[:,:,1]
+        x = np.concatenate([x_prem, x_hyp], axis=0)
+        x = Variable(x, volatile=not train)
 
         batch_size, seq_length = x.shape[0], x.shape[1]
 

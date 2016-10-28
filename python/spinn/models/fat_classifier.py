@@ -151,9 +151,6 @@ def run(only_forward=False):
         raw_training_data, vocabulary, FLAGS.seq_length, data_manager, eval_mode=False, logger=logger,
         sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
         for_rnn=FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW")
-    if FLAGS.pre_embed_inputs and initial_embeddings is not None:
-        training_data_emb = util.PreEmbed(initial_embeddings, training_data[0])
-        training_data = (training_data_emb,) + training_data[1:]
     training_data_iter = util.MakeTrainingIterator(
         training_data, FLAGS.batch_size)
 
@@ -164,8 +161,6 @@ def run(only_forward=False):
             raw_eval_set, vocabulary, FLAGS.seq_length, data_manager, eval_mode=True, logger=logger,
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             for_rnn=FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW")
-        if FLAGS.pre_embed_inputs and initial_embeddings is not None:
-            e_X = util.PreEmbed(initial_embeddings, e_X)
         eval_iterators.append((filename,
             util.MakeEvalIterator((e_X, e_transitions, e_y, e_num_transitions),
                 FLAGS.batch_size, FLAGS.eval_data_limit)))
@@ -293,7 +288,6 @@ if __name__ == '__main__':
     gflags.DEFINE_integer("eval_data_limit", -1, "Truncate evaluation set. -1 indicates no truncation.")
     gflags.DEFINE_string("embedding_data_path", None,
         "If set, load GloVe-formatted embeddings from here.")
-    gflags.DEFINE_boolean("pre_embed_inputs", True, "")
 
     # Model architecture settings.
     gflags.DEFINE_enum("model_type", "RNN",
