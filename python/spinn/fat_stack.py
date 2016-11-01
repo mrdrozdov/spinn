@@ -194,8 +194,8 @@ class ReduceChain(Chain):
         batch_size = len(left_x)
 
         # Concatenate the list of states.
-        left_x = F.stack(left_x, axis=0)
-        right_x = F.stack(right_x, axis=0)
+        left_x = F.concat(left_x, axis=0)
+        right_x = F.concat(right_x, axis=0)
         assert left_x.shape == right_x.shape, "Left and Right must match in dimensions."
         
         assert left_x.shape[1] % 2 == 0, "Unit dim needs to be even because is concatenated [c,h]"
@@ -264,6 +264,8 @@ class SPINN(Chain):
 
         def better_reduce(lefts, rights):
             lstm_state = self.reduce(lefts, rights, train=train)
+            batch_size = lstm_state.shape[0]
+            lstm_state = F.split_axis(lstm_state, batch_size, axis=0, force_tuple=True)
             for state in lstm_state:
                 yield state
 
@@ -280,7 +282,7 @@ class SPINN(Chain):
                     assert buffers_t[i] >= 0
                     buffers_t[i] -= 1
                 elif t == 0: # shift
-                    new_stack_item = buf[buffers_t[i]]
+                    new_stack_item = buf[buffers_t[i]:buffers_t[i]+1]
                     stack.append(new_stack_item)
                     assert buffers_t[i] >= 0
                     buffers_t[i] -= 1
@@ -290,7 +292,7 @@ class SPINN(Chain):
                             lr.append(stack.pop())
                         else:
                             lr.append(Variable(
-                                self.__mod.zeros((hidden_dim,), dtype=self.__mod.float32),
+                                self.__mod.zeros((1, hidden_dim,), dtype=self.__mod.float32),
                                 volatile=not train))
                 else:
                     raise Exception("Action not implemented: {}".format(t))
@@ -307,7 +309,7 @@ class SPINN(Chain):
                     else:
                         raise Exception("Action not implemented: {}".format(t))
 
-        ret = F.stack([s.pop() for s in stacks], axis=0)
+        ret = F.concat([s.pop() for s in stacks], axis=0)
         assert ret.shape == (batch_size, hidden_dim)
 
         return ret
