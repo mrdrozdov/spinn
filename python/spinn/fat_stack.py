@@ -197,10 +197,16 @@ class ReduceChain(Chain):
         left_x = F.stack(left_x, axis=0)
         right_x = F.stack(right_x, axis=0)
         assert left_x.shape == right_x.shape, "Left and Right must match in dimensions."
+        
+        assert left_x.shape[1] % 2 == 0, "Unit dim needs to be even because is concatenated [c,h]"
+        unit_dim = left_x.shape[1]
+        h_dim = unit_dim / 2
 
         # Split each state into its c/h representations.
-        c_l, h_l = F.split_axis(left_x, 2, axis=1)
-        c_r, h_r = F.split_axis(right_x, 2, axis=1)
+        c_l = left_x[:, :h_dim]
+        c_r = right_x[:, :h_dim]
+        h_l = left_x[:, h_dim:]
+        h_r = right_x[:, h_dim:]
 
         lstm_state = self.treelstm(c_l, c_r, h_l, h_r)
         return lstm_state
