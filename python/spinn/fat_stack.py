@@ -129,7 +129,7 @@ class TreeLSTMChain(Chain):
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
 
-    def __call__(self, c_l, h_l, c_r, h_r, train=True, keep_hs=False):
+    def __call__(self, c_l, c_r, h_l, h_r, train=True, keep_hs=False):
         # TODO: Figure out bias. In this case, both left and right
         # weights have intrinsic bias, but this was not the strategy
         # in the previous code base. I think the trick is to use 
@@ -151,7 +151,7 @@ class TreeLSTMChain(Chain):
         c_t = fl_gate * c_l + fr_gate * c_r + i_gate * cell_inp
         h_t = o_gate * F.tanh(c_t)
 
-        return F.concat([h_t, c_t], axis=1)
+        return F.concat([c_t, h_t], axis=1)
 
 
 class ReduceChain(Chain):
@@ -202,7 +202,7 @@ class ReduceChain(Chain):
         c_l, h_l = F.split_axis(left_x, 2, axis=1)
         c_r, h_r = F.split_axis(right_x, 2, axis=1)
 
-        lstm_state = self.treelstm(c_l, h_l, c_r, h_r)
+        lstm_state = self.treelstm(c_l, c_r, h_l, h_r)
         return lstm_state
 
 
