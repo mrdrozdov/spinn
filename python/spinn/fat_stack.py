@@ -251,7 +251,8 @@ class SPINN(Chain):
         batch_size, seq_length, hidden_dim = buffers.shape[0], buffers.shape[1], buffers.shape[2]
         transitions = transitions.T
         assert len(transitions) == seq_length
-        buffers = [b for b in buffers]
+        buffers = [F.split_axis(b, seq_length, axis=0, force_tuple=True)
+                   for b in buffers]
         buffers_t = [seq_length-1 for _ in buffers]
 
         # Initialize stack with at least one item, otherwise gradient might
@@ -282,7 +283,7 @@ class SPINN(Chain):
                     assert buffers_t[i] >= 0
                     buffers_t[i] -= 1
                 elif t == 0: # shift
-                    new_stack_item = buf[buffers_t[i]:buffers_t[i]+1]
+                    new_stack_item = buf[buffers_t[i]]
                     stack.append(new_stack_item)
                     assert buffers_t[i] >= 0
                     buffers_t[i] -= 1
