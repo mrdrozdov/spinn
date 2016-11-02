@@ -264,8 +264,16 @@ def run(only_forward=False):
                         logger.Log("[TODO: NOT IMPLEMENTED] Checkpointing with new best dev accuracy of %f" % acc)
                 progress_bar.reset()
 
+            if FLAGS.profile and step >= FLAGS.profile_steps:
+                break
+
 
 if __name__ == '__main__':
+    # General settings.
+    gflags.DEFINE_bool("debug", True, "Set to True to disable debug_mode and type_checking.")
+    gflags.DEFINE_bool("profile", False, "Set to True to quit after a few batches.")
+    gflags.DEFINE_integer("profile_steps", 3, "Specify how many steps to profile.")
+
     # Experiment naming.
     gflags.DEFINE_string("experiment_name", "experiment", "")
 
@@ -370,5 +378,9 @@ if __name__ == '__main__':
 
     # Parse command line flags.
     FLAGS(sys.argv)
+
+    if not FLAGS.debug:
+        chainer.set_debug(False)
+        os.environ['CHAINER_TYPE_CHECK'] = '0'
 
     run(only_forward=FLAGS.expanded_eval_only_mode)
