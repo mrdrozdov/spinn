@@ -350,6 +350,10 @@ class SentencePairModel(Chain):
         x_prem = sentences[:,:,0]
         x_hyp = sentences[:,:,1]
         x = np.concatenate([x_prem, x_hyp], axis=0)
+
+        if self.__gpu >= 0:
+            x = cuda.to_gpu(x)
+        
         x = Variable(x, volatile=not train)
 
         batch_size, seq_length = x.shape[0], x.shape[1]
