@@ -124,8 +124,78 @@ def CropAndPadForRNN(dataset, length, logger=None, sentence_pair_data=False):
     return dataset
 
 
-def MakeTrainingIterator(sources, batch_size):
+def merge(x, y):
+    return ''.join([a for t in zip(x, y) for a in t])
+
+
+def peano(x, y):
+    interim = ''.join(merge(format(x, '08b'), format(y, '08b')))
+    return int(interim, base=2)
+
+
+def MakeTrainingIterator(sources, batch_size, smart_batches=True, use_peano=True):
     # Make an iterator that exposes a dataset as random minibatches.
+
+    def get_key(num_transitions):
+        if use_peano:
+            prem_len, hyp_len = num_transitions
+            key = peano(prem_len, hyp_len)
+            return key
+        else:
+            return max(xy)
+
+    def build_batches():
+        dataset_size = len(sources[0])
+        seq_length = len(sources[0][0][:,0])
+        order = range(dataset_size)
+        random.shuffle(order)
+        order = np.array(order)
+
+        num_splits = 10 # TODO: Should we be smarter about split size?
+        order_limit = len(order) / num_splits * num_splits 
+        order = order[:order_limit]
+        order_splits = np.split(order, num_splits)
+        batches = []
+
+        for split in order_splits:
+            # Put indices into buckets based on example length.
+            keys = []
+            for i in split:
+                num_transitions = sources[3][i]
+                key = get_key(num_transitions)
+                keys.append((i, key))
+            keys = sorted(keys, key=lambda (_, key): key)
+
+            # Group indices from buckets into batches, so that
+            # examples in each batch have similar length.
+            batch = []
+            for i, _ in keys:
+                batch.append(i)
+                if len(batch) == batch_size:
+                    batches.append(batch)
+                    batch = []
+            if len(batch) > 0:
+                print "WARNING: May be discarding {} train examples.".format(len(batch))
+        return batches
+
+    def batch_iter():
+        batches = build_batches()
+        num_batches = len(batches)
+        idx = -1
+        order = range(num_batches)
+        random.shuffle(order)
+
+        while True:
+            idx += 1
+            if idx > num_batches:
+                # Start another epoch.
+                batches = build_batches()
+                num_batches = len(batches)
+                idx = 0
+                order = range(num_batches)
+                random.shuffle(order)
+            batch_indices = batches[order[idx]]
+            yield tuple(source[batch_indices] for source in sources)
 
     def data_iter():
         dataset_size = len(sources[0])
@@ -141,7 +211,10 @@ def MakeTrainingIterator(sources, batch_size):
                 random.shuffle(order)
             batch_indices = order[start:start + batch_size]
             yield tuple(source[batch_indices] for source in sources)
-    return data_iter()
+
+    train_iter = batch_iter if smart_batches else data_iter
+
+    return train_iter()
 
 
 def MakeEvalIterator(sources, batch_size, limit=-1):
