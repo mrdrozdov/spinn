@@ -151,7 +151,7 @@ def run(only_forward=False):
         sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
         for_rnn=FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW")
     training_data_iter = util.MakeTrainingIterator(
-        training_data, FLAGS.batch_size)
+        training_data, FLAGS.batch_size, FLAGS.smart_batching, FLAGS.use_peano)
 
     eval_iterators = []
     for filename, raw_eval_set in raw_eval_sets:
@@ -299,6 +299,8 @@ if __name__ == '__main__':
         "when to save the early stopping 'best' checkpoints.")
     gflags.DEFINE_integer("seq_length", 30, "")
     gflags.DEFINE_integer("eval_seq_length", 30, "")
+    gflags.DEFINE_boolean("smart_batching", True, "Organize batches using sequence length.")
+    gflags.DEFINE_boolean("use_peano", True, "A mind-blowing sorting key.")
     gflags.DEFINE_integer("eval_data_limit", -1, "Truncate evaluation set. -1 indicates no truncation.")
     gflags.DEFINE_string("embedding_data_path", None,
         "If set, load GloVe-formatted embeddings from here.")
