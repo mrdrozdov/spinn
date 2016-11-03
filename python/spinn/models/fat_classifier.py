@@ -70,7 +70,7 @@ def evaluate(classifier_trainer, eval_set, logger, step):
     action_acc_accum = 0.0
     eval_batches = 0.0
     total_batches = len(eval_set[1])
-    progress_bar = SimpleProgressBar(msg="Run Eval")
+    progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60)
     progress_bar.step(0, total=total_batches)
     for i, (eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch) in enumerate(eval_set[1]):
         # Calculate Local Accuracies
@@ -213,7 +213,7 @@ def run(only_forward=False):
             )
 
         # New Training Loop
-        progress_bar = SimpleProgressBar(msg="Training")
+        progress_bar = SimpleProgressBar(msg="Training", bar_length=60)
         for step in range(step, FLAGS.training_steps):
             X_batch, transitions_batch, y_batch, num_transitions_batch = training_data_iter.next()
             learning_rate = FLAGS.learning_rate * (FLAGS.learning_rate_decay_per_10k_steps ** (step / 10000.0))
