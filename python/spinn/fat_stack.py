@@ -130,16 +130,22 @@ class TreeLSTMChain(Chain):
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
 
-    def __call__(self, c_l, c_r, h_l, h_r, train=True, keep_hs=False):
-        # TODO: Figure out bias. In this case, both left and right
-        # weights have intrinsic bias, but this was not the strategy
-        # in the previous code base. I think the trick is to use 
-        # add_param, and then F.broadcast when doing the addition.
-        gates = self.b(self.W_l(h_l) + self.W_r(h_r))
+    def __call__(self, l_prev, r_prev, train=True, keep_hs=False):
+        hidden_dim = self.hidden_dim
+
+        l_h_prev = l_prev[:, :hidden_dim]
+        l_c_prev = l_prev[:,  hidden_dim:]
+        r_h_prev = r_prev[:, :hidden_dim]
+        r_c_prev = r_prev[:,  hidden_dim:]
+
+        gates = self.b(self.W_l(l_h_prev) + self.W_r(r_h_prev))
+
+        def slice_gate(gate_data, i):
+            return gate_data[:, i * hidden_dim:(i + 1) * hidden_dim]
 
         # Compute and slice gate values
         i_gate, fl_gate, fr_gate, o_gate, cell_inp = \
-            F.split_axis(gates, 5, axis=1)
+            [slice_gate(gates, i) for i in range(5)]
 
         # Apply nonlinearities
         i_gate = F.sigmoid(i_gate)
@@ -149,10 +155,10 @@ class TreeLSTMChain(Chain):
         cell_inp = F.tanh(cell_inp)
 
         # Compute new cell and hidden value
-        c_t = fl_gate * c_l + fr_gate * c_r + i_gate * cell_inp
+        c_t = fl_gate * l_c_prev + fr_gate * r_c_prev + i_gate * cell_inp
         h_t = o_gate * F.tanh(c_t)
 
-        return F.concat([c_t, h_t], axis=1)
+        return F.concat([h_t, c_t], axis=1)
 
 
 class ReduceChain(Chain):
@@ -204,12 +210,7 @@ class ReduceChain(Chain):
         h_dim = unit_dim / 2
 
         # Split each state into its c/h representations.
-        c_l = left_x[:, :h_dim]
-        c_r = right_x[:, :h_dim]
-        h_l = left_x[:, h_dim:]
-        h_r = right_x[:, h_dim:]
-
-        lstm_state = self.treelstm(c_l, c_r, h_l, h_r)
+        lstm_state = self.treelstm(left_x, right_x)
         return lstm_state
 
 
