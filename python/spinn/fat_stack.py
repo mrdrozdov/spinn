@@ -90,7 +90,7 @@ TODO:
 
 Other Tasks:
 
-- [x] Run CBOW. 
+- [x] Run CBOW.
 - [ ] Enable Cropping and use longer sequences. Currently will
       not work as expected.
 - [ ] Enable "transition validation".
@@ -206,7 +206,7 @@ class ReduceChain(Chain):
         left_x = F.concat(left_x, axis=0)
         right_x = F.concat(right_x, axis=0)
         assert left_x.shape == right_x.shape, "Left and Right must match in dimensions."
-        
+
         assert left_x.shape[1] % 2 == 0, "Unit dim needs to be even because is concatenated [c,h]"
         unit_dim = left_x.shape[1]
         h_dim = unit_dim / 2
@@ -258,7 +258,7 @@ class SPINN(Chain):
 
         buffers = [F.split_axis(b, seq_length, axis=0, force_tuple=True)
                     for b in buffers]
-        buffers_t = [seq_length-1 for _ in buffers]
+        buffers_t = [0 for _ in buffers]
 
         # Initialize stack with at least one item, otherwise gradient might
         # not propogate.
@@ -285,13 +285,12 @@ class SPINN(Chain):
             for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
                 if t == -1: # skip
                     # Because sentences are padded, we still need to pop here.
-                    assert buffers_t[i] >= 0
-                    buffers_t[i] -= 1
+                    pass
                 elif t == 0: # shift
                     new_stack_item = buf[buffers_t[i]]
                     stack.append(new_stack_item)
-                    assert buffers_t[i] >= 0
-                    buffers_t[i] -= 1
+                    assert buffers_t[i] < seq_length
+                    buffers_t[i] += 1
                 elif t == 1: # reduce
                     for lr in [rights, lefts]:
                         if len(stack) > 0:
@@ -360,7 +359,7 @@ class SentencePairModel(Chain):
 
         if self.__gpu >= 0:
             x = cuda.to_gpu(x)
-        
+
         x = Variable(x, volatile=not train)
 
         batch_size, seq_length = x.shape[0], x.shape[1]
@@ -381,7 +380,7 @@ class SentencePairModel(Chain):
         # Pass through Sentence Encoders.
         h_both = self.x2h(x, t, train=train)
         h_premise, h_hypothesis = F.split_axis(h_both, 2, axis=0)
-        
+
         # Pass through MLP Classifier.
         h = F.concat([h_premise, h_hypothesis], axis=1)
         h = self.batch_norm_0(h, test=not train)
