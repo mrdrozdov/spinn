@@ -34,8 +34,6 @@ from spinn.data.sst import load_sst_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
 
-from spinn.util.chainer_blocks import SentencePairTrainer
-
 import spinn.fat_stack
 import spinn.plain_rnn_chainer
 import spinn.cbow
@@ -44,16 +42,16 @@ import spinn.cbow
 FLAGS = gflags.FLAGS
 
 
-def build_sentence_pair_model(cls, model_dim, word_embedding_dim,
+def build_sentence_pair_model(model_cls, trainer_cls, model_dim, word_embedding_dim,
                               seq_length, num_classes, initial_embeddings,
                               keep_rate, gpu):
-    model = cls(model_dim, word_embedding_dim,
+    model = model_cls(model_dim, word_embedding_dim,
              seq_length, initial_embeddings, num_classes, mlp_dim=1024,
              keep_rate=keep_rate,
              gpu=gpu,
             )
 
-    classifier_trainer = SentencePairTrainer(model, model_dim, word_embedding_dim,
+    classifier_trainer = trainer_cls(model, model_dim, word_embedding_dim,
         keep_rate=keep_rate,
         seq_length=seq_length,
         num_classes=num_classes,
@@ -174,15 +172,16 @@ def run(only_forward=False):
     elif FLAGS.model_type == "RNN":
         model_cls = spinn.plain_rnn_chainer.RNN
     elif FLAGS.model_type == "SPINN":
-        # model_cls = getattr(spinn.fat_stack, FLAGS.model_type)
         model_cls = spinn.fat_stack.SentencePairModel
+        trainer_cls = spinn.fat_stack.SentencePairTrainer
     else:
         raise Exception("Requested unimplemented model type %s" % FLAGS.model_type)
 
 
     if data_manager.SENTENCE_PAIR_DATA:
         num_classes = len(data_manager.LABEL_MAP)
-        classifier_trainer = build_sentence_pair_model(model_cls, FLAGS.model_dim, FLAGS.word_embedding_dim,
+        classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls, 
+                              FLAGS.model_dim, FLAGS.word_embedding_dim,
                               FLAGS.seq_length, num_classes, initial_embeddings,
                               FLAGS.embedding_keep_rate, FLAGS.gpu)
     else:

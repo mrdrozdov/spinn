@@ -29,7 +29,7 @@ from chainer.training import extensions
 from chainer.functions.activation import slstm
 from chainer.utils import type_check
 
-import spinn.util.chainer_blocks as CB
+from spinn.util.chainer_blocks import BaseSentencePairTrainer
 
 from spinn.util.chainer_blocks import LSTMChain, RNNChain, EmbedChain
 from spinn.util.chainer_blocks import MLP
@@ -106,16 +106,17 @@ Questions:
 
 """
 
-def tensor_to_lists(inp, reverse=True):
-    b, l = inp.shape[0], inp.shape[1]
-    out = [F.split_axis(x, l, axis=0, force_tuple=True) for x in inp]
 
-    if reverse:
-        out = [list(reversed(x)) for x in out]
-    else:
-        out = [list(x) for x in out]
+class SentencePairTrainer(BaseSentencePairTrainer):
+    def init_params(self, **kwargs):
+        for name, param in self.model.namedparams():
+            data = param.data
+            print("Init: {}:{}".format(name, data.shape))
+            data[:] = np.random.uniform(-0.1, 0.1, data.shape)
 
-    return out
+    def init_optimizer(self, lr=0.01, **kwargs):
+        self.optimizer = optimizers.SGD(lr=lr)
+        self.optimizer.setup(self.model)
 
 
 class TreeLSTMChain(Chain):

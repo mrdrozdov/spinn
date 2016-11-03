@@ -190,7 +190,7 @@ class MLP(ChainList):
         return y
 
 
-class SentencePairTrainer(object):
+class BaseSentencePairTrainer(object):
 
     def __init__(self, model, model_dim, word_embedding_dim,
                  seq_length,
@@ -218,21 +218,15 @@ class SentencePairTrainer(object):
             cuda.get_device(gpu).use()
             self.model.to_gpu()
 
-    def init_params(self):
+    def init_params(self, **kwargs):
         for name, param in self.model.namedparams():
             data = param.data
             print("Init: {}:{}".format(name, data.shape))
             data[:] = np.random.uniform(-0.1, 0.1, data.shape)
 
-    def init_optimizer(self, clip, decay, lr=0.01, alpha=0.9, eps=1e-6):
-        self.optimizer = optimizers.SGD(lr=0.01)
+    def init_optimizer(self, lr=0.01, **kwargs):
+        self.optimizer = optimizers.SGD(lr=lr)
         self.optimizer.setup(self.model)
-
-        # Clip Gradient
-        # self.optimizer.add_hook(chainer.optimizer.GradientClipping(clip))
-
-        # L2 Regularization
-        # self.optimizer.add_hook(chainer.optimizer.WeightDecay(decay))
 
     def update(self):
         self.optimizer.update()
