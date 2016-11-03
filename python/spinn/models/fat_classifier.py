@@ -37,6 +37,7 @@ from spinn.util.data import SimpleProgressBar
 import spinn.fat_stack
 import spinn.plain_rnn_chainer
 import spinn.cbow
+import spinn.nti
 
 
 FLAGS = gflags.FLAGS
@@ -169,8 +170,12 @@ def run(only_forward=False):
 
     if FLAGS.model_type == "CBOW":
         model_cls = spinn.cbow.SentencePairModel
+        trainer_cls = spinn.cbow.SentencePairTrainer
     elif FLAGS.model_type == "RNN":
         model_cls = spinn.plain_rnn_chainer.RNN
+    elif FLAGS.model_type == "NTI":
+        model_cls = spinn.nti.SentencePairModel
+        trainer_cls = spinn.nti.SentencePairTrainer
     elif FLAGS.model_type == "SPINN":
         model_cls = spinn.fat_stack.SentencePairModel
         trainer_cls = spinn.fat_stack.SentencePairTrainer
@@ -219,7 +224,7 @@ def run(only_forward=False):
             learning_rate = FLAGS.learning_rate * (FLAGS.learning_rate_decay_per_10k_steps ** (step / 10000.0))
 
             # Reset cached gradients.
-            classifier_trainer.model.cleargrads()
+            classifier_trainer.optimizer.zero_grads()
 
             # Calculate loss and update parameters.
             ret = classifier_trainer.forward({
@@ -234,6 +239,7 @@ def run(only_forward=False):
 
             total_cost_val = xent_cost_val + transition_cost_val
             loss.backward()
+
             try:
                 classifier_trainer.update()
             except:
@@ -299,7 +305,7 @@ if __name__ == '__main__':
 
     # Model architecture settings.
     gflags.DEFINE_enum("model_type", "RNN",
-                       ["CBOW", "RNN", "SPINN"],
+                       ["CBOW", "RNN", "SPINN", "NTI"],
                        "")
     gflags.DEFINE_boolean("allow_gt_transitions_in_eval", False,
         "Whether to use ground truth transitions in evaluation when appropriate "

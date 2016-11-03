@@ -24,20 +24,37 @@ from chainer.functions.loss import softmax_cross_entropy
 from spinn.util.chainer_blocks import LSTMChain, RNNChain, EmbedChain
 from spinn.util.chainer_blocks import MLP
 from spinn.util.chainer_blocks import CrossEntropyClassifier
+from spinn.util.chainer_blocks import BaseSentencePairTrainer
+
+
+class SentencePairTrainer(BaseSentencePairTrainer):
+    def init_params(self, **kwargs):
+        for name, param in self.model.namedparams():
+            data = param.data
+            print("Init: {}:{}".format(name, data.shape))
+            data[:] = np.random.uniform(-0.005, 0.005, data.shape)
+
+    def init_optimizer(self, lr=0.01, **kwargs):
+        # self.optimizer = optimizers.Adam(alpha=0.0003, beta1=0.9, beta2=0.999, eps=1e-08)
+        self.optimizer = optimizers.SGD(lr=0.1)
+        self.optimizer.setup(self.model)
+        self.optimizer.add_hook(chainer.optimizer.GradientClipping(5))
+        self.optimizer.add_hook(chainer.optimizer.WeightDecay(0.00003))
 
 
 class SentencePairModel(Chain):
-    def __init__(self, model_dim, word_embedding_dim, vocab_size, compose_network,
-                 seq_length, initial_embeddings, num_classes,
-                 mlp_dim,
+    def __init__(self, model_dim, word_embedding_dim,
+                 seq_length, initial_embeddings, num_classes, mlp_dim,
                  keep_rate,
                  gpu=-1,
                  ):
         super(SentencePairModel, self).__init__(
-            embed=EmbedChain(word_embedding_dim, vocab_size, initial_embeddings, model_dim, gpu=gpu),
-            l0=L.Linear(word_embedding_dim*2, 1024),
-            l1=L.Linear(1024, 512),
-            l2=L.Linear(512, 3),
+            batch_norm_0=L.BatchNormalization(model_dim*2, model_dim*2),
+            batch_norm_1=L.BatchNormalization(mlp_dim, mlp_dim),
+            batch_norm_2=L.BatchNormalization(mlp_dim, mlp_dim),
+            l0=L.Linear(model_dim*2, mlp_dim),
+            l1=L.Linear(mlp_dim, mlp_dim),
+            l2=L.Linear(mlp_dim, num_classes)
         )
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
@@ -47,13 +64,18 @@ class SentencePairModel(Chain):
         self.word_embedding_dim = word_embedding_dim
         self.model_dim = model_dim
         self.num_classes = num_classes
+        self.initial_embeddings = initial_embeddings
 
     def __call__(self, sentences, transitions, y_batch=None, train=True):
         ratio = 1 - self.keep_rate
 
         # Get Embeddings
-        x_prem = self.embed(Variable(sentences[:,:,0]))
-        x_hyp = self.embed(Variable(sentences[:,:,1]))
+        sentences = self.initial_embeddings.take(sentences, axis=0
+            ).astype(np.float32)
+
+        # Get Embeddings
+        x_prem = Variable(sentences[:,:,0])
+        x_hyp = Variable(sentences[:,:,1])
 
         # Sum and Concatenate both Sentences
         h_l = F.sum(x_prem, axis=1)
@@ -61,12 +83,21 @@ class SentencePairModel(Chain):
         h = F.concat([h_l, h_r], axis=1)
 
         # Pass through Classifier
-        h = F.relu(self.l0(h))
-        h = F.relu(self.l1(h))
-        h = F.relu(self.l2(h))
+        h = self.batch_norm_0(h, test=not train)
+        h = F.dropout(h, ratio, train)
+        h = F.relu(h)
+        h = self.l0(h)
+        h = self.batch_norm_1(h, test=not train)
+        h = F.dropout(h, ratio, train)
+        h = F.relu(h)
+        h = self.l1(h)
+        h = self.batch_norm_2(h, test=not train)
+        h = F.dropout(h, ratio, train)
+        h = F.relu(h)
+        h = self.l2(h)
         y = h
         
         accum_loss = self.lossFun(y, y_batch)
-        self.accuracy = self.accFun(y_hat, y_batch)
+        self.accuracy = self.accFun(y, y_batch)
 
-        return y_hat, accum_loss
+        return y, accum_loss

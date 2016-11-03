@@ -260,7 +260,10 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
         if for_rnn:
             # TODO(SB): Extend this clause to the non-pair case.
             transitions = np.zeros((len(dataset), 2, 0))
-            num_transitions = np.zeros((len(dataset), 2))
+            num_transitions = np.transpose(np.array(
+                [[len(np.array(example["premise_tokens"]).nonzero()[0]) for example in dataset],
+                 [len(np.array(example["hypothesis_tokens"]).nonzero()[0]) for example in dataset]],
+                dtype=np.int32), (1, 0))
         else:
             transitions = np.transpose(np.array([[example["premise_transitions"] for example in dataset],
                                     [example["hypothesis_transitions"] for example in dataset]],
