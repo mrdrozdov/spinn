@@ -253,8 +253,9 @@ class SPINN(Chain):
         batch_size, seq_length, hidden_dim = buffers.shape[0], buffers.shape[1], buffers.shape[2]
         transitions = transitions.T
         assert len(transitions) == seq_length
+
         buffers = [F.split_axis(b, seq_length, axis=0, force_tuple=True)
-                   for b in buffers]
+                    for b in buffers]
         buffers_t = [seq_length-1 for _ in buffers]
 
         # Initialize stack with at least one item, otherwise gradient might
@@ -329,8 +330,10 @@ class SentencePairModel(Chain):
             x2h=SPINN(model_dim, gpu=gpu, keep_rate=keep_rate),
             batch_norm_0=L.BatchNormalization(model_dim*2, model_dim*2),
             batch_norm_1=L.BatchNormalization(mlp_dim, mlp_dim),
+            batch_norm_2=L.BatchNormalization(mlp_dim, mlp_dim),
             l0=L.Linear(model_dim*2, mlp_dim),
-            l1=L.Linear(mlp_dim, num_classes)
+            l1=L.Linear(mlp_dim, mlp_dim),
+            l2=L.Linear(mlp_dim, num_classes)
         )
         self.classifier = CrossEntropyClassifier(gpu)
         self.__gpu = gpu
@@ -387,6 +390,10 @@ class SentencePairModel(Chain):
         h = F.dropout(h, ratio, train)
         h = F.relu(h)
         h = self.l1(h)
+        h = self.batch_norm_2(h, test=not train)
+        h = F.dropout(h, ratio, train)
+        h = F.relu(h)
+        h = self.l2(h)
         y = h
 
         # Calculate Loss & Accuracy.
