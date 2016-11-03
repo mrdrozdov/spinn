@@ -187,7 +187,7 @@ def MakeTrainingIterator(sources, batch_size, smart_batches=True, use_peano=True
 
         while True:
             idx += 1
-            if idx > num_batches:
+            if idx >= num_batches:
                 # Start another epoch.
                 batches = build_batches()
                 num_batches = len(batches)
