@@ -107,18 +107,30 @@ Questions:
 """
 
 
+def HeKaimingInit(shape, real_shape=None):
+    # Calculate fan-in / fan-out using real shape if given as override
+    fan = real_shape or shape
+
+    return np.random.normal(scale=np.sqrt(4.0/(fan[0] + fan[1])),
+                            size=shape)
+
+
 class SentencePairTrainer(BaseSentencePairTrainer):
     def init_params(self, **kwargs):
         for name, param in self.model.namedparams():
             data = param.data
             print("Init: {}:{}".format(name, data.shape))
-            data[:] = np.random.uniform(-0.1, 0.1, data.shape)
+            if len(data.shape) >= 2:
+                data[:] = HeKaimingInit(data.shape)
+            else:
+                data[:] = np.random.uniform(-0.1, 0.1, data.shape)
 
     def init_optimizer(self, lr=0.01, **kwargs):
-        self.optimizer = optimizers.Adam(alpha=0.0003, beta1=0.9, beta2=0.999, eps=1e-08)
+        # self.optimizer = optimizers.Adam(alpha=0.0003, beta1=0.9, beta2=0.999, eps=1e-08)
+        self.optimizer = optimizers.SGD(lr=0.001)
         self.optimizer.setup(self.model)
-        self.optimizer.add_hook(chainer.optimizer.GradientClipping(40))
-        self.optimizer.add_hook(chainer.optimizer.WeightDecay(0.00003))
+        # self.optimizer.add_hook(chainer.optimizer.GradientClipping(40))
+        # self.optimizer.add_hook(chainer.optimizer.WeightDecay(0.00003))
 
 
 class TreeLSTMChain(Chain):
@@ -329,9 +341,9 @@ class SentencePairModel(Chain):
         super(SentencePairModel, self).__init__(
             projection=L.Linear(word_embedding_dim, model_dim, nobias=True),
             x2h=SPINN(model_dim, gpu=gpu, keep_rate=keep_rate),
-            batch_norm_0=L.BatchNormalization(model_dim*2, model_dim*2),
-            batch_norm_1=L.BatchNormalization(mlp_dim, mlp_dim),
-            batch_norm_2=L.BatchNormalization(mlp_dim, mlp_dim),
+            # batch_norm_0=L.BatchNormalization(model_dim*2, model_dim*2),
+            # batch_norm_1=L.BatchNormalization(mlp_dim, mlp_dim),
+            # batch_norm_2=L.BatchNormalization(mlp_dim, mlp_dim),
             l0=L.Linear(model_dim*2, mlp_dim),
             l1=L.Linear(mlp_dim, mlp_dim),
             l2=L.Linear(mlp_dim, num_classes)
@@ -383,16 +395,16 @@ class SentencePairModel(Chain):
 
         # Pass through MLP Classifier.
         h = F.concat([h_premise, h_hypothesis], axis=1)
-        h = self.batch_norm_0(h, test=not train)
-        h = F.dropout(h, ratio, train)
-        h = F.relu(h)
+        # h = self.batch_norm_0(h, test=not train)
+        # h = F.dropout(h, ratio, train)
+        # h = F.relu(h)
         h = self.l0(h)
-        h = self.batch_norm_1(h, test=not train)
-        h = F.dropout(h, ratio, train)
+        # h = self.batch_norm_1(h, test=not train)
+        # h = F.dropout(h, ratio, train)
         h = F.relu(h)
         h = self.l1(h)
-        h = self.batch_norm_2(h, test=not train)
-        h = F.dropout(h, ratio, train)
+        # h = self.batch_norm_2(h, test=not train)
+        # h = F.dropout(h, ratio, train)
         h = F.relu(h)
         h = self.l2(h)
         y = h
