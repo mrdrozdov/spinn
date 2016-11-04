@@ -1,4 +1,5 @@
 import numpy as np
+import random
 
 # Chainer imports
 import chainer
@@ -14,6 +15,29 @@ from chainer.training import extensions
 
 from chainer.utils import type_check
 
+
+def gradient_check(model, get_loss):
+    epsilon = 1e-7
+    cached_grads = [w.grad.ravel().copy() for (n,w) in model.namedparams()]
+    for (n, w), cached in zip(model.namedparams(), cached_grads):
+        chosen = range(len(cached))
+        random.shuffle(chosen)
+        chosen = chosen[:10]
+        for c in chosen:
+            # Find Y1
+            w.data.ravel()[c] += epsilon
+            check_loss_1 = get_loss()
+
+            # Find Y2
+            w.data.ravel()[c] -= 2 * epsilon
+            check_loss_2 = get_loss()
+
+            # Reset Param
+            w.data.ravel()[c] += epsilon
+
+            # Check that: Gradient ~ (Y1 - Y2) / (2 * epsilon)
+            estimate = (check_loss_1.data - check_loss_2.data) / (2 * epsilon)
+            np.testing.assert_almost_equal(estimate, cached[c])
 
 
 class EmbedChain(Chain):

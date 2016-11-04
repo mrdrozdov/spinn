@@ -33,6 +33,7 @@ from spinn.data.boolean import load_boolean_data
 from spinn.data.sst import load_sst_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
+from spinn.util.chainer_blocks import gradient_check
 
 import spinn.fat_stack
 import spinn.plain_rnn_chainer
@@ -240,6 +241,15 @@ def run(only_forward=False):
             total_cost_val = xent_cost_val + transition_cost_val
             loss.backward()
 
+            if FLAGS.gradient_check:
+                def get_loss():
+                    _, check_loss, _ = classifier_trainer.forward({
+                    "sentences": X_batch,
+                    "transitions": transitions_batch,
+                    }, y_batch, train=True, predict=False)
+                    return check_loss
+                gradient_check(classifier_trainer.model, get_loss)
+
             try:
                 classifier_trainer.update()
             except:
@@ -274,8 +284,9 @@ def run(only_forward=False):
 
 
 if __name__ == '__main__':
-    # General settings.
+    # Debug settings.
     gflags.DEFINE_bool("debug", True, "Set to True to disable debug_mode and type_checking.")
+    gflags.DEFINE_bool("gradient_check", False, "Randomly check that gradients match estimates.")
     gflags.DEFINE_bool("profile", False, "Set to True to quit after a few batches.")
     gflags.DEFINE_integer("profile_steps", 3, "Specify how many steps to profile.")
 
