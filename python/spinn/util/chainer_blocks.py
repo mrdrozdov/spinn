@@ -12,17 +12,21 @@ from chainer.functions.normalization.batch_normalization import batch_normalizat
 from chainer.functions.evaluation import accuracy
 import chainer.links as L
 from chainer.training import extensions
+from chainer import testing
 
 from chainer.utils import type_check
 
 
-def gradient_check(model, get_loss):
-    epsilon = 1e-7
+def gradient_check(model, get_loss, rtol=0, atol=1e-2, to_check=10):
+    epsilon = 1e-3
     cached_grads = [w.grad.ravel().copy() for (n,w) in model.namedparams()]
-    for (n, w), cached in zip(model.namedparams(), cached_grads):
+    checked = []
+
+    # TODO: Only consider non-zero gradients.
+    for (_, w), cached in zip(model.namedparams(), cached_grads):
         chosen = range(len(cached))
         random.shuffle(chosen)
-        chosen = chosen[:10]
+        chosen = chosen[:to_check]
         for c in chosen:
             # Find Y1
             w.data.ravel()[c] += epsilon
@@ -37,7 +41,11 @@ def gradient_check(model, get_loss):
 
             # Check that: Gradient ~ (Y1 - Y2) / (2 * epsilon)
             estimate = (check_loss_1.data - check_loss_2.data) / (2 * epsilon)
-            np.testing.assert_almost_equal(estimate, cached[c])
+            checked.append((estimate, cached[c]))
+
+    estimates, grads = zip(*checked)
+    estimates, grads = np.array(estimates), np.array(grads)
+    testing.assert_allclose(estimates, grads, rtol=rtol, atol=atol, verbose=True), "Gradient check failed."
 
 
 class EmbedChain(Chain):
