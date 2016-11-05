@@ -33,7 +33,7 @@ class TFLogger(object):
             self.acc: accuracy,
         }
 
-        summaries, _, _ = self.sess.run(
-            [self.summary_op, self.loss, self.acc],
-            feed_dict)
+        # sess.run returns a list, so we have to explicitly
+        # extract the first item using sess.run(...)[0]
+        summaries = self.sess.run([self.summary_op], feed_dict)[0]
         self.summary_writer.add_summary(summaries, step)
