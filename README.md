@@ -83,6 +83,21 @@ Here's a sample command that runs a fast, low-dimensional CPU training run, trai
 
 For full runs, you'll also need a copy of the 840B word 300D [GloVe word vectors](http://nlp.stanford.edu/projects/glove/).
 
+### Viewing Summaries in Tensorboard
+
+To view some statistics in Tensorboard, make sure to turn the "write_summary" flag on. In other words, your run command should look something like this:
+
+    PYTHONPATH=spinn/python \
+        THEANO_FLAGS=optimizer=fast_compile,device=cpu,floatX=float32 \
+        python2.7 -m spinn.models.fat_classifier --data_type snli \
+        --training_data_path snli_1.0/snli_1.0_dev.jsonl \
+        --eval_data_path snli_1.0/snli_1.0_dev.jsonl \
+        --embedding_data_path spinn/python/spinn/tests/test_embedding_matrix.5d.txt \
+        --word_embedding_dim 5 --model_dim 10 \
+        --write_summaries True
+
+You'll also need to install [Tensorflow](http://tflearn.org/installation/#tensorflow-installation).
+
 ## C++ code
 
 The C++ code lives in the `cpp` folder. This code implements a basic SPINN feedforward. (This implementation corresponds to the bare SPINN-PI-NT, "parsed input / no tracking" model, described in the paper.) It has been verified to produce the exact same output as a recursive neural network with the same weights and inputs. (We used a simplified version of Ozan Irsoy's [`deep-recursive` project][5] as a comparison.)

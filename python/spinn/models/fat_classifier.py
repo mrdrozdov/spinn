@@ -206,6 +206,11 @@ def run(only_forward=False):
         step = 0
         best_dev_error = 1.0
 
+    if FLAGS.write_summaries:
+        from spinn.tf_logger import TFLogger
+        train_summary_logger = TFLogger(summary_dir=os.path.join(FLAGS.summary_dir, FLAGS.experiment_name, 'train'))
+        dev_summary_logger = TFLogger(summary_dir=os.path.join(FLAGS.summary_dir, FLAGS.experiment_name, 'dev'))
+
     # Do an evaluation-only run.
     if only_forward:
         raise Exception("Not implemented for chainer.")
@@ -260,6 +265,9 @@ def run(only_forward=False):
             action_acc_val = 0.0
             acc_val = float(classifier_trainer.model.accuracy.data)
 
+            if FLAGS.write_summaries:
+                train_summary_logger.log(step=step, loss=total_cost_val, accuracy=acc_val)
+
             progress_bar.step(
                 i=max(0, step-1) % FLAGS.statistics_interval_steps + 1,
                 total=FLAGS.statistics_interval_steps)
@@ -277,6 +285,8 @@ def run(only_forward=False):
                     if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > 1000:
                         best_dev_error = 1 - acc
                         logger.Log("[TODO: NOT IMPLEMENTED] Checkpointing with new best dev accuracy of %f" % acc)
+                    if FLAGS.write_summaries:
+                        dev_summary_logger.log(step=step, loss=0.0, accuracy=acc)
                 progress_bar.reset()
 
             if FLAGS.profile and step >= FLAGS.profile_steps:
@@ -288,6 +298,7 @@ if __name__ == '__main__':
     gflags.DEFINE_bool("debug", True, "Set to True to disable debug_mode and type_checking.")
     gflags.DEFINE_bool("gradient_check", False, "Randomly check that gradients match estimates.")
     gflags.DEFINE_bool("profile", False, "Set to True to quit after a few batches.")
+    gflags.DEFINE_bool("write_summaries", False, "Toggle which controls whether summaries are written.")
     gflags.DEFINE_integer("profile_steps", 3, "Specify how many steps to profile.")
 
     # Experiment naming.
@@ -302,6 +313,7 @@ if __name__ == '__main__':
         "a filename or a directory. In the latter case, the experiment name serves as the "
         "base for the filename.")
     gflags.DEFINE_string("log_path", ".", "A directory in which to write logs.")
+    gflags.DEFINE_string("summary_dir", ".", "A directory in which to write summaries.")
 
     # Data settings.
     gflags.DEFINE_string("training_data_path", None, "")
