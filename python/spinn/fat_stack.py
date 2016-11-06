@@ -229,13 +229,19 @@ class ReduceChain(Chain):
 
 
 class SPINN(Chain):
-    def __init__(self, hidden_dim, keep_rate, prefix="SPINN", gpu=-1):
+    def __init__(self, hidden_dim, keep_rate, prefix="SPINN", gpu=-1, predict_actions=False):
         super(SPINN, self).__init__(
             reduce=ReduceChain(hidden_dim, gpu=gpu),
         )
         self.hidden_dim = hidden_dim
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
+        self.predict_actions = predict_actions
+
+        if predict_actions:
+            num_actions = 2
+            num_inputs = 3
+            self.add_link('predict', L.Linear(hidden_dim * num_inputs, num_actions))
 
     def check_type_forward(self, in_types):
         type_check.expect(in_types.size() == 1)
@@ -246,7 +252,7 @@ class SPINN(Chain):
             buff_type.ndim >= 1,
         )
 
-    def __call__(self, buffers, transitions, train=True, keep_hs=False, use_sum=False):
+    def __call__(self, buffers, transitions, train=True, keep_hs=False):
         """
         Pass over batches of transitions, modifying their associated
         buffers at each iteration.
@@ -291,6 +297,16 @@ class SPINN(Chain):
             assert len(ts) == batch_size
             assert len(ts) == len(buffers)
             assert len(ts) == len(stacks)
+
+            if self.predict_actions:
+                zeros = Variable(self.__mod.zeros((1, hidden_dim,), dtype=self.__mod.float32),
+                                volatile=not train)
+                predict_inp = F.concat([
+                    F.concat([s[0] if 0 < len(s) else zeros for s in stacks], axis=0),
+                    F.concat([s[1] if 1 < len(s) else zeros for s in stacks], axis=0), 
+                    F.concat([b[i] if i < len(buffers_t) else zeros for (b, i) in zip(buffers, buffers_t)], axis=0)
+                    ], axis=1)
+                predictions = self.predict(predict_inp)
 
             lefts = []
             rights = []
