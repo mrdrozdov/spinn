@@ -198,9 +198,10 @@ def run(only_forward=False):
     else:
         checkpoint_path = os.path.join(FLAGS.ckpt_path, FLAGS.experiment_name + ".ckpt")
     if os.path.isfile(checkpoint_path):
+        # TODO: Check that resuming works fine with tf summaries.
         logger.Log("Found checkpoint, restoring.")
-        step, best_dev_error = vs.load_checkpoint(checkpoint_path, num_extra_vars=2,
-                                                  skip_saved_unsavables=FLAGS.skip_saved_unsavables)
+        step, best_dev_error = classifier_trainer.load(checkpoint_path)
+        logger.Log("Resuming at step: {} with best dev accuracy: {}".format(step, 1. - best_dev_error))
     else:
         assert not only_forward, "Can't run an eval-only run without a checkpoint. Supply a checkpoint."
         step = 0
@@ -284,7 +285,8 @@ def run(only_forward=False):
                     acc = evaluate(classifier_trainer, eval_set, logger, step)
                     if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > 1000:
                         best_dev_error = 1 - acc
-                        logger.Log("[TODO: NOT IMPLEMENTED] Checkpointing with new best dev accuracy of %f" % acc)
+                        logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
+                        classifier_trainer.save(checkpoint_path, step, best_dev_error)
                     if FLAGS.write_summaries:
                         dev_summary_logger.log(step=step, loss=0.0, accuracy=acc)
                 progress_bar.reset()

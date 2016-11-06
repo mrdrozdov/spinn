@@ -243,12 +243,16 @@ class BaseSentencePairTrainer(object):
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
 
-        self.model = model
-
+        self.init_model(model)
         self.init_params()
         if gpu >= 0:
             cuda.get_device(gpu).use()
             self.model.to_gpu()
+
+    def init_model(self, model):
+        self.model = model
+        self.model.add_persistent('best_dev_error', 0.0)
+        self.model.add_persistent('step', 0)
 
     def init_params(self, **kwargs):
         for name, param in self.model.namedparams():
@@ -277,11 +281,11 @@ class BaseSentencePairTrainer(object):
             preds = None
         return y, loss, preds
 
-    def save(self, filename):
+    def save(self, filename, step, best_dev_error):
+        self.model.step = step
+        self.model.best_dev_error = best_dev_error
         chainer.serializers.save_npz(filename, self.model)
 
-    @staticmethod
-    def load(filename, n_units, gpu):
-        self = SentenceModel(n_units, gpu)
+    def load(self, filename):
         chainer.serializers.load_npz(filename, self.model)
-        return self
+        return self.model.step, self.model.best_dev_error
