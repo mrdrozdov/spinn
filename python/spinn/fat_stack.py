@@ -364,41 +364,27 @@ class SPINN(Chain):
                 else:
                     raise Exception("Action not implemented: {}".format(t))
 
+            # TODO! The tracking inputs for shifts and reduces should be split,
+            # in order to do consecutive shifts. This would (maybe) allow us
+            # to get the performance benefits from dynamic batch sizes while still
+            # predicting actions.
+            # TODO!!!!! This should probably use the state of the buffer/stacks
+            # prior to pops and shifts, although will be functionally the same.
+            if self.use_tracking:
+                tracking_input = self.tracking_input(stacks, buffers, buffers_t, train)
+                c = F.concat(self.c, axis=0)
+                h = F.concat(self.h, axis=0)
+
+                c, h, logits = self.tracking_lstm(c, h, tracking_input, train)
+
+                # Assign appropriate states after they've been calculated.
+                self.c = F.split_axis(c, c.shape[0], axis=0, force_tuple=True)
+                self.h = F.split_axis(h, h.shape[0], axis=0, force_tuple=True)
+
             assert len(lefts) == len(rights)
             if len(rights) > 0:
-                # TODO!!!!! This should probably use the state of the buffer/stacks
-                # prior to pops and shifts, although will be functionally the same.
-                if self.use_tracking:
-                    tracking_batch = len([t for t in ts if t == 1])
-                    tracking_ix = [i for (i, t) in enumerate(ts) if t == 1]
-                    zeros = Variable(self.__mod.zeros((tracking_batch, hidden_dim/2,), dtype=self.__mod.float32),
-                                    volatile=not train)
-                    tracking_stacks    = [x for (t, x) in zip(ts, stacks) if t == 1]
-                    tracking_buffers   = [x for (t, x) in zip(ts, buffers) if t == 1]
-                    tracking_buffers_t = [x for (t, x) in zip(ts, buffers_t) if t == 1]
-
-                    tracking_input = self.tracking_input(
-                        tracking_stacks,
-                        tracking_buffers,
-                        tracking_buffers_t,
-                        train)
-
-                    c = F.concat([x for (t, x) in zip(ts, self.c) if t == 1], axis=0)
-                    h = F.concat([x for (t, x) in zip(ts, self.h) if t == 1], axis=0)
-
-                    c, h, logits = self.tracking_lstm(c, h, tracking_input, train)
-
-                    # Assign appropriate states after they've been calculated.
-                    _c = F.split_axis(c, tracking_batch, axis=0, force_tuple=True)
-                    for i, ix in enumerate(tracking_ix):
-                        if t == 1:
-                            self.c[ix] = _c[i]
-                    _h = F.split_axis(h, tracking_batch, axis=0, force_tuple=True)
-                    for i, ix in enumerate(tracking_ix):
-                        if t == 1:
-                            self.h[ix] = _h[i]
-
-                reduced = iter(better_reduce(lefts, rights, h))
+                reduce_h = F.concat([x for (t, x) in zip(ts, self.h) if t == 1], axis=0)
+                reduced = iter(better_reduce(lefts, rights, reduce_h))
                 for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
                     if t == -1 or t == 0:
                         continue
