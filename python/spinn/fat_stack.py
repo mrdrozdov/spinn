@@ -201,7 +201,7 @@ class ReduceChain(Chain):
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
 
-    def __call__(self, left_x, right_x, h=None, train=True, keep_hs=False):
+    def __call__(self, left_x, right_x, external=None, train=True, keep_hs=False):
         """
         Args:
             left_x:  B* x H
@@ -223,7 +223,7 @@ class ReduceChain(Chain):
         h_dim = unit_dim / 2
 
         # Split each state into its c/h representations.
-        lstm_state = self.treelstm(left_x, right_x, external=h)
+        lstm_state = self.treelstm(left_x, right_x, external)
         return lstm_state
 
 
@@ -342,6 +342,21 @@ class SPINN(Chain):
             assert len(ts) == len(buffers)
             assert len(ts) == len(stacks)
 
+            # TODO! The tracking inputs for shifts and reduces should be split,
+            # in order to do consecutive shifts. This would (maybe) allow us
+            # to get the performance benefits from dynamic batch sizes while still
+            # predicting actions.
+            if self.use_tracking:
+                tracking_input = self.tracking_input(stacks, buffers, buffers_t, train)
+                c = F.concat(self.c, axis=0)
+                h = F.concat(self.h, axis=0)
+
+                c, h, logits = self.tracking_lstm(c, h, tracking_input, train)
+
+                # Assign appropriate states after they've been calculated.
+                self.c = F.split_axis(c, c.shape[0], axis=0, force_tuple=True)
+                self.h = F.split_axis(h, h.shape[0], axis=0, force_tuple=True)
+
             lefts = []
             rights = []
             for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
@@ -364,27 +379,13 @@ class SPINN(Chain):
                 else:
                     raise Exception("Action not implemented: {}".format(t))
 
-            # TODO! The tracking inputs for shifts and reduces should be split,
-            # in order to do consecutive shifts. This would (maybe) allow us
-            # to get the performance benefits from dynamic batch sizes while still
-            # predicting actions.
-            # TODO!!!!! This should probably use the state of the buffer/stacks
-            # prior to pops and shifts, although will be functionally the same.
-            if self.use_tracking:
-                tracking_input = self.tracking_input(stacks, buffers, buffers_t, train)
-                c = F.concat(self.c, axis=0)
-                h = F.concat(self.h, axis=0)
-
-                c, h, logits = self.tracking_lstm(c, h, tracking_input, train)
-
-                # Assign appropriate states after they've been calculated.
-                self.c = F.split_axis(c, c.shape[0], axis=0, force_tuple=True)
-                self.h = F.split_axis(h, h.shape[0], axis=0, force_tuple=True)
-
             assert len(lefts) == len(rights)
             if len(rights) > 0:
-                reduce_h = F.concat([x for (t, x) in zip(ts, self.h) if t == 1], axis=0)
-                reduced = iter(better_reduce(lefts, rights, reduce_h))
+                if self.use_tracking:
+                    external = F.concat([x for (t, x) in zip(ts, self.h) if t == 1], axis=0)
+                else:
+                    external = None
+                reduced = iter(better_reduce(lefts, rights, external))
                 for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
                     if t == -1 or t == 0:
                         continue
