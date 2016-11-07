@@ -268,7 +268,9 @@ class TrackingInput(Chain):
 
 
 class SPINN(Chain):
-    def __init__(self, hidden_dim, keep_rate, prefix="SPINN", gpu=-1, tracking_lstm_hidden_dim=4, use_tracking_lstm=True, make_logits=False):
+    def __init__(self, hidden_dim, keep_rate, prefix="SPINN", gpu=-1,
+                 tracking_lstm_hidden_dim=4, use_tracking_lstm=True, make_logits=False,
+                 use_shift_composition=True):
         super(SPINN, self).__init__(
             reduce=ReduceChain(hidden_dim, tracking_lstm_hidden_dim, use_external=use_tracking_lstm, gpu=gpu),
         )
@@ -277,6 +279,7 @@ class SPINN(Chain):
         self.__mod = cuda.cupy if gpu >= 0 else np
         self.tracking_lstm_hidden_dim = tracking_lstm_hidden_dim
         self.use_tracking_lstm = use_tracking_lstm
+        self.use_shift_composition = use_shift_composition
 
         if use_tracking_lstm:
             self.add_link('tracking_input', TrackingInput(hidden_dim, tracking_lstm_hidden_dim))
@@ -348,15 +351,18 @@ class SPINN(Chain):
             # to get the performance benefits from dynamic batch sizes while still
             # predicting actions.
             if self.use_tracking_lstm:
-                tracking_input = self.tracking_input(stacks, buffers, buffers_t, train)
-                c = F.concat(self.c, axis=0)
-                h = F.concat(self.h, axis=0)
+                if self.use_shift_composition:
+                    tracking_input = self.tracking_input(stacks, buffers, buffers_t, train)
+                    c = F.concat(self.c, axis=0)
+                    h = F.concat(self.h, axis=0)
 
-                c, h, logits = self.tracking_lstm(c, h, tracking_input, train)
+                    c, h, logits = self.tracking_lstm(c, h, tracking_input, train)
 
-                # Assign appropriate states after they've been calculated.
-                self.c = F.split_axis(c, c.shape[0], axis=0, force_tuple=True)
-                self.h = F.split_axis(h, h.shape[0], axis=0, force_tuple=True)
+                    # Assign appropriate states after they've been calculated.
+                    self.c = F.split_axis(c, c.shape[0], axis=0, force_tuple=True)
+                    self.h = F.split_axis(h, h.shape[0], axis=0, force_tuple=True)
+                else:
+                    raise Exception("Not implemented.")
 
             lefts = []
             rights = []
@@ -409,6 +415,7 @@ class SentencePairModel(Chain):
                  gpu=-1,
                  tracking_lstm_hidden_dim=4,
                  use_tracking_lstm=True,
+                 use_shift_composition=True,
                  make_logits=False,
                  **kwargs
                 ):
@@ -417,6 +424,7 @@ class SentencePairModel(Chain):
             x2h=SPINN(model_dim,
                 tracking_lstm_hidden_dim=tracking_lstm_hidden_dim,
                 use_tracking_lstm=use_tracking_lstm,
+                use_shift_composition=use_shift_composition,
                 make_logits=make_logits,
                 gpu=gpu, keep_rate=keep_rate),
             # batch_norm_0=L.BatchNormalization(model_dim*2, model_dim*2),
