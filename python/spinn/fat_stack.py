@@ -268,16 +268,16 @@ class TrackingInput(Chain):
 
 
 class SPINN(Chain):
-    def __init__(self, hidden_dim, keep_rate, prefix="SPINN", gpu=-1, use_tracking=True):
+    def __init__(self, hidden_dim, keep_rate, prefix="SPINN", gpu=-1, use_tracking_lstm=True):
         super(SPINN, self).__init__(
-            reduce=ReduceChain(hidden_dim, use_external=use_tracking, gpu=gpu),
+            reduce=ReduceChain(hidden_dim, use_external=use_tracking_lstm, gpu=gpu),
         )
         self.hidden_dim = hidden_dim
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
-        self.use_tracking = use_tracking
+        self.use_tracking_lstm = use_tracking_lstm
 
-        if use_tracking:
+        if use_tracking_lstm:
             self.add_link('tracking_input', TrackingInput(hidden_dim))
             self.add_link('tracking_lstm', TrackingLSTM(hidden_dim))
 
@@ -346,7 +346,7 @@ class SPINN(Chain):
             # in order to do consecutive shifts. This would (maybe) allow us
             # to get the performance benefits from dynamic batch sizes while still
             # predicting actions.
-            if self.use_tracking:
+            if self.use_tracking_lstm:
                 tracking_input = self.tracking_input(stacks, buffers, buffers_t, train)
                 c = F.concat(self.c, axis=0)
                 h = F.concat(self.h, axis=0)
@@ -381,7 +381,7 @@ class SPINN(Chain):
 
             assert len(lefts) == len(rights)
             if len(rights) > 0:
-                if self.use_tracking:
+                if self.use_tracking_lstm:
                     external = F.concat([x for (t, x) in zip(ts, self.h) if t == 1], axis=0)
                 else:
                     external = None
@@ -405,12 +405,13 @@ class SentencePairModel(Chain):
     def __init__(self, model_dim, word_embedding_dim,
                  seq_length, initial_embeddings, num_classes, mlp_dim,
                  keep_rate,
-                 use_tracking=True,
                  gpu=-1,
+                 use_tracking_lstm=True,
+                 **kwargs
                 ):
         super(SentencePairModel, self).__init__(
             projection=L.Linear(word_embedding_dim, model_dim, nobias=True),
-            x2h=SPINN(model_dim, use_tracking=use_tracking, gpu=gpu, keep_rate=keep_rate),
+            x2h=SPINN(model_dim, use_tracking_lstm=use_tracking_lstm, gpu=gpu, keep_rate=keep_rate),
             # batch_norm_0=L.BatchNormalization(model_dim*2, model_dim*2),
             # batch_norm_1=L.BatchNormalization(mlp_dim, mlp_dim),
             # batch_norm_2=L.BatchNormalization(mlp_dim, mlp_dim),

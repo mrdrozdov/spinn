@@ -51,6 +51,7 @@ def build_sentence_pair_model(model_cls, trainer_cls, model_dim, word_embedding_
              seq_length, initial_embeddings, num_classes, mlp_dim=1024,
              keep_rate=keep_rate,
              gpu=gpu,
+             use_tracking_lstm=FLAGS.use_tracking_lstm,
             )
 
     classifier_trainer = trainer_cls(model, model_dim, word_embedding_dim,

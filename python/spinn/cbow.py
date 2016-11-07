@@ -59,6 +59,7 @@ class SentencePairModel(Chain):
                  seq_length, initial_embeddings, num_classes, mlp_dim,
                  keep_rate,
                  gpu=-1,
+                 **kwargs
                  ):
         super(SentencePairModel, self).__init__(
             # batch_norm_0=L.BatchNormalization(model_dim*2, model_dim*2),
