@@ -143,7 +143,7 @@ class SentencePairTrainer(BaseSentencePairTrainer):
 
 
 class TreeLSTMChain(Chain):
-    def __init__(self, hidden_dim, use_external=False, prefix="TreeLSTMChain", gpu=-1):
+    def __init__(self, hidden_dim, tracking_lstm_hidden_dim, use_external=False, prefix="TreeLSTMChain", gpu=-1):
         super(TreeLSTMChain, self).__init__(
             W_l=L.Linear(hidden_dim / 2, hidden_dim / 2 * 5, nobias=True),
             W_r=L.Linear(hidden_dim / 2, hidden_dim / 2 * 5, nobias=True),
@@ -156,7 +156,7 @@ class TreeLSTMChain(Chain):
         self.use_external = use_external
 
         if use_external:
-            self.add_link('W_external', L.Linear(hidden_dim / 2, hidden_dim / 2 * 5))
+            self.add_link('W_external', L.Linear(tracking_lstm_hidden_dim / 2, hidden_dim / 2 * 5))
 
     def __call__(self, l_prev, r_prev, external=None, train=True, keep_hs=False):
         hidden_dim = self.hidden_dim
@@ -193,9 +193,9 @@ class TreeLSTMChain(Chain):
 
 
 class ReduceChain(Chain):
-    def __init__(self, hidden_dim, use_external=False, prefix="ReduceChain", gpu=-1):
+    def __init__(self, hidden_dim, tracking_lstm_hidden_dim, use_external=False, prefix="ReduceChain", gpu=-1):
         super(ReduceChain, self).__init__(
-            treelstm=TreeLSTMChain(hidden_dim, use_external=use_external),
+            treelstm=TreeLSTMChain(hidden_dim, tracking_lstm_hidden_dim, use_external=use_external),
         )
         self.hidden_dim = hidden_dim
         self.__gpu = gpu
@@ -228,15 +228,15 @@ class ReduceChain(Chain):
 
 
 class TrackingLSTM(Chain):
-    def __init__(self, hidden_dim, num_actions=2, make_logits=False):
+    def __init__(self, hidden_dim, tracking_lstm_hidden_dim, num_actions=2, make_logits=False):
         super(TrackingLSTM, self).__init__(
-            W_x=L.Linear(hidden_dim / 2, hidden_dim / 2 * 4),
-            W_h=L.Linear(hidden_dim / 2, hidden_dim / 2 * 4),
-            bias=L.Bias(axis=1, shape=(hidden_dim / 2 * 4,)),
+            W_x=L.Linear(tracking_lstm_hidden_dim / 2, tracking_lstm_hidden_dim / 2 * 4),
+            W_h=L.Linear(tracking_lstm_hidden_dim / 2, tracking_lstm_hidden_dim / 2 * 4),
+            bias=L.Bias(axis=1, shape=(tracking_lstm_hidden_dim / 2 * 4,)),
         )
         # TODO: TrackingLSTM should be able to be a size different from hidden_dim.
         if make_logits:
-            self.add_link('logits', L.Linear(hidden_dim / 2, num_actions))
+            self.add_link('logits', L.Linear(tracking_lstm_hidden_dim / 2, num_actions))
 
     def __call__(self, c, h, x, train=True):
         gates = self.bias(self.W_x(x) + self.W_h(h))
@@ -249,11 +249,11 @@ class TrackingLSTM(Chain):
 
 
 class TrackingInput(Chain):
-    def __init__(self, hidden_dim, num_inputs=3):
+    def __init__(self, hidden_dim, tracking_lstm_hidden_dim, num_inputs=3):
         super(TrackingInput, self).__init__(
-            W_stack_0=L.Linear(hidden_dim / 2, hidden_dim / 2),
-            W_stack_1=L.Linear(hidden_dim / 2, hidden_dim / 2),
-            W_buffer=L.Linear(hidden_dim / 2, hidden_dim / 2),
+            W_stack_0=L.Linear(hidden_dim / 2, tracking_lstm_hidden_dim / 2),
+            W_stack_1=L.Linear(hidden_dim / 2, tracking_lstm_hidden_dim / 2),
+            W_buffer=L.Linear(hidden_dim / 2, tracking_lstm_hidden_dim / 2),
         )
         assert hidden_dim % 2 == 0, "The hidden_dim must be even because contains c and h."
         self.hidden_dim = hidden_dim / 2
@@ -268,18 +268,19 @@ class TrackingInput(Chain):
 
 
 class SPINN(Chain):
-    def __init__(self, hidden_dim, keep_rate, prefix="SPINN", gpu=-1, use_tracking_lstm=True):
+    def __init__(self, hidden_dim, keep_rate, prefix="SPINN", gpu=-1, tracking_lstm_hidden_dim=4, use_tracking_lstm=True):
         super(SPINN, self).__init__(
-            reduce=ReduceChain(hidden_dim, use_external=use_tracking_lstm, gpu=gpu),
+            reduce=ReduceChain(hidden_dim, tracking_lstm_hidden_dim, use_external=use_tracking_lstm, gpu=gpu),
         )
         self.hidden_dim = hidden_dim
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
+        self.tracking_lstm_hidden_dim = tracking_lstm_hidden_dim
         self.use_tracking_lstm = use_tracking_lstm
 
         if use_tracking_lstm:
-            self.add_link('tracking_input', TrackingInput(hidden_dim))
-            self.add_link('tracking_lstm', TrackingLSTM(hidden_dim))
+            self.add_link('tracking_input', TrackingInput(hidden_dim, tracking_lstm_hidden_dim))
+            self.add_link('tracking_lstm', TrackingLSTM(hidden_dim, tracking_lstm_hidden_dim))
 
     def check_type_forward(self, in_types):
         type_check.expect(in_types.size() == 1)
@@ -291,7 +292,7 @@ class SPINN(Chain):
         )
 
     def reset_state(self, batch_size, train):
-        zeros = Variable(self.__mod.zeros((1, self.hidden_dim/2,), dtype=self.__mod.float32),
+        zeros = Variable(self.__mod.zeros((1, self.tracking_lstm_hidden_dim/2,), dtype=self.__mod.float32),
                                 volatile=not train)
         self.c = [zeros for _ in range(batch_size)]
         self.h = [zeros for _ in range(batch_size)]
@@ -406,12 +407,16 @@ class SentencePairModel(Chain):
                  seq_length, initial_embeddings, num_classes, mlp_dim,
                  keep_rate,
                  gpu=-1,
+                 tracking_lstm_hidden_dim=4,
                  use_tracking_lstm=True,
                  **kwargs
                 ):
         super(SentencePairModel, self).__init__(
             projection=L.Linear(word_embedding_dim, model_dim, nobias=True),
-            x2h=SPINN(model_dim, use_tracking_lstm=use_tracking_lstm, gpu=gpu, keep_rate=keep_rate),
+            x2h=SPINN(model_dim,
+                tracking_lstm_hidden_dim=tracking_lstm_hidden_dim,
+                use_tracking_lstm=use_tracking_lstm,
+                gpu=gpu, keep_rate=keep_rate),
             # batch_norm_0=L.BatchNormalization(model_dim*2, model_dim*2),
             # batch_norm_1=L.BatchNormalization(mlp_dim, mlp_dim),
             # batch_norm_2=L.BatchNormalization(mlp_dim, mlp_dim),

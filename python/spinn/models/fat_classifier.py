@@ -51,6 +51,7 @@ def build_sentence_pair_model(model_cls, trainer_cls, model_dim, word_embedding_
              seq_length, initial_embeddings, num_classes, mlp_dim=1024,
              keep_rate=keep_rate,
              gpu=gpu,
+             tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
              use_tracking_lstm=FLAGS.use_tracking_lstm,
             )
 
