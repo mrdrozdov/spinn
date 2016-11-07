@@ -268,7 +268,7 @@ class TrackingInput(Chain):
 
 
 class SPINN(Chain):
-    def __init__(self, hidden_dim, keep_rate, prefix="SPINN", gpu=-1, tracking_lstm_hidden_dim=4, use_tracking_lstm=True):
+    def __init__(self, hidden_dim, keep_rate, prefix="SPINN", gpu=-1, tracking_lstm_hidden_dim=4, use_tracking_lstm=True, make_logits=False):
         super(SPINN, self).__init__(
             reduce=ReduceChain(hidden_dim, tracking_lstm_hidden_dim, use_external=use_tracking_lstm, gpu=gpu),
         )
@@ -280,7 +280,7 @@ class SPINN(Chain):
 
         if use_tracking_lstm:
             self.add_link('tracking_input', TrackingInput(hidden_dim, tracking_lstm_hidden_dim))
-            self.add_link('tracking_lstm', TrackingLSTM(hidden_dim, tracking_lstm_hidden_dim))
+            self.add_link('tracking_lstm', TrackingLSTM(hidden_dim, tracking_lstm_hidden_dim, make_logits=make_logits))
 
     def check_type_forward(self, in_types):
         type_check.expect(in_types.size() == 1)
@@ -409,6 +409,7 @@ class SentencePairModel(Chain):
                  gpu=-1,
                  tracking_lstm_hidden_dim=4,
                  use_tracking_lstm=True,
+                 make_logits=False,
                  **kwargs
                 ):
         super(SentencePairModel, self).__init__(
@@ -416,6 +417,7 @@ class SentencePairModel(Chain):
             x2h=SPINN(model_dim,
                 tracking_lstm_hidden_dim=tracking_lstm_hidden_dim,
                 use_tracking_lstm=use_tracking_lstm,
+                make_logits=make_logits,
                 gpu=gpu, keep_rate=keep_rate),
             # batch_norm_0=L.BatchNormalization(model_dim*2, model_dim*2),
             # batch_norm_1=L.BatchNormalization(mlp_dim, mlp_dim),

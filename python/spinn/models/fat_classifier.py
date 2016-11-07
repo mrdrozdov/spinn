@@ -53,6 +53,7 @@ def build_sentence_pair_model(model_cls, trainer_cls, model_dim, word_embedding_
              gpu=gpu,
              tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
              use_tracking_lstm=FLAGS.use_tracking_lstm,
+             make_logits=FLAGS.make_logits,
             )
 
     classifier_trainer = trainer_cls(model, model_dim, word_embedding_dim,
@@ -346,6 +347,7 @@ if __name__ == '__main__':
     gflags.DEFINE_integer("tracking_lstm_hidden_dim", 4, "")
     gflags.DEFINE_boolean("use_tracking_lstm", True,
                           "Whether to use LSTM in the tracking unit")
+    gflags.DEFINE_boolean("make_logits", False, "Predict parser actions.")
     gflags.DEFINE_boolean("predict_use_cell", False,
                           "For models which predict parser actions, use "
                           "both the tracking LSTM hidden and cell values as "
