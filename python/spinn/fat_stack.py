@@ -362,7 +362,33 @@ class SPINN(Chain):
                     self.c = F.split_axis(c, c.shape[0], axis=0, force_tuple=True)
                     self.h = F.split_axis(h, h.shape[0], axis=0, force_tuple=True)
                 else:
-                    raise Exception("Not implemented.")
+                    tracking_size = len([t for t in ts if t == 1])
+                    if tracking_size > 0:
+                        tracking_ix = [i for (i, t) in enumerate(ts) if t == 1]
+                        tracking_stacks    = [x for (t, x) in zip(ts, stacks) if t == 1]
+                        tracking_buffers   = [x for (t, x) in zip(ts, buffers) if t == 1]
+                        tracking_buffers_t = [x for (t, x) in zip(ts, buffers_t) if t == 1]
+
+                        tracking_input = self.tracking_input(
+                            tracking_stacks,
+                            tracking_buffers,
+                            tracking_buffers_t,
+                            train)
+
+                        c = F.concat([x for (t, x) in zip(ts, self.c) if t == 1], axis=0)
+                        h = F.concat([x for (t, x) in zip(ts, self.h) if t == 1], axis=0)
+
+                        c, h, logits = self.tracking_lstm(c, h, tracking_input, train)
+
+                        # Assign appropriate states after they've been calculated.
+                        _c = F.split_axis(c, tracking_size, axis=0, force_tuple=True)
+                        for i, ix in enumerate(tracking_ix):
+                            if t == 1:
+                                self.c[ix] = _c[i]
+                        _h = F.split_axis(h, tracking_size, axis=0, force_tuple=True)
+                        for i, ix in enumerate(tracking_ix):
+                            if t == 1:
+                                self.h[ix] = _h[i]
 
             lefts = []
             rights = []
