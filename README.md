@@ -5,7 +5,7 @@ This repository contains the source code based on the paper [A Fast Unified Mode
 
 The included implementations are:
 
-- A **Python/Chain** implementation of SPINN using a naïve stack representation (named `fat-stack`)
+- A **Python/Chainer** implementation of SPINN using a naïve stack representation (named `fat-stack`)
 
 ## Python code
 
@@ -26,7 +26,7 @@ Install all required Python dependencies using the command below.
 
 ### Running the code
 
-The main executable for the SNLI experiments in the paper is [fat_classifier.py](https://github.com/mrdrozdov/spinn/blob/chainer-skeleton-clean/python/spinn/models/fat_classifier.py), whose flags specify the hyperparameters of the model. You can specify the gpu id using the `--gpu <id>` flag. Uses the CPU by default.
+The main executable for the SNLI experiments in the paper is [fat_classifier.py](https://github.com/mrdrozdov/spinn/blob/chainer-skeleton-clean/python/spinn/models/fat_classifier.py), whose flags specify the hyperparameters of the model. You can specify the gpu id using the `--gpu <gpu_id>` flag. Uses the CPU by default.
 
 Here's a sample command that runs a fast, low-dimensional CPU training run, training and testing only on the dev set. It assumes that you have a copy of [SNLI](http://nlp.stanford.edu/projects/snli/) available locally.
 
@@ -44,7 +44,6 @@ For full runs, you'll also need a copy of the 840B word 300D [GloVe word vectors
 To view some statistics in Tensorboard, make sure to turn the "write_summary" flag on. In other words, your run command should look something like this:
 
     PYTHONPATH=spinn/python \
-        THEANO_FLAGS=optimizer=fast_compile,device=cpu,floatX=float32 \
         python2.7 -m spinn.models.fat_classifier --data_type snli \
         --training_data_path snli_1.0/snli_1.0_dev.jsonl \
         --eval_data_path snli_1.0/snli_1.0_dev.jsonl \
