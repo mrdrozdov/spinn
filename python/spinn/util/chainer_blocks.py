@@ -274,12 +274,12 @@ class BaseSentencePairTrainer(object):
         sentences = x_batch["sentences"]
         transitions = x_batch["transitions"]
 
-        y, loss = self.model(sentences, transitions, y_batch, train=train)
+        y, loss, class_acc, transition_acc = self.model(sentences, transitions, y_batch, train=train)
         if predict:
             preds = self.__mod.argmax(y.data, 1).tolist()
         else:
             preds = None
-        return y, loss, preds
+        return y, loss, class_acc, transition_acc
 
     def save(self, filename, step, best_dev_error):
         self.model.step = step

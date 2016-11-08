@@ -114,6 +114,15 @@ def HeKaimingInit(shape, real_shape=None):
     return np.random.normal(scale=np.sqrt(4.0/(fan[0] + fan[1])),
                             size=shape)
 
+def get_c(state, hidden_dim):
+    return state[:, hidden_dim:]
+
+def get_h(state, hidden_dim):
+    return state[:, :hidden_dim]
+
+def get_state(c, h):
+    return F.concat([h, c], axis=1)
+
 
 class SentencePairTrainer(BaseSentencePairTrainer):
     def init_params(self, **kwargs):
@@ -126,33 +135,41 @@ class SentencePairTrainer(BaseSentencePairTrainer):
                 data[:] = np.random.uniform(-0.1, 0.1, data.shape)
 
     def init_optimizer(self, lr=0.01, **kwargs):
-        # self.optimizer = optimizers.Adam(alpha=0.0003, beta1=0.9, beta2=0.999, eps=1e-08)
-        self.optimizer = optimizers.SGD(lr=0.001)
+        self.optimizer = optimizers.Adam(alpha=0.0003, beta1=0.9, beta2=0.999, eps=1e-08)
+        # self.optimizer = optimizers.SGD(lr=0.001)
         self.optimizer.setup(self.model)
         # self.optimizer.add_hook(chainer.optimizer.GradientClipping(40))
         # self.optimizer.add_hook(chainer.optimizer.WeightDecay(0.00003))
 
 
 class TreeLSTMChain(Chain):
-    def __init__(self, hidden_dim, prefix="TreeLSTMChain", gpu=-1):
+    def __init__(self, hidden_dim, tracking_lstm_hidden_dim, use_external=False, prefix="TreeLSTMChain", gpu=-1):
         super(TreeLSTMChain, self).__init__(
-            W_l=L.Linear(hidden_dim, hidden_dim*5, nobias=True),
-            W_r=L.Linear(hidden_dim, hidden_dim*5, nobias=True),
-            b=L.Bias(axis=1, shape=(hidden_dim*5,)),
+            W_l=L.Linear(hidden_dim / 2, hidden_dim / 2 * 5, nobias=True),
+            W_r=L.Linear(hidden_dim / 2, hidden_dim / 2 * 5, nobias=True),
+            b=L.Bias(axis=1, shape=(hidden_dim / 2 * 5,)),
             )
-        self.hidden_dim = hidden_dim
+        assert hidden_dim % 2 == 0, "The hidden_dim must be even because contains c and h."
+        self.hidden_dim = hidden_dim / 2
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
+        self.use_external = use_external
 
-    def __call__(self, l_prev, r_prev, train=True, keep_hs=False):
+        if use_external:
+            self.add_link('W_external', L.Linear(tracking_lstm_hidden_dim / 2, hidden_dim / 2 * 5))
+
+    def __call__(self, l_prev, r_prev, external=None, train=True, keep_hs=False):
         hidden_dim = self.hidden_dim
 
-        l_h_prev = l_prev[:, :hidden_dim]
-        l_c_prev = l_prev[:,  hidden_dim:]
-        r_h_prev = r_prev[:, :hidden_dim]
-        r_c_prev = r_prev[:,  hidden_dim:]
+        l_h_prev = get_h(l_prev, hidden_dim)
+        l_c_prev = get_c(l_prev, hidden_dim)
+        r_h_prev = get_h(r_prev, hidden_dim)
+        r_c_prev = get_c(r_prev, hidden_dim)
 
         gates = self.b(self.W_l(l_h_prev) + self.W_r(r_h_prev))
+
+        if external is not None:
+            gates += self.W_external(external)
 
         def slice_gate(gate_data, i):
             return gate_data[:, i * hidden_dim:(i + 1) * hidden_dim]
@@ -172,30 +189,19 @@ class TreeLSTMChain(Chain):
         c_t = fl_gate * l_c_prev + fr_gate * r_c_prev + i_gate * cell_inp
         h_t = o_gate * F.tanh(c_t)
 
-        return F.concat([h_t, c_t], axis=1)
+        return get_state(c_t, h_t)
 
 
 class ReduceChain(Chain):
-    def __init__(self, hidden_dim, prefix="ReduceChain", gpu=-1):
+    def __init__(self, hidden_dim, tracking_lstm_hidden_dim, use_external=False, prefix="ReduceChain", gpu=-1):
         super(ReduceChain, self).__init__(
-            treelstm=TreeLSTMChain(hidden_dim / 2),
+            treelstm=TreeLSTMChain(hidden_dim, tracking_lstm_hidden_dim, use_external=use_external),
         )
         self.hidden_dim = hidden_dim
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
 
-    def check_type_forward(self, in_types):
-        type_check.expect(in_types.size() == 2)
-        left_type, right_type = in_types
-
-        type_check.expect(
-            left_type.dtype == 'f',
-            left_type.ndim >= 1,
-            right_type.dtype == 'f',
-            right_type.ndim >= 1,
-        )
-
-    def __call__(self, left_x, right_x, train=True, keep_hs=False):
+    def __call__(self, left_x, right_x, external=None, train=True, keep_hs=False):
         """
         Args:
             left_x:  B* x H
@@ -203,13 +209,6 @@ class ReduceChain(Chain):
         Returns:
             final_state: B* x H
         """
-
-        # BEGIN: Type Check
-        for l, r in zip(left_x, right_x):
-            in_data = tuple([x.data for x in [l, r]])
-            in_types = type_check.get_types(in_data, 'in_types', False)
-            self.check_type_forward(in_types)
-        # END: Type Check
 
         assert len(left_x) == len(right_x)
         batch_size = len(left_x)
@@ -224,18 +223,73 @@ class ReduceChain(Chain):
         h_dim = unit_dim / 2
 
         # Split each state into its c/h representations.
-        lstm_state = self.treelstm(left_x, right_x)
+        lstm_state = self.treelstm(left_x, right_x, external)
         return lstm_state
 
 
+class TrackingLSTM(Chain):
+    def __init__(self, hidden_dim, tracking_lstm_hidden_dim, num_actions=2, make_logits=False):
+        super(TrackingLSTM, self).__init__(
+            W_x=L.Linear(tracking_lstm_hidden_dim / 2, tracking_lstm_hidden_dim / 2 * 4),
+            W_h=L.Linear(tracking_lstm_hidden_dim / 2, tracking_lstm_hidden_dim / 2 * 4),
+            bias=L.Bias(axis=1, shape=(tracking_lstm_hidden_dim / 2 * 4,)),
+        )
+        # TODO: TrackingLSTM should be able to be a size different from hidden_dim.
+        if make_logits:
+            self.add_link('logits', L.Linear(tracking_lstm_hidden_dim / 2, num_actions))
+
+    def __call__(self, c, h, x, train=True):
+        gates = self.bias(self.W_x(x) + self.W_h(h))
+        c, h = F.lstm(c, gates)
+        if hasattr(self, 'logits'):
+            logits = self.logits(h)
+        else:
+            logits = 0.0
+        return c, h, logits
+
+
+class TrackingInput(Chain):
+    def __init__(self, hidden_dim, tracking_lstm_hidden_dim, num_inputs=3):
+        super(TrackingInput, self).__init__(
+            W_stack_0=L.Linear(hidden_dim / 2, tracking_lstm_hidden_dim / 2),
+            W_stack_1=L.Linear(hidden_dim / 2, tracking_lstm_hidden_dim / 2),
+            W_buffer=L.Linear(hidden_dim / 2, tracking_lstm_hidden_dim / 2),
+        )
+        assert hidden_dim % 2 == 0, "The hidden_dim must be even because contains c and h."
+        self.hidden_dim = hidden_dim / 2
+
+    def __call__(self, stacks, buffers, buffers_t, train=True):
+        zeros = Variable(self.xp.zeros((1, self.hidden_dim,), dtype=self.xp.float32),
+                                volatile=not train)
+        state = self.W_stack_0(F.concat([get_h(s[0], self.hidden_dim) if 0 < len(s) else zeros for s in stacks], axis=0))
+        state += self.W_stack_1(F.concat([get_h(s[1], self.hidden_dim) if 1 < len(s) else zeros for s in stacks], axis=0))
+        state += self.W_buffer(F.concat([get_h(b[i], self.hidden_dim) if i < len(b) else zeros for (b, i) in zip(buffers, buffers_t)], axis=0))
+        return state
+
+
 class SPINN(Chain):
-    def __init__(self, hidden_dim, keep_rate, prefix="SPINN", gpu=-1):
+    def __init__(self, hidden_dim, keep_rate, prefix="SPINN", gpu=-1,
+                 tracking_lstm_hidden_dim=4, use_tracking_lstm=True, make_logits=False,
+                 use_shift_composition=True):
         super(SPINN, self).__init__(
-            reduce=ReduceChain(hidden_dim, gpu=gpu),
+            reduce=ReduceChain(hidden_dim, tracking_lstm_hidden_dim, use_external=use_tracking_lstm, gpu=gpu),
         )
         self.hidden_dim = hidden_dim
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
+        self.tracking_lstm_hidden_dim = tracking_lstm_hidden_dim
+        self.use_tracking_lstm = use_tracking_lstm
+        self.use_shift_composition = use_shift_composition
+        self.make_logits = make_logits
+
+        self.accFun = accuracy.accuracy
+
+        if use_tracking_lstm:
+            self.add_link('tracking_input', TrackingInput(hidden_dim, tracking_lstm_hidden_dim))
+            self.add_link('tracking_lstm', TrackingLSTM(hidden_dim, tracking_lstm_hidden_dim, make_logits=make_logits))
+            self.transition_classifier = CrossEntropyClassifier(gpu)
+            self.transition_optimizer = optimizers.SGD(lr=0.0001)
+            self.transition_optimizer.setup(self.tracking_lstm)
 
     def check_type_forward(self, in_types):
         type_check.expect(in_types.size() == 1)
@@ -246,7 +300,21 @@ class SPINN(Chain):
             buff_type.ndim >= 1,
         )
 
-    def __call__(self, buffers, transitions, train=True, keep_hs=False, use_sum=False):
+    def reset_state(self, batch_size, train):
+        zeros = Variable(self.__mod.zeros((1, self.tracking_lstm_hidden_dim/2,), dtype=self.__mod.float32),
+                                volatile=not train)
+        self.c = [zeros for _ in range(batch_size)]
+        self.h = [zeros for _ in range(batch_size)]
+
+    def reset_transitions(self):
+        if self.make_logits:
+            self.transition_optimizer.zero_grads()
+
+    def update_transitions(self):
+        if self.make_logits:
+            self.transition_optimizer.update()
+
+    def __call__(self, buffers, transitions, train=True, keep_hs=False):
         """
         Pass over batches of transitions, modifying their associated
         buffers at each iteration.
@@ -262,6 +330,8 @@ class SPINN(Chain):
         in_data = tuple([x.data for x in [buffers]])
         in_types = type_check.get_types(in_data, 'in_types', False)
         self.check_type_forward(in_types)
+        transition_num = 0
+        transition_acc = 0.0
         # END: Type Check
 
         batch_size, seq_length, hidden_dim = buffers.shape[0], buffers.shape[1], buffers.shape[2]
@@ -280,23 +350,80 @@ class SPINN(Chain):
             for l, r in zip(lefts, rights):
                 yield l + r
 
-        def better_reduce(lefts, rights):
-            lstm_state = self.reduce(lefts, rights, train=train)
+        def better_reduce(lefts, rights, h):
+            lstm_state = self.reduce(lefts, rights, h, train=train)
             batch_size = lstm_state.shape[0]
             lstm_state = F.split_axis(lstm_state, batch_size, axis=0, force_tuple=True)
             for state in lstm_state:
                 yield state
+
+
+        self.reset_transitions()
 
         for ii, ts in enumerate(transitions):
             assert len(ts) == batch_size
             assert len(ts) == len(buffers)
             assert len(ts) == len(stacks)
 
+            # TODO! The tracking inputs for shifts and reduces should be split,
+            # in order to do consecutive shifts. This would (maybe) allow us
+            # to get the performance benefits from dynamic batch sizes while still
+            # predicting actions.
+            if self.use_tracking_lstm:
+                if self.use_shift_composition:
+                    tracking_input = self.tracking_input(stacks, buffers, buffers_t, train)
+                    c = F.concat(self.c, axis=0)
+                    h = F.concat(self.h, axis=0)
+
+                    c, h, logits = self.tracking_lstm(c, h, tracking_input, train)
+                    if self.make_logits and np.any(ts != -1):
+                        _rpt = np.repeat(np.expand_dims(ts == -1, 1), 2, axis=1)
+                        try:
+                            selectedTransitions = F.where(Variable(_rpt), logits, Variable(np.zeros_like(logits.data)))
+                        except:
+                            import ipdb; ipdb.set_trace()
+                        transition_loss = self.transition_classifier(selectedTransitions, Variable(ts))
+                        transition_acc += np.sum(np.argmax(logits.data[ts != -1], axis=1) == ts[ts != -1])
+                        transition_num += np.sum(ts != -1)
+                        # print("Accuracy: ", np.sum(ts != -1), np.mean(np.argmax(logits.data[ts != -1], axis=1) == ts[ts != -1]))
+                        transition_loss.backward()
+
+                    # Assign appropriate states after they've been calculated.
+                    self.c = F.split_axis(c, c.shape[0], axis=0, force_tuple=True)
+                    self.h = F.split_axis(h, h.shape[0], axis=0, force_tuple=True)
+                else:
+                    tracking_size = len([t for t in ts if t == 1])
+                    if tracking_size > 0:
+                        tracking_ix = [i for (i, t) in enumerate(ts) if t == 1]
+                        tracking_stacks    = [x for (t, x) in zip(ts, stacks) if t == 1]
+                        tracking_buffers   = [x for (t, x) in zip(ts, buffers) if t == 1]
+                        tracking_buffers_t = [x for (t, x) in zip(ts, buffers_t) if t == 1]
+
+                        tracking_input = self.tracking_input(
+                            tracking_stacks,
+                            tracking_buffers,
+                            tracking_buffers_t,
+                            train)
+
+                        c = F.concat([x for (t, x) in zip(ts, self.c) if t == 1], axis=0)
+                        h = F.concat([x for (t, x) in zip(ts, self.h) if t == 1], axis=0)
+
+                        c, h, logits = self.tracking_lstm(c, h, tracking_input, train)
+
+                        # Assign appropriate states after they've been calculated.
+                        _c = F.split_axis(c, tracking_size, axis=0, force_tuple=True)
+                        for i, ix in enumerate(tracking_ix):
+                            if t == 1:
+                                self.c[ix] = _c[i]
+                        _h = F.split_axis(h, tracking_size, axis=0, force_tuple=True)
+                        for i, ix in enumerate(tracking_ix):
+                            if t == 1:
+                                self.h[ix] = _h[i]
+
             lefts = []
             rights = []
             for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
                 if t == -1: # skip
-                    # Because sentences are padded, we still need to pop here.
                     pass
                 elif t == 0: # shift
                     new_stack_item = buf[buffers_t[i]]
@@ -316,7 +443,11 @@ class SPINN(Chain):
 
             assert len(lefts) == len(rights)
             if len(rights) > 0:
-                reduced = iter(better_reduce(lefts, rights))
+                if self.use_tracking_lstm:
+                    external = F.concat([x for (t, x) in zip(ts, self.h) if t == 1], axis=0)
+                else:
+                    external = None
+                reduced = iter(better_reduce(lefts, rights, external))
                 for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
                     if t == -1 or t == 0:
                         continue
@@ -327,9 +458,16 @@ class SPINN(Chain):
                         raise Exception("Action not implemented: {}".format(t))
 
         ret = F.concat([s.pop() for s in stacks], axis=0)
+        self.update_transitions()
         assert ret.shape == (batch_size, hidden_dim)
 
-        return ret
+        if self.make_logits:
+            avg_transition_acc = transition_acc / transition_num
+        else:
+            avg_transition_acc = 0.0
+
+        # print("Avg tr acc:", transition_acc / transition_num)
+        return ret, avg_transition_acc
 
 
 class SentencePairModel(Chain):
@@ -337,10 +475,20 @@ class SentencePairModel(Chain):
                  seq_length, initial_embeddings, num_classes, mlp_dim,
                  keep_rate,
                  gpu=-1,
+                 tracking_lstm_hidden_dim=4,
+                 use_tracking_lstm=True,
+                 use_shift_composition=True,
+                 make_logits=False,
+                 **kwargs
                 ):
         super(SentencePairModel, self).__init__(
             projection=L.Linear(word_embedding_dim, model_dim, nobias=True),
-            x2h=SPINN(model_dim, gpu=gpu, keep_rate=keep_rate),
+            x2h=SPINN(model_dim,
+                tracking_lstm_hidden_dim=tracking_lstm_hidden_dim,
+                use_tracking_lstm=use_tracking_lstm,
+                use_shift_composition=use_shift_composition,
+                make_logits=make_logits,
+                gpu=gpu, keep_rate=keep_rate),
             # batch_norm_0=L.BatchNormalization(model_dim*2, model_dim*2),
             # batch_norm_1=L.BatchNormalization(mlp_dim, mlp_dim),
             # batch_norm_2=L.BatchNormalization(mlp_dim, mlp_dim),
@@ -390,7 +538,8 @@ class SentencePairModel(Chain):
         t = np.concatenate([t_prem, t_hyp], axis=0)
 
         # Pass through Sentence Encoders.
-        h_both = self.x2h(x, t, train=train)
+        self.x2h.reset_state(batch_size, train)
+        h_both, transition_acc = self.x2h(x, t, train=train)
         h_premise, h_hypothesis = F.split_axis(h_both, 2, axis=0)
 
         # Pass through MLP Classifier.
@@ -413,4 +562,4 @@ class SentencePairModel(Chain):
         accum_loss = self.classifier(y, Variable(y_batch, volatile=not train), train)
         self.accuracy = self.accFun(y, self.__mod.array(y_batch))
 
-        return y, accum_loss
+        return y, accum_loss, self.accuracy.data, transition_acc

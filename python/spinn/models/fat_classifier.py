@@ -51,6 +51,10 @@ def build_sentence_pair_model(model_cls, trainer_cls, model_dim, word_embedding_
              seq_length, initial_embeddings, num_classes, mlp_dim=1024,
              keep_rate=keep_rate,
              gpu=gpu,
+             tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
+             use_tracking_lstm=FLAGS.use_tracking_lstm,
+             use_shift_composition=FLAGS.use_shift_composition,
+             make_logits=FLAGS.make_logits,
             )
 
     classifier_trainer = trainer_cls(model, model_dim, word_embedding_dim,
@@ -72,7 +76,7 @@ def evaluate(classifier_trainer, eval_set, logger, step):
     action_acc_accum = 0.0
     eval_batches = 0.0
     total_batches = len(eval_set[1])
-    progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60)
+    progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
     for i, (eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch) in enumerate(eval_set[1]):
         # Calculate Local Accuracies
@@ -186,7 +190,7 @@ def run(only_forward=False):
 
     if data_manager.SENTENCE_PAIR_DATA:
         num_classes = len(data_manager.LABEL_MAP)
-        classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls, 
+        classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
                               FLAGS.model_dim, FLAGS.word_embedding_dim,
                               FLAGS.seq_length, num_classes, initial_embeddings,
                               FLAGS.embedding_keep_rate, FLAGS.gpu)
@@ -218,14 +222,16 @@ def run(only_forward=False):
     else:
          # Train
         logger.Log("Training.")
-        
+
         classifier_trainer.init_optimizer(
             clip=FLAGS.clipping_max_value, decay=FLAGS.l2_lambda,
             lr=FLAGS.learning_rate,
             )
 
         # New Training Loop
-        progress_bar = SimpleProgressBar(msg="Training", bar_length=60)
+        progress_bar = SimpleProgressBar(msg="Training", bar_length=60, enabled=FLAGS.show_progress_bar)
+        avg_class_acc = 0
+        avg_trans_acc = 0
         for step in range(step, FLAGS.training_steps):
             X_batch, transitions_batch, y_batch, num_transitions_batch = training_data_iter.next()
             learning_rate = FLAGS.learning_rate * (FLAGS.learning_rate_decay_per_10k_steps ** (step / 10000.0))
@@ -238,11 +244,16 @@ def run(only_forward=False):
                 "sentences": X_batch,
                 "transitions": transitions_batch,
                 }, y_batch, train=True, predict=False)
-            y, loss, preds = ret
+            y, loss, class_acc, transition_acc = ret
 
             # Boilerplate for calculating loss.
             xent_cost_val = loss.data
-            transition_cost_val = 0.0
+            transition_cost_val = 0
+            avg_trans_acc += transition_acc
+            avg_class_acc += class_acc
+
+            if FLAGS.show_intermediate_stats and step % 5 == 0 and step % FLAGS.statistics_interval_steps > 0:
+                print("Accuracies so far : ", avg_class_acc / (step % FLAGS.statistics_interval_steps), avg_trans_acc / (step % FLAGS.statistics_interval_steps))
 
             total_cost_val = xent_cost_val + transition_cost_val
             loss.backward()
@@ -275,10 +286,14 @@ def run(only_forward=False):
 
             if step % FLAGS.statistics_interval_steps == 0:
                 progress_bar.finish()
+                avg_class_acc /= FLAGS.statistics_interval_steps
+                avg_trans_acc /= FLAGS.statistics_interval_steps
                 logger.Log(
                     "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %s"
-                    % (step, acc_val, action_acc_val, total_cost_val, xent_cost_val, transition_cost_val,
+                    % (step, avg_class_acc, avg_trans_acc, total_cost_val, xent_cost_val, transition_cost_val,
                        "l2-not-exposed"))
+                avg_trans_acc = 0
+                avg_class_acc = 0
 
             if step > 0 and step % FLAGS.eval_interval_steps == 0:
                 for index, eval_set in enumerate(eval_iterators):
@@ -301,6 +316,9 @@ if __name__ == '__main__':
     gflags.DEFINE_bool("gradient_check", False, "Randomly check that gradients match estimates.")
     gflags.DEFINE_bool("profile", False, "Set to True to quit after a few batches.")
     gflags.DEFINE_bool("write_summaries", False, "Toggle which controls whether summaries are written.")
+    gflags.DEFINE_bool("show_progress_bar", True, "Turn this off when running experiments on HPC.")
+    gflags.DEFINE_bool("show_intermediate_stats", False, "Print stats more frequently than regular interval."
+                                                         "Mostly to retain timing with progress bar")
     gflags.DEFINE_integer("profile_steps", 3, "Specify how many steps to profile.")
 
     # Experiment naming.
@@ -342,8 +360,10 @@ if __name__ == '__main__':
     gflags.DEFINE_integer("word_embedding_dim", 8, "")
 
     gflags.DEFINE_integer("tracking_lstm_hidden_dim", 4, "")
+    gflags.DEFINE_boolean("use_shift_composition", True, "")
     gflags.DEFINE_boolean("use_tracking_lstm", True,
                           "Whether to use LSTM in the tracking unit")
+    gflags.DEFINE_boolean("make_logits", False, "Predict parser actions.")
     gflags.DEFINE_boolean("predict_use_cell", False,
                           "For models which predict parser actions, use "
                           "both the tracking LSTM hidden and cell values as "

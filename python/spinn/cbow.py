@@ -47,8 +47,8 @@ class SentencePairTrainer(BaseSentencePairTrainer):
                 data[:] = np.random.uniform(-0.1, 0.1, data.shape)
 
     def init_optimizer(self, lr=0.01, **kwargs):
-        # self.optimizer = optimizers.Adam(alpha=0.0003, beta1=0.9, beta2=0.999, eps=1e-08)
-        self.optimizer = optimizers.SGD(lr=0.001)
+        self.optimizer = optimizers.Adam(alpha=0.0003, beta1=0.9, beta2=0.999, eps=1e-08)
+        # self.optimizer = optimizers.SGD(lr=0.001)
         self.optimizer.setup(self.model)
         # self.optimizer.add_hook(chainer.optimizer.GradientClipping(40))
         # self.optimizer.add_hook(chainer.optimizer.WeightDecay(0.00003))
@@ -59,6 +59,7 @@ class SentencePairModel(Chain):
                  seq_length, initial_embeddings, num_classes, mlp_dim,
                  keep_rate,
                  gpu=-1,
+                 **kwargs
                  ):
         super(SentencePairModel, self).__init__(
             # batch_norm_0=L.BatchNormalization(model_dim*2, model_dim*2),
