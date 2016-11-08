@@ -1,11 +1,13 @@
 import numpy as np
 
+import os
 from nose.tools import assert_equal
 
 from spinn import util
 
 
-TEST_EMBEDDING_MATRIX = "spinn/tests/test_embedding_matrix.5d.txt"
+cdir = os.path.dirname(os.path.realpath(__file__))
+TEST_EMBEDDING_MATRIX = "{}/test_embedding_matrix.5d.txt".format(cdir)
 
 
 def test_build_vocabulary_for_ascii_embedding_file():

@@ -2,9 +2,10 @@
 
 import random
 import itertools
+import time
+import sys
 
 import numpy as np
-import theano
 
 
 # With loaded embedding matrix, the padding vector will be initialized to zero
@@ -15,6 +16,9 @@ PADDING_TOKEN = "*PADDING*"
 # Temporary hack: Map UNK to "_" when loading pretrained embedding matrices:
 # it's a common token that is pretrained, but shouldn't look like any content words.
 UNK_TOKEN = "_"
+
+TRANSITION_PADDING_SYMBOL = -1
+SENTENCE_PADDING_SYMBOL = 0
 
 CORE_VOCABULARY = {PADDING_TOKEN: 0,
                    UNK_TOKEN: 1}
@@ -58,7 +62,7 @@ def TokensToIDs(vocabulary, dataset, sentence_pair_data=False):
     return dataset
 
 
-def CropAndPadExample(example, left_padding, target_length, key, logger=None):
+def CropAndPadExample(example, left_padding, target_length, key, symbol=0, logger=None):
     """
     Crop/pad a sequence value of the given dict `example`.
     """
@@ -69,8 +73,8 @@ def CropAndPadExample(example, left_padding, target_length, key, logger=None):
         example[key] = example[key][-left_padding:]
         left_padding = 0
     right_padding = target_length - (left_padding + len(example[key]))
-    example[key] = ([0] * left_padding) + \
-        example[key] + ([0] * right_padding)
+    example[key] = ([symbol] * left_padding) + \
+        example[key] + ([symbol] * right_padding)
 
 
 def CropAndPad(dataset, length, logger=None, sentence_pair_data=False):
@@ -91,12 +95,14 @@ def CropAndPad(dataset, length, logger=None, sentence_pair_data=False):
             transitions_left_padding = length - example[num_transitions_key]
             shifts_before_crop_and_pad = example[transitions_key].count(0)
             CropAndPadExample(
-                example, transitions_left_padding, length, transitions_key, logger=logger)
+                example, transitions_left_padding, length, transitions_key,
+                symbol=TRANSITION_PADDING_SYMBOL, logger=logger)
             shifts_after_crop_and_pad = example[transitions_key].count(0)
             tokens_left_padding = shifts_after_crop_and_pad - \
                 shifts_before_crop_and_pad
             CropAndPadExample(
-                example, tokens_left_padding, length, tokens_key, logger=logger)
+                example, tokens_left_padding, length, tokens_key,
+                symbol=SENTENCE_PADDING_SYMBOL, logger=logger)
     return dataset
 
 def CropAndPadForRNN(dataset, length, logger=None, sentence_pair_data=False):
@@ -113,12 +119,83 @@ def CropAndPadForRNN(dataset, length, logger=None, sentence_pair_data=False):
             num_tokens = len(example[tokens_key])
             tokens_left_padding = length - num_tokens
             CropAndPadExample(
-                example, tokens_left_padding, length, tokens_key, logger=logger)
+                example, tokens_left_padding, length, tokens_key,
+                symbol=SENTENCE_PADDING_SYMBOL, logger=logger)
     return dataset
 
 
-def MakeTrainingIterator(sources, batch_size):
+def merge(x, y):
+    return ''.join([a for t in zip(x, y) for a in t])
+
+
+def peano(x, y):
+    interim = ''.join(merge(format(x, '08b'), format(y, '08b')))
+    return int(interim, base=2)
+
+
+def MakeTrainingIterator(sources, batch_size, smart_batches=True, use_peano=True):
     # Make an iterator that exposes a dataset as random minibatches.
+
+    def get_key(num_transitions):
+        if use_peano:
+            prem_len, hyp_len = num_transitions
+            key = peano(prem_len, hyp_len)
+            return key
+        else:
+            return max(xy)
+
+    def build_batches():
+        dataset_size = len(sources[0])
+        seq_length = len(sources[0][0][:,0])
+        order = range(dataset_size)
+        random.shuffle(order)
+        order = np.array(order)
+
+        num_splits = 10 # TODO: Should we be smarter about split size?
+        order_limit = len(order) / num_splits * num_splits 
+        order = order[:order_limit]
+        order_splits = np.split(order, num_splits)
+        batches = []
+
+        for split in order_splits:
+            # Put indices into buckets based on example length.
+            keys = []
+            for i in split:
+                num_transitions = sources[3][i]
+                key = get_key(num_transitions)
+                keys.append((i, key))
+            keys = sorted(keys, key=lambda (_, key): key)
+
+            # Group indices from buckets into batches, so that
+            # examples in each batch have similar length.
+            batch = []
+            for i, _ in keys:
+                batch.append(i)
+                if len(batch) == batch_size:
+                    batches.append(batch)
+                    batch = []
+            if len(batch) > 0:
+                print "WARNING: May be discarding {} train examples.".format(len(batch))
+        return batches
+
+    def batch_iter():
+        batches = build_batches()
+        num_batches = len(batches)
+        idx = -1
+        order = range(num_batches)
+        random.shuffle(order)
+
+        while True:
+            idx += 1
+            if idx >= num_batches:
+                # Start another epoch.
+                batches = build_batches()
+                num_batches = len(batches)
+                idx = 0
+                order = range(num_batches)
+                random.shuffle(order)
+            batch_indices = batches[order[idx]]
+            yield tuple(source[batch_indices] for source in sources)
 
     def data_iter():
         dataset_size = len(sources[0])
@@ -134,17 +211,20 @@ def MakeTrainingIterator(sources, batch_size):
                 random.shuffle(order)
             batch_indices = order[start:start + batch_size]
             yield tuple(source[batch_indices] for source in sources)
-    return data_iter()
+
+    train_iter = batch_iter if smart_batches else data_iter
+
+    return train_iter()
 
 
-def MakeEvalIterator(sources, batch_size):
+def MakeEvalIterator(sources, batch_size, limit=-1):
     # Make a list of minibatches from a dataset to use as an iterator.
     # TODO(SB): Pad out the last few examples in the eval set if they don't
     # form a batch.
 
     print "WARNING: May be discarding eval examples."
 
-    dataset_size = len(sources[0])
+    dataset_size = limit if limit >= 0 else len(sources[0])
     data_iter = []
     start = -batch_size
     while True:
@@ -180,7 +260,10 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
         if for_rnn:
             # TODO(SB): Extend this clause to the non-pair case.
             transitions = np.zeros((len(dataset), 2, 0))
-            num_transitions = np.zeros((len(dataset), 2))
+            num_transitions = np.transpose(np.array(
+                [[len(np.array(example["premise_tokens"]).nonzero()[0]) for example in dataset],
+                 [len(np.array(example["hypothesis_tokens"]).nonzero()[0]) for example in dataset]],
+                dtype=np.int32), (1, 0))
         else:
             transitions = np.transpose(np.array([[example["premise_transitions"] for example in dataset],
                                     [example["hypothesis_transitions"] for example in dataset]],
@@ -258,7 +341,7 @@ def LoadEmbeddingsFromASCII(vocabulary, embedding_dim, path):
 
     For now, values not found in the file will be set to zero."""
     emb = np.zeros(
-        (len(vocabulary), embedding_dim), dtype=theano.config.floatX)
+        (len(vocabulary), embedding_dim), dtype=np.float32)
     with open(path, 'r') as f:
         for line in f:
             spl = line.split(" ")
@@ -283,3 +366,37 @@ def TransitionsToParse(transitions, words):
         return stack.pop()
     else:
         return " ".join(words)
+
+
+class SimpleProgressBar(object):
+    """ Simple Progress Bar and Timing Snippet
+    """
+
+    def __init__(self, msg=">", bar_length=80, enabled=True):
+        super(SimpleProgressBar, self).__init__()
+        self.enabled = enabled
+        if not self.enabled: return
+
+        self.begin = time.time()
+        self.bar_length = bar_length
+        self.msg = msg
+
+    def step(self, i, total):
+        if not self.enabled: return
+        sys.stdout.write('\r')
+        pct = (i / float(total)) * 100
+        ii = i * self.bar_length / total
+        fmt = "%s [%-{}s] %d%% %ds / %ds".format(self.bar_length)
+        total_time = time.time()-self.begin
+        expected = total_time / ((i+1e-03) / float(total))
+        sys.stdout.write(fmt % (self.msg, '='*ii, pct, total_time, expected))
+        sys.stdout.flush()
+
+    def reset(self):
+        if not self.enabled: return
+        self.begin = time.time()
+
+    def finish(self):
+        if not self.enabled: return
+        self.reset()
+        sys.stdout.write('\n')

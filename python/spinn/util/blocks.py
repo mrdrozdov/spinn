@@ -221,6 +221,58 @@ def TreeLSTMLayer(lstm_prev, external_state, full_memory_dim, vs, name="tree_lst
     return T.concatenate([h_t, c_t], axis=1)
 
 
+def TreeGRULayer(h_prev, external_state, full_memory_dim, vs, name="tree_gru", initializer=None, external_state_dim=0):
+    hidden_dim = full_memory_dim
+
+    assert isinstance(h_prev, tuple)
+    l_h_prev, r_h_prev = h_prev
+
+    real_shape = (hidden_dim * 2, hidden_dim * 5)
+    initializer_children = partial(initializer or vs.default_initializer,
+                                   real_shape=real_shape)
+    W_l = vs.add_param("%s/W_l" % name, (hidden_dim, hidden_dim * 5),
+                       initializer=initializer_children)
+    W_r = vs.add_param("%s/W_r" % name, (hidden_dim, hidden_dim * 5),
+                       initializer=initializer_children)
+    # TODO(mrdrozdov): Implement tracking LSTM for TreeGRU.
+    # if external_state_dim > 0:
+    #     W_ext = vs.add_param("%s/W_ext" % name, (external_state_dim, hidden_dim * 5),
+    #                          initializer=initializer_children)
+    # TODO(mrdrozdov): Use b (bias) as is used for LSTM.
+    # b = vs.add_param("%s/b" % name, (hidden_dim * 5,),
+    #                  initializer=TreeLSTMBiasInitializer())
+
+    def slice_gate(gate_data, i):
+        return gate_data[:, i * hidden_dim:(i + 1) * hidden_dim]
+
+    X_l = W_l[:, 0:4 * hidden_dim]
+    X_r = W_r[:, 0:4 * hidden_dim]
+    V_l = slice_gate(W_l, 4)
+    V_r = slice_gate(W_r, 4)
+
+    gates = T.dot(l_h_prev, X_l) + T.dot(r_h_prev, X_r)
+    # TODO(mrdrozdov): Implement tracking LSTM for TreeGRU.
+    # if external_state_dim > 0:
+    #     gates += T.dot(external_state, W_ext)
+
+    # Compute and slice gate values
+    r_l_gate, r_r_gate, z_l_gate, z_r_gate = [slice_gate(gates, i) for i in range(4)]
+
+    # Apply nonlinearities
+    r_l_gate = T.nnet.sigmoid(r_l_gate)
+    r_r_gate = T.nnet.sigmoid(r_r_gate)
+    z_l_gate = T.nnet.sigmoid(z_l_gate)
+    z_r_gate = T.nnet.sigmoid(z_r_gate)
+
+    # Compute new hidden values
+    h_t_l = T.tanh(T.dot(r_l_gate, V_l))
+    h_t_r = T.tanh(T.dot(r_r_gate, V_r))
+    h_next = l_h_prev + z_l_gate * (h_t_l - l_h_prev) + \
+             r_h_prev + z_r_gate * (h_t_r - r_h_prev)
+
+    return T.concatenate([h_next], axis=1)
+
+
 def LSTMLayer(lstm_prev, inp, inp_dim, full_memory_dim, vs, name="lstm", initializer=None):
     assert full_memory_dim % 2 == 0, "Input is concatenated (h, c); dim must be even."
     hidden_dim = full_memory_dim / 2
@@ -260,6 +312,45 @@ def LSTMLayer(lstm_prev, inp, inp_dim, full_memory_dim, vs, name="lstm", initial
     h_t = o_gate * T.tanh(c_t)
 
     return T.concatenate([h_t, c_t], axis=1)
+
+
+def GRULayer(h_prev, inp, inp_dim, full_memory_dim, vs, name="gru", initializer=None):
+    hidden_dim = full_memory_dim
+
+    # gate biases
+    # TODO(mrdrozdov): use b (bias) same as is done in LSTM
+    # b = vs.add_param("%s_b" % name, (hidden_dim * 3,),
+    #                  initializer=GRUBiasInitializer())
+
+    def slice_gate(gate_data, i):
+        return gate_data[:, i * hidden_dim:(i + 1) * hidden_dim]
+
+    # Compute and slice gate values
+    # input -> hidden mapping
+    i2h = Linear(inp, inp_dim, hidden_dim * 3, vs,
+                   name="%s/inp/linear" % name,
+                   initializer=initializer, use_bias=False)
+    # hidden -> hidden mapping
+    h2h = Linear(h_prev, hidden_dim, hidden_dim * 3, vs,
+                    name="%s/hid/linear" % name,
+                    initializer=initializer, use_bias=False)
+
+    gates = i2h[:, 0:2*hidden_dim] + h2h[:, 0:2*hidden_dim]
+
+    z_gate = gates[:, 0:hidden_dim]
+    r_gate = gates[:, hidden_dim:2*hidden_dim]
+
+    # Apply nonlinearities
+    z_gate = T.nnet.sigmoid(z_gate)
+    r_gate = T.nnet.sigmoid(r_gate)
+
+    i2h_gate = i2h[:, 2*hidden_dim:3*hidden_dim]
+    h2h_gate = h2h[:, 2*hidden_dim:3*hidden_dim]
+
+    h_t = T.tanh(i2h_gate + r_gate * h2h_gate)
+    h_next = h_prev + z_gate * (h_t - h_prev)
+
+    return T.concatenate([h_next], axis=1)
 
 
 def MLP(inp, inp_dim, outp_dim, vs, layer=ReLULayer, hidden_dims=None,
@@ -317,24 +408,26 @@ def Momentum(cost, params, lr=0.01, momentum=0.9):
 
     return new_values
 
-
 def RMSprop(cost, params, lr=0.001, rho=0.9, epsilon=1e-6, grads=None):
-    # From:
-    # https://github.com/Newmu/Theano-Tutorials/blob/master/4_modern_net.py
-    if grads is None:
-        grads = T.grad(cost=cost, wrt=params)
-    assert len(grads) == len(params)
+    return cost
 
-    updates = []
-    for p, g in zip(params, grads):
-        acc = theano.shared(np.zeros_like(p.get_value(), dtype=np.float32),
-                            name="%s/rms/acc" % p.name)
-        acc_new = rho * acc + (1 - rho) * g ** 2
-        gradient_scaling = T.sqrt(acc_new + epsilon)
-        g = g / gradient_scaling
-        updates.append((acc, acc_new))
-        updates.append((p, p - lr * g))
-    return updates
+# def RMSprop(cost, params, lr=0.001, rho=0.9, epsilon=1e-6, grads=None):
+#     # From:
+#     # https://github.com/Newmu/Theano-Tutorials/blob/master/4_modern_net.py
+#     if grads is None:
+#         grads = T.grad(cost=cost, wrt=params)
+#     assert len(grads) == len(params)
+
+#     updates = []
+#     for p, g in zip(params, grads):
+#         acc = theano.shared(np.zeros_like(p.get_value(), dtype=np.float32),
+#                             name="%s/rms/acc" % p.name)
+#         acc_new = rho * acc + (1 - rho) * g ** 2
+#         gradient_scaling = T.sqrt(acc_new + epsilon)
+#         g = g / gradient_scaling
+#         updates.append((acc, acc_new))
+#         updates.append((p, p - lr * g))
+#     return updates
 
 
 def BatchNorm(x, input_dim, vs, name, training_mode, axes=[0], momentum=0.9):
@@ -420,227 +513,5 @@ def TrackingUnit(state_prev, inp, inp_dim, hidden_dim, vs,
         logits = 0.0
 
     return state, logits
-
-
-def TreeWangJiangAttentionUnit(attention_state_prev_l, attention_state_prev_r, current_stack_top,
-        premise_stack_tops, projected_stack_tops, attention_dim, vs, name="attention_unit",
-        initializer=None):
-    """
-    This is for use in a Wang and Jiang style mLSTM attention formalism where a TreeLSTM, rather than
-    an LSTM RNN, accumulates attention states. In this setting, the model should contain a single step
-    of 2 * model_dim dimensions, where the left [0:model_dim] half contains the TreeLSTM composition states
-    and the right [model_dim:2 * model_dim] half contains the mTreeLSTM states.
-
-    Args:
-      attention_state_prev_{l, r}: The attention results for the children of this node, if present.
-        Else, zero vectors.
-      current_stack_top: The current stack top (h state only, if applicable).
-      premise_stack_tops: The values to do attention over.
-      projected_stack_tops: Projected vectors to use to produce an attentive
-          weighting alpha_t.
-      attention_dim: The dimension of the vectors over which to do attention.
-      vs: A variable store for the learned parameters.
-      name: An identifier for the learned parameters in this unit.
-      initializer: Used to initialize the learned parameters.
-
-    Dimension notation:
-      B : Batch size
-      k : Model dim
-      L : num_transitions
-    """
-    W_h = vs.add_param("%s_W_h" % name, (attention_dim, attention_dim), initializer=initializer)
-    W_rl = vs.add_param("%s_W_rl" % name, (attention_dim, attention_dim), initializer=initializer)
-    W_rr = vs.add_param("%s_W_rr" % name, (attention_dim, attention_dim), initializer=initializer)
-    w = vs.add_param("%s_w" % name, (attention_dim,), initializer=initializer)
-
-    W_h__h_t = T.dot(current_stack_top, W_h)
-    W_rl__l_prev = T.dot(attention_state_prev_l[:,:attention_dim], W_rl)
-    W_rr__r_prev = T.dot(attention_state_prev_r[:,:attention_dim], W_rr)
-
-    # Shape: L x B x k
-    M_t = T.tanh(projected_stack_tops + (W_h__h_t +  W_rl__l_prev + W_rr__r_prev))
-
-    # Shape: B x L
-    alpha_t = T.nnet.softmax(T.dot(M_t, w).T)
-
-    # Shape B x k
-    Y__alpha_t = T.sum(premise_stack_tops * alpha_t.T[:, :, np.newaxis], axis=0)
-
-    mlstm_input = T.concatenate([Y__alpha_t, current_stack_top], axis=1)
-    lstm_prev = (attention_state_prev_l, attention_state_prev_r)
-    r_t = TreeLSTMLayer(lstm_prev, mlstm_input, 2 * attention_dim, vs,
-            name="%s/lstm" % name, external_state_dim=2 * attention_dim)
-
-    return r_t
-
-
-def WangJiangAttentionUnit(attention_state_prev, current_stack_top, premise_stack_tops, projected_stack_tops, attention_dim,
-                    vs, name="attention_unit", initializer=None):
-    """
-    Args:
-      attention_state_prev: The output of this unit at the previous time step.
-      current_stack_top: The current stack top (h state only, if applicable).
-      premise_stack_tops: The values to do attention over.
-      projected_stack_tops: Projected vectors to use to produce an attentive
-          weighting alpha_t.
-      attention_dim: The dimension of the vectors over which to do attention.
-      vs: A variable store for the learned parameters.
-      name: An identifier for the learned parameters in this unit.
-      initializer: Used to initialize the learned parameters.
-
-    Dimension notation:
-      B : Batch size
-      k : Model dim
-      L : num_transitions
-    """
-    W_h = vs.add_param("%s_W_h" % name, (attention_dim, attention_dim), initializer=initializer)
-    W_r = vs.add_param("%s_W_r" % name, (attention_dim, attention_dim), initializer=initializer)
-    w = vs.add_param("%s_w" % name, (attention_dim,), initializer=initializer)
-
-    W_h__h_t = T.dot(current_stack_top, W_h)
-    W_r__r_t_prev = T.dot(attention_state_prev[:,:attention_dim], W_r)
-
-    # Shape: L x B x k
-    M_t = T.tanh(projected_stack_tops + (W_h__h_t + W_r__r_t_prev))
-
-    # Shape: B x L
-    alpha_t = T.nnet.softmax(T.dot(M_t, w).T)
-
-    # Shape B x k
-    Y__alpha_t = T.sum(premise_stack_tops * alpha_t.T[:, :, np.newaxis], axis=0)
-
-    mlstm_input = T.concatenate([Y__alpha_t, current_stack_top], axis=1)
-
-    r_t = LSTMLayer(attention_state_prev, mlstm_input, 2 * attention_dim, 2 * attention_dim, vs, name="%s/lstm" % name)
-
-    return r_t
-
-def TreeThangAttentionUnit(attention_state_prev_l, attention_state_prev_r, current_stack_top,
-        premise_stack_tops, projected_stack_tops, attention_dim, vs, name="attention_unit",
-        initializer=None):
-    """
-    Args:
-      attention_state_prev_{l, r}: The attention results for the children of this node, if present.
-        Else, zero vectors.
-      current_stack_top: The current stack top (h state only, if applicable).
-      premise_stack_tops: The values to do attention over.
-      projected_stack_tops: Projected vectors to use to produce an attentive
-          weighting alpha_t.
-      attention_dim: The dimension of the vectors over which to do attention.
-      vs: A variable store for the learned parameters.
-      name: An identifier for the learned parameters in this unit.
-      initializer: Used to initialize the learned parameters.
-
-    Dimension notation:
-      B : Batch size
-      k : Model dim
-      L : num_transitions
-    """
-    # Shape: B x L
-    score = T.sum(projected_stack_tops * current_stack_top, axis=2).T
-    alpha_t = T.nnet.softmax(score)
-
-    # Shape B x k
-    Y__alpha_t = T.sum(premise_stack_tops * alpha_t.T[:, :, np.newaxis], axis=0)
-
-    mlstm_input = T.concatenate([Y__alpha_t, current_stack_top], axis=1)
-    lstm_prev = (attention_state_prev_l, attention_state_prev_r)
-    r_t = TreeLSTMLayer(lstm_prev, mlstm_input, 2 * attention_dim, vs,
-            name="%s/lstm" % name, external_state_dim=2 * attention_dim)
-
-    return r_t
-
-
-def ThangAttentionUnit(attention_state_prev, current_stack_top, premise_stack_tops, projected_stack_tops, attention_dim,
-                    vs, name="attention_unit", initializer=None):
-    """
-    Args:
-      attention_state_prev: The output of this unit at the previous time step.
-      current_stack_top: The current stack top (h state only, if applicable).
-      premise_stack_tops: The values to do attention over.
-      projected_stack_tops: Projected vectors to use to produce an attentive
-          weighting alpha_t.
-      attention_dim: The dimension of the vectors over which to do attention.
-      vs: A variable store for the learned parameters.
-      name: An identifier for the learned parameters in this unit.
-      initializer: Used to initialize the learned parameters.
-
-    Dimension notation:
-      B : Batch size
-      k : Model dim
-      L : num_transitions
-    """
-    # Shape: B x L
-    score = T.sum(projected_stack_tops * current_stack_top, axis=2).T
-    alpha_t = T.nnet.softmax(score)
-
-    # Shape B x k
-    Y__alpha_t = T.sum(premise_stack_tops * alpha_t.T[:, :, np.newaxis], axis=0)
-
-    mlstm_input = T.concatenate([Y__alpha_t, current_stack_top], axis=1)
-
-    r_t = LSTMLayer(attention_state_prev, mlstm_input, 2 * attention_dim, 2 * attention_dim, vs, name="%s/lstm" % name)
-
-    return r_t
-
-def RocktaschelAttentionUnit(attention_state_prev, current_stack_top, premise_stack_tops, projected_stack_tops, attention_dim,
-                    vs, name="attention_unit", initializer=None):
-    """
-    Args:
-      attention_state_prev: The output of this unit at the previous time step.
-      current_stack_top: The current stack top (h state only, if applicable).
-      premise_stack_tops: The values to retrieve using attention.
-      projected_stack_tops: Projected vectors to use to produce an attentive
-          weighting alpha_t.
-      attention_dim: The dimension of the vectors over which to do attention.
-      vs: A variable store for the learned parameters.
-      name: An identifier for the learned parameters in this unit.
-      initializer: Used to initialize the learned parameters.
-
-    Dimension notation:
-      B : Batch size
-      k : Model dim
-      L : num_transitions
-    """
-
-    W_h = vs.add_param("%s_W_h" % name, (attention_dim, attention_dim), initializer=initializer)
-    W_r = vs.add_param("%s_W_r" % name, (attention_dim, attention_dim), initializer=initializer)
-    W_t = vs.add_param("%s_W_t" % name, (attention_dim, attention_dim), initializer=initializer)
-    w = vs.add_param("%s_w" % name, (attention_dim,), initializer=initializer)
-
-    W_h__h_t = T.dot(current_stack_top, W_h)
-    W_r__r_t_prev = T.dot(attention_state_prev, W_r)
-
-    # Vector-by-matrix addition here: (Right?)
-    # Shape: L x B x k
-    M_t = T.tanh(projected_stack_tops + (W_h__h_t + W_r__r_t_prev))
-
-    # Shape: B x L
-    alpha_t = T.nnet.softmax(T.dot(M_t, w).T)
-
-    # Shape B x k
-    Y__alpha_t = T.sum(premise_stack_tops * alpha_t.T[:, :, np.newaxis], axis=0)
-
-    # Mysterious Rocktaschel-style RNN update step.
-    r_t = Y__alpha_t + T.tanh(T.dot(attention_state_prev, W_t))
-    return r_t
-
-
-def AttentionUnitFinalRepresentation(final_attention_state, final_stack_top, attention_dim, vs, initializer=None, name="attention_unit_final"):
-    """Produces the complete representation of the aligned sentence pair."""
-
-    W_p = vs.add_param("%s_W_p" % name, (attention_dim, attention_dim), initializer=initializer)
-    W_x = vs.add_param("%s_W_x" % name, (attention_dim, attention_dim), initializer=initializer)
-    h_final = T.tanh(T.dot(final_attention_state, W_p) + T.dot(final_stack_top, W_x))
-    return h_final
-
-
-def AttentionUnitInit(premise_stack_tops, attention_dim, vs, initializer=None, name="attention_unit_init"):
-    """Does an initial reweighting on the input vectors that will be used for attention.
-
-    Unlike the units above, this only needs to be called once per batch, not at every step."""
-
-    W_y = vs.add_param("%s_W_y" % name, (attention_dim, attention_dim), initializer=initializer)
-    return T.dot(premise_stack_tops, W_y)
 
 

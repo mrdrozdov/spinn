@@ -12,554 +12,554 @@ relatively slow to compile.
 from functools import partial
 
 import numpy as np
-import theano
-
-from theano import tensor as T
 from spinn import util
 
+# Chainer imports
+import chainer
+from chainer import cuda, Function, gradient_check, report, training, utils, Variable
+from chainer import datasets, iterators, optimizers, serializers
+from chainer import Link, Chain, ChainList
+import chainer.functions as F
+from chainer.functions.connection import embed_id
+from chainer.functions.normalization.batch_normalization import batch_normalization
+from chainer.functions.evaluation import accuracy
+import chainer.links as L
+from chainer.training import extensions
 
-def update_stack(stack_t, shift_value, reduce_value, mask, model_dim):
-    """
-    Compute the new value of the given stack.
+from chainer.functions.activation import slstm
+from chainer.utils import type_check
 
-    This performs stack shifts and reduces in parallel, and somewhat
-    wastefully.  It accepts a precomputed reduce result (in `reduce_value`) and
-    a precomputed shift value `shift` for all examples, and switches between
-    the two outcomes based on the per-example value of `mask`.
+from spinn.util.chainer_blocks import BaseSentencePairTrainer
 
-    Args:
-        stack_t: Current stack value
-        shift_value: Batch of values to be shifted
-        reduce_value: Batch of reduce results
-        mask: Batch of booleans: 1 if reduce, 0 if shift
-        model_dim: The dimension of shift_value and reduce_value.
-    """
+from spinn.util.chainer_blocks import LSTMChain, RNNChain, EmbedChain
+from spinn.util.chainer_blocks import MLP
+from spinn.util.chainer_blocks import CrossEntropyClassifier
 
-    # Build two copies of the stack batch: one where every stack has received
-    # a shift op, and one where every stack has received a reduce op.
+"""
+Documentation Symbols:
 
-    # Copy 1: Shift.
-    stack_s = T.set_subtensor(stack_t[:, 0, :model_dim], shift_value)
-    stack_s = T.set_subtensor(stack_s[:, 1:], stack_t[:, :-1])
+B: Batch Size
+B*: Dynamic Batch Size
+S: Sequence Length
+S*: Dynamic Sequence Length
+E: Embedding Size
+H: Output Size of Current Module
 
-    # Copy 2: Reduce.
-    stack_r = T.set_subtensor(stack_t[:, 0, :model_dim], reduce_value)
-    stack_r = T.set_subtensor(stack_r[:, 1:-1], stack_t[:, 2:])
+Style Guide:
 
-    # Make sure mask broadcasts over all dimensions after the first.
-    mask = mask.dimshuffle(0, "x", "x")
-    mask = T.cast(mask, dtype=theano.config.floatX)
-    stack_next = mask * stack_r + (1. - mask) * stack_s
+1. Each __call__() or forward() should be documented with its
+   input and output types/dimensions.
+2. Every ChainList/Chain/Link needs to have assigned a __gpu and __mod.
+3. Each __call__() or forward() should have `train` as a parameter,
+   and Variables need to be set to Volatile=True during evaluation.
+4. Each __call__() or forward() should have an accompanying `check_type_forward`
+   called along the lines of:
 
-    return stack_next
+   ```
+   in_data = tuple([x.data for x in [input_1, input_2]])
+   in_types = type_check.get_types(in_data, 'in_types', False)
+   self.check_type_forward(in_types)
+   ```
+
+   This is mimicing the behavior seen in Chainer Functions.
+5. Each __call__() or forward() should have a chainer.Variable as input.
+   There may be slight exceptions to this rule, since at a times
+   especially in this model a list is preferred, but try to stick to
+   this as close as possible.
+
+TODO:
+
+- [x] Compute embeddings for initial sequences.
+- [x] Convert embeddings into list of lists of Chainer Variables.
+- [x] Loop over transitions, modifying buffer and stack as
+      necessary using ``PseudoReduce''.
+      NOTE: In this implementation, we pad the transitions
+      with `-1` to indicate ``skip''.
+- [x] Add projection layer to convert embeddings into proper
+      dimensions for the TreeLSTM.
+- [x] Use TreeLSTM reduce in place of PseudoReduce.
+- [x] Debug NoneType that is coming out of gradient. You probably
+      have to pad the sentences. SOLVED: The gradient was not
+      being generated for the projection layer because of a
+      redundant called to Variable().
+- [x] Use the right C and H units for the TreeLSTM.
+- [x] Enable evaluation. Currently crashing.
+- [ ] Confirm that volatile is working correctly during eval time.
+      Time the eval with and without volatile being set. Full eval
+      takes about 2m to complete on AD Mac.
+
+Other Tasks:
+
+- [x] Run CBOW.
+- [ ] Enable Cropping and use longer sequences. Currently will
+      not work as expected.
+- [ ] Enable "transition validation".
+- [ ] Enable TreeGRU as alternative option to TreeLSTM.
+- [ ] Add TrackingLSTM.
+- [ ] Run RNN for comparison.
+
+Questions:
+
+- [ ] Is the Projection layer implemented correctly? Efficiently?
+- [ ] Is the composition with TreeLSTM implemented correctly? Efficiently?
+- [ ] What should the types of Transitions and Y labels be? np.int64?
+
+"""
 
 
-class HardStack(object):
-    """
-    Implementation of the SPINN model using a naive stack representation.
+def HeKaimingInit(shape, real_shape=None):
+    # Calculate fan-in / fan-out using real shape if given as override
+    fan = real_shape or shape
 
-    This model scans a sequence using a hard stack. It optionally predicts
-    stack operations using an MLP, and can receive supervision on these
-    predictions from some external parser which acts as the "ground truth"
-    parser.
+    return np.random.normal(scale=np.sqrt(4.0/(fan[0] + fan[1])),
+                            size=shape)
 
-    All of the SPINN model variants described in the paper can be instantiated
-    with this class. See the file `checkpoints/commands.sh` in this project
-    directory for concrete examples of how to invoke the variants.
-    """
+def get_c(state, hidden_dim):
+    return state[:, hidden_dim:]
 
-    def __init__(self, model_dim, word_embedding_dim, vocab_size, seq_length, compose_network,
-                 embedding_projection_network, training_mode, ground_truth_transitions_visible, vs,
-                 prediction_and_tracking_network=None,
-                 predict_use_cell=False,
-                 predict_transitions=False,
-                 train_with_predicted_transitions=False,
-                 interpolate=False,
-                 X=None,
-                 transitions=None,
-                 initial_embeddings=None,
-                 make_test_fn=False,
-                 use_input_batch_norm=True,
-                 use_input_dropout=True,
-                 embedding_dropout_keep_rate=1.0,
-                 ss_mask_gen=None,
-                 ss_prob=0.0,
-                 use_tracking_lstm=False,
-                 tracking_lstm_hidden_dim=8,
-                 connect_tracking_comp=False,
-                 context_sensitive_shift=False,
-                 context_sensitive_use_relu=False,
-                 use_attention=False,
-                 premise_stack_tops=None,
-                 attention_unit=None,
-                 is_hypothesis=False,
-                 initialize_hyp_tracking_state=False,
-                 premise_tracking_c_state_final=None):
+def get_h(state, hidden_dim):
+    return state[:, :hidden_dim]
+
+def get_state(c, h):
+    return F.concat([h, c], axis=1)
+
+
+class SentencePairTrainer(BaseSentencePairTrainer):
+    def init_params(self, **kwargs):
+        for name, param in self.model.namedparams():
+            data = param.data
+            print("Init: {}:{}".format(name, data.shape))
+            if len(data.shape) >= 2:
+                data[:] = HeKaimingInit(data.shape)
+            else:
+                data[:] = np.random.uniform(-0.1, 0.1, data.shape)
+
+    def init_optimizer(self, lr=0.01, **kwargs):
+        self.optimizer = optimizers.Adam(alpha=0.0003, beta1=0.9, beta2=0.999, eps=1e-08)
+        # self.optimizer = optimizers.SGD(lr=0.001)
+        self.optimizer.setup(self.model)
+        # self.optimizer.add_hook(chainer.optimizer.GradientClipping(40))
+        # self.optimizer.add_hook(chainer.optimizer.WeightDecay(0.00003))
+
+
+class TreeLSTMChain(Chain):
+    def __init__(self, hidden_dim, tracking_lstm_hidden_dim, use_external=False, prefix="TreeLSTMChain", gpu=-1):
+        super(TreeLSTMChain, self).__init__(
+            W_l=L.Linear(hidden_dim / 2, hidden_dim / 2 * 5, nobias=True),
+            W_r=L.Linear(hidden_dim / 2, hidden_dim / 2 * 5, nobias=True),
+            b=L.Bias(axis=1, shape=(hidden_dim / 2 * 5,)),
+            )
+        assert hidden_dim % 2 == 0, "The hidden_dim must be even because contains c and h."
+        self.hidden_dim = hidden_dim / 2
+        self.__gpu = gpu
+        self.__mod = cuda.cupy if gpu >= 0 else np
+        self.use_external = use_external
+
+        if use_external:
+            self.add_link('W_external', L.Linear(tracking_lstm_hidden_dim / 2, hidden_dim / 2 * 5))
+
+    def __call__(self, l_prev, r_prev, external=None, train=True, keep_hs=False):
+        hidden_dim = self.hidden_dim
+
+        l_h_prev = get_h(l_prev, hidden_dim)
+        l_c_prev = get_c(l_prev, hidden_dim)
+        r_h_prev = get_h(r_prev, hidden_dim)
+        r_c_prev = get_c(r_prev, hidden_dim)
+
+        gates = self.b(self.W_l(l_h_prev) + self.W_r(r_h_prev))
+
+        if external is not None:
+            gates += self.W_external(external)
+
+        def slice_gate(gate_data, i):
+            return gate_data[:, i * hidden_dim:(i + 1) * hidden_dim]
+
+        # Compute and slice gate values
+        i_gate, fl_gate, fr_gate, o_gate, cell_inp = \
+            [slice_gate(gates, i) for i in range(5)]
+
+        # Apply nonlinearities
+        i_gate = F.sigmoid(i_gate)
+        fl_gate = F.sigmoid(fl_gate)
+        fr_gate = F.sigmoid(fr_gate)
+        o_gate = F.sigmoid(o_gate)
+        cell_inp = F.tanh(cell_inp)
+
+        # Compute new cell and hidden value
+        c_t = fl_gate * l_c_prev + fr_gate * r_c_prev + i_gate * cell_inp
+        h_t = o_gate * F.tanh(c_t)
+
+        return get_state(c_t, h_t)
+
+
+class ReduceChain(Chain):
+    def __init__(self, hidden_dim, tracking_lstm_hidden_dim, use_external=False, prefix="ReduceChain", gpu=-1):
+        super(ReduceChain, self).__init__(
+            treelstm=TreeLSTMChain(hidden_dim, tracking_lstm_hidden_dim, use_external=use_external),
+        )
+        self.hidden_dim = hidden_dim
+        self.__gpu = gpu
+        self.__mod = cuda.cupy if gpu >= 0 else np
+
+    def __call__(self, left_x, right_x, external=None, train=True, keep_hs=False):
         """
-        Construct a HardStack.
+        Args:
+            left_x:  B* x H
+            right_x: B* x H
+        Returns:
+            final_state: B* x H
+        """
+
+        assert len(left_x) == len(right_x)
+        batch_size = len(left_x)
+
+        # Concatenate the list of states.
+        left_x = F.concat(left_x, axis=0)
+        right_x = F.concat(right_x, axis=0)
+        assert left_x.shape == right_x.shape, "Left and Right must match in dimensions."
+
+        assert left_x.shape[1] % 2 == 0, "Unit dim needs to be even because is concatenated [c,h]"
+        unit_dim = left_x.shape[1]
+        h_dim = unit_dim / 2
+
+        # Split each state into its c/h representations.
+        lstm_state = self.treelstm(left_x, right_x, external)
+        return lstm_state
+
+
+class TrackingLSTM(Chain):
+    def __init__(self, hidden_dim, tracking_lstm_hidden_dim, num_actions=2, make_logits=False):
+        super(TrackingLSTM, self).__init__(
+            W_x=L.Linear(tracking_lstm_hidden_dim / 2, tracking_lstm_hidden_dim / 2 * 4),
+            W_h=L.Linear(tracking_lstm_hidden_dim / 2, tracking_lstm_hidden_dim / 2 * 4),
+            bias=L.Bias(axis=1, shape=(tracking_lstm_hidden_dim / 2 * 4,)),
+        )
+        # TODO: TrackingLSTM should be able to be a size different from hidden_dim.
+        if make_logits:
+            self.add_link('logits', L.Linear(tracking_lstm_hidden_dim / 2, num_actions))
+
+    def __call__(self, c, h, x, train=True):
+        gates = self.bias(self.W_x(x) + self.W_h(h))
+        c, h = F.lstm(c, gates)
+        if hasattr(self, 'logits'):
+            logits = self.logits(h)
+        else:
+            logits = 0.0
+        return c, h, logits
+
+
+class TrackingInput(Chain):
+    def __init__(self, hidden_dim, tracking_lstm_hidden_dim, num_inputs=3):
+        super(TrackingInput, self).__init__(
+            W_stack_0=L.Linear(hidden_dim / 2, tracking_lstm_hidden_dim / 2),
+            W_stack_1=L.Linear(hidden_dim / 2, tracking_lstm_hidden_dim / 2),
+            W_buffer=L.Linear(hidden_dim / 2, tracking_lstm_hidden_dim / 2),
+        )
+        assert hidden_dim % 2 == 0, "The hidden_dim must be even because contains c and h."
+        self.hidden_dim = hidden_dim / 2
+
+    def __call__(self, stacks, buffers, buffers_t, train=True):
+        zeros = Variable(self.xp.zeros((1, self.hidden_dim,), dtype=self.xp.float32),
+                                volatile=not train)
+        state = self.W_stack_0(F.concat([get_h(s[0], self.hidden_dim) if 0 < len(s) else zeros for s in stacks], axis=0))
+        state += self.W_stack_1(F.concat([get_h(s[1], self.hidden_dim) if 1 < len(s) else zeros for s in stacks], axis=0))
+        state += self.W_buffer(F.concat([get_h(b[i], self.hidden_dim) if i < len(b) else zeros for (b, i) in zip(buffers, buffers_t)], axis=0))
+        return state
+
+
+class SPINN(Chain):
+    def __init__(self, hidden_dim, keep_rate, prefix="SPINN", gpu=-1,
+                 tracking_lstm_hidden_dim=4, use_tracking_lstm=True, make_logits=False,
+                 use_shift_composition=True):
+        super(SPINN, self).__init__(
+            reduce=ReduceChain(hidden_dim, tracking_lstm_hidden_dim, use_external=use_tracking_lstm, gpu=gpu),
+        )
+        self.hidden_dim = hidden_dim
+        self.__gpu = gpu
+        self.__mod = cuda.cupy if gpu >= 0 else np
+        self.tracking_lstm_hidden_dim = tracking_lstm_hidden_dim
+        self.use_tracking_lstm = use_tracking_lstm
+        self.use_shift_composition = use_shift_composition
+        self.make_logits = make_logits
+
+        self.accFun = accuracy.accuracy
+
+        if use_tracking_lstm:
+            self.add_link('tracking_input', TrackingInput(hidden_dim, tracking_lstm_hidden_dim))
+            self.add_link('tracking_lstm', TrackingLSTM(hidden_dim, tracking_lstm_hidden_dim, make_logits=make_logits))
+            self.transition_classifier = CrossEntropyClassifier(gpu)
+            self.transition_optimizer = optimizers.SGD(lr=0.0001)
+            self.transition_optimizer.setup(self.tracking_lstm)
+
+    def check_type_forward(self, in_types):
+        type_check.expect(in_types.size() == 1)
+        buff_type = in_types[0]
+
+        type_check.expect(
+            buff_type.dtype == 'f',
+            buff_type.ndim >= 1,
+        )
+
+    def reset_state(self, batch_size, train):
+        zeros = Variable(self.__mod.zeros((1, self.tracking_lstm_hidden_dim/2,), dtype=self.__mod.float32),
+                                volatile=not train)
+        self.c = [zeros for _ in range(batch_size)]
+        self.h = [zeros for _ in range(batch_size)]
+
+    def reset_transitions(self):
+        if self.make_logits:
+            self.transition_optimizer.zero_grads()
+
+    def update_transitions(self):
+        if self.make_logits:
+            self.transition_optimizer.update()
+
+    def __call__(self, buffers, transitions, train=True, keep_hs=False):
+        """
+        Pass over batches of transitions, modifying their associated
+        buffers at each iteration.
 
         Args:
-            model_dim: Dimensionality of token embeddings and stack values
-            word_embedding_dim: dimension of the word embedding
-            vocab_size: Number of unique tokens in vocabulary
-            seq_length: Maximum sequence length which will be processed by this
-              stack
-            compose_network: Blocks-like function which accepts arguments
-              `inp, inp_dim, outp_dim, vs, name` (see e.g. `util.Linear`).
-              Given a Theano batch `inp` of dimension `batch_size * inp_dim`,
-              returns a transformed Theano batch of dimension
-              `batch_size * outp_dim`.
-            embedding_projection_network: Same form as `compose_network`.
-            training_mode: A Theano scalar indicating whether to act as a training model
-              with dropout (1.0) or to act as an eval model with rescaling (0.0).
-            ground_truth_transitions_visible: A Theano scalar. If set (1.0), allow the model access
-              to ground truth transitions. This can be disabled at evaluation time to force Model 1
-              (or 2S) to evaluate in the Model 2 style with predicted transitions. Has no effect
-              on Model 0.
-            vs: VariableStore instance for parameter storage
-            prediction_and_tracking_network: Blocks-like function which either maps values
-              `3 * model_dim` to `action_dim` or uses the more complex TrackingUnit template.
-            predict_use_cell: Only applicable when using an LSTM tracking unit
-                for prediction (when `predict_transitions` is `True`). If
-                `True`, use both the LSTM cell and hidden value to make
-                predictions; use just the hidden value otherwise.
-            predict_transitions: If set, predict transitions. If not, the tracking LSTM may still
-              be used for other purposes.
-            train_with_predicted_transitions: If `True`, use the predictions from the model
-              (rather than the ground-truth `transitions`) to perform stack
-              operations
-            interpolate: If True, use scheduled sampling while training
-            X: Theano batch describing input matrix, or `None` (in which case
-              this instance will make its own batch variable).
-            transitions: Theano batch describing transition matrix, or `None`
-              (in which case this instance will make its own batch variable).
-            initial_embeddings: pretrained embeddings or None
-            make_test_fn: If set, create a function to run a scan for testing.
-            use_input_batch_norm: If True, use batch normalization
-            use_input_dropout: If True, use dropout
-            embedding_dropout_keep_rate: The keep rate for dropout on projected embeddings.
-            ss_mask_gen: A theano random stream
-            ss_prob: Scheduled sampling probability
-            use_tracking_lstm: If True, LSTM will be used in the tracking unit
-            tracking_lstm_hidden_dim: hidden state dimension of the tracking LSTM
-            connect_tracking_comp: If True, the hidden state of tracking LSTM will be
-                fed to the TreeLSTM in the composition unit
-            context_sensitive_shift: If True, the hidden state of tracking LSTM and the embedding
-                vector will be used to calculate the vector that will be pushed onto the stack
-            context_sensitive_use_relu: If True, a ReLU layer will be used while doing context
-                sensitive shift, otherwise a Linear layer will be used
-            use_attention: Use attention over premise tree nodes to obtain sentence representation (SNLI)
-            premise_stack_tops: Tokens located on the top of premise stack. Used only when use_attention
-                is set to True (SNLI)
-            attention_unit: Function to implement the recurrent attention unit.
-                Takes in the current attention state, current hypothesis stack top, all premise stack tops
-                and returns the next attention state
-            is_hypothesis: Whether we're processing the premise or the hypothesis (for SNLI)
-            initialize_hyp_tracking_state: Initialize the c state of the tracking unit of hypothesis
-                model with the final tracking unit c state of the premise model.
-            premise_tracking_c_state_final: The final c state of the tracking unit in premise model.
+            buffers: List of B x S* x E
+            transitions: List of B x S
+        Returns:
+            final_state: List of B x E
         """
 
-        self.model_dim = model_dim
-        self.stack_dim = 2 * model_dim if use_attention in {"TreeWangJiang", "TreeThang"} else model_dim
-        self.word_embedding_dim = word_embedding_dim
-        self.use_tracking_lstm = use_tracking_lstm
-        self.tracking_lstm_hidden_dim = tracking_lstm_hidden_dim
-        self.vocab_size = vocab_size
-        self.seq_length = seq_length
+        # BEGIN: Type Check
+        in_data = tuple([x.data for x in [buffers]])
+        in_types = type_check.get_types(in_data, 'in_types', False)
+        self.check_type_forward(in_types)
+        transition_num = 0
+        transition_acc = 0.0
+        # END: Type Check
 
-        self._compose_network = compose_network
-        self._embedding_projection_network = embedding_projection_network
-        self._prediction_and_tracking_network = prediction_and_tracking_network
-        self._predict_use_cell = predict_use_cell
-        self._predict_transitions = predict_transitions
-        self.train_with_predicted_transitions = train_with_predicted_transitions
+        batch_size, seq_length, hidden_dim = buffers.shape[0], buffers.shape[1], buffers.shape[2]
+        transitions = transitions.T
+        assert len(transitions) == seq_length
 
-        self._vs = vs
+        buffers = [F.split_axis(b, seq_length, axis=0, force_tuple=True)
+                    for b in buffers]
+        buffers_t = [0 for _ in buffers]
 
-        self.initial_embeddings = initial_embeddings
+        # Initialize stack with at least one item, otherwise gradient might
+        # not propogate.
+        stacks = [[] for b in buffers]
 
-        self.training_mode = training_mode
-        self.ground_truth_transitions_visible = ground_truth_transitions_visible
-        self.embedding_dropout_keep_rate = embedding_dropout_keep_rate
+        def pseudo_reduce(lefts, rights):
+            for l, r in zip(lefts, rights):
+                yield l + r
 
-        self.X = X
-        self.transitions = transitions
+        def better_reduce(lefts, rights, h):
+            lstm_state = self.reduce(lefts, rights, h, train=train)
+            batch_size = lstm_state.shape[0]
+            lstm_state = F.split_axis(lstm_state, batch_size, axis=0, force_tuple=True)
+            for state in lstm_state:
+                yield state
 
-        self.use_input_batch_norm = use_input_batch_norm
-        self.use_input_dropout = use_input_dropout
 
-        # Mask for scheduled sampling.
-        self.ss_mask_gen = ss_mask_gen
-        # Flag for scheduled sampling.
-        self.interpolate = interpolate
-        # Training step number.
-        self.ss_prob = ss_prob
-        # Connect tracking unit and composition unit.
-        self.connect_tracking_comp = connect_tracking_comp
-        assert (use_tracking_lstm or not connect_tracking_comp), \
-            "Must use tracking LSTM if connecting tracking and composition units"
-        self.context_sensitive_shift = context_sensitive_shift
-        assert (use_tracking_lstm or not context_sensitive_shift), \
-            "Must use tracking LSTM while doing context sensitive shift"
-        self.context_sensitive_use_relu = context_sensitive_use_relu
-        # Use constituent-by-constituent attention - true for both premise and hypothesis stacks
-        self.use_attention = use_attention
-        # Stores premise stack tops; none for the premise stack
-        self.premise_stack_tops = premise_stack_tops
-        # Attention unit
-        if use_attention == "Rocktaschel" and is_hypothesis:
-            self._attention_unit = util.RocktaschelAttentionUnit
-        elif use_attention == "WangJiang" and is_hypothesis:
-            self._attention_unit = util.WangJiangAttentionUnit
-        elif use_attention == "TreeWangJiang" and is_hypothesis:
-            self._attention_unit = util.TreeWangJiangAttentionUnit
-        elif use_attention == "Thang" and is_hypothesis:
-            self._attention_unit = util.ThangAttentionUnit
-        elif use_attention == "TreeThang" and is_hypothesis:
-            self._attention_unit = util.TreeThangAttentionUnit
-        else:
-            self._attention_unit = None
-        self.initialize_hyp_tracking_state = initialize_hyp_tracking_state
-        self.premise_tracking_c_state_final = premise_tracking_c_state_final
-        if initialize_hyp_tracking_state:
-            assert not is_hypothesis or premise_tracking_c_state_final is not None, \
-                "Must supply initial c states in hypothesis model"
+        self.reset_transitions()
 
-        # Check whether we're processing the hypothesis or the premise
-        self.is_hypothesis = is_hypothesis
+        for ii, ts in enumerate(transitions):
+            assert len(ts) == batch_size
+            assert len(ts) == len(buffers)
+            assert len(ts) == len(stacks)
 
-        self._make_params()
-        self._make_inputs()
-        self._make_scan()
-
-        if make_test_fn:
-            self.scan_fn = theano.function([self.X, self.transitions, self.training_mode,
-                                            self.ground_truth_transitions_visible],
-                                           self.final_stack,
-                                           on_unused_input='warn')
-
-    def _make_params(self):
-        # Per-token embeddings.
-        if self.initial_embeddings is not None:
-            def EmbeddingInitializer(shape):
-                return self.initial_embeddings
-            self.word_embeddings = self._vs.add_param(
-                    "embeddings", (self.vocab_size, self.word_embedding_dim),
-                    initializer=EmbeddingInitializer,
-                    trainable=False,
-                    savable=False)
-        else:
-            self.word_embeddings = self._vs.add_param(
-                "embeddings", (self.vocab_size, self.word_embedding_dim))
-
-    def _make_inputs(self):
-        self.X = self.X or T.imatrix("X")
-        self.transitions = self.transitions or T.imatrix("transitions")
-
-    def _step(self, transitions_t, ss_mask_gen_matrix_t, stack_t, buffer_cur_t,
-            tracking_hidden, attention_hidden, buffer,
-            ground_truth_transitions_visible, premise_stack_tops, projected_stack_tops):
-        """TODO document"""
-        batch_size, _ = self.X.shape
-
-        # Extract top buffer values.
-        idxs = buffer_cur_t + (T.arange(batch_size) * self.seq_length)
-
-        if self.context_sensitive_shift:
-            # Combine with the hidden state from previous unit.
-            tracking_h_t = tracking_hidden[:, :self.tracking_lstm_hidden_dim]
-            context_comb_input_t = T.concatenate([tracking_h_t, buffer[idxs]], axis=1)
-            context_comb_input_dim = self.word_embedding_dim + self.tracking_lstm_hidden_dim
-            comb_layer = util.ReLULayer if self.context_sensitive_use_relu else util.Linear
-            buffer_top_t = comb_layer(context_comb_input_t, context_comb_input_dim, self.model_dim,
-                                self._vs, name="context_comb_unit", use_bias=True,
-                                initializer=util.HeKaimingInitializer())
-        else:
-            buffer_top_t = buffer[idxs]
-
-        if self._prediction_and_tracking_network is not None:
-            # We are predicting our own stack operations.
-            h_dim = self.model_dim / 2 # TODO(SB): Turn this off when not using TreeLSTM.
-
-            predict_inp = T.concatenate(
-                [stack_t[:, 0, :h_dim], stack_t[:, 1, :h_dim], buffer_top_t[:, :h_dim]], axis=1)
-
+            # TODO! The tracking inputs for shifts and reduces should be split,
+            # in order to do consecutive shifts. This would (maybe) allow us
+            # to get the performance benefits from dynamic batch sizes while still
+            # predicting actions.
             if self.use_tracking_lstm:
-                # Update the hidden state and obtain predicted actions.
-                tracking_hidden, actions_t = self._prediction_and_tracking_network(
-                    tracking_hidden, predict_inp, h_dim * 3,
-                    self.tracking_lstm_hidden_dim, self._vs,
-                    logits_use_cell=self._predict_use_cell,
-                    name="prediction_and_tracking")
-            else:
-                # Obtain predicted actions directly.
-                actions_t = self._prediction_and_tracking_network(
-                    predict_inp, h_dim * 3, util.NUM_TRANSITION_TYPES, self._vs,
-                    logits_use_cell=self._predict_use_cell,
-                    name="prediction_and_tracking")
+                if self.use_shift_composition:
+                    tracking_input = self.tracking_input(stacks, buffers, buffers_t, train)
+                    c = F.concat(self.c, axis=0)
+                    h = F.concat(self.h, axis=0)
 
-        if self.train_with_predicted_transitions:
-            # Model 2 case.
-            if self.interpolate:
-                # Only use ground truth transitions if they are marked as visible to the model.
-                effective_ss_mask_gen_matrix_t = ss_mask_gen_matrix_t * ground_truth_transitions_visible
-                # Interpolate between truth and prediction using bernoulli RVs
-                # generated prior to the step.
-                mask = (transitions_t * effective_ss_mask_gen_matrix_t
-                        + actions_t.argmax(axis=1) * (1 - effective_ss_mask_gen_matrix_t))
-            else:
-                # Use predicted actions to build a mask.
-                mask = actions_t.argmax(axis=1)
-        elif self._predict_transitions:
-            # Use transitions provided from external parser when not masked out
-            mask = (transitions_t * ground_truth_transitions_visible
-                        + actions_t.argmax(axis=1) * (1 - ground_truth_transitions_visible))
+                    c, h, logits = self.tracking_lstm(c, h, tracking_input, train)
+                    if self.make_logits and np.any(ts != -1):
+                        _rpt = np.repeat(np.expand_dims(ts == -1, 1), 2, axis=1)
+                        try:
+                            selectedTransitions = F.where(Variable(_rpt), logits, Variable(np.zeros_like(logits.data)))
+                        except:
+                            import ipdb; ipdb.set_trace()
+                        transition_loss = self.transition_classifier(selectedTransitions, Variable(ts))
+                        transition_acc += np.sum(np.argmax(logits.data[ts != -1], axis=1) == ts[ts != -1])
+                        transition_num += np.sum(ts != -1)
+                        # print("Accuracy: ", np.sum(ts != -1), np.mean(np.argmax(logits.data[ts != -1], axis=1) == ts[ts != -1]))
+                        transition_loss.backward()
+
+                    # Assign appropriate states after they've been calculated.
+                    self.c = F.split_axis(c, c.shape[0], axis=0, force_tuple=True)
+                    self.h = F.split_axis(h, h.shape[0], axis=0, force_tuple=True)
+                else:
+                    tracking_size = len([t for t in ts if t == 1])
+                    if tracking_size > 0:
+                        tracking_ix = [i for (i, t) in enumerate(ts) if t == 1]
+                        tracking_stacks    = [x for (t, x) in zip(ts, stacks) if t == 1]
+                        tracking_buffers   = [x for (t, x) in zip(ts, buffers) if t == 1]
+                        tracking_buffers_t = [x for (t, x) in zip(ts, buffers_t) if t == 1]
+
+                        tracking_input = self.tracking_input(
+                            tracking_stacks,
+                            tracking_buffers,
+                            tracking_buffers_t,
+                            train)
+
+                        c = F.concat([x for (t, x) in zip(ts, self.c) if t == 1], axis=0)
+                        h = F.concat([x for (t, x) in zip(ts, self.h) if t == 1], axis=0)
+
+                        c, h, logits = self.tracking_lstm(c, h, tracking_input, train)
+
+                        # Assign appropriate states after they've been calculated.
+                        _c = F.split_axis(c, tracking_size, axis=0, force_tuple=True)
+                        for i, ix in enumerate(tracking_ix):
+                            if t == 1:
+                                self.c[ix] = _c[i]
+                        _h = F.split_axis(h, tracking_size, axis=0, force_tuple=True)
+                        for i, ix in enumerate(tracking_ix):
+                            if t == 1:
+                                self.h[ix] = _h[i]
+
+            lefts = []
+            rights = []
+            for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
+                if t == -1: # skip
+                    pass
+                elif t == 0: # shift
+                    new_stack_item = buf[buffers_t[i]]
+                    stack.append(new_stack_item)
+                    assert buffers_t[i] < seq_length
+                    buffers_t[i] += 1
+                elif t == 1: # reduce
+                    for lr in [rights, lefts]:
+                        if len(stack) > 0:
+                            lr.append(stack.pop())
+                        else:
+                            lr.append(Variable(
+                                self.__mod.zeros((1, hidden_dim,), dtype=self.__mod.float32),
+                                volatile=not train))
+                else:
+                    raise Exception("Action not implemented: {}".format(t))
+
+            assert len(lefts) == len(rights)
+            if len(rights) > 0:
+                if self.use_tracking_lstm:
+                    external = F.concat([x for (t, x) in zip(ts, self.h) if t == 1], axis=0)
+                else:
+                    external = None
+                reduced = iter(better_reduce(lefts, rights, external))
+                for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
+                    if t == -1 or t == 0:
+                        continue
+                    elif t == 1:
+                        composition = next(reduced)
+                        stack.append(composition)
+                    else:
+                        raise Exception("Action not implemented: {}".format(t))
+
+        ret = F.concat([s.pop() for s in stacks], axis=0)
+        self.update_transitions()
+        assert ret.shape == (batch_size, hidden_dim)
+
+        if self.make_logits:
+            avg_transition_acc = transition_acc / transition_num
         else:
-            # Model 0 case.
-            mask = transitions_t
+            avg_transition_acc = 0.0
 
-        # Now update the stack: first precompute reduce results.
-        if self.model_dim != self.stack_dim:
-            stack1 = stack_t[:, 0, :self.model_dim].reshape((-1, self.model_dim))
-            stack2 = stack_t[:, 1, :self.model_dim].reshape((-1, self.model_dim))
-        else:
-            stack1 = stack_t[:, 0].reshape((-1, self.model_dim))
-            stack2 = stack_t[:, 1].reshape((-1, self.model_dim))
-        reduce_items = (stack1, stack2)
-        if self.connect_tracking_comp:
-            tracking_h_t = tracking_hidden[:, :self.tracking_lstm_hidden_dim]
-            reduce_value = self._compose_network(reduce_items, tracking_h_t, self.model_dim,
-                self._vs, name="compose", external_state_dim=self.tracking_lstm_hidden_dim)
-        else:
-            reduce_value = self._compose_network(reduce_items, (self.model_dim,) * 2, self.model_dim,
-                self._vs, name="compose")
-
-        # Compute new stack value.
-        stack_next = update_stack(stack_t, buffer_top_t, reduce_value, mask,
-                                  self.model_dim)
-
-        # If attention is to be used and premise_stack_tops is not None (i.e.
-        # we're processing the hypothesis) calculate the attention weighed representation.
-        if self.use_attention != "None" and self.is_hypothesis:
-            h_dim = self.model_dim / 2
-            if self.use_attention in {"TreeWangJiang", "TreeThang"}:
-                mask_ = mask.dimshuffle(0, "x")
-                mask_ = T.cast(mask_, dtype=theano.config.floatX)
-                attention_hidden_l = stack_t[:, 0, self.model_dim:] * mask_
-                attention_hidden_r = stack_t[:, 1, self.model_dim:] * mask_
-
-                tree_attention_hidden = self._attention_unit(attention_hidden_l, attention_hidden_r,
-                    stack_next[:, 0, :h_dim], premise_stack_tops, projected_stack_tops, h_dim,
-                    self._vs, name="attention_unit")
-                stack_next = T.set_subtensor(stack_next[:, 0, self.model_dim:], tree_attention_hidden)
-            else:
-                attention_hidden = self._attention_unit(attention_hidden, stack_next[:, 0, :h_dim],
-                    premise_stack_tops, projected_stack_tops, h_dim, self._vs, name="attention_unit")
-
-        # Move buffer cursor as necessary. Since mask == 1 when reduce, we
-        # should increment each buffer cursor by 1 - mask.
-        buffer_cur_next = buffer_cur_t + (1 - mask)
-
-        if self._predict_transitions:
-            ret_val = stack_next, buffer_cur_next, tracking_hidden, attention_hidden, actions_t
-        else:
-            ret_val = stack_next, buffer_cur_next, tracking_hidden, attention_hidden
-
-        if not self.interpolate:
-            # Use ss_mask as a redundant return value.
-            ret_val = (ss_mask_gen_matrix_t,) + ret_val
-
-        return ret_val
-
-    def _make_scan(self):
-        """Build the sequential composition / scan graph."""
-
-        batch_size, max_stack_size = self.X.shape
-
-        # Stack batch is a 3D tensor.
-        stack_shape = (batch_size, max_stack_size, self.stack_dim)
-        stack_init = T.zeros(stack_shape)
-
-        # Look up all of the embeddings that will be used.
-        raw_embeddings = self.word_embeddings[self.X]  # batch_size * seq_length * emb_dim
-
-        if self.context_sensitive_shift:
-            # Use the raw embedding vectors, they will be combined with the hidden state of
-            # the tracking unit later
-            buffer_t = raw_embeddings
-            buffer_emb_dim = self.word_embedding_dim
-        else:
-            # Allocate a "buffer" stack initialized with projected embeddings,
-            # and maintain a cursor in this buffer.
-            if self.use_input_dropout:
-                raw_embeddings = util.Dropout(raw_embeddings, self.embedding_dropout_keep_rate, self.training_mode)
-            buffer_t = self._embedding_projection_network(
-                raw_embeddings, self.word_embedding_dim, self.model_dim, self._vs, name="project")
-            if self.use_input_batch_norm:
-                buffer_t = util.BatchNorm(buffer_t, self.model_dim, self._vs, "buffer",
-                    self.training_mode, axes=[0, 1])
-            buffer_emb_dim = self.model_dim
-
-        # Collapse buffer to (batch_size * buffer_size) * emb_dim for fast indexing.
-        buffer_t = buffer_t.reshape((-1, buffer_emb_dim))
-
-        buffer_cur_init = T.zeros((batch_size,), dtype="int")
-
-        DUMMY = T.zeros((2,)) # a dummy tensor used as a place-holder
-
-        # Dimshuffle inputs to seq_len * batch_size for scanning
-        transitions = self.transitions.dimshuffle(1, 0)
-
-        # Initialize the hidden state for the tracking LSTM, if needed.
-        if self.use_tracking_lstm:
-            if self.initialize_hyp_tracking_state and self.is_hypothesis:
-                # Initialize the c state of tracking unit from the c state of premise model.
-                h_state_init = T.zeros((batch_size, self.tracking_lstm_hidden_dim))
-                hidden_init = T.concatenate([h_state_init, self.premise_tracking_c_state_final], axis=1)
-            else:
-                hidden_init = T.zeros((batch_size, self.tracking_lstm_hidden_dim * 2))
-        else:
-            hidden_init = DUMMY
-
-        # Initialize the attention representation if needed
-        if self.use_attention not in {"TreeWangJiang", "TreeThang", "None"} and self.is_hypothesis:
-            h_dim = self.model_dim / 2
-            if self.use_attention == "WangJiang" or self.use_attention == "Thang":
-                 attention_init = T.zeros((batch_size, 2 * h_dim))
-            else:
-                attention_init = T.zeros((batch_size, h_dim))
-        else:
-            # If we're not using a sequential attention accumulator (i.e., no attention or
-            # tree attention), use a size-zero value here.
-            attention_init = DUMMY
-
-        # Set up the output list for scanning over _step().
-        if self._predict_transitions:
-            outputs_info = [stack_init, buffer_cur_init, hidden_init, attention_init, None]
-        else:
-            outputs_info = [stack_init, buffer_cur_init, hidden_init, attention_init]
-
-        # Prepare data to scan over.
-        sequences = [transitions]
-        if self.interpolate:
-            # Generate Bernoulli RVs to simulate scheduled sampling
-            # if the interpolate flag is on.
-            ss_mask_gen_matrix = self.ss_mask_gen.binomial(
-                                transitions.shape, p=self.ss_prob)
-            # Take in the RV sequence as input.
-            sequences.append(ss_mask_gen_matrix)
-        else:
-            # Take in the RV sequqnce as a dummy output. This is
-            # done to avaid defining another step function.
-            outputs_info = [DUMMY] + outputs_info
-
-        non_sequences = [buffer_t, self.ground_truth_transitions_visible]
-
-        if self.use_attention != "None" and self.is_hypothesis:
-            h_dim = self.model_dim / 2
-            projected_stack_tops = util.AttentionUnitInit(self.premise_stack_tops, h_dim, self._vs)
-            non_sequences = non_sequences + [self.premise_stack_tops, projected_stack_tops]
-        else:
-            DUMMY2 = T.zeros((2,)) # another dummy tensor
-            non_sequences = non_sequences + [DUMMY, DUMMY2]
-
-        scan_ret = theano.scan(
-                self._step,
-                sequences=sequences,
-                non_sequences=non_sequences,
-                outputs_info=outputs_info,
-                n_steps=self.seq_length,
-                name="stack_fwd")
-
-        stack_ind = 0 if self.interpolate else 1
-        self.final_stack = scan_ret[0][stack_ind][-1]
-        self.final_representations = self.final_stack[:, 0, :self.model_dim]
-        self.embeddings = self.final_stack[:, 0]
-
-        if self._predict_transitions:
-            self.transitions_pred = scan_ret[0][-1].dimshuffle(1, 0, 2)
-        else:
-            self.transitions_pred = T.zeros((batch_size, 0))
+        # print("Avg tr acc:", transition_acc / transition_num)
+        return ret, avg_transition_acc
 
 
-        if self.use_attention != "None" and not self.is_hypothesis:
-            # Store the stack top at each step as an attribute.
-            h_dim = self.model_dim / 2
-            self.stack_tops = scan_ret[0][stack_ind][:,:,0,:h_dim].reshape((max_stack_size, batch_size, h_dim))
+class SentencePairModel(Chain):
+    def __init__(self, model_dim, word_embedding_dim,
+                 seq_length, initial_embeddings, num_classes, mlp_dim,
+                 keep_rate,
+                 gpu=-1,
+                 tracking_lstm_hidden_dim=4,
+                 use_tracking_lstm=True,
+                 use_shift_composition=True,
+                 make_logits=False,
+                 **kwargs
+                ):
+        super(SentencePairModel, self).__init__(
+            projection=L.Linear(word_embedding_dim, model_dim, nobias=True),
+            x2h=SPINN(model_dim,
+                tracking_lstm_hidden_dim=tracking_lstm_hidden_dim,
+                use_tracking_lstm=use_tracking_lstm,
+                use_shift_composition=use_shift_composition,
+                make_logits=make_logits,
+                gpu=gpu, keep_rate=keep_rate),
+            # batch_norm_0=L.BatchNormalization(model_dim*2, model_dim*2),
+            # batch_norm_1=L.BatchNormalization(mlp_dim, mlp_dim),
+            # batch_norm_2=L.BatchNormalization(mlp_dim, mlp_dim),
+            l0=L.Linear(model_dim*2, mlp_dim),
+            l1=L.Linear(mlp_dim, mlp_dim),
+            l2=L.Linear(mlp_dim, num_classes)
+        )
+        self.classifier = CrossEntropyClassifier(gpu)
+        self.__gpu = gpu
+        self.__mod = cuda.cupy if gpu >= 0 else np
+        self.accFun = accuracy.accuracy
+        self.initial_embeddings = initial_embeddings
+        self.keep_rate = keep_rate
+        self.word_embedding_dim = word_embedding_dim
+        self.model_dim = model_dim
 
-        if self.use_attention != "None" and self.is_hypothesis:
-            h_dim = self.model_dim / 2
-            if self.use_attention == "Rocktaschel":
-                self.final_weighed_representation = util.AttentionUnitFinalRepresentation(scan_ret[0][stack_ind + 3][-1],
-                    self.embeddings[:,:h_dim], h_dim, self._vs)
-            elif self.use_attention in {"WangJiang", "Thang"}:
-                self.final_weighed_representation = scan_ret[0][stack_ind+3][-1][:,:h_dim]
-            elif self.use_attention in {"TreeWangJiang", "TreeThang"}:
-                self.final_weighed_representation = scan_ret[0][stack_ind][-1][:,0,2*h_dim:3*h_dim]
+    def __call__(self, sentences, transitions, y_batch=None, train=True):
+        ratio = 1 - self.keep_rate
 
-        if self.initialize_hyp_tracking_state and not self.is_hypothesis:
-            # Store the final c states of the tracking unit.
-            self.tracking_c_state_final = scan_ret[0][stack_ind+2][-1][:, self.tracking_lstm_hidden_dim:]
-        else:
-            self.tracking_c_state_final = None
+        # Get Embeddings
+        sentences = self.initial_embeddings.take(sentences, axis=0
+            ).astype(np.float32)
 
-class Model0(HardStack):
+        # Reshape sentences
+        x_prem = sentences[:,:,0]
+        x_hyp = sentences[:,:,1]
+        x = np.concatenate([x_prem, x_hyp], axis=0)
 
-    def __init__(self, *args, **kwargs):
-        use_tracking_lstm = kwargs.get("use_tracking_lstm", False)
-        if use_tracking_lstm:
-            kwargs["prediction_and_tracking_network"] = partial(util.TrackingUnit, make_logits=False)
-        else:
-            kwargs["prediction_and_tracking_network"] = None
+        if self.__gpu >= 0:
+            x = cuda.to_gpu(x)
 
-        kwargs["predict_transitions"] = False
-        kwargs["train_with_predicted_transitions"] = False
-        kwargs["interpolate"] = False
-        super(Model0, self).__init__(*args, **kwargs)
+        x = Variable(x, volatile=not train)
 
+        batch_size, seq_length = x.shape[0], x.shape[1]
 
-class Model1(HardStack):
+        x = F.dropout(x, ratio=ratio, train=train)
 
-    def __init__(self, *args, **kwargs):
-        # Set the tracking unit based on supplied tracking_lstm_hidden_dim.
-        use_tracking_lstm = kwargs.get("use_tracking_lstm", False)
-        if use_tracking_lstm:
-            kwargs["prediction_and_tracking_network"] = util.TrackingUnit
-        else:
-            kwargs["prediction_and_tracking_network"] = util.Linear
-        # Defaults to not using predictions while training and not using scheduled sampling.
-        kwargs["predict_transitions"] = True
-        kwargs["train_with_predicted_transitions"] = False
-        super(Model1, self).__init__(*args, **kwargs)
+        # Pass embeddings through projection layer, so that they match
+        # the dimensions in the output of the compose/reduce function.
+        x = F.reshape(x, (batch_size * seq_length, self.word_embedding_dim))
+        x = self.projection(x)
+        x = F.reshape(x, (batch_size, seq_length, self.model_dim))
 
+        # Extract Transitions
+        t_prem = transitions[:,:,0]
+        t_hyp = transitions[:,:,1]
+        t = np.concatenate([t_prem, t_hyp], axis=0)
 
-class Model2(HardStack):
+        # Pass through Sentence Encoders.
+        self.x2h.reset_state(batch_size, train)
+        h_both, transition_acc = self.x2h(x, t, train=train)
+        h_premise, h_hypothesis = F.split_axis(h_both, 2, axis=0)
 
-    def __init__(self, *args, **kwargs):
-        # Set the tracking unit based on supplied tracking_lstm_hidden_dim.
-        use_tracking_lstm = kwargs.get("use_tracking_lstm", False)
-        if use_tracking_lstm:
-            kwargs["prediction_and_tracking_network"] = util.TrackingUnit
-        else:
-            kwargs["prediction_and_tracking_network"] = util.Linear
-        # Defaults to using predictions while training and not using scheduled sampling.
-        kwargs["predict_transitions"] = True
-        kwargs["train_with_predicted_transitions"] = True
-        kwargs["interpolate"] = False
-        super(Model2, self).__init__(*args, **kwargs)
+        # Pass through MLP Classifier.
+        h = F.concat([h_premise, h_hypothesis], axis=1)
+        # h = self.batch_norm_0(h, test=not train)
+        # h = F.dropout(h, ratio, train)
+        # h = F.relu(h)
+        h = self.l0(h)
+        # h = self.batch_norm_1(h, test=not train)
+        # h = F.dropout(h, ratio, train)
+        h = F.relu(h)
+        h = self.l1(h)
+        # h = self.batch_norm_2(h, test=not train)
+        # h = F.dropout(h, ratio, train)
+        h = F.relu(h)
+        h = self.l2(h)
+        y = h
 
+        # Calculate Loss & Accuracy.
+        accum_loss = self.classifier(y, Variable(y_batch, volatile=not train), train)
+        self.accuracy = self.accFun(y, self.__mod.array(y_batch))
 
-class Model2S(HardStack):
-
-    def __init__(self, *args, **kwargs):
-        use_tracking_lstm = kwargs.get("use_tracking_lstm", False)
-        if use_tracking_lstm:
-            kwargs["prediction_and_tracking_network"] = util.TrackingUnit
-        else:
-            kwargs["prediction_and_tracking_network"] = util.Linear
-        # Use supplied settings and use scheduled sampling.
-        kwargs["predict_transitions"] = True
-        kwargs["train_with_predicted_transitions"] = True
-        kwargs["interpolate"] = True
-        super(Model2S, self).__init__(*args, **kwargs)
+        return y, accum_loss, self.accuracy.data, transition_acc
