@@ -348,6 +348,9 @@ class SPINN(Chain):
             for state in lstm_state:
                 yield state
 
+
+        self.transition_optimizer.zero_grads()
+
         for ii, ts in enumerate(transitions):
             assert len(ts) == batch_size
             assert len(ts) == len(buffers)
@@ -365,7 +368,6 @@ class SPINN(Chain):
 
                     c, h, logits = self.tracking_lstm(c, h, tracking_input, train)
                     if np.any(ts != -1):
-                        self.transition_optimizer.zero_grads()
                         _rpt = np.repeat(np.expand_dims(ts == -1, 1), 2, axis=1)
                         selectedTransitions = F.where(Variable(_rpt), logits, Variable(np.zeros_like(logits.data)))
                         transition_loss = self.transition_classifier(selectedTransitions, Variable(ts))
@@ -373,7 +375,6 @@ class SPINN(Chain):
                         transition_num += np.sum(ts != -1)
                         # print("Accuracy: ", np.sum(ts != -1), np.mean(np.argmax(logits.data[ts != -1], axis=1) == ts[ts != -1]))
                         transition_loss.backward()
-                        self.transition_optimizer.update()
 
                     # Assign appropriate states after they've been calculated.
                     self.c = F.split_axis(c, c.shape[0], axis=0, force_tuple=True)
@@ -445,6 +446,7 @@ class SPINN(Chain):
                         raise Exception("Action not implemented: {}".format(t))
 
         ret = F.concat([s.pop() for s in stacks], axis=0)
+        self.transition_optimizer.update()
         assert ret.shape == (batch_size, hidden_dim)
 
         # print("Avg tr acc:", transition_acc / transition_num)
