@@ -76,7 +76,7 @@ def evaluate(classifier_trainer, eval_set, logger, step):
     action_acc_accum = 0.0
     eval_batches = 0.0
     total_batches = len(eval_set[1])
-    progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60)
+    progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
     for i, (eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch) in enumerate(eval_set[1]):
         # Calculate Local Accuracies
@@ -229,7 +229,7 @@ def run(only_forward=False):
             )
 
         # New Training Loop
-        progress_bar = SimpleProgressBar(msg="Training", bar_length=60)
+        progress_bar = SimpleProgressBar(msg="Training", bar_length=60, enabled=FLAGS.show_progress_bar)
         avg_class_acc = 0
         avg_trans_acc = 0
         for step in range(step, FLAGS.training_steps):
@@ -251,6 +251,10 @@ def run(only_forward=False):
             transition_cost_val = 0
             avg_trans_acc += transition_acc
             avg_class_acc += class_acc
+
+            if FLAGS.show_intermediate_stats and step % 5 == 0 and step % FLAGS.statistics_interval_steps > 0:
+                print("Accuracies so far : ", avg_class_acc / (step % FLAGS.statistics_interval_steps), avg_trans_acc / (step % FLAGS.statistics_interval_steps))
+
             total_cost_val = xent_cost_val + transition_cost_val
             loss.backward()
 
@@ -312,6 +316,9 @@ if __name__ == '__main__':
     gflags.DEFINE_bool("gradient_check", False, "Randomly check that gradients match estimates.")
     gflags.DEFINE_bool("profile", False, "Set to True to quit after a few batches.")
     gflags.DEFINE_bool("write_summaries", False, "Toggle which controls whether summaries are written.")
+    gflags.DEFINE_bool("show_progress_bar", True, "Turn this off when running experiments on HPC.")
+    gflags.DEFINE_bool("show_intermediate_stats", False, "Print stats more frequently than regular interval."
+                                                         "Mostly to retain timing with progress bar")
     gflags.DEFINE_integer("profile_steps", 3, "Specify how many steps to profile.")
 
     # Experiment naming.
