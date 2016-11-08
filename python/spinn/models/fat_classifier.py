@@ -251,10 +251,6 @@ def run(only_forward=False):
             transition_cost_val = 0
             avg_trans_acc += transition_acc
             avg_class_acc += class_acc
-
-            if step % 5 == 0 and step % FLAGS.statistics_interval_steps > 0:
-                print("Accuracies so far : ", avg_class_acc / (step % FLAGS.statistics_interval_steps), avg_trans_acc / (step % FLAGS.statistics_interval_steps))
-
             total_cost_val = xent_cost_val + transition_cost_val
             loss.backward()
 
