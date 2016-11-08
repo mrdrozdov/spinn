@@ -113,4 +113,4 @@ class SentencePairModel(Chain):
         accum_loss = self.lossFun(y, y_batch)
         self.accuracy = self.accFun(y, y_batch)
 
-        return y, accum_loss
+        return y, accum_loss, self.accuracy.data, 0.0

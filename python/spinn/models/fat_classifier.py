@@ -260,7 +260,7 @@ def run(only_forward=False):
 
             if FLAGS.gradient_check:
                 def get_loss():
-                    _, check_loss, _ = classifier_trainer.forward({
+                    _, check_loss, _, _ = classifier_trainer.forward({
                     "sentences": X_batch,
                     "transitions": transitions_batch,
                     }, y_batch, train=True, predict=False)
