@@ -190,7 +190,7 @@ def run(only_forward=False):
 
     if data_manager.SENTENCE_PAIR_DATA:
         num_classes = len(data_manager.LABEL_MAP)
-        classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls, 
+        classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
                               FLAGS.model_dim, FLAGS.word_embedding_dim,
                               FLAGS.seq_length, num_classes, initial_embeddings,
                               FLAGS.embedding_keep_rate, FLAGS.gpu)
@@ -222,7 +222,7 @@ def run(only_forward=False):
     else:
          # Train
         logger.Log("Training.")
-        
+
         classifier_trainer.init_optimizer(
             clip=FLAGS.clipping_max_value, decay=FLAGS.l2_lambda,
             lr=FLAGS.learning_rate,
@@ -230,6 +230,8 @@ def run(only_forward=False):
 
         # New Training Loop
         progress_bar = SimpleProgressBar(msg="Training", bar_length=60)
+        avg_class_acc = 0
+        avg_trans_acc = 0
         for step in range(step, FLAGS.training_steps):
             X_batch, transitions_batch, y_batch, num_transitions_batch = training_data_iter.next()
             learning_rate = FLAGS.learning_rate * (FLAGS.learning_rate_decay_per_10k_steps ** (step / 10000.0))
@@ -242,11 +244,16 @@ def run(only_forward=False):
                 "sentences": X_batch,
                 "transitions": transitions_batch,
                 }, y_batch, train=True, predict=False)
-            y, loss, preds = ret
+            y, loss, class_acc, transition_acc = ret
 
             # Boilerplate for calculating loss.
             xent_cost_val = loss.data
-            transition_cost_val = 0.0
+            transition_cost_val = 0
+            avg_trans_acc += transition_acc
+            avg_class_acc += class_acc
+
+            if step % 5 == 0 and step % FLAGS.statistics_interval_steps > 0:
+                print("Accuracies so far : ", avg_class_acc / (step % FLAGS.statistics_interval_steps), avg_trans_acc / (step % FLAGS.statistics_interval_steps))
 
             total_cost_val = xent_cost_val + transition_cost_val
             loss.backward()
@@ -279,10 +286,14 @@ def run(only_forward=False):
 
             if step % FLAGS.statistics_interval_steps == 0:
                 progress_bar.finish()
+                avg_class_acc /= FLAGS.statistics_interval_steps
+                avg_trans_acc /= FLAGS.statistics_interval_steps
                 logger.Log(
                     "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %s"
-                    % (step, acc_val, action_acc_val, total_cost_val, xent_cost_val, transition_cost_val,
+                    % (step, avg_class_acc, avg_trans_acc, total_cost_val, xent_cost_val, transition_cost_val,
                        "l2-not-exposed"))
+                avg_trans_acc = 0
+                avg_class_acc = 0
 
             if step > 0 and step % FLAGS.eval_interval_steps == 0:
                 for index, eval_set in enumerate(eval_iterators):
