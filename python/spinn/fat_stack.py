@@ -280,10 +280,16 @@ class SPINN(Chain):
         self.tracking_lstm_hidden_dim = tracking_lstm_hidden_dim
         self.use_tracking_lstm = use_tracking_lstm
         self.use_shift_composition = use_shift_composition
+        self.make_logits = make_logits
+
+        self.accFun = accuracy.accuracy
 
         if use_tracking_lstm:
             self.add_link('tracking_input', TrackingInput(hidden_dim, tracking_lstm_hidden_dim))
             self.add_link('tracking_lstm', TrackingLSTM(hidden_dim, tracking_lstm_hidden_dim, make_logits=make_logits))
+            self.transition_classifier = CrossEntropyClassifier(gpu)
+            self.transition_optimizer = optimizers.SGD(lr=0.0001)
+            self.transition_optimizer.setup(self.tracking_lstm)
 
     def check_type_forward(self, in_types):
         type_check.expect(in_types.size() == 1)
@@ -299,6 +305,14 @@ class SPINN(Chain):
                                 volatile=not train)
         self.c = [zeros for _ in range(batch_size)]
         self.h = [zeros for _ in range(batch_size)]
+
+    def reset_transitions(self):
+        if self.make_logits:
+            self.transition_optimizer.zero_grads()
+
+    def update_transitions(self):
+        if self.make_logits:
+            self.transition_optimizer.update()
 
     def __call__(self, buffers, transitions, train=True, keep_hs=False):
         """
@@ -316,6 +330,8 @@ class SPINN(Chain):
         in_data = tuple([x.data for x in [buffers]])
         in_types = type_check.get_types(in_data, 'in_types', False)
         self.check_type_forward(in_types)
+        transition_num = 0
+        transition_acc = 0.0
         # END: Type Check
 
         batch_size, seq_length, hidden_dim = buffers.shape[0], buffers.shape[1], buffers.shape[2]
@@ -341,6 +357,9 @@ class SPINN(Chain):
             for state in lstm_state:
                 yield state
 
+
+        self.reset_transitions()
+
         for ii, ts in enumerate(transitions):
             assert len(ts) == batch_size
             assert len(ts) == len(buffers)
@@ -357,6 +376,17 @@ class SPINN(Chain):
                     h = F.concat(self.h, axis=0)
 
                     c, h, logits = self.tracking_lstm(c, h, tracking_input, train)
+                    if self.make_logits and np.any(ts != -1):
+                        _rpt = np.repeat(np.expand_dims(ts == -1, 1), 2, axis=1)
+                        try:
+                            selectedTransitions = F.where(Variable(_rpt), logits, Variable(np.zeros_like(logits.data)))
+                        except:
+                            import ipdb; ipdb.set_trace()
+                        transition_loss = self.transition_classifier(selectedTransitions, Variable(ts))
+                        transition_acc += np.sum(np.argmax(logits.data[ts != -1], axis=1) == ts[ts != -1])
+                        transition_num += np.sum(ts != -1)
+                        # print("Accuracy: ", np.sum(ts != -1), np.mean(np.argmax(logits.data[ts != -1], axis=1) == ts[ts != -1]))
+                        transition_loss.backward()
 
                     # Assign appropriate states after they've been calculated.
                     self.c = F.split_axis(c, c.shape[0], axis=0, force_tuple=True)
@@ -394,7 +424,6 @@ class SPINN(Chain):
             rights = []
             for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
                 if t == -1: # skip
-                    # Because sentences are padded, we still need to pop here.
                     pass
                 elif t == 0: # shift
                     new_stack_item = buf[buffers_t[i]]
@@ -429,9 +458,16 @@ class SPINN(Chain):
                         raise Exception("Action not implemented: {}".format(t))
 
         ret = F.concat([s.pop() for s in stacks], axis=0)
+        self.update_transitions()
         assert ret.shape == (batch_size, hidden_dim)
 
-        return ret
+        if self.make_logits:
+            avg_transition_acc = transition_acc / transition_num
+        else:
+            avg_transition_acc = 0.0
+
+        # print("Avg tr acc:", transition_acc / transition_num)
+        return ret, avg_transition_acc
 
 
 class SentencePairModel(Chain):
@@ -503,7 +539,7 @@ class SentencePairModel(Chain):
 
         # Pass through Sentence Encoders.
         self.x2h.reset_state(batch_size, train)
-        h_both = self.x2h(x, t, train=train)
+        h_both, transition_acc = self.x2h(x, t, train=train)
         h_premise, h_hypothesis = F.split_axis(h_both, 2, axis=0)
 
         # Pass through MLP Classifier.
@@ -526,4 +562,4 @@ class SentencePairModel(Chain):
         accum_loss = self.classifier(y, Variable(y_batch, volatile=not train), train)
         self.accuracy = self.accFun(y, self.__mod.array(y_batch))
 
-        return y, accum_loss
+        return y, accum_loss, self.accuracy.data, transition_acc
