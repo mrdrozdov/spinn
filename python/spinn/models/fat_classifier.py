@@ -55,6 +55,8 @@ def build_sentence_pair_model(model_cls, trainer_cls, model_dim, word_embedding_
              use_tracking_lstm=FLAGS.use_tracking_lstm,
              use_shift_composition=FLAGS.use_shift_composition,
              make_logits=FLAGS.make_logits,
+             use_history=FLAGS.use_history,
+             save_stack=FLAGS.save_stack,
             )
 
     classifier_trainer = trainer_cls(model, model_dim, word_embedding_dim,
@@ -361,6 +363,8 @@ if __name__ == '__main__':
 
     gflags.DEFINE_integer("tracking_lstm_hidden_dim", 4, "")
     gflags.DEFINE_boolean("use_shift_composition", True, "")
+    gflags.DEFINE_boolean("use_history", False, "")
+    gflags.DEFINE_boolean("save_stack", False, "")
     gflags.DEFINE_boolean("use_tracking_lstm", True,
                           "Whether to use LSTM in the tracking unit")
     gflags.DEFINE_boolean("make_logits", False, "Predict parser actions.")

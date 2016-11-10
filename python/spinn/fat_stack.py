@@ -432,13 +432,14 @@ class Reduce(Chain):
             lstm_in += self.attend(attend.h)
         out = unbundle(treelstm(left.c, right.c, lstm_in))
         for o, l, r in zip(out, left_in, right_in):
-            o.left, o.right = l, r
-            # o.left.parent, o.right.parent = o, o
-            o.transitions = o.left.transitions + o.right.transitions + [1]
-            o.tokens = o.left.tokens + o.right.tokens
-            o.buf = o.left.buf
-            o.stack = o.left.stack
-            o.tracking = o.left.tracking
+            if hasattr(l, 'buf'):
+                o.left, o.right = l, r
+                o.buf = o.left.buf
+                # o.left.parent, o.right.parent = o, o
+                o.transitions = o.left.transitions + o.right.transitions + [1]
+                o.tokens = o.left.tokens + o.right.tokens
+                o.stack = o.left.stack
+                o.tracking = o.left.tracking
         return out
 
 
@@ -502,6 +503,8 @@ class SPINN(Chain):
                 args.size, args.tracker_size,
                 predict=args.transition_weight is not None))
         self.transition_weight = args.transition_weight
+        self.use_history = args.use_history
+        self.save_stack = args.save_stack
 
     def __call__(self, example, attention=None, print_transitions=False):
         self.bufs = self.embed(example.tokens)
@@ -517,9 +520,10 @@ class SPINN(Chain):
         self.stacks = [[buf[0], buf[0]] for buf in self.bufs]
         for stack, buf in zip(self.stacks, self.bufs):
             for ss in stack:
-                ss.buf = buf[:]
-                ss.stack = stack[:]
-                ss.tracking = None
+                if self.save_stack:
+                    ss.buf = buf[:]
+                    ss.stack = stack[:]
+                    ss.tracking = None
         if hasattr(self, 'tracker'):
             self.tracker.reset_state()
         if hasattr(example, 'transitions'):
@@ -535,9 +539,8 @@ class SPINN(Chain):
         # encoder.tracker.state = trackings, unbundled
         # encoder.transitions = ExampleList of Examples, padded with n
         # encoder.run()
-        self.history = [[] for buf in self.bufs]
-        if hasattr(self, '_hist_tensor'):
-            del self._hist_tensor
+        self.history = [[] for buf in self.bufs] if self.use_history is not None \
+                        else itertools.repeat(None)
 
         transition_loss, transition_acc = 0, 0
         if hasattr(self, 'transitions'):
@@ -579,25 +582,29 @@ class SPINN(Chain):
                 must_shift = len(stack) < 2
 
                 if transition == 0: # shift
-                    buf[-1].buf = buf[:]
-                    buf[-1].stack = stack[:]
-                    buf[-1].tracking = tracking
+                    if self.save_stack:
+                        buf[-1].buf = buf[:]
+                        buf[-1].stack = stack[:]
+                        buf[-1].tracking = tracking
                     stack.append(buf.pop())
-                    history.append(stack[-1])
+                    if self.use_history:
+                        history.append(stack[-1])
                 elif transition == 1: # reduce
                     for lr in [rights, lefts]:
                         if len(stack) > 0:
                             lr.append(stack.pop())
                         else:
                             zeros = buf[0]
-                            zeros.buf = buf[:]
-                            zeros.stack = stack[:]
-                            zeros.tracking = tracking
+                            if self.save_stack:
+                                zeros.buf = buf[:]
+                                zeros.stack = stack[:]
+                                zeros.tracking = tracking
                             lr.append(zeros)
                     trackings.append(tracking)
                     attentions.append(attention)
                 else:
-                    history.append(buf[-1])  # pad history so it can be stacked/transposed
+                    if self.use_history:
+                        history.append(buf[-1])  # pad history so it can be stacked/transposed
             if len(rights) > 0:
                 reduced = iter(self.reduce(
                     lefts, rights, trackings, attentions))
@@ -605,7 +612,8 @@ class SPINN(Chain):
                         transition_arr, self.stacks, self.history):
                     if transition == 1: # reduce
                         stack.append(next(reduced))
-                        history.append(stack[-1])
+                        if self.use_history:
+                            history.append(stack[-1])
         if print_transitions:
             print()
         if self.transition_weight is not None and transition_loss is not 0:
@@ -614,17 +622,6 @@ class SPINN(Chain):
             transition_loss *= self.transition_weight
 
         return [stack.pop() for stack in self.stacks], transition_loss
-
-    @property
-    def histories(self):
-        #just h for now
-        return [to_gpu(F.stack(tuple(var[:, var.data.shape[1] // 2:] for var in b), axis=1)) for b in self.history]
-
-    @property
-    def hist_tensor(self):
-        if not hasattr(self, '_hist_tensor'):
-            self._hist_tensor = to_gpu(F.concat((F.stack(tuple(var[:, var.data.shape[1] // 2:] for var in b), axis=1) for b in self.history), axis=0))
-        return self._hist_tensor
 
 
 class SentencePairModel(Chain):
@@ -636,6 +633,8 @@ class SentencePairModel(Chain):
                  use_tracking_lstm=True,
                  use_shift_composition=True,
                  make_logits=False,
+                 use_history=False,
+                 save_stack=False,
                  **kwargs
                 ):
         super(SentencePairModel, self).__init__(
@@ -661,6 +660,8 @@ class SentencePairModel(Chain):
             'embed_dropout': 1 - keep_rate,
             'tracker_size': None,
             'transition_weight': None,
+            'use_history': use_history,
+            'save_stack': save_stack,
         }
         args = argparse.Namespace(**args)
 
