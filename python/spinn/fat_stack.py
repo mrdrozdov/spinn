@@ -10,6 +10,8 @@ relatively slow to compile.
 """
 
 from functools import partial
+import argparse
+import itertools
 
 import numpy as np
 from spinn import util
@@ -114,6 +116,73 @@ def HeKaimingInit(shape, real_shape=None):
     return np.random.normal(scale=np.sqrt(4.0/(fan[0] + fan[1])),
                             size=shape)
 
+
+# Chainer already has a method for moving a variable to/from GPU in-place,
+# but that messes with backpropagation. So I do it with a copy. Note that
+# cuda.get_device() actually returns the dummy device, not the current one
+# -- but F.copy will move it to the active GPU anyway (!)
+def to_gpu(var, gpu=-1):
+    return F.copy(var, gpu)
+
+
+def to_cpu(var):
+    return F.copy(var, -1)
+
+
+def arr_to_gpu(arr, gpu=-1):
+    if gpu >= 0:
+        return cuda.to_gpu(arr)
+    else:
+        return arr
+
+
+class LSTMState:
+    """Class for intelligent LSTM state object.
+
+    It can be initialized from either a tuple ``(c, h)`` or a single variable
+    `both`, and provides lazy attribute access to ``c``, ``h``, and ``both``.
+    Since the SPINN conducts all LSTM operations on GPU and all tensor
+    shuffling on CPU, ``c`` and ``h`` are automatically moved to GPU while
+    ``both`` is automatically moved to CPU.
+
+    Args:
+        inpt: Either a tuple of ~chainer.Variable objects``(c, h)`` or a single
+        concatenated ~chainer.Variable containing both.
+
+    Attributes:
+        c (~chainer.Variable): LSTM memory state, moved to GPU if necessary.
+        h (~chainer.Variable): LSTM hidden state, moved to GPU if necessary.
+        both (~chainer.Variable): Concatenated LSTM state, moved to CPU if
+            necessary.
+
+    """
+    def __init__(self, inpt):
+        if isinstance(inpt, tuple):
+            self._c, self._h = inpt
+        else:
+            self._both = inpt
+            self.size = inpt.data.shape[1] // 2
+
+    @property
+    def h(self):
+        if not hasattr(self, '_h'):
+            self._h = to_gpu(self._both[:, self.size:])
+        return self._h
+
+    @property
+    def c(self):
+        if not hasattr(self, '_c'):
+            self._c = to_gpu(self._both[:, :self.size])
+        return self._c
+
+    @property
+    def both(self):
+        if not hasattr(self, '_both'):
+            self._both = F.concat(
+                (to_cpu(self._c), to_cpu(self._h)), axis=1)
+        return self._both
+
+
 def get_c(state, hidden_dim):
     return state[:, hidden_dim:]
 
@@ -122,6 +191,123 @@ def get_h(state, hidden_dim):
 
 def get_state(c, h):
     return F.concat([h, c], axis=1)
+
+
+def bundle(lstm_iter):
+    """Bundle an iterable of concatenated LSTM states into a batched LSTMState.
+
+    Used between CPU and GPU computation. Reversed by :func:`~unbundle`.
+
+    Args:
+        lstm_iter: Iterable of ``B`` ~chainer.Variable objects, each with
+            shape ``(1,2*S)``, consisting of ``c`` and ``h`` concatenated on
+            axis 1.
+
+    Returns:
+        state: :class:`~LSTMState` object, with ``c`` and ``h`` attributes
+            each with shape ``(B,S)``.
+    """
+    if lstm_iter is None:
+        return None
+    lstm_iter = tuple(lstm_iter)
+    if lstm_iter[0] is None:
+        return None
+    return LSTMState(F.concat(lstm_iter, axis=0))
+
+
+def unbundle(state):
+    """Unbundle a batched LSTM state into a tuple of concatenated LSTM states.
+
+    Used between GPU and CPU computation. Reversed by :func:`~bundle`.
+
+    Args:
+        state: :class:`~LSTMState` object, with ``c`` and ``h`` attributes
+            each with shape ``(B,S)``, or an ``inpt`` to
+            :func:`~LSTMState.__init__` that would produce such an object.
+
+    Returns:
+        lstm_iter: Iterable of ``B`` ~chainer.Variable objects, each with
+            shape ``(1,2*S)``, consisting of ``c`` and ``h`` concatenated on
+            axis 1.
+    """
+    if state is None:
+        return itertools.repeat(None)
+    if not isinstance(state, LSTMState):
+        state = LSTMState(state)
+    return F.split_axis(
+        state.both, state.both.data.shape[0], axis=0, force_tuple=True)
+
+
+class Embed(Chain):
+    """Flexible word embedding module for SPINN.
+
+    It supports either word vectors trained from scratch or word vectors
+    defined by a trainable projection layer on top of fixed embeddings.
+
+    Args:
+        size: The size of the model state; word vectors are treated as LSTM
+            states with both ``c`` and ``h`` so their dimension is ``2*size``.
+        vocab_size: The size of the vocabulary.
+        dropout: The drop fraction for dropout on the word vectors.
+        vectors: None, or an ~numpy.ndarray containing the fixed embeddings.
+        normalization: A normalization link class (typically
+            ~chainer.links.BatchNormalization).
+    """
+
+    def __init__(self, size, vocab_size, dropout, vectors, normalization=None,
+                 make_buffers=True, activation=None):
+        size = 2 * size if make_buffers else size
+        if vectors is None:
+            super(Embed, self).__init__(embed=L.EmbedID(vocab_size, size))
+        else:
+            super(Embed, self).__init__(projection=L.Linear(vectors.shape[1], size))
+        # self.add_link('normalization', normalization(size))
+        self.vectors = vectors
+        self.dropout = dropout
+        self.make_buffers = make_buffers
+        self.activation = (lambda x: x) if activation is None else activation
+
+    def __call__(self, tokens):
+        """Embed a tensor of tokens into a list of SPINN buffers.
+
+        Returns the embeddings as a list of lists of ~chainer.Variable objects
+        each augmented with ``tokens`` and ``transitions`` attributes, where
+        each buffer (list of variables) is reversed to provide queue-like
+        ``pop()`` behavior.
+
+        Args:
+            tokens (~chainer.Variable): Tensor of token ids with shape
+                ``(B,T)``
+
+        Returns:
+            buffers: List of ``B`` lists, each of which contains ``T``
+                variables in reverse timestep order, each of which contains
+                the embedding of the corresponding token along with ``tokens``
+                and ``transitions`` attributes.
+        """
+        b, l = tokens.data.shape
+        if self.vectors is None:
+            embeds = self.embed(to_gpu(F.reshape(tokens, (-1,))))
+        else:
+            embeds = Variable(
+                arr_to_gpu(
+                    self.vectors.take(tokens.data.ravel(), axis=0)),
+                volatile=tokens.volatile)
+            embeds = self.projection(embeds)
+        if not self.make_buffers:
+            return self.activation(F.reshape(embeds, (b, l, -1)))
+        # embeds = self.normalization(embeds, embeds.volatile == 'on')
+        # embeds = F.dropout(embeds, self.dropout, embeds.volatile == 'off')
+        # if not self.make_buffers:
+        #     return F.reshape(embeds, (b, l, -1))
+        embeds = F.split_axis(to_cpu(embeds), b, axis=0, force_tuple=True)
+        embeds = [F.split_axis(x, l, axis=0, force_tuple=True) for x in embeds]
+        buffers = [list(reversed(x)) for x in embeds]
+        for ex, buf in zip(list(tokens), buffers):
+            for tok, var in zip(ex, reversed(buf)):
+                var.tokens = [tok]
+                var.transitions = [0]
+        return buffers
 
 
 class SentencePairTrainer(BaseSentencePairTrainer):
@@ -142,332 +328,303 @@ class SentencePairTrainer(BaseSentencePairTrainer):
         # self.optimizer.add_hook(chainer.optimizer.WeightDecay(0.00003))
 
 
-class TreeLSTMChain(Chain):
-    def __init__(self, hidden_dim, tracking_lstm_hidden_dim, use_external=False, prefix="TreeLSTMChain", gpu=-1):
-        super(TreeLSTMChain, self).__init__(
-            W_l=L.Linear(hidden_dim / 2, hidden_dim / 2 * 5, nobias=True),
-            W_r=L.Linear(hidden_dim / 2, hidden_dim / 2 * 5, nobias=True),
-            b=L.Bias(axis=1, shape=(hidden_dim / 2 * 5,)),
-            )
-        assert hidden_dim % 2 == 0, "The hidden_dim must be even because contains c and h."
-        self.hidden_dim = hidden_dim / 2
-        self.__gpu = gpu
-        self.__mod = cuda.cupy if gpu >= 0 else np
-        self.use_external = use_external
+def treelstm(c_left, c_right, gates):
+    hidden_dim = c_left.shape[1]
 
-        if use_external:
-            self.add_link('W_external', L.Linear(tracking_lstm_hidden_dim / 2, hidden_dim / 2 * 5))
+    assert gates.shape[1] == hidden_dim * 5, "Need to have 5 gates."
 
-    def __call__(self, l_prev, r_prev, external=None, train=True, keep_hs=False):
-        hidden_dim = self.hidden_dim
+    def slice_gate(gate_data, i):
+        return gate_data[:, i * hidden_dim:(i + 1) * hidden_dim]
 
-        l_h_prev = get_h(l_prev, hidden_dim)
-        l_c_prev = get_c(l_prev, hidden_dim)
-        r_h_prev = get_h(r_prev, hidden_dim)
-        r_c_prev = get_c(r_prev, hidden_dim)
+    # Compute and slice gate values
+    i_gate, fl_gate, fr_gate, o_gate, cell_inp = \
+        [slice_gate(gates, i) for i in range(5)]
 
-        gates = self.b(self.W_l(l_h_prev) + self.W_r(r_h_prev))
+    # Apply nonlinearities
+    i_gate = F.sigmoid(i_gate)
+    fl_gate = F.sigmoid(fl_gate)
+    fr_gate = F.sigmoid(fr_gate)
+    o_gate = F.sigmoid(o_gate)
+    cell_inp = F.tanh(cell_inp)
 
-        if external is not None:
-            gates += self.W_external(external)
+    # Compute new cell and hidden value
+    c_t = fl_gate * c_left + fr_gate * c_right + i_gate * cell_inp
+    h_t = o_gate * F.tanh(c_t)
 
-        def slice_gate(gate_data, i):
-            return gate_data[:, i * hidden_dim:(i + 1) * hidden_dim]
-
-        # Compute and slice gate values
-        i_gate, fl_gate, fr_gate, o_gate, cell_inp = \
-            [slice_gate(gates, i) for i in range(5)]
-
-        # Apply nonlinearities
-        i_gate = F.sigmoid(i_gate)
-        fl_gate = F.sigmoid(fl_gate)
-        fr_gate = F.sigmoid(fr_gate)
-        o_gate = F.sigmoid(o_gate)
-        cell_inp = F.tanh(cell_inp)
-
-        # Compute new cell and hidden value
-        c_t = fl_gate * l_c_prev + fr_gate * r_c_prev + i_gate * cell_inp
-        h_t = o_gate * F.tanh(c_t)
-
-        return get_state(c_t, h_t)
+    return get_state(c_t, h_t)
 
 
-class ReduceChain(Chain):
-    def __init__(self, hidden_dim, tracking_lstm_hidden_dim, use_external=False, prefix="ReduceChain", gpu=-1):
-        super(ReduceChain, self).__init__(
-            treelstm=TreeLSTMChain(hidden_dim, tracking_lstm_hidden_dim, use_external=use_external),
-        )
-        self.hidden_dim = hidden_dim
-        self.__gpu = gpu
-        self.__mod = cuda.cupy if gpu >= 0 else np
+class Reduce(Chain):
+    """TreeLSTM composition module for SPINN.
 
-    def __call__(self, left_x, right_x, external=None, train=True, keep_hs=False):
-        """
+    The TreeLSTM has two to four inputs: the first two are the left and right
+    children being composed; the third is the current state of the tracker
+    LSTM if one is present in the SPINN model; the fourth is an optional
+    attentional input.
+
+    Args:
+        size: The size of the model state.
+        tracker_size: The size of the tracker LSTM hidden state, or None if no
+            tracker is present.
+        attend (bool): Whether to accept an additional attention input.
+        attn_fn (function): A callback function to compute the attention value
+            given the left, right, tracker, and attention inputs. TODO
+    """
+
+    def __init__(self, size, tracker_size=None, attend=False, attn_fn=None):
+        super(Reduce, self).__init__(
+            left=L.Linear(size, 5 * size),
+            right=L.Linear(size, 5 * size, nobias=True))
+        if tracker_size is not None:
+            self.add_link('track',
+                          L.Linear(tracker_size, 5 * size, nobias=True))
+        if attend:
+            self.add_link('attend', L.Linear(size, 5 * size, nobias=True))
+        self.attn_fn = lambda l, r, t, a: a if attn_fn is None else attn_fn
+
+    def __call__(self, left_in, right_in, tracking=None, attend=None):
+        """Perform batched TreeLSTM composition.
+
+        This implements the REDUCE operation of a SPINN in parallel for a
+        batch of nodes. The batch size is flexible; only provide this function
+        the nodes that actually need to be REDUCEd.
+
+        The TreeLSTM has two to four inputs: the first two are the left and
+        right children being composed; the third is the current state of the
+        tracker LSTM if one is present in the SPINN model; the fourth is an
+        optional attentional input. All are provided as iterables and batched
+        internally into tensors.
+
+        Additionally augments each new node with pointers to its children as
+        well as concatenated attributes ``transitions`` and ``tokens`` and
+        the states of the buffer, stack, and tracker prior to the first SHIFT
+        of a token that is part of the node. This allows restarting the
+        encoding process with modifications to a particular node.
+
         Args:
-            left_x:  B* x H
-            right_x: B* x H
+            left_in: Iterable of ``B`` ~chainer.Variable objects containing
+                ``c`` and ``h`` concatenated for the left child of each node
+                in the batch.
+            right_in: Iterable of ``B`` ~chainer.Variable objects containing
+                ``c`` and ``h`` concatenated for the right child of each node
+                in the batch.
+            tracking: Iterable of ``B`` ~chainer.Variable objects containing
+                ``c`` and ``h`` concatenated for the tracker LSTM state of
+                each node in the batch, or None.
+            attend: Iterable of ``B`` ~chainer.Variable objects containing
+                ``c`` and ``h`` concatenated for the attention state to be fed
+                into each node in the batch, or None.
+
         Returns:
-            final_state: B* x H
+            out: Tuple of ``B`` ~chainer.Variable objects containing ``c`` and
+                ``h`` concatenated for the LSTM state of each new node. These
+                objects are also augmented with ``left``, ``right``,
+                ``tokens``, ``transitions``, ``buf``, ``stack``, and
+                ``tracking`` attributes.
         """
-
-        assert len(left_x) == len(right_x)
-        batch_size = len(left_x)
-
-        # Concatenate the list of states.
-        left_x = F.concat(left_x, axis=0)
-        right_x = F.concat(right_x, axis=0)
-        assert left_x.shape == right_x.shape, "Left and Right must match in dimensions."
-
-        assert left_x.shape[1] % 2 == 0, "Unit dim needs to be even because is concatenated [c,h]"
-        unit_dim = left_x.shape[1]
-        h_dim = unit_dim / 2
-
-        # Split each state into its c/h representations.
-        lstm_state = self.treelstm(left_x, right_x, external)
-        return lstm_state
-
-
-class TrackingLSTM(Chain):
-    def __init__(self, hidden_dim, tracking_lstm_hidden_dim, num_actions=2, make_logits=False):
-        super(TrackingLSTM, self).__init__(
-            W_x=L.Linear(tracking_lstm_hidden_dim / 2, tracking_lstm_hidden_dim / 2 * 4),
-            W_h=L.Linear(tracking_lstm_hidden_dim / 2, tracking_lstm_hidden_dim / 2 * 4),
-            bias=L.Bias(axis=1, shape=(tracking_lstm_hidden_dim / 2 * 4,)),
-        )
-        # TODO: TrackingLSTM should be able to be a size different from hidden_dim.
-        if make_logits:
-            self.add_link('logits', L.Linear(tracking_lstm_hidden_dim / 2, num_actions))
-
-    def __call__(self, c, h, x, train=True):
-        gates = self.bias(self.W_x(x) + self.W_h(h))
-        c, h = F.lstm(c, gates)
-        if hasattr(self, 'logits'):
-            logits = self.logits(h)
-        else:
-            logits = 0.0
-        return c, h, logits
+        left, right = bundle(left_in), bundle(right_in)
+        tracking, attend = bundle(tracking), bundle(attend)
+        lstm_in = self.left(left.h)
+        lstm_in += self.right(right.h)
+        if hasattr(self, 'track'):
+            lstm_in += self.track(tracking.h)
+        if hasattr(self, 'attend'):
+            lstm_in += self.attend(attend.h)
+        out = unbundle(treelstm(left.c, right.c, lstm_in))
+        for o, l, r in zip(out, left_in, right_in):
+            o.left, o.right = l, r
+            # o.left.parent, o.right.parent = o, o
+            o.transitions = o.left.transitions + o.right.transitions + [1]
+            o.tokens = o.left.tokens + o.right.tokens
+            o.buf = o.left.buf
+            o.stack = o.left.stack
+            o.tracking = o.left.tracking
+        return out
 
 
-class TrackingInput(Chain):
-    def __init__(self, hidden_dim, tracking_lstm_hidden_dim, num_inputs=3):
-        super(TrackingInput, self).__init__(
-            W_stack_0=L.Linear(hidden_dim / 2, tracking_lstm_hidden_dim / 2),
-            W_stack_1=L.Linear(hidden_dim / 2, tracking_lstm_hidden_dim / 2),
-            W_buffer=L.Linear(hidden_dim / 2, tracking_lstm_hidden_dim / 2),
-        )
-        assert hidden_dim % 2 == 0, "The hidden_dim must be even because contains c and h."
-        self.hidden_dim = hidden_dim / 2
+class Tracker(Chain):
 
-    def __call__(self, stacks, buffers, buffers_t, train=True):
-        zeros = Variable(self.xp.zeros((1, self.hidden_dim,), dtype=self.xp.float32),
-                                volatile=not train)
-        state = self.W_stack_0(F.concat([get_h(s[0], self.hidden_dim) if 0 < len(s) else zeros for s in stacks], axis=0))
-        state += self.W_stack_1(F.concat([get_h(s[1], self.hidden_dim) if 1 < len(s) else zeros for s in stacks], axis=0))
-        state += self.W_buffer(F.concat([get_h(b[i], self.hidden_dim) if i < len(b) else zeros for (b, i) in zip(buffers, buffers_t)], axis=0))
-        return state
+    def __init__(self, size, tracker_size, predict):
+        super(Tracker, self).__init__(
+            lateral=L.Linear(tracker_size, 4 * tracker_size),
+            buf=L.Linear(size, 4 * tracker_size, nobias=True),
+            stack1=L.Linear(size, 4 * tracker_size, nobias=True),
+            stack2=L.Linear(size, 4 * tracker_size, nobias=True))
+        if predict:
+            self.add_link('transition', L.Linear(tracker_size, 3))
+        self.state_size = tracker_size
+        self.reset_state()
+
+    def reset_state(self):
+        self.c = self.h = None
+
+    def __call__(self, bufs, stacks):
+        self.batch_size = len(bufs)
+        buf = bundle(buf[-1] for buf in bufs)
+        stack1 = bundle(stack[-1] for stack in stacks)
+        stack2 = bundle(stack[-2] for stack in stacks)
+        lstm_in = self.buf(buf.h)
+        lstm_in += self.stack1(stack1.h)
+        lstm_in += self.stack2(stack2.h)
+        if self.h is not None:
+            lstm_in += self.lateral(self.h)
+        if self.c is None:
+            self.c = Variable(
+                self.xp.zeros((self.batch_size, self.state_size),
+                              dtype=lstm_in.data.dtype),
+                volatile='auto')
+        self.c, self.h = F.lstm(self.c, lstm_in)
+        if hasattr(self, 'transition'):
+            return self.transition(self.h)
+        return None
+
+    @property
+    def states(self):
+        return unbundle((self.c, self.h))
+
+    @states.setter
+    def states(self, state_iter):
+        if state_iter is not None:
+            state = bundle(state_iter)
+            self.c, self.h = state.c, state.h
 
 
 class SPINN(Chain):
-    def __init__(self, hidden_dim, keep_rate, prefix="SPINN", gpu=-1,
-                 tracking_lstm_hidden_dim=4, use_tracking_lstm=True, make_logits=False,
-                 use_shift_composition=True):
+
+    def __init__(self, args, vocab, normalization=L.BatchNormalization,
+                 attention=False, attn_fn=None):
         super(SPINN, self).__init__(
-            reduce=ReduceChain(hidden_dim, tracking_lstm_hidden_dim, use_external=use_tracking_lstm, gpu=gpu),
-        )
-        self.hidden_dim = hidden_dim
-        self.__gpu = gpu
-        self.__mod = cuda.cupy if gpu >= 0 else np
-        self.tracking_lstm_hidden_dim = tracking_lstm_hidden_dim
-        self.use_tracking_lstm = use_tracking_lstm
-        self.use_shift_composition = use_shift_composition
-        self.make_logits = make_logits
+            embed=Embed(args.size, vocab.size, args.embed_dropout,
+                        vectors=vocab.vectors, normalization=normalization),
+            reduce=Reduce(args.size, args.tracker_size, attention, attn_fn))
+        if args.tracker_size is not None:
+            self.add_link('tracker', Tracker(
+                args.size, args.tracker_size,
+                predict=args.transition_weight is not None))
+        self.transition_weight = args.transition_weight
 
-        self.accFun = accuracy.accuracy
+    def __call__(self, example, attention=None, print_transitions=False):
+        self.bufs = self.embed(example.tokens)
+        if not hasattr(self.embed, 'wh'):
+            self.embed.add_param('wh', self.bufs[0][0].data.shape)
+            # initializers.init_weight(self.embed.wh.data,
+            #                          initializers.Normal(1.0))
+            self.embed.wh.to_cpu()
+            self.embed.wh.zerograd()
+            self.embed.wh.tokens = ['<X>']
+            self.embed.wh.transitions = [0]
+        # prepend with NULL NULL:
+        self.stacks = [[buf[0], buf[0]] for buf in self.bufs]
+        for stack, buf in zip(self.stacks, self.bufs):
+            for ss in stack:
+                ss.buf = buf[:]
+                ss.stack = stack[:]
+                ss.tracking = None
+        if hasattr(self, 'tracker'):
+            self.tracker.reset_state()
+        if hasattr(example, 'transitions'):
+            self.transitions = example.transitions
+        self.attention = attention
+        return self.run()
 
-        if use_tracking_lstm:
-            self.add_link('tracking_input', TrackingInput(hidden_dim, tracking_lstm_hidden_dim))
-            self.add_link('tracking_lstm', TrackingLSTM(hidden_dim, tracking_lstm_hidden_dim, make_logits=make_logits))
-            self.transition_classifier = CrossEntropyClassifier(gpu)
-            self.transition_optimizer = optimizers.SGD(lr=0.0001)
-            self.transition_optimizer.setup(self.tracking_lstm)
+    def run(self, print_transitions=False, run_internal_parser=False,
+            use_internal_parser=False):
+        # how to use:
+        # encoder.bufs = bufs, unbundled
+        # encoder.stacks = stacks, unbundled
+        # encoder.tracker.state = trackings, unbundled
+        # encoder.transitions = ExampleList of Examples, padded with n
+        # encoder.run()
+        self.history = [[] for buf in self.bufs]
+        if hasattr(self, '_hist_tensor'):
+            del self._hist_tensor
 
-    def check_type_forward(self, in_types):
-        type_check.expect(in_types.size() == 1)
-        buff_type = in_types[0]
+        transition_loss, transition_acc = 0, 0
+        if hasattr(self, 'transitions'):
+            num_transitions = self.transitions.shape[1]
+        else:
+            num_transitions = len(self.bufs[0]) * 2 - 3
+        for i in range(num_transitions):
+            if hasattr(self, 'transitions'):
+                transitions = self.transitions[:, i]
+                transition_arr = list(transitions)
+            # else:
+            #     transition_arr = [0]*len(self.bufs)
+            if hasattr(self, 'tracker'):
+                transition_hyp = self.tracker(self.bufs, self.stacks)
+                if transition_hyp is not None and run_internal_parser:
+                    transition_hyp = to_cpu(transition_hyp)
+                    transition_preds = transition_hyp.data.argmax(axis=1)
+                    if hasattr(self, 'transitions'):
+                        transition_loss += F.softmax_cross_entropy(
+                            transition_hyp, transitions.tensor,
+                            normalize=False)
+                        transition_acc += F.accuracy(
+                            transition_hyp, transitions.tensor, ignore_label=2)
+                    if use_internal_parser:
+                        transition_arr = [[0, 1, -1][x] for x in
+                                          transition_preds.tolist()]
 
-        type_check.expect(
-            buff_type.dtype == 'f',
-            buff_type.ndim >= 1,
-        )
+            lefts, rights, trackings, attentions = [], [], [], []
+            batch = zip(transition_arr, self.bufs, self.stacks, self.history,
+                        self.tracker.states if hasattr(self, 'tracker')
+                        else itertools.repeat(None),
+                        self.attention if self.attention is not None
+                        else itertools.repeat(None))
 
-    def reset_state(self, batch_size, train):
-        zeros = Variable(self.__mod.zeros((1, self.tracking_lstm_hidden_dim/2,), dtype=self.__mod.float32),
-                                volatile=not train)
-        self.c = [zeros for _ in range(batch_size)]
-        self.h = [zeros for _ in range(batch_size)]
+            assert len(transition_arr) == len(self.bufs)
+            assert len(self.stacks) == len(self.bufs)
 
-    def reset_transitions(self):
-        if self.make_logits:
-            self.transition_optimizer.zero_grads()
+            for transition, buf, stack, history, tracking, attention in batch:
+                must_shift = len(stack) < 2
 
-    def update_transitions(self):
-        if self.make_logits:
-            self.transition_optimizer.update()
-
-    def __call__(self, buffers, transitions, train=True, keep_hs=False):
-        """
-        Pass over batches of transitions, modifying their associated
-        buffers at each iteration.
-
-        Args:
-            buffers: List of B x S* x E
-            transitions: List of B x S
-        Returns:
-            final_state: List of B x E
-        """
-
-        # BEGIN: Type Check
-        in_data = tuple([x.data for x in [buffers]])
-        in_types = type_check.get_types(in_data, 'in_types', False)
-        self.check_type_forward(in_types)
-        transition_num = 0
-        transition_acc = 0.0
-        # END: Type Check
-
-        batch_size, seq_length, hidden_dim = buffers.shape[0], buffers.shape[1], buffers.shape[2]
-        transitions = transitions.T
-        assert len(transitions) == seq_length
-
-        buffers = [F.split_axis(b, seq_length, axis=0, force_tuple=True)
-                    for b in buffers]
-        buffers_t = [0 for _ in buffers]
-
-        # Initialize stack with at least one item, otherwise gradient might
-        # not propogate.
-        stacks = [[] for b in buffers]
-
-        def pseudo_reduce(lefts, rights):
-            for l, r in zip(lefts, rights):
-                yield l + r
-
-        def better_reduce(lefts, rights, h):
-            lstm_state = self.reduce(lefts, rights, h, train=train)
-            batch_size = lstm_state.shape[0]
-            lstm_state = F.split_axis(lstm_state, batch_size, axis=0, force_tuple=True)
-            for state in lstm_state:
-                yield state
-
-
-        self.reset_transitions()
-
-        for ii, ts in enumerate(transitions):
-            assert len(ts) == batch_size
-            assert len(ts) == len(buffers)
-            assert len(ts) == len(stacks)
-
-            # TODO! The tracking inputs for shifts and reduces should be split,
-            # in order to do consecutive shifts. This would (maybe) allow us
-            # to get the performance benefits from dynamic batch sizes while still
-            # predicting actions.
-            if self.use_tracking_lstm:
-                if self.use_shift_composition:
-                    tracking_input = self.tracking_input(stacks, buffers, buffers_t, train)
-                    c = F.concat(self.c, axis=0)
-                    h = F.concat(self.h, axis=0)
-
-                    c, h, logits = self.tracking_lstm(c, h, tracking_input, train)
-                    if self.make_logits and np.any(ts != -1):
-                        _rpt = np.repeat(np.expand_dims(ts == -1, 1), 2, axis=1)
-                        try:
-                            selectedTransitions = F.where(Variable(_rpt), logits, Variable(np.zeros_like(logits.data)))
-                        except:
-                            import ipdb; ipdb.set_trace()
-                        transition_loss = self.transition_classifier(selectedTransitions, Variable(ts))
-                        transition_acc += np.sum(np.argmax(logits.data[ts != -1], axis=1) == ts[ts != -1])
-                        transition_num += np.sum(ts != -1)
-                        # print("Accuracy: ", np.sum(ts != -1), np.mean(np.argmax(logits.data[ts != -1], axis=1) == ts[ts != -1]))
-                        transition_loss.backward()
-
-                    # Assign appropriate states after they've been calculated.
-                    self.c = F.split_axis(c, c.shape[0], axis=0, force_tuple=True)
-                    self.h = F.split_axis(h, h.shape[0], axis=0, force_tuple=True)
-                else:
-                    tracking_size = len([t for t in ts if t == 1])
-                    if tracking_size > 0:
-                        tracking_ix = [i for (i, t) in enumerate(ts) if t == 1]
-                        tracking_stacks    = [x for (t, x) in zip(ts, stacks) if t == 1]
-                        tracking_buffers   = [x for (t, x) in zip(ts, buffers) if t == 1]
-                        tracking_buffers_t = [x for (t, x) in zip(ts, buffers_t) if t == 1]
-
-                        tracking_input = self.tracking_input(
-                            tracking_stacks,
-                            tracking_buffers,
-                            tracking_buffers_t,
-                            train)
-
-                        c = F.concat([x for (t, x) in zip(ts, self.c) if t == 1], axis=0)
-                        h = F.concat([x for (t, x) in zip(ts, self.h) if t == 1], axis=0)
-
-                        c, h, logits = self.tracking_lstm(c, h, tracking_input, train)
-
-                        # Assign appropriate states after they've been calculated.
-                        _c = F.split_axis(c, tracking_size, axis=0, force_tuple=True)
-                        for i, ix in enumerate(tracking_ix):
-                            if t == 1:
-                                self.c[ix] = _c[i]
-                        _h = F.split_axis(h, tracking_size, axis=0, force_tuple=True)
-                        for i, ix in enumerate(tracking_ix):
-                            if t == 1:
-                                self.h[ix] = _h[i]
-
-            lefts = []
-            rights = []
-            for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
-                if t == -1: # skip
-                    pass
-                elif t == 0: # shift
-                    new_stack_item = buf[buffers_t[i]]
-                    stack.append(new_stack_item)
-                    assert buffers_t[i] < seq_length
-                    buffers_t[i] += 1
-                elif t == 1: # reduce
+                if transition == 0: # shift
+                    buf[-1].buf = buf[:]
+                    buf[-1].stack = stack[:]
+                    buf[-1].tracking = tracking
+                    stack.append(buf.pop())
+                    history.append(stack[-1])
+                elif transition == 1: # reduce
                     for lr in [rights, lefts]:
                         if len(stack) > 0:
                             lr.append(stack.pop())
                         else:
-                            lr.append(Variable(
-                                self.__mod.zeros((1, hidden_dim,), dtype=self.__mod.float32),
-                                volatile=not train))
+                            zeros = buf[0]
+                            zeros.buf = buf[:]
+                            zeros.stack = stack[:]
+                            zeros.tracking = tracking
+                            lr.append(zeros)
+                    trackings.append(tracking)
+                    attentions.append(attention)
                 else:
-                    raise Exception("Action not implemented: {}".format(t))
-
-            assert len(lefts) == len(rights)
+                    history.append(buf[-1])  # pad history so it can be stacked/transposed
             if len(rights) > 0:
-                if self.use_tracking_lstm:
-                    external = F.concat([x for (t, x) in zip(ts, self.h) if t == 1], axis=0)
-                else:
-                    external = None
-                reduced = iter(better_reduce(lefts, rights, external))
-                for i, (t, buf, stack) in enumerate(zip(ts, buffers, stacks)):
-                    if t == -1 or t == 0:
-                        continue
-                    elif t == 1:
-                        composition = next(reduced)
-                        stack.append(composition)
-                    else:
-                        raise Exception("Action not implemented: {}".format(t))
+                reduced = iter(self.reduce(
+                    lefts, rights, trackings, attentions))
+                for transition, stack, history in zip(
+                        transition_arr, self.stacks, self.history):
+                    if transition == 1: # reduce
+                        stack.append(next(reduced))
+                        history.append(stack[-1])
+        if print_transitions:
+            print()
+        if self.transition_weight is not None and transition_loss is not 0:
+            reporter.report({'accuracy': transition_acc / num_transitions,
+                             'loss': transition_loss / num_transitions}, self)
+            transition_loss *= self.transition_weight
 
-        ret = F.concat([s.pop() for s in stacks], axis=0)
-        self.update_transitions()
-        assert ret.shape == (batch_size, hidden_dim)
+        return [stack.pop() for stack in self.stacks], transition_loss
 
-        if self.make_logits:
-            avg_transition_acc = transition_acc / transition_num
-        else:
-            avg_transition_acc = 0.0
+    @property
+    def histories(self):
+        #just h for now
+        return [to_gpu(F.stack(tuple(var[:, var.data.shape[1] // 2:] for var in b), axis=1)) for b in self.history]
 
-        # print("Avg tr acc:", transition_acc / transition_num)
-        return ret, avg_transition_acc
+    @property
+    def hist_tensor(self):
+        if not hasattr(self, '_hist_tensor'):
+            self._hist_tensor = to_gpu(F.concat((F.stack(tuple(var[:, var.data.shape[1] // 2:] for var in b), axis=1) for b in self.history), axis=0))
+        return self._hist_tensor
 
 
 class SentencePairModel(Chain):
@@ -482,13 +639,6 @@ class SentencePairModel(Chain):
                  **kwargs
                 ):
         super(SentencePairModel, self).__init__(
-            projection=L.Linear(word_embedding_dim, model_dim, nobias=True),
-            x2h=SPINN(model_dim,
-                tracking_lstm_hidden_dim=tracking_lstm_hidden_dim,
-                use_tracking_lstm=use_tracking_lstm,
-                use_shift_composition=use_shift_composition,
-                make_logits=make_logits,
-                gpu=gpu, keep_rate=keep_rate),
             # batch_norm_0=L.BatchNormalization(model_dim*2, model_dim*2),
             # batch_norm_1=L.BatchNormalization(mlp_dim, mlp_dim),
             # batch_norm_2=L.BatchNormalization(mlp_dim, mlp_dim),
@@ -496,6 +646,7 @@ class SentencePairModel(Chain):
             l1=L.Linear(mlp_dim, mlp_dim),
             l2=L.Linear(mlp_dim, num_classes)
         )
+
         self.classifier = CrossEntropyClassifier(gpu)
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
@@ -505,42 +656,45 @@ class SentencePairModel(Chain):
         self.word_embedding_dim = word_embedding_dim
         self.model_dim = model_dim
 
+        args = {
+            'size': model_dim/2,
+            'embed_dropout': 1 - keep_rate,
+            'tracker_size': None,
+            'transition_weight': None,
+        }
+        args = argparse.Namespace(**args)
+
+        vocab = {
+            'size': initial_embeddings.shape[0],
+            'vectors': initial_embeddings,
+        }
+        vocab = argparse.Namespace(**vocab)
+
+        self.add_link('spinn', SPINN(args, vocab, normalization=L.BatchNormalization,
+                 attention=False, attn_fn=None))
+
     def __call__(self, sentences, transitions, y_batch=None, train=True):
-        ratio = 1 - self.keep_rate
+        batch_size = sentences.shape[0]
 
-        # Get Embeddings
-        sentences = self.initial_embeddings.take(sentences, axis=0
-            ).astype(np.float32)
-
-        # Reshape sentences
         x_prem = sentences[:,:,0]
         x_hyp = sentences[:,:,1]
         x = np.concatenate([x_prem, x_hyp], axis=0)
-
-        if self.__gpu >= 0:
-            x = cuda.to_gpu(x)
-
-        x = Variable(x, volatile=not train)
-
-        batch_size, seq_length = x.shape[0], x.shape[1]
-
-        x = F.dropout(x, ratio=ratio, train=train)
-
-        # Pass embeddings through projection layer, so that they match
-        # the dimensions in the output of the compose/reduce function.
-        x = F.reshape(x, (batch_size * seq_length, self.word_embedding_dim))
-        x = self.projection(x)
-        x = F.reshape(x, (batch_size, seq_length, self.model_dim))
-
-        # Extract Transitions
         t_prem = transitions[:,:,0]
         t_hyp = transitions[:,:,1]
         t = np.concatenate([t_prem, t_hyp], axis=0)
+        example = {
+            'tokens': Variable(x, volatile=not train),
+            # 'transitions': Variable(t, volatile=not train),
+            'transitions': t
+        }
+        example = argparse.Namespace(**example)
 
-        # Pass through Sentence Encoders.
-        self.x2h.reset_state(batch_size, train)
-        h_both, transition_acc = self.x2h(x, t, train=train)
-        h_premise, h_hypothesis = F.split_axis(h_both, 2, axis=0)
+        h_both, transition_acc = self.spinn(example)
+
+        h_premise = F.concat(h_both[:batch_size], axis=0)
+        h_hypothesis = F.concat(h_both[batch_size:], axis=0)
+
+        # h_premise, h_hypothesis = F.split_axis(h_both, 2, axis=0)
 
         # Pass through MLP Classifier.
         h = F.concat([h_premise, h_hypothesis], axis=1)
