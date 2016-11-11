@@ -610,10 +610,12 @@ class SentencePairModel(Chain):
         self.word_embedding_dim = word_embedding_dim
         self.model_dim = model_dim
 
+        tracker_size = tracking_lstm_hidden_dim if use_tracking_lstm else None
+
         args = {
             'size': model_dim/2,
             'embed_dropout': 1 - keep_rate,
-            'tracker_size': None,
+            'tracker_size': tracker_size,
             'transition_weight': None,
             'use_history': use_history,
             'save_stack': save_stack,
