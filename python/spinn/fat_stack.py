@@ -38,15 +38,6 @@ from spinn.util.chainer_blocks import MLP
 from spinn.util.chainer_blocks import CrossEntropyClassifier
 
 """
-Documentation Symbols:
-
-B: Batch Size
-B*: Dynamic Batch Size
-S: Sequence Length
-S*: Dynamic Sequence Length
-E: Embedding Size
-H: Output Size of Current Module
-
 Style Guide:
 
 1. Each __call__() or forward() should be documented with its
@@ -67,44 +58,15 @@ Style Guide:
 5. Each __call__() or forward() should have a chainer.Variable as input.
    There may be slight exceptions to this rule, since at a times
    especially in this model a list is preferred, but try to stick to
-   this as close as possible.
-
-TODO:
-
-- [x] Compute embeddings for initial sequences.
-- [x] Convert embeddings into list of lists of Chainer Variables.
-- [x] Loop over transitions, modifying buffer and stack as
-      necessary using ``PseudoReduce''.
-      NOTE: In this implementation, we pad the transitions
-      with `-1` to indicate ``skip''.
-- [x] Add projection layer to convert embeddings into proper
-      dimensions for the TreeLSTM.
-- [x] Use TreeLSTM reduce in place of PseudoReduce.
-- [x] Debug NoneType that is coming out of gradient. You probably
-      have to pad the sentences. SOLVED: The gradient was not
-      being generated for the projection layer because of a
-      redundant called to Variable().
-- [x] Use the right C and H units for the TreeLSTM.
-- [x] Enable evaluation. Currently crashing.
-- [ ] Confirm that volatile is working correctly during eval time.
-      Time the eval with and without volatile being set. Full eval
-      takes about 2m to complete on AD Mac.
-
-Other Tasks:
-
-- [x] Run CBOW.
-- [ ] Enable Cropping and use longer sequences. Currently will
-      not work as expected.
-- [ ] Enable "transition validation".
-- [ ] Enable TreeGRU as alternative option to TreeLSTM.
-- [ ] Add TrackingLSTM.
-- [ ] Run RNN for comparison.
-
-Questions:
-
-- [ ] Is the Projection layer implemented correctly? Efficiently?
-- [ ] Is the composition with TreeLSTM implemented correctly? Efficiently?
-- [ ] What should the types of Transitions and Y labels be? np.int64?
+   this as close as possible. When avoiding this rule, consider setting
+   a property rather than passing the variable. For instance:
+   
+   ```
+   link.transitions = transitions
+   loss = link(sentences)
+   ```
+6. Each link should be made to run on GPU and CPU.
+7. Type checking should be disabled using an environment variable.
 
 """
 
@@ -508,14 +470,6 @@ class SPINN(Chain):
 
     def __call__(self, example, attention=None, print_transitions=False):
         self.bufs = self.embed(example.tokens)
-        if not hasattr(self.embed, 'wh'):
-            self.embed.add_param('wh', self.bufs[0][0].data.shape)
-            # initializers.init_weight(self.embed.wh.data,
-            #                          initializers.Normal(1.0))
-            self.embed.wh.to_cpu()
-            self.embed.wh.zerograd()
-            self.embed.wh.tokens = ['<X>']
-            self.embed.wh.transitions = [0]
         # prepend with NULL NULL:
         self.stacks = [[buf[0], buf[0]] for buf in self.bufs]
         for stack, buf in zip(self.stacks, self.bufs):
@@ -551,8 +505,9 @@ class SPINN(Chain):
             if hasattr(self, 'transitions'):
                 transitions = self.transitions[:, i]
                 transition_arr = list(transitions)
-            # else:
+            else:
             #     transition_arr = [0]*len(self.bufs)
+                raise Exception('Running without transitions not implemented')
             if hasattr(self, 'tracker'):
                 transition_hyp = self.tracker(self.bufs, self.stacks)
                 if transition_hyp is not None and run_internal_parser:
@@ -677,38 +632,36 @@ class SentencePairModel(Chain):
     def __call__(self, sentences, transitions, y_batch=None, train=True):
         batch_size = sentences.shape[0]
 
+        # Build Tokens
         x_prem = sentences[:,:,0]
         x_hyp = sentences[:,:,1]
         x = np.concatenate([x_prem, x_hyp], axis=0)
+        
+        # Build Transitions
         t_prem = transitions[:,:,0]
         t_hyp = transitions[:,:,1]
         t = np.concatenate([t_prem, t_hyp], axis=0)
+
+        assert batch_size * 2 == x.shape[0]
+        assert batch_size * 2 == t.shape[0]
+        
         example = {
             'tokens': Variable(x, volatile=not train),
-            # 'transitions': Variable(t, volatile=not train),
             'transitions': t
         }
         example = argparse.Namespace(**example)
 
+        # h_both is an array of states.
         h_both, transition_acc = self.spinn(example)
 
         h_premise = F.concat(h_both[:batch_size], axis=0)
         h_hypothesis = F.concat(h_both[batch_size:], axis=0)
 
-        # h_premise, h_hypothesis = F.split_axis(h_both, 2, axis=0)
-
         # Pass through MLP Classifier.
         h = F.concat([h_premise, h_hypothesis], axis=1)
-        # h = self.batch_norm_0(h, test=not train)
-        # h = F.dropout(h, ratio, train)
-        # h = F.relu(h)
         h = self.l0(h)
-        # h = self.batch_norm_1(h, test=not train)
-        # h = F.dropout(h, ratio, train)
         h = F.relu(h)
         h = self.l1(h)
-        # h = self.batch_norm_2(h, test=not train)
-        # h = F.dropout(h, ratio, train)
         h = F.relu(h)
         h = self.l2(h)
         y = h
