@@ -79,20 +79,25 @@ def HeKaimingInit(shape, real_shape=None):
                             size=shape)
 
 
+def the_gpu():
+    return the_gpu.gpu
+
+the_gpu.gpu = -1
+
 # Chainer already has a method for moving a variable to/from GPU in-place,
 # but that messes with backpropagation. So I do it with a copy. Note that
 # cuda.get_device() actually returns the dummy device, not the current one
 # -- but F.copy will move it to the active GPU anyway (!)
-def to_gpu(var, gpu=-1):
-    return F.copy(var, gpu)
+def to_gpu(var):
+    return F.copy(var, the_gpu())
 
 
 def to_cpu(var):
     return F.copy(var, -1)
 
 
-def arr_to_gpu(arr, gpu=-1):
-    if gpu >= 0:
+def arr_to_gpu(arr):
+    if the_gpu() >= 0:
         return cuda.to_gpu(arr)
     else:
         return arr
@@ -174,7 +179,10 @@ def bundle(lstm_iter):
     lstm_iter = tuple(lstm_iter)
     if lstm_iter[0] is None:
         return None
-    return LSTMState(F.concat(lstm_iter, axis=0))
+    try:
+        return LSTMState(F.concat(lstm_iter, axis=0))
+    except:
+        import ipdb; ipdb.set_trace()
 
 
 def unbundle(state):
@@ -265,10 +273,10 @@ class Embed(Chain):
         embeds = F.split_axis(to_cpu(embeds), b, axis=0, force_tuple=True)
         embeds = [F.split_axis(x, l, axis=0, force_tuple=True) for x in embeds]
         buffers = [list(reversed(x)) for x in embeds]
-        for ex, buf in zip(list(tokens), buffers):
-            for tok, var in zip(ex, reversed(buf)):
-                var.tokens = [tok]
-                var.transitions = [0]
+        # for ex, buf in zip(list(tokens), buffers):
+        #     for tok, var in zip(ex, reversed(buf)):
+        #         var.tokens = [tok]
+        #         var.transitions = [0]
         return buffers
 
 
@@ -313,7 +321,7 @@ def treelstm(c_left, c_right, gates):
     c_t = fl_gate * c_left + fr_gate * c_right + i_gate * cell_inp
     h_t = o_gate * F.tanh(c_t)
 
-    return get_state(c_t, h_t)
+    return (c_t, h_t)
 
 
 class Reduce(Chain):
@@ -549,7 +557,9 @@ class SPINN(Chain):
                         if len(stack) > 0:
                             lr.append(stack.pop())
                         else:
-                            zeros = buf[0]
+                            zeros = Variable(np.zeros(buf[0].shape,
+                                dtype=buf[0].data.dtype),
+                                volatile='auto')
                             if self.save_stack:
                                 zeros.buf = buf[:]
                                 zeros.stack = stack[:]
@@ -566,7 +576,9 @@ class SPINN(Chain):
                 for transition, stack, history in zip(
                         transition_arr, self.stacks, self.history):
                     if transition == 1: # reduce
-                        stack.append(next(reduced))
+                        new_stack_item = next(reduced)
+                        assert isinstance(new_stack_item.data, np.ndarray), "Pushing cupy array to stack"
+                        stack.append(new_stack_item)
                         if self.use_history:
                             history.append(stack[-1])
         if print_transitions:
@@ -600,6 +612,8 @@ class SentencePairModel(Chain):
             l1=L.Linear(mlp_dim, mlp_dim),
             l2=L.Linear(mlp_dim, num_classes)
         )
+
+        the_gpu.gpu = gpu
 
         self.classifier = CrossEntropyClassifier(gpu)
         self.__gpu = gpu
@@ -661,6 +675,8 @@ class SentencePairModel(Chain):
 
         # Pass through MLP Classifier.
         h = F.concat([h_premise, h_hypothesis], axis=1)
+        
+        h = to_gpu(h)
         h = self.l0(h)
         h = F.relu(h)
         h = self.l1(h)
