@@ -18,6 +18,7 @@ from spinn import util
 
 # Chainer imports
 import chainer
+from chainer import reporter, initializers
 from chainer import cuda, Function, gradient_check, report, training, utils, Variable
 from chainer import datasets, iterators, optimizers, serializers
 from chainer import Link, Chain, ChainList
@@ -70,6 +71,9 @@ Style Guide:
 
 """
 
+T_SKIP   = -1
+T_SHIFT  = 0
+T_REDUCE = 1
 
 def HeKaimingInit(shape, real_shape=None):
     # Calculate fan-in / fan-out using real shape if given as override
@@ -494,7 +498,7 @@ class SPINN(Chain):
         if hasattr(example, 'transitions'):
             self.transitions = example.transitions
         self.attention = attention
-        return self.run()
+        return self.run(run_internal_parser=True)
 
     def run(self, print_transitions=False, run_internal_parser=False,
             use_internal_parser=False):
@@ -527,10 +531,10 @@ class SPINN(Chain):
                     transition_preds = transition_hyp.data.argmax(axis=1)
                     if hasattr(self, 'transitions'):
                         transition_loss += F.softmax_cross_entropy(
-                            transition_hyp, transitions.tensor,
+                            transition_hyp, transitions,
                             normalize=False)
                         transition_acc += F.accuracy(
-                            transition_hyp, transitions.tensor, ignore_label=2)
+                            transition_hyp, transitions, ignore_label=T_SKIP)
                     if use_internal_parser:
                         transition_arr = [[0, 1, -1][x] for x in
                                           transition_preds.tolist()]
@@ -548,7 +552,7 @@ class SPINN(Chain):
             for transition, buf, stack, history, tracking, attention in batch:
                 must_shift = len(stack) < 2
 
-                if transition == 0: # shift
+                if transition == T_SHIFT: # shift
                     if self.save_stack:
                         buf[-1].buf = buf[:]
                         buf[-1].stack = stack[:]
@@ -556,7 +560,7 @@ class SPINN(Chain):
                     stack.append(buf.pop())
                     if self.use_history:
                         history.append(stack[-1])
-                elif transition == 1: # reduce
+                elif transition == T_REDUCE: # reduce
                     for lr in [rights, lefts]:
                         if len(stack) > 0:
                             lr.append(stack.pop())
@@ -579,7 +583,7 @@ class SPINN(Chain):
                     lefts, rights, trackings, attentions))
                 for transition, stack, history in zip(
                         transition_arr, self.stacks, self.history):
-                    if transition == 1: # reduce
+                    if transition == T_REDUCE: # reduce
                         new_stack_item = next(reduced)
                         assert isinstance(new_stack_item.data, np.ndarray), "Pushing cupy array to stack"
                         stack.append(new_stack_item)
@@ -588,8 +592,8 @@ class SPINN(Chain):
         if print_transitions:
             print()
         if self.transition_weight is not None and transition_loss is not 0:
-            reporter.report({'accuracy': transition_acc / num_transitions,
-                             'loss': transition_loss / num_transitions}, self)
+            reporter.report({'transition_accuracy': transition_acc / num_transitions,
+                             'transition_loss': transition_loss / num_transitions}, self)
             transition_loss *= self.transition_weight
 
         return [stack.pop() for stack in self.stacks], transition_loss
@@ -601,6 +605,7 @@ class SentencePairModel(Chain):
                  keep_rate,
                  gpu=-1,
                  tracking_lstm_hidden_dim=4,
+                 transition_weight=None,
                  use_tracking_lstm=True,
                  use_shift_composition=True,
                  make_logits=False,
@@ -634,7 +639,7 @@ class SentencePairModel(Chain):
             'size': model_dim/2,
             'embed_dropout': 1 - keep_rate,
             'tracker_size': tracker_size,
-            'transition_weight': None,
+            'transition_weight': transition_weight,
             'use_history': use_history,
             'save_stack': save_stack,
         }
@@ -672,7 +677,12 @@ class SentencePairModel(Chain):
         example = argparse.Namespace(**example)
 
         # h_both is an array of states.
-        h_both, transition_acc = self.spinn(example)
+        r = reporter.Reporter()
+        r.add_observer('spinn', self.spinn)
+        observation = {}
+        with r.scope(observation):
+            h_both, transition_loss = self.spinn(example)
+        transition_acc = observation['spinn/transition_accuracy']
 
         h_premise = F.concat(h_both[:batch_size], axis=0)
         h_hypothesis = F.concat(h_both[batch_size:], axis=0)
@@ -692,4 +702,4 @@ class SentencePairModel(Chain):
         accum_loss = self.classifier(y, Variable(y_batch, volatile=not train), train)
         self.accuracy = self.accFun(y, self.__mod.array(y_batch))
 
-        return y, accum_loss, self.accuracy.data, transition_acc
+        return y, accum_loss, self.accuracy.data, transition_acc.data, transition_loss

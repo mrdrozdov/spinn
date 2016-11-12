@@ -52,6 +52,7 @@ def build_sentence_pair_model(model_cls, trainer_cls, model_dim, word_embedding_
              keep_rate=keep_rate,
              gpu=gpu,
              tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
+             transition_weight=FLAGS.transition_weight,
              use_tracking_lstm=FLAGS.use_tracking_lstm,
              use_shift_composition=FLAGS.use_shift_composition,
              make_logits=FLAGS.make_logits,
@@ -86,9 +87,9 @@ def evaluate(classifier_trainer, eval_set, logger, step):
             "sentences": eval_X_batch,
             "transitions": eval_transitions_batch,
             }, eval_y_batch, train=False, predict=False)
-        # y, loss, preds = ret
+        y, loss, class_loss, transition_acc, transition_loss = ret
         acc_value = float(classifier_trainer.model.accuracy.data)
-        action_acc_value = 0.0
+        action_acc_value = transition_acc
 
         # Update Aggregate Accuracies
         acc_accum += acc_value
@@ -246,7 +247,7 @@ def run(only_forward=False):
                 "sentences": X_batch,
                 "transitions": transitions_batch,
                 }, y_batch, train=True, predict=False)
-            y, loss, class_acc, transition_acc = ret
+            y, loss, class_acc, transition_acc, transition_loss = ret
 
             # Boilerplate for calculating loss.
             xent_cost_val = loss.data
@@ -259,6 +260,7 @@ def run(only_forward=False):
 
             total_cost_val = xent_cost_val + transition_cost_val
             loss.backward()
+            transition_loss.backward()
 
             if FLAGS.gradient_check:
                 def get_loss():
@@ -361,6 +363,7 @@ if __name__ == '__main__':
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")
 
+    gflags.DEFINE_float("transition_weight", None, "")
     gflags.DEFINE_integer("tracking_lstm_hidden_dim", 4, "")
     gflags.DEFINE_boolean("use_shift_composition", True, "")
     gflags.DEFINE_boolean("use_history", False, "")
