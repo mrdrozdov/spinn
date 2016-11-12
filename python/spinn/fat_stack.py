@@ -431,9 +431,11 @@ class Tracker(Chain):
 
     def __call__(self, bufs, stacks):
         self.batch_size = len(bufs)
+        zeros = Variable(np.zeros(bufs[0][0].shape, dtype=bufs[0][0].data.dtype),
+                         volatile='auto')
         buf = bundle(buf[-1] for buf in bufs)
-        stack1 = bundle(stack[-1] for stack in stacks)
-        stack2 = bundle(stack[-2] for stack in stacks)
+        stack1 = bundle(stack[-1] if len(stack) > 0 else zeros for stack in stacks)
+        stack2 = bundle(stack[-2] if len(stack) > 1 else zeros for stack in stacks)
         lstm_in = self.buf(buf.h)
         lstm_in += self.stack1(stack1.h)
         lstm_in += self.stack2(stack2.h)
@@ -479,6 +481,7 @@ class SPINN(Chain):
     def __call__(self, example, attention=None, print_transitions=False):
         self.bufs = self.embed(example.tokens)
         # prepend with NULL NULL:
+        # This exists specifically for the tracker.
         self.stacks = [[buf[0], buf[0]] for buf in self.bufs]
         for stack, buf in zip(self.stacks, self.bufs):
             for ss in stack:
@@ -509,6 +512,7 @@ class SPINN(Chain):
             num_transitions = self.transitions.shape[1]
         else:
             num_transitions = len(self.bufs[0]) * 2 - 3
+
         for i in range(num_transitions):
             if hasattr(self, 'transitions'):
                 transitions = self.transitions[:, i]
