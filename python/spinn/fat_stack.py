@@ -682,7 +682,7 @@ class SentencePairModel(Chain):
         observation = {}
         with r.scope(observation):
             h_both, transition_loss = self.spinn(example)
-        transition_acc = observation['spinn/transition_accuracy']
+        transition_acc = observation.get('spinn/transition_accuracy', 0.0)
 
         h_premise = F.concat(h_both[:batch_size], axis=0)
         h_hypothesis = F.concat(h_both[batch_size:], axis=0)
@@ -702,4 +702,7 @@ class SentencePairModel(Chain):
         accum_loss = self.classifier(y, Variable(y_batch, volatile=not train), train)
         self.accuracy = self.accFun(y, self.__mod.array(y_batch))
 
-        return y, accum_loss, self.accuracy.data, transition_acc.data, transition_loss
+        if hasattr(transition_acc, 'data'):
+          transition_acc = transition_acc.data
+
+        return y, accum_loss, self.accuracy.data, transition_acc, transition_loss

@@ -260,7 +260,8 @@ def run(only_forward=False):
 
             total_cost_val = xent_cost_val + transition_cost_val
             loss.backward()
-            transition_loss.backward()
+            if hasattr(transition_loss, 'backward'):
+              transition_loss.backward()
 
             if FLAGS.gradient_check:
                 def get_loss():
