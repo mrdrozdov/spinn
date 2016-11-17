@@ -142,11 +142,13 @@ def MakeTrainingIterator(sources, batch_size, smart_batches=True, use_peano=True
             key = peano(prem_len, hyp_len)
             return key
         else:
-            return max(xy)
+            if not isinstance(num_transitions, list):
+                num_transitions = [num_transitions]
+            return max(num_transitions)
 
     def build_batches():
         dataset_size = len(sources[0])
-        seq_length = len(sources[0][0][:,0])
+        seq_length = sources[0].shape[1]
         order = range(dataset_size)
         random.shuffle(order)
         order = np.array(order)

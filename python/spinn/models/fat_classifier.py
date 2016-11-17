@@ -177,28 +177,41 @@ def run(only_forward=False):
     logger.Log("Building model.")
 
     if FLAGS.model_type == "CBOW":
-        model_cls = spinn.cbow.SentencePairModel
-        trainer_cls = spinn.cbow.SentencePairTrainer
+        model_module = spinn.cbow
     elif FLAGS.model_type == "RNN":
-        model_cls = spinn.plain_rnn_chainer.RNN
+        model_module = spinn.plain_rnn_chainer
     elif FLAGS.model_type == "NTI":
-        model_cls = spinn.nti.SentencePairModel
-        trainer_cls = spinn.nti.SentencePairTrainer
+        model_module = spinn.nti
     elif FLAGS.model_type == "SPINN":
-        model_cls = spinn.fat_stack.SentencePairModel
-        trainer_cls = spinn.fat_stack.SentencePairTrainer
+        model_module = spinn.fat_stack
     else:
         raise Exception("Requested unimplemented model type %s" % FLAGS.model_type)
 
 
     if data_manager.SENTENCE_PAIR_DATA:
+        if hasattr(model_module, 'SentencePairTrainer') and hasattr(model_module, 'SentencePairModel'):
+            trainer_cls = model_module.SentencePairTrainer
+            model_cls = model_module.SentencePairModel
+        else:
+            raise Exception("Unimplemented for model type %s" % FLAGS.model_type)
+
         num_classes = len(data_manager.LABEL_MAP)
         classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
                               FLAGS.model_dim, FLAGS.word_embedding_dim,
                               FLAGS.seq_length, num_classes, initial_embeddings,
                               FLAGS.embedding_keep_rate, FLAGS.gpu)
     else:
-        raise Exception("Single sentence model not implemented.")
+        if hasattr(model_module, 'SentencePairTrainer') and hasattr(model_module, 'SentencePairModel'):
+            trainer_cls = model_module.SentenceTrainer
+            model_cls = model_module.SentenceModel
+        else:
+            raise Exception("Unimplemented for model type %s" % FLAGS.model_type)
+
+        num_classes = len(data_manager.LABEL_MAP)
+        classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
+                              FLAGS.model_dim, FLAGS.word_embedding_dim,
+                              FLAGS.seq_length, num_classes, initial_embeddings,
+                              FLAGS.embedding_keep_rate, FLAGS.gpu)
 
     if ".ckpt" in FLAGS.ckpt_path:
         checkpoint_path = FLAGS.ckpt_path

@@ -302,6 +302,10 @@ class SentencePairTrainer(BaseSentencePairTrainer):
         # self.optimizer.add_hook(chainer.optimizer.WeightDecay(0.00003))
 
 
+class SentenceTrainer(SentencePairTrainer):
+    pass
+
+
 def treelstm(c_left, c_right, gates):
     hidden_dim = c_left.shape[1]
 
@@ -690,6 +694,101 @@ class SentencePairModel(Chain):
         # Pass through MLP Classifier.
         h = F.concat([h_premise, h_hypothesis], axis=1)
         
+        h = to_gpu(h)
+        h = self.l0(h)
+        h = F.relu(h)
+        h = self.l1(h)
+        h = F.relu(h)
+        h = self.l2(h)
+        y = h
+
+        # Calculate Loss & Accuracy.
+        accum_loss = self.classifier(y, Variable(y_batch, volatile=not train), train)
+        self.accuracy = self.accFun(y, self.__mod.array(y_batch))
+
+        if hasattr(transition_acc, 'data'):
+          transition_acc = transition_acc.data
+
+        return y, accum_loss, self.accuracy.data, transition_acc, transition_loss
+
+class SentenceModel(Chain):
+    def __init__(self, model_dim, word_embedding_dim,
+                 seq_length, initial_embeddings, num_classes, mlp_dim,
+                 keep_rate,
+                 gpu=-1,
+                 tracking_lstm_hidden_dim=4,
+                 transition_weight=None,
+                 use_tracking_lstm=True,
+                 use_shift_composition=True,
+                 make_logits=False,
+                 use_history=False,
+                 save_stack=False,
+                 **kwargs
+                ):
+        super(SentenceModel, self).__init__(
+            l0=L.Linear(model_dim, mlp_dim),
+            l1=L.Linear(mlp_dim, mlp_dim),
+            l2=L.Linear(mlp_dim, num_classes)
+        )
+
+        the_gpu.gpu = gpu
+
+        self.classifier = CrossEntropyClassifier(gpu)
+        self.__gpu = gpu
+        self.__mod = cuda.cupy if gpu >= 0 else np
+        self.accFun = accuracy.accuracy
+        self.initial_embeddings = initial_embeddings
+        self.keep_rate = keep_rate
+        self.word_embedding_dim = word_embedding_dim
+        self.model_dim = model_dim
+
+        tracker_size = tracking_lstm_hidden_dim if use_tracking_lstm else None
+
+        args = {
+            'size': model_dim/2,
+            'embed_dropout': 1 - keep_rate,
+            'tracker_size': tracker_size,
+            'transition_weight': transition_weight,
+            'use_history': use_history,
+            'save_stack': save_stack,
+        }
+        args = argparse.Namespace(**args)
+
+        vocab = {
+            'size': initial_embeddings.shape[0],
+            'vectors': initial_embeddings,
+        }
+        vocab = argparse.Namespace(**vocab)
+
+        self.add_link('spinn', SPINN(args, vocab, normalization=L.BatchNormalization,
+                 attention=False, attn_fn=None))
+
+    def __call__(self, sentences, transitions, y_batch=None, train=True):
+        batch_size = sentences.shape[0]
+
+        # Build Tokens
+        x = sentences
+        
+        # Build Transitions
+        t = transitions
+
+        example = {
+            'tokens': Variable(x, volatile=not train),
+            'transitions': t
+        }
+        example = argparse.Namespace(**example)
+
+        # h_both is an array of states.
+        r = reporter.Reporter()
+        r.add_observer('spinn', self.spinn)
+        observation = {}
+        with r.scope(observation):
+            h, transition_loss = self.spinn(example)
+        transition_acc = observation.get('spinn/transition_accuracy', 0.0)
+
+        h = F.concat(h, axis=0)
+
+        # Pass through MLP Classifier.
         h = to_gpu(h)
         h = self.l0(h)
         h = F.relu(h)
