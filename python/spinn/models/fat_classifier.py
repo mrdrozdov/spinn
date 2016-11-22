@@ -23,6 +23,7 @@ from functools import partial
 import os
 import pprint
 import sys
+import time
 
 import gflags
 import numpy as np
@@ -451,6 +452,14 @@ if __name__ == '__main__':
 
     # Parse command line flags.
     FLAGS(sys.argv)
+
+    if not FLAGS.experiment_name:
+        timestamp = str(int(time.time()))
+        FLAGS.experiment_name = "{}-{}-{}".format(
+            FLAGS.data_type,
+            FLAGS.model_type,
+            timestamp,
+            )
 
     if not FLAGS.debug:
         chainer.set_debug(False)
