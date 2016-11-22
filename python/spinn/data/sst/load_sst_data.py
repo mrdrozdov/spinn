@@ -8,6 +8,7 @@
 
 import collections
 import numpy as np
+import sys
 
 from spinn import util
 
@@ -58,7 +59,26 @@ def load_data(path, vocabulary=None, seq_length=None, batch_size=32, eval_mode=F
     return dataset, None
 
 
+def create_binary_classes(input_path, output_path):
+    with open(input_path) as f, open(output_path, 'w') as f_out:
+        for line in f:
+            if int(line[1]) < 2:
+                line = line[0] + '0' + line[2:]
+                f_out.write(line)
+            elif int(line[1]) > 2:
+                line = line[0] + '1' + line[2:]
+                f_out.write(line)
+            else:
+                # skip neutral sentences
+                pass
+
+
 if __name__ == "__main__":
     # Demo:
-    examples = import_binary_bracketed_data('sst-data/dev.txt')
-    print examples[0]
+    if len(sys.argv) > 1 and sys.argv[1] == 'binary':
+        create_binary_classes('sst/dev.txt', 'sst/dev-binary.txt')
+        create_binary_classes('sst/test.txt', 'sst/test-binary.txt')
+        create_binary_classes('sst/train.txt', 'sst/train-binary.txt')
+    else:
+        examples = convert_unary_binary_bracketed_data('sst/dev.txt')
+        print examples[0]

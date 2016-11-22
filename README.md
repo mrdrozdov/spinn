@@ -53,6 +53,27 @@ To view some statistics in Tensorboard, make sure to turn the "write_summary" fl
 
 You'll also need to install [Tensorflow](http://tflearn.org/installation/#tensorflow-installation).
 
+## Data
+
+To download [SST](http://nlp.stanford.edu/sentiment/):
+
+```
+curl -o temp.zip http://nlp.stanford.edu/sentiment/trainDevTestTrees_PTB.zip
+unzip temp.zip
+rm temp.zip
+mv trees sst
+
+sed -i -e 's/)/\ )/g' ./sst/dev.txt
+sed -i -e 's/)/\ )/g' ./sst/test.txt
+sed -i -e 's/)/\ )/g' ./sst/train.txt
+```
+
+Creating Binary SST data:
+
+```
+python python/spinn/data/sst/load_sst_data.py binary
+```
+
 ## License
 
 Copyright 2016, Stanford University
