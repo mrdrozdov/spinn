@@ -532,7 +532,6 @@ class SPINN(Chain):
                 transition_hyp = self.tracker(self.bufs, self.stacks)
                 if transition_hyp is not None and run_internal_parser:
                     transition_hyp = to_cpu(transition_hyp)
-                    transition_preds = transition_hyp.data.argmax(axis=1)
                     if hasattr(self, 'transitions'):
                         transition_loss += F.softmax_cross_entropy(
                             transition_hyp, transitions,
@@ -540,6 +539,7 @@ class SPINN(Chain):
                         transition_acc += F.accuracy(
                             transition_hyp, transitions, ignore_label=T_SKIP)
                     if use_internal_parser:
+                        transition_preds = transition_hyp.data.argmax(axis=1)
                         transition_arr = [[0, 1, -1][x] for x in
                                           transition_preds.tolist()]
 
@@ -599,6 +599,8 @@ class SPINN(Chain):
             reporter.report({'transition_accuracy': transition_acc / num_transitions,
                              'transition_loss': transition_loss / num_transitions}, self)
             transition_loss *= self.transition_weight
+        else:
+            transition_loss = None
 
         return [stack.pop() for stack in self.stacks], transition_loss
 

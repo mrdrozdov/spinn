@@ -264,7 +264,7 @@ def run(only_forward=False):
 
             # Boilerplate for calculating loss.
             xent_cost_val = loss.data
-            transition_cost_val = 0
+            transition_cost_val = transition_loss.data if transition_loss is not None else 0.0
             avg_trans_acc += transition_acc
             avg_class_acc += class_acc
 
