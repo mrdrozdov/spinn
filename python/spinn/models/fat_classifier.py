@@ -341,7 +341,7 @@ if __name__ == '__main__':
     gflags.DEFINE_integer("profile_steps", 3, "Specify how many steps to profile.")
 
     # Experiment naming.
-    gflags.DEFINE_string("experiment_name", "experiment", "")
+    gflags.DEFINE_string("experiment_name", "", "")
 
     # Data types.
     gflags.DEFINE_enum("data_type", "bl", ["bl", "sst", "snli"],
