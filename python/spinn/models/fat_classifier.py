@@ -261,10 +261,10 @@ def run(only_forward=False):
                 "sentences": X_batch,
                 "transitions": transitions_batch,
                 }, y_batch, train=True, predict=False)
-            y, loss, class_acc, transition_acc, transition_loss = ret
+            y, xent_loss, class_acc, transition_acc, transition_loss = ret
 
             # Boilerplate for calculating loss.
-            xent_cost_val = loss.data
+            xent_cost_val = xent_loss.data
             transition_cost_val = transition_loss.data if transition_loss is not None else 0.0
             avg_trans_acc += transition_acc
             avg_class_acc += class_acc
@@ -272,10 +272,18 @@ def run(only_forward=False):
             if FLAGS.show_intermediate_stats and step % 5 == 0 and step % FLAGS.statistics_interval_steps > 0:
                 print("Accuracies so far : ", avg_class_acc / (step % FLAGS.statistics_interval_steps), avg_trans_acc / (step % FLAGS.statistics_interval_steps))
 
-            total_cost_val = xent_cost_val + transition_cost_val
-            loss.backward()
+            # Accumulate Total Loss Data
+            total_cost_val = 0.0
+            total_cost_val += xent_cost_val
+            total_cost_val += transition_cost_val
+
+            # Accumulate Total Loss Variable
+            total_loss = 0.0
+            total_loss += xent_loss
             if hasattr(transition_loss, 'backward'):
-              transition_loss.backward()
+                total_loss += transition_loss
+
+            total_loss.backward()
 
             if FLAGS.gradient_check:
                 def get_loss():
