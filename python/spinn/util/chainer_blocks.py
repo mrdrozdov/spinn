@@ -48,6 +48,13 @@ def gradient_check(model, get_loss, rtol=0, atol=1e-2, to_check=10):
     testing.assert_allclose(estimates, grads, rtol=rtol, atol=atol, verbose=True), "Gradient check failed."
 
 
+def l2_cost(model, l2_lambda):
+    cost = 0.0
+    for _, w in model.namedparams():
+        cost += l2_lambda * F.sum(F.square(w))
+    return cost
+
+
 class EmbedChain(Chain):
     def __init__(self, embedding_dim, vocab_size, initial_embeddings, projection_dim, prefix="EmbedChain", gpu=-1):
         super(EmbedChain, self).__init__()
