@@ -606,7 +606,7 @@ class SPINN(Chain):
 
 
 class SentencePairModel(Chain):
-    def __init__(self, model_dim, word_embedding_dim,
+    def __init__(self, model_dim, word_embedding_dim, vocab_size,
                  seq_length, initial_embeddings, num_classes, mlp_dim,
                  keep_rate,
                  gpu=-1,
@@ -652,7 +652,7 @@ class SentencePairModel(Chain):
         args = argparse.Namespace(**args)
 
         vocab = {
-            'size': initial_embeddings.shape[0],
+            'size': initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size,
             'vectors': initial_embeddings,
         }
         vocab = argparse.Namespace(**vocab)
@@ -714,7 +714,7 @@ class SentencePairModel(Chain):
         return y, accum_loss, self.accuracy.data, transition_acc, transition_loss
 
 class SentenceModel(Chain):
-    def __init__(self, model_dim, word_embedding_dim,
+    def __init__(self, model_dim, word_embedding_dim, vocab_size,
                  seq_length, initial_embeddings, num_classes, mlp_dim,
                  keep_rate,
                  gpu=-1,
@@ -757,7 +757,7 @@ class SentenceModel(Chain):
         args = argparse.Namespace(**args)
 
         vocab = {
-            'size': initial_embeddings.shape[0],
+            'size': initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size,
             'vectors': initial_embeddings,
         }
         vocab = argparse.Namespace(**vocab)

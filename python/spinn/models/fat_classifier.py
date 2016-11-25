@@ -45,10 +45,10 @@ import spinn.nti
 FLAGS = gflags.FLAGS
 
 
-def build_sentence_pair_model(model_cls, trainer_cls, model_dim, word_embedding_dim,
+def build_sentence_pair_model(model_cls, trainer_cls, vocab_size, model_dim, word_embedding_dim,
                               seq_length, num_classes, initial_embeddings,
                               keep_rate, gpu):
-    model = model_cls(model_dim, word_embedding_dim,
+    model = model_cls(model_dim, word_embedding_dim, vocab_size,
              seq_length, initial_embeddings, num_classes, mlp_dim=1024,
              keep_rate=keep_rate,
              gpu=gpu,
@@ -198,7 +198,7 @@ def run(only_forward=False):
 
         num_classes = len(data_manager.LABEL_MAP)
         classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
-                              FLAGS.model_dim, FLAGS.word_embedding_dim,
+                              len(vocabulary), FLAGS.model_dim, FLAGS.word_embedding_dim,
                               FLAGS.seq_length, num_classes, initial_embeddings,
                               FLAGS.embedding_keep_rate, FLAGS.gpu)
     else:
@@ -210,7 +210,7 @@ def run(only_forward=False):
 
         num_classes = len(data_manager.LABEL_MAP)
         classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
-                              FLAGS.model_dim, FLAGS.word_embedding_dim,
+                              len(vocabulary), FLAGS.model_dim, FLAGS.word_embedding_dim,
                               FLAGS.seq_length, num_classes, initial_embeddings,
                               FLAGS.embedding_keep_rate, FLAGS.gpu)
 
