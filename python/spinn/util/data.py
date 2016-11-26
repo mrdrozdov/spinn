@@ -17,7 +17,7 @@ PADDING_TOKEN = "*PADDING*"
 # it's a common token that is pretrained, but shouldn't look like any content words.
 UNK_TOKEN = "_"
 
-TRANSITION_PADDING_SYMBOL = -1
+TRANSITION_PADDING_SYMBOL = 2
 SENTENCE_PADDING_SYMBOL = 0
 
 CORE_VOCABULARY = {PADDING_TOKEN: 0,
