@@ -71,7 +71,7 @@ Style Guide:
 
 """
 
-T_SKIP   = -1
+T_SKIP   = 2
 T_SHIFT  = 0
 T_REDUCE = 1
 
@@ -439,11 +439,10 @@ class Tracker(Chain):
 
     def __call__(self, bufs, stacks):
         self.batch_size = len(bufs)
-        zeros = Variable(np.zeros(bufs[0][0].shape, dtype=bufs[0][0].data.dtype),
-                         volatile='auto')
         buf = bundle(buf[-1] for buf in bufs)
-        stack1 = bundle(stack[-1] if len(stack) > 0 else zeros for stack in stacks)
-        stack2 = bundle(stack[-2] if len(stack) > 1 else zeros for stack in stacks)
+        stack1 = bundle(stack[-1] for stack in stacks)
+        stack2 = bundle(stack[-2] for stack in stacks)
+
         lstm_in = self.buf(buf.h)
         lstm_in += self.stack1(stack1.h)
         lstm_in += self.stack2(stack2.h)
@@ -530,16 +529,17 @@ class SPINN(Chain):
                 raise Exception('Running without transitions not implemented')
             if hasattr(self, 'tracker'):
                 transition_hyp = self.tracker(self.bufs, self.stacks)
+                transition_preds = transition_hyp.data.argmax(axis=1)
                 if transition_hyp is not None and run_internal_parser:
                     transition_hyp = to_cpu(transition_hyp)
                     if hasattr(self, 'transitions'):
                         transition_loss += F.softmax_cross_entropy(
                             transition_hyp, transitions,
                             normalize=False)
-                        transition_acc += F.accuracy(
-                            transition_hyp, transitions, ignore_label=T_SKIP)
+                        local_transition_acc = F.accuracy(
+                            transition_hyp, transitions)
+                        transition_acc += local_transition_acc
                     if use_internal_parser:
-                        transition_preds = transition_hyp.data.argmax(axis=1)
                         transition_arr = [[0, 1, -1][x] for x in
                                           transition_preds.tolist()]
 
@@ -786,8 +786,9 @@ class SentenceModel(Chain):
         r.add_observer('spinn', self.spinn)
         observation = {}
         with r.scope(observation):
-            h, transition_loss = self.spinn(example)
+            h, _ = self.spinn(example)
         transition_acc = observation.get('spinn/transition_accuracy', 0.0)
+        transition_loss = observation.get('spinn/transition_loss', None)
 
         h = F.concat(h, axis=0)
 
