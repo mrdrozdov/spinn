@@ -296,7 +296,7 @@ class SentencePairTrainer(BaseSentencePairTrainer):
 
     def init_optimizer(self, lr=0.01, **kwargs):
         self.optimizer = optimizers.Adam(alpha=0.0003, beta1=0.9, beta2=0.999, eps=1e-08)
-        # self.optimizer = optimizers.SGD(lr=0.001)
+        # self.optimizer = optimizers.SGD(lr=0.01)
         self.optimizer.setup(self.model)
         # self.optimizer.add_hook(chainer.optimizer.GradientClipping(40))
         # self.optimizer.add_hook(chainer.optimizer.WeightDecay(0.00003))
@@ -687,8 +687,9 @@ class SentencePairModel(Chain):
         r.add_observer('spinn', self.spinn)
         observation = {}
         with r.scope(observation):
-            h_both, transition_loss = self.spinn(example)
+            h_both, _ = self.spinn(example)
         transition_acc = observation.get('spinn/transition_accuracy', 0.0)
+        transition_loss = observation.get('spinn/transition_loss', None)
 
         h_premise = F.concat(h_both[:batch_size], axis=0)
         h_hypothesis = F.concat(h_both[batch_size:], axis=0)

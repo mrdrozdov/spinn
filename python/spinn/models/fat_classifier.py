@@ -34,7 +34,7 @@ from spinn.data.boolean import load_boolean_data
 from spinn.data.sst import load_sst_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
-from spinn.util.chainer_blocks import gradient_check
+from spinn.util.chainer_blocks import gradient_check, l2_cost
 
 import spinn.fat_stack
 import spinn.plain_rnn_chainer
@@ -249,6 +249,7 @@ def run(only_forward=False):
         progress_bar = SimpleProgressBar(msg="Training", bar_length=60, enabled=FLAGS.show_progress_bar)
         avg_class_acc = 0
         avg_trans_acc = 0
+        avg_trans_acc = 0
         for step in range(step, FLAGS.training_steps):
             X_batch, transitions_batch, y_batch, num_transitions_batch = training_data_iter.next()
             learning_rate = FLAGS.learning_rate * (FLAGS.learning_rate_decay_per_10k_steps ** (step / 10000.0))
@@ -272,19 +273,26 @@ def run(only_forward=False):
             if FLAGS.show_intermediate_stats and step % 5 == 0 and step % FLAGS.statistics_interval_steps > 0:
                 print("Accuracies so far : ", avg_class_acc / (step % FLAGS.statistics_interval_steps), avg_trans_acc / (step % FLAGS.statistics_interval_steps))
 
+            # Extract L2 Cost
+            model = classifier_trainer.optimizer.target
+            l2_loss = l2_cost(model, FLAGS.l2_lambda)
+            l2_cost_val = l2_loss.data
+
             # Accumulate Total Loss Data
             total_cost_val = 0.0
             total_cost_val += xent_cost_val
             total_cost_val += transition_cost_val
+            total_cost_val += l2_cost_val
 
             # Accumulate Total Loss Variable
             total_loss = 0.0
             total_loss += xent_loss
+            total_loss += l2_loss
             if hasattr(transition_loss, 'backward'):
                 total_loss += transition_loss
 
             total_loss.backward()
-
+            
             if FLAGS.gradient_check:
                 def get_loss():
                     _, check_loss, _, _ = classifier_trainer.forward({
@@ -316,9 +324,8 @@ def run(only_forward=False):
                 avg_class_acc /= FLAGS.statistics_interval_steps
                 avg_trans_acc /= FLAGS.statistics_interval_steps
                 logger.Log(
-                    "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %s"
-                    % (step, avg_class_acc, avg_trans_acc, total_cost_val, xent_cost_val, transition_cost_val,
-                       "l2-not-exposed"))
+                    "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %5f"
+                    % (step, avg_class_acc, avg_trans_acc, total_cost_val, xent_cost_val, transition_cost_val, l2_cost_val))
                 avg_trans_acc = 0
                 avg_class_acc = 0
 
