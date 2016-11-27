@@ -519,13 +519,6 @@ class SPINN(Chain):
         self.save_stack = args.save_stack
         self.use_reinforce = use_reinforce
 
-        if use_reinforce:
-            self.optimizer_lr = 0.01
-            self.baseline = 0
-            self.mu = 0.1
-            self.transition_optimizer = optimizers.SGD(lr=self.optimizer_lr)
-            self.transition_optimizer.setup(self.tracker)
-
     def __call__(self, example, attention=None, print_transitions=False):
         self.bufs = self.embed(example.tokens)
         # prepend with NULL NULL:
@@ -543,17 +536,6 @@ class SPINN(Chain):
             self.transitions = example.transitions
         self.attention = attention
         return self.run(run_internal_parser=True)
-
-    def reinforce(self, reward, transition_loss):
-        self.transition_optimizer.lr = (self.optimizer_lr*(reward - self.baseline)).data
-        self.baseline = self.baseline*(1-self.mu)+self.mu*reward
-
-        self.tracker.cleargrads()
-        transition_loss.backward()
-        transition_loss.unchain_backward()
-        self.transition_optimizer.update()
-
-        return transition_loss
 
     def run(self, print_transitions=False, run_internal_parser=False,
             use_internal_parser=False):

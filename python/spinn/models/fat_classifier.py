@@ -41,6 +41,9 @@ import spinn.plain_rnn_chainer
 import spinn.cbow
 import spinn.nti
 
+# Try to avoid chainer imports as much as possible.
+from chainer import optimizers
+
 
 FLAGS = gflags.FLAGS
 
@@ -109,6 +112,13 @@ def evaluate(classifier_trainer, eval_set, logger, step):
     logger.Log("Step: %i\tEval acc: %f\t %f\t%s" %
               (step, acc_accum / eval_batches, action_acc_accum / eval_batches, eval_set[0]))
     return acc_accum / eval_batches
+
+
+def reinforce(optimizer, lr, baseline, mu, reward, transition_loss):
+    new_lr = (lr*(reward - baseline)).data
+    baseline = baseline*(1-mu)+mu*reward
+
+    return new_lr, baseline
 
 
 def run(only_forward=False):
@@ -255,6 +265,15 @@ def run(only_forward=False):
             lr=FLAGS.learning_rate,
             )
 
+        model = classifier_trainer.optimizer.target
+
+        if FLAGS.use_reinforce:
+            optimizer_lr = 0.01
+            baseline = 0
+            mu = 0.1
+            transition_optimizer = optimizers.SGD(lr=optimizer_lr)
+            transition_optimizer.setup(model.spinn.tracker)
+
         # New Training Loop
         progress_bar = SimpleProgressBar(msg="Training", bar_length=60, enabled=FLAGS.show_progress_bar)
         avg_class_acc = 0
@@ -287,7 +306,6 @@ def run(only_forward=False):
                 print("Accuracies so far : ", avg_class_acc / (step % FLAGS.statistics_interval_steps), avg_trans_acc / (step % FLAGS.statistics_interval_steps))
 
             # Extract L2 Cost
-            model = classifier_trainer.optimizer.target
             l2_loss = l2_cost(model, FLAGS.l2_lambda)
             l2_cost_val = l2_loss.data
 
@@ -324,7 +342,12 @@ def run(only_forward=False):
 
             if FLAGS.use_reinforce:
                 transition_cost_val = transition_loss.data
-                model.spinn.reinforce(rewards, transition_loss)
+                
+                transition_optimizer.zero_grads()
+                optimizer_lr, baseline = reinforce(transition_optimizer, optimizer_lr, baseline, mu, rewards, transition_loss)
+                transition_loss.backward()
+                # transition_loss.unchain_backward()
+                transition_optimizer.update()
 
             # Accumulate accuracy for current interval.
             action_acc_val = 0.0
