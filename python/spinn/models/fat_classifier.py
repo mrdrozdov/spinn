@@ -323,8 +323,8 @@ def run(only_forward=False):
                 pass
 
             if FLAGS.use_reinforce:
-                transition_loss = model.spinn.reinforce(rewards)
                 transition_cost_val = transition_loss.data
+                model.spinn.reinforce(rewards, transition_loss)
 
             # Accumulate accuracy for current interval.
             action_acc_val = 0.0
