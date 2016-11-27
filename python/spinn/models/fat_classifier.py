@@ -43,6 +43,7 @@ import spinn.nti
 
 # Try to avoid chainer imports as much as possible.
 from chainer import optimizers
+import chainer.functions as F
 
 
 FLAGS = gflags.FLAGS
@@ -78,8 +79,6 @@ def build_sentence_pair_model(model_cls, trainer_cls, vocab_size, model_dim, wor
 
 
 def build_rewards(logits, y):
-    import chainer.functions as F
-
     return F.accuracy(logits, y) - 0.5
 
 
@@ -340,14 +339,14 @@ def run(only_forward=False):
                 import ipdb; ipdb.set_trace()
                 pass
 
-            if FLAGS.use_reinforce:
-                transition_cost_val = transition_loss.data
+            # if FLAGS.use_reinforce:
+            #     transition_cost_val = transition_loss.data
                 
-                transition_optimizer.zero_grads()
-                optimizer_lr, baseline = reinforce(transition_optimizer, optimizer_lr, baseline, mu, rewards, transition_loss)
-                transition_loss.backward()
-                # transition_loss.unchain_backward()
-                transition_optimizer.update()
+            #     transition_optimizer.zero_grads()
+            #     optimizer_lr, baseline = reinforce(transition_optimizer, optimizer_lr, baseline, mu, rewards, transition_loss)
+            #     transition_loss.backward()
+            #     # transition_loss.unchain_backward()
+            #     transition_optimizer.update()
 
             # Accumulate accuracy for current interval.
             action_acc_val = 0.0
