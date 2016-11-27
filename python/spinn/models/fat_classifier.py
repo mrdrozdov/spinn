@@ -354,6 +354,8 @@ if __name__ == '__main__':
     gflags.DEFINE_bool("show_intermediate_stats", False, "Print stats more frequently than regular interval."
                                                          "Mostly to retain timing with progress bar")
     gflags.DEFINE_integer("profile_steps", 3, "Specify how many steps to profile.")
+    gflags.DEFINE_string("branch_name", "", "")
+    gflags.DEFINE_string("sha", "", "")
 
     # Experiment naming.
     gflags.DEFINE_string("experiment_name", "", "")
@@ -479,5 +481,11 @@ if __name__ == '__main__':
     if not FLAGS.debug:
         chainer.set_debug(False)
         os.environ['CHAINER_TYPE_CHECK'] = '0'
+
+    if not FLAGS.branch_name:
+        FLAGS.branch_name = os.popen('git rev-parse --abbrev-ref HEAD').read().strip()
+
+    if not FLAGS.sha:
+        FLAGS.sha = os.popen('git rev-parse HEAD').read().strip()
 
     run(only_forward=FLAGS.expanded_eval_only_mode)
