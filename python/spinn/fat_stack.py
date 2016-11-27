@@ -229,17 +229,21 @@ class Embed(Chain):
     """
 
     def __init__(self, size, vocab_size, dropout, vectors, normalization=None,
-                 make_buffers=True, activation=None):
+                 make_buffers=True, activation=None,
+                 use_input_dropout=True, use_input_norm=True):
         size = 2 * size if make_buffers else size
         if vectors is None:
             super(Embed, self).__init__(embed=L.EmbedID(vocab_size, size))
         else:
             super(Embed, self).__init__(projection=L.Linear(vectors.shape[1], size))
-        # self.add_link('normalization', normalization(size))
+        if use_input_norm:
+            self.add_link('normalization', normalization(size))
         self.vectors = vectors
         self.dropout = dropout
         self.make_buffers = make_buffers
         self.activation = (lambda x: x) if activation is None else activation
+        self.use_input_dropout = use_input_dropout
+        self.use_input_norm = use_input_norm
 
     def __call__(self, tokens):
         """Embed a tensor of tokens into a list of SPINN buffers.
@@ -270,8 +274,13 @@ class Embed(Chain):
             embeds = self.projection(embeds)
         if not self.make_buffers:
             return self.activation(F.reshape(embeds, (b, l, -1)))
-        # embeds = self.normalization(embeds, embeds.volatile == 'on')
-        # embeds = F.dropout(embeds, self.dropout, embeds.volatile == 'off')
+        
+        if self.use_input_norm:
+            embeds = self.normalization(embeds, embeds.volatile == 'on')
+        
+        if self.use_input_dropout:
+            embeds = F.dropout(embeds, self.dropout, embeds.volatile == 'off')
+        
         # if not self.make_buffers:
         #     return F.reshape(embeds, (b, l, -1))
         embeds = F.split_axis(to_cpu(embeds), b, axis=0, force_tuple=True)
@@ -326,7 +335,12 @@ def treelstm(c_left, c_right, gates):
     cell_inp = F.tanh(cell_inp)
 
     # Compute new cell and hidden value
-    c_t = fl_gate * c_left + fr_gate * c_right + i_gate * cell_inp
+    i_val = i_gate * cell_inp
+    use_dropout = True
+    dropout_rate = 0.1
+    if use_dropout:
+        i_val = F.dropout(i_val, dropout_rate, train=i_val.volatile == False)
+    c_t = fl_gate * c_left + fr_gate * c_right + i_val
     h_t = o_gate * F.tanh(c_t)
 
     return (c_t, h_t)
@@ -453,6 +467,12 @@ class Tracker(Chain):
                 self.xp.zeros((self.batch_size, self.state_size),
                               dtype=lstm_in.data.dtype),
                 volatile='auto')
+
+        use_dropout = True
+        dropout_rate = 0.1
+        if use_dropout:
+            lstm_in = F.dropout(lstm_in, dropout_rate, train=lstm_in.volatile == False)
+
         self.c, self.h = F.lstm(self.c, lstm_in)
         if hasattr(self, 'transition'):
             return self.transition(self.h)
@@ -726,6 +746,7 @@ class SentenceModel(Chain):
                  make_logits=False,
                  use_history=False,
                  save_stack=False,
+                 use_batch_norm=True,
                  **kwargs
                 ):
         super(SentenceModel, self).__init__(
@@ -741,7 +762,7 @@ class SentenceModel(Chain):
         self.__mod = cuda.cupy if gpu >= 0 else np
         self.accFun = accuracy.accuracy
         self.initial_embeddings = initial_embeddings
-        self.keep_rate = keep_rate
+        self.dropout_rate = 1. - keep_rate
         self.word_embedding_dim = word_embedding_dim
         self.model_dim = model_dim
 
@@ -762,6 +783,11 @@ class SentenceModel(Chain):
             'vectors': initial_embeddings,
         }
         vocab = argparse.Namespace(**vocab)
+
+        if use_batch_norm:
+            self.add_link('bn_0', L.BatchNormalization(model_dim))
+            self.add_link('bn_1', L.BatchNormalization(mlp_dim))
+            self.add_link('bn_2', L.BatchNormalization(mlp_dim))
 
         self.add_link('spinn', SPINN(args, vocab, normalization=L.BatchNormalization,
                  attention=False, attn_fn=None))
@@ -794,10 +820,19 @@ class SentenceModel(Chain):
 
         # Pass through MLP Classifier.
         h = to_gpu(h)
+        if hasattr(self, 'bn_0'):
+            h = self.bn_0(h, not train)
+        h = F.dropout(h, self.dropout_rate, train)
         h = self.l0(h)
         h = F.relu(h)
+        if hasattr(self, 'bn_1'):
+            h = self.bn_1(h, not train)
+        h = F.dropout(h, self.dropout_rate, train)
         h = self.l1(h)
         h = F.relu(h)
+        if hasattr(self, 'bn_2'):
+            h = self.bn_2(h, not train)
+        h = F.dropout(h, self.dropout_rate, train)
         h = self.l2(h)
         y = h
 
