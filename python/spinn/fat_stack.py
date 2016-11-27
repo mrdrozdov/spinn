@@ -731,6 +731,7 @@ class BaseModel(Chain):
         self.use_classifier_norm = use_classifier_norm
         self.word_embedding_dim = word_embedding_dim
         self.model_dim = model_dim
+        self.use_reinforce = use_reinforce
 
         args = {
             'size': model_dim/2,
@@ -753,7 +754,7 @@ class BaseModel(Chain):
         vocab = argparse.Namespace(**vocab)
 
         self.add_link('spinn', SPINN(args, vocab, normalization=L.BatchNormalization,
-                 attention=False, attn_fn=None))
+                 attention=False, attn_fn=None, use_reinforce=use_reinforce))
 
 
     def build_example(self, sentences, transitions, train):
@@ -766,6 +767,10 @@ class BaseModel(Chain):
         observation = {}
         with r.scope(observation):
             h, _ = self.spinn(example)
+            if self.use_reinforce:
+                self.spinn.reset_state()
+            h_both, _ = self.spinn(example)
+
         transition_acc = observation.get('spinn/transition_accuracy', 0.0)
         transition_loss = observation.get('spinn/transition_loss', None)
         return h, transition_acc, transition_loss
