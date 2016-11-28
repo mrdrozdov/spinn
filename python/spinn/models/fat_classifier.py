@@ -254,7 +254,8 @@ def run(only_forward=False):
 
     # Do an evaluation-only run.
     if only_forward:
-        raise Exception("Not implemented for chainer.")
+        for index, eval_set in enumerate(eval_iterators):
+            acc = evaluate(classifier_trainer, eval_set, logger, step)
     else:
          # Train
         logger.Log("Training.")
