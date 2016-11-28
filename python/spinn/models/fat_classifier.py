@@ -339,14 +339,14 @@ def run(only_forward=False):
                 import ipdb; ipdb.set_trace()
                 pass
 
-            # if FLAGS.use_reinforce:
-            #     transition_cost_val = transition_loss.data
-                
-            #     transition_optimizer.zero_grads()
-            #     optimizer_lr, baseline = reinforce(transition_optimizer, optimizer_lr, baseline, mu, rewards, transition_loss)
-            #     transition_loss.backward()
-            #     # transition_loss.unchain_backward()
-            #     transition_optimizer.update()
+            if FLAGS.use_reinforce:
+                transition_cost_val = transition_loss.data
+
+                transition_optimizer.zero_grads()
+                optimizer_lr, baseline = reinforce(transition_optimizer, optimizer_lr, baseline, mu, rewards, transition_loss)
+                transition_loss.backward()
+                # transition_loss.unchain_backward()
+                transition_optimizer.update()
 
             # Accumulate accuracy for current interval.
             action_acc_val = 0.0

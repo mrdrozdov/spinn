@@ -479,8 +479,6 @@ class Tracker(Chain):
         if self.use_tracker_dropout:
             lstm_in = F.dropout(lstm_in, self.tracker_dropout_rate, train=lstm_in.volatile == False)
 
-        c_prev, h_prev = self.c, self.h
-
         self.c, self.h = F.lstm(self.c, lstm_in)
         if hasattr(self, 'transition'):
             return self.transition(self.h)
@@ -678,6 +676,7 @@ class BaseModel(Chain):
                  make_logits=False,
                  use_history=False,
                  save_stack=False,
+                 use_reinforce=False,
                  use_sentence_pair=False,
                  **kwargs
                 ):
@@ -739,8 +738,6 @@ class BaseModel(Chain):
         r.add_observer('spinn', self.spinn)
         observation = {}
         with r.scope(observation):
-            if self.use_reinforce:
-                self.spinn.reset_state()
             h_both, _ = self.spinn(example)
 
         transition_acc = observation.get('spinn/transition_accuracy', 0.0)
