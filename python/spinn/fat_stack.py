@@ -61,7 +61,7 @@ Style Guide:
    especially in this model a list is preferred, but try to stick to
    this as close as possible. When avoiding this rule, consider setting
    a property rather than passing the variable. For instance:
-   
+
    ```
    link.transitions = transitions
    loss = link(sentences)
@@ -105,6 +105,10 @@ def arr_to_gpu(arr):
         return cuda.to_gpu(arr)
     else:
         return arr
+
+
+def is_train(var):
+    return var.volatile == False
 
 
 class LSTMState:
@@ -274,13 +278,13 @@ class Embed(Chain):
             embeds = self.projection(embeds)
         if not self.make_buffers:
             return self.activation(F.reshape(embeds, (b, l, -1)))
-        
+
         if self.use_input_norm:
             embeds = self.normalization(embeds, embeds.volatile == 'on')
-        
+
         if self.use_input_dropout:
             embeds = F.dropout(embeds, self.dropout, embeds.volatile == 'off')
-        
+
         # if not self.make_buffers:
         #     return F.reshape(embeds, (b, l, -1))
         embeds = F.split_axis(to_cpu(embeds), b, axis=0, force_tuple=True)
@@ -455,9 +459,11 @@ class Tracker(Chain):
 
     def __call__(self, bufs, stacks):
         self.batch_size = len(bufs)
+        zeros = Variable(np.zeros(bufs[0][0].shape, dtype=bufs[0][0].data.dtype),
+                         volatile='auto')
         buf = bundle(buf[-1] for buf in bufs)
-        stack1 = bundle(stack[-1] for stack in stacks)
-        stack2 = bundle(stack[-2] for stack in stacks)
+        stack1 = bundle(stack[-1] if len(stack) > 0 else zeros for stack in stacks)
+        stack2 = bundle(stack[-2] if len(stack) > 1 else zeros for stack in stacks)
 
         lstm_in = self.buf(buf.h)
         lstm_in += self.stack1(stack1.h)
@@ -492,7 +498,7 @@ class Tracker(Chain):
 class SPINN(Chain):
 
     def __init__(self, args, vocab, normalization=L.BatchNormalization,
-                 attention=False, attn_fn=None):
+                 attention=False, attn_fn=None, use_reinforce=True):
         super(SPINN, self).__init__(
             embed=Embed(args.size, vocab.size, args.input_dropout_rate,
                         vectors=vocab.vectors, normalization=normalization,
@@ -509,6 +515,7 @@ class SPINN(Chain):
         self.transition_weight = args.transition_weight
         self.use_history = args.use_history
         self.save_stack = args.save_stack
+        self.use_reinforce = use_reinforce
 
     def __call__(self, example, attention=None, print_transitions=False):
         self.bufs = self.embed(example.tokens)
@@ -558,15 +565,39 @@ class SPINN(Chain):
                 if transition_hyp is not None and run_internal_parser:
                     transition_hyp = to_cpu(transition_hyp)
                     if hasattr(self, 'transitions'):
-                        transition_loss += F.softmax_cross_entropy(
-                            transition_hyp, transitions,
-                            normalize=False)
-                        local_transition_acc = F.accuracy(
-                            transition_hyp, transitions)
-                        transition_acc += local_transition_acc
+                        if self.use_reinforce:
+                            probas = F.softmax(transition_hyp)
+                            samples = np.array([np.random.choice(3, 1, p=proba)[0] for proba in probas.data])
+
+                            validate_transitions = True
+                            if validate_transitions:
+                                # TODO: Almost definitely these don't work as expected because of how
+                                # things are initialized and because of the SKIP action.
+
+                                # Cannot reduce on too small a stack
+                                must_shift = np.array([len(stack) < 2 for stack in self.stacks])
+                                samples[must_shift] = 0
+
+                                # Cannot shift if stack has to be reduced
+                                must_reduce = np.array([len(buf) >= num_transitions for buf in self.bufs])
+                                samples[must_reduce] = 1
+
+                            local_transition_acc = F.accuracy(
+                                probas, transitions)
+                            transition_acc += local_transition_acc
+                            transition_loss += F.softmax_cross_entropy(
+                                probas, samples.astype('int32'),
+                                normalize=False)
+
+                        else:
+                            transition_loss += F.softmax_cross_entropy(
+                                transition_hyp, transitions,
+                                normalize=False)
+                            local_transition_acc = F.accuracy(
+                                transition_hyp, transitions)
+                            transition_acc += local_transition_acc
                     if use_internal_parser:
-                        transition_arr = [[0, 1, -1][x] for x in
-                                          transition_preds.tolist()]
+                        transition_arr = transition_preds.tolist()
 
             lefts, rights, trackings, attentions = [], [], [], []
             batch = zip(transition_arr, self.bufs, self.stacks, self.history,
@@ -645,6 +676,7 @@ class BaseModel(Chain):
                  make_logits=False,
                  use_history=False,
                  save_stack=False,
+                 use_reinforce=False,
                  use_sentence_pair=False,
                  **kwargs
                 ):
@@ -671,6 +703,7 @@ class BaseModel(Chain):
         self.use_classifier_norm = use_classifier_norm
         self.word_embedding_dim = word_embedding_dim
         self.model_dim = model_dim
+        self.use_reinforce = use_reinforce
 
         args = {
             'size': model_dim/2,
@@ -693,7 +726,7 @@ class BaseModel(Chain):
         vocab = argparse.Namespace(**vocab)
 
         self.add_link('spinn', SPINN(args, vocab, normalization=L.BatchNormalization,
-                 attention=False, attn_fn=None))
+                 attention=False, attn_fn=None, use_reinforce=use_reinforce))
 
 
     def build_example(self, sentences, transitions, train):
@@ -705,10 +738,11 @@ class BaseModel(Chain):
         r.add_observer('spinn', self.spinn)
         observation = {}
         with r.scope(observation):
-            h, _ = self.spinn(example)
+            h_both, _ = self.spinn(example)
+
         transition_acc = observation.get('spinn/transition_accuracy', 0.0)
         transition_loss = observation.get('spinn/transition_loss', None)
-        return h, transition_acc, transition_loss
+        return h_both, transition_acc, transition_loss
 
 
     def run_mlp(self, h, train):
@@ -747,7 +781,6 @@ class BaseModel(Chain):
 
         return y, accum_loss, self.accuracy.data, transition_acc, transition_loss
 
-
 class SentencePairModel(BaseModel):
     def build_example(self, sentences, transitions, train):
         batch_size = sentences.shape[0]
@@ -756,7 +789,7 @@ class SentencePairModel(BaseModel):
         x_prem = sentences[:,:,0]
         x_hyp = sentences[:,:,1]
         x = np.concatenate([x_prem, x_hyp], axis=0)
-        
+
         # Build Transitions
         t_prem = transitions[:,:,0]
         t_hyp = transitions[:,:,1]
@@ -764,7 +797,7 @@ class SentencePairModel(BaseModel):
 
         assert batch_size * 2 == x.shape[0]
         assert batch_size * 2 == t.shape[0]
-        
+
         example = {
             'tokens': Variable(x, volatile=not train),
             'transitions': t
@@ -773,6 +806,8 @@ class SentencePairModel(BaseModel):
 
         return example
 
+        self.add_link('spinn', SPINN(args, vocab, normalization=L.BatchNormalization,
+                 attention=False, attn_fn=None, use_reinforce=use_reinforce))
 
     def run_spinn(self, example, train):
         h_both, transition_acc, transition_loss = super(SentencePairModel, self).run_spinn(example, train)
@@ -790,7 +825,7 @@ class SentenceModel(BaseModel):
 
         # Build Tokens
         x = sentences
-        
+
         # Build Transitions
         t = transitions
 
@@ -800,6 +835,16 @@ class SentenceModel(BaseModel):
         }
         example = argparse.Namespace(**example)
 
+        # h_both is an array of states.
+        r = reporter.Reporter()
+        r.add_observer('spinn', self.spinn)
+        observation = {}
+        with r.scope(observation):
+            h, _ = self.spinn(example)
+        transition_acc = observation.get('spinn/transition_accuracy', 0.0)
+        transition_loss = observation.get('spinn/transition_loss', None)
+
+
         return example
 
     def run_spinn(self, example, train):
@@ -808,4 +853,3 @@ class SentenceModel(BaseModel):
         h = F.concat(h, axis=0)
 
         return h, transition_acc, transition_loss
-
