@@ -46,12 +46,17 @@ FLAGS = gflags.FLAGS
 
 
 def build_sentence_pair_model(model_cls, trainer_cls, vocab_size, model_dim, word_embedding_dim,
-                              seq_length, num_classes, initial_embeddings,
-                              keep_rate, gpu):
+                              seq_length, num_classes, initial_embeddings, use_sentence_pair,
+                              gpu):
     model = model_cls(model_dim, word_embedding_dim, vocab_size,
              seq_length, initial_embeddings, num_classes, mlp_dim=1024,
-             keep_rate=keep_rate,
-             gpu=gpu,
+             input_keep_rate=FLAGS.embedding_keep_rate,
+             classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
+             use_input_dropout=FLAGS.use_input_dropout,
+             use_input_norm=FLAGS.use_input_norm,
+             tracker_dropout_rate=FLAGS.tracker_dropout_rate,
+             use_tracker_dropout=FLAGS.use_tracker_dropout,
+             use_classifier_norm=FLAGS.use_classifier_norm,
              tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
              transition_weight=FLAGS.transition_weight,
              use_tracking_lstm=FLAGS.use_tracking_lstm,
@@ -59,17 +64,11 @@ def build_sentence_pair_model(model_cls, trainer_cls, vocab_size, model_dim, wor
              make_logits=FLAGS.make_logits,
              use_history=FLAGS.use_history,
              save_stack=FLAGS.save_stack,
+             use_sentence_pair=use_sentence_pair,
+             gpu=gpu,
             )
 
-    classifier_trainer = trainer_cls(model, model_dim, word_embedding_dim,
-        keep_rate=keep_rate,
-        seq_length=seq_length,
-        num_classes=num_classes,
-        mlp_dim=1024,
-        initial_embeddings=initial_embeddings,
-        use_sentence_pair=True,
-        gpu=gpu,
-        )
+    classifier_trainer = trainer_cls(model, gpu=gpu)
 
     return classifier_trainer
 
@@ -197,10 +196,12 @@ def run(only_forward=False):
             raise Exception("Unimplemented for model type %s" % FLAGS.model_type)
 
         num_classes = len(data_manager.LABEL_MAP)
+        use_sentence_pair = True
         classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
                               len(vocabulary), FLAGS.model_dim, FLAGS.word_embedding_dim,
                               FLAGS.seq_length, num_classes, initial_embeddings,
-                              FLAGS.embedding_keep_rate, FLAGS.gpu)
+                              use_sentence_pair,
+                              FLAGS.gpu)
     else:
         if hasattr(model_module, 'SentencePairTrainer') and hasattr(model_module, 'SentencePairModel'):
             trainer_cls = model_module.SentenceTrainer
@@ -209,10 +210,12 @@ def run(only_forward=False):
             raise Exception("Unimplemented for model type %s" % FLAGS.model_type)
 
         num_classes = len(data_manager.LABEL_MAP)
+        use_sentence_pair = False
         classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
                               len(vocabulary), FLAGS.model_dim, FLAGS.word_embedding_dim,
                               FLAGS.seq_length, num_classes, initial_embeddings,
-                              FLAGS.embedding_keep_rate, FLAGS.gpu)
+                              use_sentence_pair,
+                              FLAGS.gpu)
 
     if ".ckpt" in FLAGS.ckpt_path:
         checkpoint_path = FLAGS.ckpt_path
@@ -411,10 +414,15 @@ if __name__ == '__main__':
         "Use LSTM hidden state and word embedding to determine the vector to be pushed")
     gflags.DEFINE_boolean("context_sensitive_use_relu", False,
         "Use ReLU Layer to combine embedding and tracking unit hidden state")
-    gflags.DEFINE_float("semantic_classifier_keep_rate", 0.5,
+    gflags.DEFINE_float("semantic_classifier_keep_rate", 0.9,
         "Used for dropout in the semantic task classifier.")
-    gflags.DEFINE_float("embedding_keep_rate", 0.5,
+    gflags.DEFINE_float("embedding_keep_rate", 0.9,
         "Used for dropout on transformed embeddings.")
+    gflags.DEFINE_boolean("use_input_dropout", False, "")
+    gflags.DEFINE_boolean("use_input_norm", False, "")
+    gflags.DEFINE_boolean("use_tracker_dropout", True, "")
+    gflags.DEFINE_boolean("use_classifier_norm", True, "")
+    gflags.DEFINE_float("tracker_dropout_rate", 0.1, "")
     gflags.DEFINE_boolean("lstm_composition", True, "")
     gflags.DEFINE_enum("classifier_type", "MLP", ["MLP", "Highway", "ResNet"], "")
     gflags.DEFINE_integer("resnet_unit_depth", 2, "")
