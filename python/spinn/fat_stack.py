@@ -630,7 +630,7 @@ class SPINN(Chain):
         return [stack.pop() for stack in self.stacks], transition_loss
 
 
-class SentencePairModel(Chain):
+class BaseModel(Chain):
     def __init__(self, model_dim, word_embedding_dim, vocab_size,
                  seq_length, initial_embeddings, num_classes, mlp_dim,
                  input_keep_rate, classifier_keep_rate,
@@ -645,15 +645,22 @@ class SentencePairModel(Chain):
                  make_logits=False,
                  use_history=False,
                  save_stack=False,
+                 use_sentence_pair=False,
                  **kwargs
                 ):
-        super(SentencePairModel, self).__init__(
-            l0=L.Linear(model_dim*2, mlp_dim),
-            l1=L.Linear(mlp_dim, mlp_dim),
-            l2=L.Linear(mlp_dim, num_classes)
-        )
+        super(BaseModel, self).__init__()
 
         the_gpu.gpu = gpu
+
+        mlp_input_dim = model_dim * 2 if use_sentence_pair else model_dim
+        self.add_link('l0', L.Linear(mlp_input_dim, mlp_dim))
+        self.add_link('l1', L.Linear(mlp_dim, mlp_dim))
+        self.add_link('l2', L.Linear(mlp_dim, num_classes))
+
+        if use_classifier_norm:
+            self.add_link('bn_0', L.BatchNormalization(mlp_input_dim))
+            self.add_link('bn_1', L.BatchNormalization(mlp_dim))
+            self.add_link('bn_2', L.BatchNormalization(mlp_dim))
 
         self.classifier = CrossEntropyClassifier(gpu)
         self.__gpu = gpu
@@ -665,11 +672,9 @@ class SentencePairModel(Chain):
         self.word_embedding_dim = word_embedding_dim
         self.model_dim = model_dim
 
-        tracker_size = tracking_lstm_hidden_dim if use_tracking_lstm else None
-
         args = {
             'size': model_dim/2,
-            'tracker_size': tracker_size,
+            'tracker_size': tracking_lstm_hidden_dim if use_tracking_lstm else None,
             'transition_weight': transition_weight,
             'use_history': use_history,
             'save_stack': save_stack,
@@ -687,15 +692,64 @@ class SentencePairModel(Chain):
         }
         vocab = argparse.Namespace(**vocab)
 
-        if use_classifier_norm:
-            self.add_link('bn_0', L.BatchNormalization(model_dim*2))
-            self.add_link('bn_1', L.BatchNormalization(mlp_dim))
-            self.add_link('bn_2', L.BatchNormalization(mlp_dim))
-
         self.add_link('spinn', SPINN(args, vocab, normalization=L.BatchNormalization,
                  attention=False, attn_fn=None))
 
+
+    def build_example(self, sentences, transitions, train):
+        raise Exception('Not implemented.')
+
+
+    def run_spinn(self, example, train):
+        r = reporter.Reporter()
+        r.add_observer('spinn', self.spinn)
+        observation = {}
+        with r.scope(observation):
+            h, _ = self.spinn(example)
+        transition_acc = observation.get('spinn/transition_accuracy', 0.0)
+        transition_loss = observation.get('spinn/transition_loss', None)
+        return h, transition_acc, transition_loss
+
+
+    def run_mlp(self, h, train):
+        # Pass through MLP Classifier.
+        h = to_gpu(h)
+        if hasattr(self, 'bn_0'):
+            h = self.bn_0(h, not train)
+        h = F.dropout(h, self.classifier_dropout_rate, train)
+        h = self.l0(h)
+        h = F.relu(h)
+        if hasattr(self, 'bn_1'):
+            h = self.bn_1(h, not train)
+        h = F.dropout(h, self.classifier_dropout_rate, train)
+        h = self.l1(h)
+        h = F.relu(h)
+        if hasattr(self, 'bn_2'):
+            h = self.bn_2(h, not train)
+        h = F.dropout(h, self.classifier_dropout_rate, train)
+        h = self.l2(h)
+        y = h
+
+        return y
+
+
     def __call__(self, sentences, transitions, y_batch=None, train=True):
+        example = self.build_example(sentences, transitions, train)
+        h, transition_acc, transition_loss = self.run_spinn(example, train)
+        y = self.run_mlp(h, train)
+
+        # Calculate Loss & Accuracy.
+        accum_loss = self.classifier(y, Variable(y_batch, volatile=not train), train)
+        self.accuracy = self.accFun(y, self.__mod.array(y_batch))
+
+        if hasattr(transition_acc, 'data'):
+          transition_acc = transition_acc.data
+
+        return y, accum_loss, self.accuracy.data, transition_acc, transition_loss
+
+
+class SentencePairModel(BaseModel):
+    def build_example(self, sentences, transitions, train):
         batch_size = sentences.shape[0]
 
         # Build Tokens
@@ -717,114 +771,21 @@ class SentencePairModel(Chain):
         }
         example = argparse.Namespace(**example)
 
-        # h_both is an array of states.
-        r = reporter.Reporter()
-        r.add_observer('spinn', self.spinn)
-        observation = {}
-        with r.scope(observation):
-            h_both, _ = self.spinn(example)
-        transition_acc = observation.get('spinn/transition_accuracy', 0.0)
-        transition_loss = observation.get('spinn/transition_loss', None)
+        return example
+
+
+    def run_spinn(self, example, train):
+        h_both, transition_acc, transition_loss = super(SentencePairModel, self).run_spinn(example, train)
 
         h_premise = F.concat(h_both[:batch_size], axis=0)
         h_hypothesis = F.concat(h_both[batch_size:], axis=0)
-
-        # Pass through MLP Classifier.
         h = F.concat([h_premise, h_hypothesis], axis=1)
-        
-        h = to_gpu(h)
-        if hasattr(self, 'bn_0'):
-            h = self.bn_0(h, not train)
-        h = F.dropout(h, self.classifier_dropout_rate, train)
-        h = self.l0(h)
-        h = F.relu(h)
-        if hasattr(self, 'bn_1'):
-            h = self.bn_1(h, not train)
-        h = F.dropout(h, self.classifier_dropout_rate, train)
-        h = self.l1(h)
-        h = F.relu(h)
-        if hasattr(self, 'bn_2'):
-            h = self.bn_2(h, not train)
-        h = F.dropout(h, self.classifier_dropout_rate, train)
-        h = self.l2(h)
-        y = h
 
-        # Calculate Loss & Accuracy.
-        accum_loss = self.classifier(y, Variable(y_batch, volatile=not train), train)
-        self.accuracy = self.accFun(y, self.__mod.array(y_batch))
-
-        if hasattr(transition_acc, 'data'):
-          transition_acc = transition_acc.data
-
-        return y, accum_loss, self.accuracy.data, transition_acc, transition_loss
-
-class SentenceModel(Chain):
-    def __init__(self, model_dim, word_embedding_dim, vocab_size,
-                 seq_length, initial_embeddings, num_classes, mlp_dim,
-                 input_keep_rate, classifier_keep_rate,
-                 use_tracker_dropout=True, tracker_dropout_rate=0.1,
-                 use_input_dropout=False, use_input_norm=False,
-                 use_classifier_norm=True,
-                 gpu=-1,
-                 tracking_lstm_hidden_dim=4,
-                 transition_weight=None,
-                 use_tracking_lstm=True,
-                 use_shift_composition=True,
-                 make_logits=False,
-                 use_history=False,
-                 save_stack=False,
-                 **kwargs
-                ):
-        super(SentenceModel, self).__init__(
-            l0=L.Linear(model_dim, mlp_dim),
-            l1=L.Linear(mlp_dim, mlp_dim),
-            l2=L.Linear(mlp_dim, num_classes)
-        )
-
-        the_gpu.gpu = gpu
-
-        self.classifier = CrossEntropyClassifier(gpu)
-        self.__gpu = gpu
-        self.__mod = cuda.cupy if gpu >= 0 else np
-        self.accFun = accuracy.accuracy
-        self.initial_embeddings = initial_embeddings
-        self.classifier_dropout_rate = 1. - classifier_keep_rate
-        self.use_classifier_norm = use_classifier_norm
-        self.word_embedding_dim = word_embedding_dim
-        self.model_dim = model_dim
-
-        tracker_size = tracking_lstm_hidden_dim if use_tracking_lstm else None
-
-        args = {
-            'size': model_dim/2,
-            'tracker_size': tracker_size,
-            'transition_weight': transition_weight,
-            'use_history': use_history,
-            'save_stack': save_stack,
-            'input_dropout_rate': 1. - input_keep_rate,
-            'use_input_dropout': use_input_dropout,
-            'use_input_norm': use_input_norm,
-            'use_tracker_dropout': use_tracker_dropout,
-            'tracker_dropout_rate': tracker_dropout_rate,
-        }
-        args = argparse.Namespace(**args)
-
-        vocab = {
-            'size': initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size,
-            'vectors': initial_embeddings,
-        }
-        vocab = argparse.Namespace(**vocab)
-
-        if use_classifier_norm:
-            self.add_link('bn_0', L.BatchNormalization(model_dim))
-            self.add_link('bn_1', L.BatchNormalization(mlp_dim))
-            self.add_link('bn_2', L.BatchNormalization(mlp_dim))
-
-        self.add_link('spinn', SPINN(args, vocab, normalization=L.BatchNormalization,
-                 attention=False, attn_fn=None))
+        return h, transition_acc, transition_loss
 
 
-    def __call__(self, sentences, transitions, y_batch=None, train=True):
+class SentenceModel(BaseModel):
+    def build_example(self, sentences, transitions, train):
         batch_size = sentences.shape[0]
 
         # Build Tokens
@@ -839,40 +800,12 @@ class SentenceModel(Chain):
         }
         example = argparse.Namespace(**example)
 
-        # h_both is an array of states.
-        r = reporter.Reporter()
-        r.add_observer('spinn', self.spinn)
-        observation = {}
-        with r.scope(observation):
-            h, _ = self.spinn(example)
-        transition_acc = observation.get('spinn/transition_accuracy', 0.0)
-        transition_loss = observation.get('spinn/transition_loss', None)
+        return example
+
+    def run_spinn(self, example, train):
+        h, transition_acc, transition_loss = super(SentenceModel, self).run_spinn(example, train)
 
         h = F.concat(h, axis=0)
 
-        # Pass through MLP Classifier.
-        h = to_gpu(h)
-        if hasattr(self, 'bn_0'):
-            h = self.bn_0(h, not train)
-        h = F.dropout(h, self.classifier_dropout_rate, train)
-        h = self.l0(h)
-        h = F.relu(h)
-        if hasattr(self, 'bn_1'):
-            h = self.bn_1(h, not train)
-        h = F.dropout(h, self.classifier_dropout_rate, train)
-        h = self.l1(h)
-        h = F.relu(h)
-        if hasattr(self, 'bn_2'):
-            h = self.bn_2(h, not train)
-        h = F.dropout(h, self.classifier_dropout_rate, train)
-        h = self.l2(h)
-        y = h
+        return h, transition_acc, transition_loss
 
-        # Calculate Loss & Accuracy.
-        accum_loss = self.classifier(y, Variable(y_batch, volatile=not train), train)
-        self.accuracy = self.accFun(y, self.__mod.array(y_batch))
-
-        if hasattr(transition_acc, 'data'):
-          transition_acc = transition_acc.data
-
-        return y, accum_loss, self.accuracy.data, transition_acc, transition_loss

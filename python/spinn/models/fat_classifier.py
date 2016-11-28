@@ -46,7 +46,7 @@ FLAGS = gflags.FLAGS
 
 
 def build_sentence_pair_model(model_cls, trainer_cls, vocab_size, model_dim, word_embedding_dim,
-                              seq_length, num_classes, initial_embeddings,
+                              seq_length, num_classes, initial_embeddings, use_sentence_pair,
                               gpu):
     model = model_cls(model_dim, word_embedding_dim, vocab_size,
              seq_length, initial_embeddings, num_classes, mlp_dim=1024,
@@ -64,6 +64,7 @@ def build_sentence_pair_model(model_cls, trainer_cls, vocab_size, model_dim, wor
              make_logits=FLAGS.make_logits,
              use_history=FLAGS.use_history,
              save_stack=FLAGS.save_stack,
+             use_sentence_pair=use_sentence_pair,
              gpu=gpu,
             )
 
@@ -195,9 +196,11 @@ def run(only_forward=False):
             raise Exception("Unimplemented for model type %s" % FLAGS.model_type)
 
         num_classes = len(data_manager.LABEL_MAP)
+        use_sentence_pair = True
         classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
                               len(vocabulary), FLAGS.model_dim, FLAGS.word_embedding_dim,
                               FLAGS.seq_length, num_classes, initial_embeddings,
+                              use_sentence_pair,
                               FLAGS.gpu)
     else:
         if hasattr(model_module, 'SentencePairTrainer') and hasattr(model_module, 'SentencePairModel'):
@@ -207,9 +210,11 @@ def run(only_forward=False):
             raise Exception("Unimplemented for model type %s" % FLAGS.model_type)
 
         num_classes = len(data_manager.LABEL_MAP)
+        use_sentence_pair = False
         classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
                               len(vocabulary), FLAGS.model_dim, FLAGS.word_embedding_dim,
                               FLAGS.seq_length, num_classes, initial_embeddings,
+                              use_sentence_pair,
                               FLAGS.gpu)
 
     if ".ckpt" in FLAGS.ckpt_path:
