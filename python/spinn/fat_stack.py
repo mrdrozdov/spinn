@@ -230,7 +230,7 @@ class Embed(Chain):
 
     def __init__(self, size, vocab_size, dropout, vectors, normalization=None,
                  make_buffers=True, activation=None,
-                 use_input_dropout=True, use_input_norm=True):
+                 use_input_dropout=False, use_input_norm=False):
         size = 2 * size if make_buffers else size
         if vectors is None:
             super(Embed, self).__init__(embed=L.EmbedID(vocab_size, size))
@@ -437,7 +437,7 @@ class Reduce(Chain):
 
 class Tracker(Chain):
 
-    def __init__(self, size, tracker_size, predict):
+    def __init__(self, size, tracker_size, predict, use_tracker_dropout=True, tracker_dropout_rate=0.1):
         super(Tracker, self).__init__(
             lateral=L.Linear(tracker_size, 4 * tracker_size),
             buf=L.Linear(size, 4 * tracker_size, nobias=True),
@@ -446,6 +446,8 @@ class Tracker(Chain):
         if predict:
             self.add_link('transition', L.Linear(tracker_size, 3))
         self.state_size = tracker_size
+        self.tracker_dropout_rate = tracker_dropout_rate
+        self.use_tracker_dropout = use_tracker_dropout
         self.reset_state()
 
     def reset_state(self):
@@ -468,10 +470,8 @@ class Tracker(Chain):
                               dtype=lstm_in.data.dtype),
                 volatile='auto')
 
-        use_dropout = True
-        dropout_rate = 0.1
-        if use_dropout:
-            lstm_in = F.dropout(lstm_in, dropout_rate, train=lstm_in.volatile == False)
+        if self.use_tracker_dropout:
+            lstm_in = F.dropout(lstm_in, self.tracker_dropout_rate, train=lstm_in.volatile == False)
 
         self.c, self.h = F.lstm(self.c, lstm_in)
         if hasattr(self, 'transition'):
@@ -494,13 +494,18 @@ class SPINN(Chain):
     def __init__(self, args, vocab, normalization=L.BatchNormalization,
                  attention=False, attn_fn=None):
         super(SPINN, self).__init__(
-            embed=Embed(args.size, vocab.size, args.embed_dropout,
-                        vectors=vocab.vectors, normalization=normalization),
+            embed=Embed(args.size, vocab.size, args.input_dropout_rate,
+                        vectors=vocab.vectors, normalization=normalization,
+                        use_input_dropout=args.use_input_dropout,
+                        use_input_norm=args.use_input_norm,
+                        ),
             reduce=Reduce(args.size, args.tracker_size, attention, attn_fn))
         if args.tracker_size is not None:
             self.add_link('tracker', Tracker(
                 args.size, args.tracker_size,
-                predict=args.transition_weight is not None))
+                predict=args.transition_weight is not None,
+                use_tracker_dropout=args.use_tracker_dropout,
+                tracker_dropout_rate=args.tracker_dropout_rate))
         self.transition_weight = args.transition_weight
         self.use_history = args.use_history
         self.save_stack = args.save_stack
@@ -628,7 +633,10 @@ class SPINN(Chain):
 class SentencePairModel(Chain):
     def __init__(self, model_dim, word_embedding_dim, vocab_size,
                  seq_length, initial_embeddings, num_classes, mlp_dim,
-                 keep_rate,
+                 input_keep_rate, classifier_keep_rate,
+                 use_tracker_dropout=True, tracker_dropout_rate=0.1,
+                 use_input_dropout=False, use_input_norm=False,
+                 use_classifier_norm=True,
                  gpu=-1,
                  tracking_lstm_hidden_dim=4,
                  transition_weight=None,
@@ -640,9 +648,6 @@ class SentencePairModel(Chain):
                  **kwargs
                 ):
         super(SentencePairModel, self).__init__(
-            # batch_norm_0=L.BatchNormalization(model_dim*2, model_dim*2),
-            # batch_norm_1=L.BatchNormalization(mlp_dim, mlp_dim),
-            # batch_norm_2=L.BatchNormalization(mlp_dim, mlp_dim),
             l0=L.Linear(model_dim*2, mlp_dim),
             l1=L.Linear(mlp_dim, mlp_dim),
             l2=L.Linear(mlp_dim, num_classes)
@@ -655,7 +660,8 @@ class SentencePairModel(Chain):
         self.__mod = cuda.cupy if gpu >= 0 else np
         self.accFun = accuracy.accuracy
         self.initial_embeddings = initial_embeddings
-        self.keep_rate = keep_rate
+        self.classifier_dropout_rate = 1. - classifier_keep_rate
+        self.use_classifier_norm = use_classifier_norm
         self.word_embedding_dim = word_embedding_dim
         self.model_dim = model_dim
 
@@ -663,11 +669,15 @@ class SentencePairModel(Chain):
 
         args = {
             'size': model_dim/2,
-            'embed_dropout': 1 - keep_rate,
             'tracker_size': tracker_size,
             'transition_weight': transition_weight,
             'use_history': use_history,
             'save_stack': save_stack,
+            'input_dropout_rate': 1. - input_keep_rate,
+            'use_input_dropout': use_input_dropout,
+            'use_input_norm': use_input_norm,
+            'use_tracker_dropout': use_tracker_dropout,
+            'tracker_dropout_rate': tracker_dropout_rate,
         }
         args = argparse.Namespace(**args)
 
@@ -676,6 +686,11 @@ class SentencePairModel(Chain):
             'vectors': initial_embeddings,
         }
         vocab = argparse.Namespace(**vocab)
+
+        if use_classifier_norm:
+            self.add_link('bn_0', L.BatchNormalization(model_dim*2))
+            self.add_link('bn_1', L.BatchNormalization(mlp_dim))
+            self.add_link('bn_2', L.BatchNormalization(mlp_dim))
 
         self.add_link('spinn', SPINN(args, vocab, normalization=L.BatchNormalization,
                  attention=False, attn_fn=None))
@@ -718,10 +733,19 @@ class SentencePairModel(Chain):
         h = F.concat([h_premise, h_hypothesis], axis=1)
         
         h = to_gpu(h)
+        if hasattr(self, 'bn_0'):
+            h = self.bn_0(h, not train)
+        h = F.dropout(h, self.classifier_dropout_rate, train)
         h = self.l0(h)
         h = F.relu(h)
+        if hasattr(self, 'bn_1'):
+            h = self.bn_1(h, not train)
+        h = F.dropout(h, self.classifier_dropout_rate, train)
         h = self.l1(h)
         h = F.relu(h)
+        if hasattr(self, 'bn_2'):
+            h = self.bn_2(h, not train)
+        h = F.dropout(h, self.classifier_dropout_rate, train)
         h = self.l2(h)
         y = h
 
@@ -737,7 +761,10 @@ class SentencePairModel(Chain):
 class SentenceModel(Chain):
     def __init__(self, model_dim, word_embedding_dim, vocab_size,
                  seq_length, initial_embeddings, num_classes, mlp_dim,
-                 keep_rate,
+                 input_keep_rate, classifier_keep_rate,
+                 use_tracker_dropout=True, tracker_dropout_rate=0.1,
+                 use_input_dropout=False, use_input_norm=False,
+                 use_classifier_norm=True,
                  gpu=-1,
                  tracking_lstm_hidden_dim=4,
                  transition_weight=None,
@@ -746,7 +773,6 @@ class SentenceModel(Chain):
                  make_logits=False,
                  use_history=False,
                  save_stack=False,
-                 use_batch_norm=True,
                  **kwargs
                 ):
         super(SentenceModel, self).__init__(
@@ -762,7 +788,8 @@ class SentenceModel(Chain):
         self.__mod = cuda.cupy if gpu >= 0 else np
         self.accFun = accuracy.accuracy
         self.initial_embeddings = initial_embeddings
-        self.dropout_rate = 1. - keep_rate
+        self.classifier_dropout_rate = 1. - classifier_keep_rate
+        self.use_classifier_norm = use_classifier_norm
         self.word_embedding_dim = word_embedding_dim
         self.model_dim = model_dim
 
@@ -770,11 +797,15 @@ class SentenceModel(Chain):
 
         args = {
             'size': model_dim/2,
-            'embed_dropout': 1 - keep_rate,
             'tracker_size': tracker_size,
             'transition_weight': transition_weight,
             'use_history': use_history,
             'save_stack': save_stack,
+            'input_dropout_rate': 1. - input_keep_rate,
+            'use_input_dropout': use_input_dropout,
+            'use_input_norm': use_input_norm,
+            'use_tracker_dropout': use_tracker_dropout,
+            'tracker_dropout_rate': tracker_dropout_rate,
         }
         args = argparse.Namespace(**args)
 
@@ -784,13 +815,14 @@ class SentenceModel(Chain):
         }
         vocab = argparse.Namespace(**vocab)
 
-        if use_batch_norm:
+        if use_classifier_norm:
             self.add_link('bn_0', L.BatchNormalization(model_dim))
             self.add_link('bn_1', L.BatchNormalization(mlp_dim))
             self.add_link('bn_2', L.BatchNormalization(mlp_dim))
 
         self.add_link('spinn', SPINN(args, vocab, normalization=L.BatchNormalization,
                  attention=False, attn_fn=None))
+
 
     def __call__(self, sentences, transitions, y_batch=None, train=True):
         batch_size = sentences.shape[0]
@@ -822,17 +854,17 @@ class SentenceModel(Chain):
         h = to_gpu(h)
         if hasattr(self, 'bn_0'):
             h = self.bn_0(h, not train)
-        h = F.dropout(h, self.dropout_rate, train)
+        h = F.dropout(h, self.classifier_dropout_rate, train)
         h = self.l0(h)
         h = F.relu(h)
         if hasattr(self, 'bn_1'):
             h = self.bn_1(h, not train)
-        h = F.dropout(h, self.dropout_rate, train)
+        h = F.dropout(h, self.classifier_dropout_rate, train)
         h = self.l1(h)
         h = F.relu(h)
         if hasattr(self, 'bn_2'):
             h = self.bn_2(h, not train)
-        h = F.dropout(h, self.dropout_rate, train)
+        h = F.dropout(h, self.classifier_dropout_rate, train)
         h = self.l2(h)
         y = h
 

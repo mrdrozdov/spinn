@@ -231,25 +231,8 @@ class MLP(ChainList):
 
 class BaseSentencePairTrainer(object):
 
-    def __init__(self, model, model_dim, word_embedding_dim,
-                 seq_length,
-                 num_classes,
-                 mlp_dim,
-                 keep_rate,
-                 initial_embeddings=None,
-                 use_sentence_pair=False,
-                 gpu=-1,
-                 **kwargs):
-
-        self.model_dim = model_dim
-        self.word_embedding_dim = word_embedding_dim
-        self.mlp_dim = mlp_dim
-        self.initial_embeddings = initial_embeddings
-        self.seq_length = seq_length
-        self.keep_rate = keep_rate
+    def __init__(self, model, gpu=-1, **kwargs):
         self.__gpu = gpu
-        self.__mod = cuda.cupy if gpu >= 0 else np
-
         self.init_model(model)
         self.init_params()
         if gpu >= 0:
