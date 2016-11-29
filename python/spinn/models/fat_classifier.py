@@ -45,6 +45,8 @@ import spinn.nti
 from chainer import optimizers
 import chainer.functions as F
 
+from spinn.util.data import print_tree
+
 
 FLAGS = gflags.FLAGS
 
@@ -82,7 +84,7 @@ def build_rewards(logits, y):
     return F.accuracy(logits, y) - 0.5
 
 
-def evaluate(classifier_trainer, eval_set, logger, step):
+def evaluate(classifier_trainer, eval_set, logger, step, use_internal_parser=False):
     # Evaluate
     acc_accum = 0.0
     action_acc_accum = 0.0
@@ -95,7 +97,7 @@ def evaluate(classifier_trainer, eval_set, logger, step):
         ret = classifier_trainer.forward({
             "sentences": eval_X_batch,
             "transitions": eval_transitions_batch,
-            }, eval_y_batch, train=False, predict=False)
+            }, eval_y_batch, train=False, predict=False, use_internal_parser=use_internal_parser)
         y, loss, class_loss, transition_acc, transition_loss = ret
         acc_value = float(classifier_trainer.model.accuracy.data)
         action_acc_value = transition_acc
@@ -104,6 +106,32 @@ def evaluate(classifier_trainer, eval_set, logger, step):
         acc_accum += acc_value
         action_acc_accum += action_acc_value
         eval_batches += 1.0
+
+        memories = classifier_trainer.model.spinn.memories
+        all_preds = [el['preds'] for el in memories]
+
+        if FLAGS.print_tree:
+            for ii in range(len(eval_X_batch)):
+                print(i, ii)
+                sentence = eval_X_batch[ii]
+                sentence = [s for s in sentence if s != 0]
+                transitions = eval_transitions_batch[ii]
+                offset = len(transitions)
+                transitions = [t for t in transitions if t != 2]
+                offset = offset - len(transitions)
+                preds = np.array(all_preds[offset:])[:, ii]
+
+                try:
+                    print_tree(sentence, transitions, "graphs/gold/tree_{:03}_{:03}.png".format(i, ii))
+                except  Exception, e:
+                    import ipdb; ipdb.set_trace()
+                    pass
+
+                try:
+                    print_tree(sentence, preds, "graphs/pred/tree_{:03}_{:03}.png".format(i, ii))
+                except  Exception, e:
+                    import ipdb; ipdb.set_trace()
+                    pass
 
         # Print Progress
         progress_bar.step(i+1, total=total_batches)
@@ -251,7 +279,7 @@ def run(only_forward=False):
     # Do an evaluation-only run.
     if only_forward:
         for index, eval_set in enumerate(eval_iterators):
-            acc = evaluate(classifier_trainer, eval_set, logger, step)
+            acc = evaluate(classifier_trainer, eval_set, logger, step, FLAGS.use_internal_parser)
     else:
          # Train
         logger.Log("Training.")
@@ -364,7 +392,7 @@ def run(only_forward=False):
             if step > 0 and step % FLAGS.eval_interval_steps == 0:
                 for index, eval_set in enumerate(eval_iterators):
                     acc = evaluate(classifier_trainer, eval_set, logger, step)
-                    if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > 1000:
+                    if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > 0:
                         best_dev_error = 1 - acc
                         logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
                         classifier_trainer.save(checkpoint_path, step, best_dev_error)
@@ -388,6 +416,7 @@ if __name__ == '__main__':
     gflags.DEFINE_integer("profile_steps", 3, "Specify how many steps to profile.")
     gflags.DEFINE_string("branch_name", "", "")
     gflags.DEFINE_string("sha", "", "")
+    gflags.DEFINE_boolean("print_tree", False, "Print trees to file.")
 
     # Experiment naming.
     gflags.DEFINE_string("experiment_name", "", "")

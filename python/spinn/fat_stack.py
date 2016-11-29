@@ -171,11 +171,16 @@ class SPINN(Chain):
         self.save_stack = args.save_stack
         self.use_reinforce = use_reinforce
 
-    def __call__(self, example, attention=None, print_transitions=False):
+    def reset_state(self):
+        self.memories = []
+
+    def __call__(self, example, attention=None, print_transitions=False, use_internal_parser=False):
         self.bufs = self.embed(example.tokens)
         # prepend with NULL NULL:
         # This exists specifically for the tracker.
-        self.stacks = [[buf[0], buf[0]] for buf in self.bufs]
+        self.stacks = [[] for buf in self.bufs]
+        self.buffers_t = [0 for buf in self.bufs]
+        self.buffers_n = [(len([t for t in ts if t != T_SKIP]) + 1) / 2 for ts in example.transitions]
         for stack, buf in zip(self.stacks, self.bufs):
             for ss in stack:
                 if self.save_stack:
@@ -187,7 +192,28 @@ class SPINN(Chain):
         if hasattr(example, 'transitions'):
             self.transitions = example.transitions
         self.attention = attention
-        return self.run(run_internal_parser=True)
+        return self.run(run_internal_parser=True, use_internal_parser=use_internal_parser)
+
+    def validate(self, transitions, preds):
+        # TODO: Almost definitely these don't work as expected because of how
+        # things are initialized and because of the SKIP action.
+
+        DEFAULT_CHOICE = T_SHIFT
+        cant_skip = np.array([tp == T_SKIP and t != T_SKIP for t, tp in zip(transitions, preds)])
+        preds[cant_skip] = DEFAULT_CHOICE
+
+        # Cannot reduce on too small a stack
+        must_shift = np.array([len(stack) < 2 for stack in self.stacks])
+        preds[must_shift] = 0
+
+        # Cannot shift if stack has to be reduced
+        must_reduce = np.array([self.buffers_t[i] >= self.buffers_n[i] for i in range(len(self.stacks))])
+        preds[must_reduce] = 1
+
+        must_skip = np.array([t == T_SKIP for t in transitions])
+        preds[must_skip] = 2
+
+        return preds
 
     def run(self, print_transitions=False, run_internal_parser=False,
             use_internal_parser=False):
@@ -215,7 +241,7 @@ class SPINN(Chain):
                 raise Exception('Running without transitions not implemented')
             if hasattr(self, 'tracker'):
                 transition_hyp = self.tracker(self.bufs, self.stacks)
-                transition_preds = transition_hyp.data.argmax(axis=1)
+                validate_preds = True
                 if transition_hyp is not None and run_internal_parser:
                     transition_hyp = to_cpu(transition_hyp)
                     if hasattr(self, 'transitions'):
@@ -223,35 +249,41 @@ class SPINN(Chain):
                             probas = F.softmax(transition_hyp)
                             samples = np.array([np.random.choice(3, 1, p=proba)[0] for proba in probas.data])
 
-                            validate_transitions = True
-                            if validate_transitions:
-                                # TODO: Almost definitely these don't work as expected because of how
-                                # things are initialized and because of the SKIP action.
-
-                                # Cannot reduce on too small a stack
-                                must_shift = np.array([len(stack) < 2 for stack in self.stacks])
-                                samples[must_shift] = 0
-
-                                # Cannot shift if stack has to be reduced
-                                must_reduce = np.array([len(buf) >= num_transitions for buf in self.bufs])
-                                samples[must_reduce] = 1
+                            if validate_preds:
+                                samples = self.validate(transition_arr, samples)
 
                             local_transition_acc = F.accuracy(
-                                probas, transitions)
+                                probas, transitions, ignore_label=T_SKIP)
                             transition_acc += local_transition_acc
                             transition_loss += F.softmax_cross_entropy(
                                 probas, samples.astype('int32'),
-                                normalize=False)
+                                normalize=True)
+
+                            self.memories.append({
+                                "logits": transition_hyp,
+                                "preds": samples.astype('int32').tolist()
+                                })
+                            if use_internal_parser:
+                                transition_arr = samples.astype('int32').tolist()
 
                         else:
+                            transition_preds = transition_hyp.data.argmax(axis=1)
+                            if validate_preds:
+                                transition_preds = self.validate(transition_arr, transition_preds)
+
                             transition_loss += F.softmax_cross_entropy(
                                 transition_hyp, transitions,
-                                normalize=False)
+                                normalize=True)
                             local_transition_acc = F.accuracy(
-                                transition_hyp, transitions)
+                                transition_hyp, transitions, ignore_label=T_SKIP)
                             transition_acc += local_transition_acc
-                    if use_internal_parser:
-                        transition_arr = transition_preds.tolist()
+                            
+                            self.memories.append({
+                                "logits": transition_hyp,
+                                "preds": transition_preds
+                                })
+                            if use_internal_parser:
+                                transition_arr = transition_preds.tolist()
 
             lefts, rights, trackings, attentions = [], [], [], []
             batch = zip(transition_arr, self.bufs, self.stacks, self.history,
@@ -263,7 +295,7 @@ class SPINN(Chain):
             assert len(transition_arr) == len(self.bufs)
             assert len(self.stacks) == len(self.bufs)
 
-            for transition, buf, stack, history, tracking, attention in batch:
+            for ii, (transition, buf, stack, history, tracking, attention) in enumerate(batch):
                 must_shift = len(stack) < 2
 
                 if transition == T_SHIFT: # shift
@@ -272,6 +304,7 @@ class SPINN(Chain):
                         buf[-1].stack = stack[:]
                         buf[-1].tracking = tracking
                     stack.append(buf.pop())
+                    self.buffers_t[ii] += 1
                     if self.use_history:
                         history.append(stack[-1])
                 elif transition == T_REDUCE: # reduce
@@ -387,12 +420,13 @@ class BaseModel(Chain):
         raise Exception('Not implemented.')
 
 
-    def run_spinn(self, example, train):
+    def run_spinn(self, example, train, use_internal_parser):
         r = reporter.Reporter()
         r.add_observer('spinn', self.spinn)
         observation = {}
         with r.scope(observation):
-            h_both, _ = self.spinn(example)
+            self.spinn.reset_state()
+            h_both, _ = self.spinn(example, use_internal_parser=use_internal_parser)
 
         transition_acc = observation.get('spinn/transition_accuracy', 0.0)
         transition_loss = observation.get('spinn/transition_loss', None)
@@ -421,9 +455,9 @@ class BaseModel(Chain):
         return y
 
 
-    def __call__(self, sentences, transitions, y_batch=None, train=True):
+    def __call__(self, sentences, transitions, y_batch=None, train=True, use_internal_parser=False):
         example = self.build_example(sentences, transitions, train)
-        h, transition_acc, transition_loss = self.run_spinn(example, train)
+        h, transition_acc, transition_loss = self.run_spinn(example, train, use_internal_parser)
         y = self.run_mlp(h, train)
 
         # Calculate Loss & Accuracy.
@@ -461,8 +495,8 @@ class SentencePairModel(BaseModel):
         return example
 
 
-    def run_spinn(self, example, train):
-        h_both, transition_acc, transition_loss = super(SentencePairModel, self).run_spinn(example, train)
+    def run_spinn(self, example, train, use_internal_parser=False):
+        h_both, transition_acc, transition_loss = super(SentencePairModel, self).run_spinn(example, train, use_internal_parser)
         h_premise = F.concat(h_both[:batch_size], axis=0)
         h_hypothesis = F.concat(h_both[batch_size:], axis=0)
         h = F.concat([h_premise, h_hypothesis], axis=1)
@@ -488,7 +522,7 @@ class SentenceModel(BaseModel):
         return example
 
 
-    def run_spinn(self, example, train):
-        h, transition_acc, transition_loss = super(SentenceModel, self).run_spinn(example, train)
+    def run_spinn(self, example, train, use_internal_parser=False):
+        h, transition_acc, transition_loss = super(SentenceModel, self).run_spinn(example, train, use_internal_parser)
         h = F.concat(h, axis=0)
         return h, transition_acc, transition_loss
