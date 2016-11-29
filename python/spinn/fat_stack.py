@@ -806,16 +806,12 @@ class SentencePairModel(BaseModel):
 
         return example
 
-        self.add_link('spinn', SPINN(args, vocab, normalization=L.BatchNormalization,
-                 attention=False, attn_fn=None, use_reinforce=use_reinforce))
 
     def run_spinn(self, example, train):
         h_both, transition_acc, transition_loss = super(SentencePairModel, self).run_spinn(example, train)
-
         h_premise = F.concat(h_both[:batch_size], axis=0)
         h_hypothesis = F.concat(h_both[batch_size:], axis=0)
         h = F.concat([h_premise, h_hypothesis], axis=1)
-
         return h, transition_acc, transition_loss
 
 
@@ -835,21 +831,11 @@ class SentenceModel(BaseModel):
         }
         example = argparse.Namespace(**example)
 
-        # h_both is an array of states.
-        r = reporter.Reporter()
-        r.add_observer('spinn', self.spinn)
-        observation = {}
-        with r.scope(observation):
-            h, _ = self.spinn(example)
-        transition_acc = observation.get('spinn/transition_accuracy', 0.0)
-        transition_loss = observation.get('spinn/transition_loss', None)
-
-
         return example
+
 
     def run_spinn(self, example, train):
         h, transition_acc, transition_loss = super(SentenceModel, self).run_spinn(example, train)
-
         h = F.concat(h, axis=0)
-
         return h, transition_acc, transition_loss
+
