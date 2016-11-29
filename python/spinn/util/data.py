@@ -17,7 +17,7 @@ PADDING_TOKEN = "*PADDING*"
 # it's a common token that is pretrained, but shouldn't look like any content words.
 UNK_TOKEN = "_"
 
-TRANSITION_PADDING_SYMBOL = 2
+SKIP_SYMBOL = 2
 SENTENCE_PADDING_SYMBOL = 0
 
 CORE_VOCABULARY = {PADDING_TOKEN: 0,
@@ -118,7 +118,7 @@ def CropAndPadExample(example, left_padding, target_length, key, symbol=0, logge
         example[key] + ([symbol] * right_padding)
 
 
-def CropAndPad(dataset, length, logger=None, sentence_pair_data=False):
+def CropAndPad(dataset, length, logger=None, sentence_pair_data=False, use_skips=False):
     # NOTE: This can probably be done faster in NumPy if it winds up making a
     # difference.
     # Always make sure that the transitions are aligned at the left edge, so
@@ -134,10 +134,12 @@ def CropAndPad(dataset, length, logger=None, sentence_pair_data=False):
         for (transitions_key, num_transitions_key, tokens_key) in keys:
             example[num_transitions_key] = len(example[transitions_key])
             transitions_left_padding = length - example[num_transitions_key]
+            if not use_skips and transitions_left_padding > 0:
+                transitions_left_padding = 0
             shifts_before_crop_and_pad = example[transitions_key].count(0)
             CropAndPadExample(
                 example, transitions_left_padding, length, transitions_key,
-                symbol=TRANSITION_PADDING_SYMBOL, logger=logger)
+                symbol=SKIP_SYMBOL, logger=logger)
             shifts_after_crop_and_pad = example[transitions_key].count(0)
             tokens_left_padding = shifts_after_crop_and_pad - \
                 shifts_before_crop_and_pad
@@ -287,14 +289,14 @@ def MakeEvalIterator(sources, batch_size, limit=-1):
 
 
 def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=False, logger=None,
-                      sentence_pair_data=False, for_rnn=False):
+                      sentence_pair_data=False, for_rnn=False, use_skips=False):
     # TODO(SB): Simpler version for plain RNN.
     dataset = TrimDataset(dataset, seq_length, eval_mode=eval_mode, sentence_pair_data=sentence_pair_data)
     dataset = TokensToIDs(vocabulary, dataset, sentence_pair_data=sentence_pair_data)
     if for_rnn:
         dataset = CropAndPadForRNN(dataset, seq_length, logger=logger, sentence_pair_data=sentence_pair_data)
     else:
-        dataset = CropAndPad(dataset, seq_length, logger=logger, sentence_pair_data=sentence_pair_data)
+        dataset = CropAndPad(dataset, seq_length, logger=logger, sentence_pair_data=sentence_pair_data, use_skips=use_skips)
 
     if sentence_pair_data:
         X = np.transpose(np.array([[example["premise_tokens"] for example in dataset],

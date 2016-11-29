@@ -73,6 +73,7 @@ def build_sentence_pair_model(model_cls, trainer_cls, vocab_size, model_dim, wor
              use_sentence_pair=use_sentence_pair,
              gpu=gpu,
              use_reinforce=FLAGS.use_reinforce,
+             use_skips=FLAGS.use_skips,
             )
 
     classifier_trainer = trainer_cls(model, gpu=gpu)
@@ -227,7 +228,8 @@ def run(only_forward=False):
     training_data = util.PreprocessDataset(
         raw_training_data, vocabulary, FLAGS.seq_length, data_manager, eval_mode=False, logger=logger,
         sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-        for_rnn=FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW")
+        for_rnn=FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW",
+        use_skips=FLAGS.use_skips)
     training_data_iter = util.MakeTrainingIterator(
         training_data, FLAGS.batch_size, FLAGS.smart_batching, FLAGS.use_peano)
 
@@ -237,7 +239,8 @@ def run(only_forward=False):
         e_X, e_transitions, e_y, e_num_transitions = util.PreprocessDataset(
             raw_eval_set, vocabulary, FLAGS.seq_length, data_manager, eval_mode=True, logger=logger,
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-            for_rnn=FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW")
+            for_rnn=FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW",
+            use_skips=FLAGS.use_skips)
         eval_iterators.append((filename,
             util.MakeEvalIterator((e_X, e_transitions, e_y, e_num_transitions),
                 FLAGS.batch_size, FLAGS.eval_data_limit)))
@@ -486,6 +489,7 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("use_reinforce", False, "Use RL to provide tracking lstm gradients")
     gflags.DEFINE_boolean("use_shift_composition", True, "")
     gflags.DEFINE_boolean("use_history", False, "")
+    gflags.DEFINE_boolean("use_skips", False, "Pad transitions with SKIP actions.")
     gflags.DEFINE_boolean("validate_transitions", True, "Constrain predicted transitions to ones"
                                                         "that give a valid parse tree.")
     gflags.DEFINE_boolean("save_stack", False, "")
