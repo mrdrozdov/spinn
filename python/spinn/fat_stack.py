@@ -282,9 +282,10 @@ class SPINN(Chain):
                         if not self.use_skips:
                             hyp_acc = hyp_acc.data[cant_skip]
                             truth_acc = truth_acc[cant_skip]
-                            hyp_xent = F.split_axis(transition_hyp, transition_hyp.shape[0], axis=0)
-                            hyp_xent = F.concat([hyp_xent[i] for i, y in enumerate(cant_skip) if y], axis=0)
-                            truth_xent = truth_xent[cant_skip]
+
+                            cant_skip_mask = np.tile(np.expand_dims(cant_skip, axis=1), (1, 2))
+                            hyp_xent = F.where(cant_skip_mask, hyp_xent, Variable(0.5*np.ones_like(hyp_xent.data), volatile='auto'))
+                            truth_xent = np.where(cant_skip_mask[:,0], truth_xent, T_SHIFT*np.ones_like(truth_xent))
                             relevant = sum(cant_skip)
                         else:
                             relevant = len(cant_skip)
