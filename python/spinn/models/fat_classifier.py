@@ -37,7 +37,6 @@ from spinn.util.data import SimpleProgressBar
 from spinn.util.chainer_blocks import gradient_check, l2_cost
 
 import spinn.fat_stack
-import spinn.plain_rnn_chainer
 import spinn.cbow
 import spinn.nti
 

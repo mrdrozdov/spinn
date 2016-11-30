@@ -21,7 +21,6 @@ from chainer.utils import type_check
 import spinn.util.chainer_blocks as CB
 
 from chainer.functions.loss import softmax_cross_entropy
-from spinn.util.chainer_blocks import LSTMChain, RNNChain, EmbedChain
 from spinn.util.chainer_blocks import MLP
 from spinn.util.chainer_blocks import CrossEntropyClassifier
 from spinn.util.chainer_blocks import BaseSentencePairTrainer
@@ -109,7 +108,7 @@ class SentencePairModel(Chain):
         h = F.relu(h)
         h = self.l2(h)
         y = h
-        
+
         accum_loss = self.lossFun(y, y_batch)
         self.accuracy = self.accFun(y, y_batch)
 
