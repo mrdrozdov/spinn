@@ -302,6 +302,11 @@ class SPINN(Chain):
                         if use_internal_parser:
                             transition_arr = transition_preds.tolist()
 
+                        self.memories.append({
+                            "preds": transition_preds,
+                            "truth": transitions
+                            })
+
             lefts, rights, trackings, attentions = [], [], [], []
             batch = zip(transition_arr, self.bufs, self.stacks, self.history,
                         self.tracker.states if hasattr(self, 'tracker') and self.tracker.h is not None
