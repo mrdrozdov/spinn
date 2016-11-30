@@ -352,10 +352,10 @@ class SPINN(Chain):
         if print_transitions:
             print()
         if self.transition_weight is not None and transition_loss is not 0:
-            rs = [m["relevant"] for m in self.memories]
-            rs = sum([float(r) / transitions.shape[0] for r in rs])
-            reporter.report({'transition_accuracy': transition_acc / rs,
-                             'transition_loss': transition_loss / rs}, self)
+            # if skipping skips, acc/loss is slightly skewed towards batches with many skips.
+            relevancy = len(self.memories)
+            reporter.report({'transition_accuracy': transition_acc / relevancy,
+                             'transition_loss': transition_loss / relevancy}, self)
             transition_loss *= self.transition_weight
         else:
             transition_loss = None
