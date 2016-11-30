@@ -247,7 +247,8 @@ class SPINN(Chain):
                         memory = {}
                         if self.use_reinforce:
                             probas = F.softmax(transition_hyp)
-                            transition_preds = np.array([np.random.choice(3, 1, p=proba)[0] for proba in probas.data])
+                            choices = np.array([T_SHIFT, T_REDUCE, T_SKIP], dtype=np.int32)
+                            transition_preds = np.array([np.random.choice(choices, 1, p=proba)[0] for proba in probas.data])
 
                             if validate_preds:
                                 transition_preds = self.validate(transition_arr, transition_preds)
