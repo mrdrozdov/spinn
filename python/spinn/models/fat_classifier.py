@@ -413,7 +413,7 @@ def run(only_forward=False):
             if step > 0 and step % FLAGS.eval_interval_steps == 0:
                 for index, eval_set in enumerate(eval_iterators):
                     acc = evaluate(classifier_trainer, eval_set, logger, step)
-                    if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > 0:
+                    if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                         best_dev_error = 1 - acc
                         logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
                         classifier_trainer.save(checkpoint_path, step, best_dev_error)
@@ -458,6 +458,7 @@ if __name__ == '__main__':
     gflags.DEFINE_string("eval_data_path", None, "Can contain multiple file paths, separated "
         "using ':' tokens. The first file should be the dev set, and is used for determining "
         "when to save the early stopping 'best' checkpoints.")
+    gflags.DEFINE_integer("ckpt_step", 1000, "Steps to run before considering saving checkpoint.")
     gflags.DEFINE_integer("seq_length", 30, "")
     gflags.DEFINE_integer("eval_seq_length", 30, "")
     gflags.DEFINE_boolean("smart_batching", True, "Organize batches using sequence length.")
