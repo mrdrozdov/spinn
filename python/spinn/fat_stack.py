@@ -278,7 +278,6 @@ class SPINN(Chain):
 
                         memory["logits"] = transition_hyp
                         memory["preds"]  = transition_preds
-                        self.memories.append(memory)
 
                         if not self.use_skips:
                             hyp_acc = hyp_acc.data[cant_skip]
@@ -286,6 +285,12 @@ class SPINN(Chain):
                             hyp_xent = F.split_axis(transition_hyp, transition_hyp.shape[0], axis=0)
                             hyp_xent = F.concat([hyp_xent[i] for i, y in enumerate(cant_skip) if y], axis=0)
                             truth_xent = truth_xent[cant_skip]
+                            relevant = sum(cant_skip)
+                        else:
+                            relevant = len(cant_skip)
+                        
+                        memory["relevant"] = relevant
+                        self.memories.append(memory)
 
                         transition_acc += F.accuracy(
                             hyp_acc, truth_acc)
@@ -347,8 +352,10 @@ class SPINN(Chain):
         if print_transitions:
             print()
         if self.transition_weight is not None and transition_loss is not 0:
-            reporter.report({'transition_accuracy': transition_acc / num_transitions,
-                             'transition_loss': transition_loss / num_transitions}, self)
+            rs = [m["relevant"] for m in self.memories]
+            rs = sum([float(r) / transitions.shape[0] for r in rs])
+            reporter.report({'transition_accuracy': transition_acc / rs,
+                             'transition_loss': transition_loss / rs}, self)
             transition_loss *= self.transition_weight
         else:
             transition_loss = None
