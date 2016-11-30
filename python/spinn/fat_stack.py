@@ -95,14 +95,14 @@ class SentenceTrainer(SentencePairTrainer):
 
 class Tracker(Chain):
 
-    def __init__(self, size, tracker_size, predict, use_tracker_dropout=True, tracker_dropout_rate=0.1):
+    def __init__(self, size, tracker_size, predict, use_tracker_dropout=True, tracker_dropout_rate=0.1, use_skips=False):
         super(Tracker, self).__init__(
             lateral=L.Linear(tracker_size, 4 * tracker_size),
             buf=L.Linear(size, 4 * tracker_size, nobias=True),
             stack1=L.Linear(size, 4 * tracker_size, nobias=True),
             stack2=L.Linear(size, 4 * tracker_size, nobias=True))
         if predict:
-            self.add_link('transition', L.Linear(tracker_size, 3))
+            self.add_link('transition', L.Linear(tracker_size, 3 if use_skips else 2))
         self.state_size = tracker_size
         self.tracker_dropout_rate = tracker_dropout_rate
         self.use_tracker_dropout = use_tracker_dropout
@@ -152,7 +152,7 @@ class Tracker(Chain):
 class SPINN(Chain):
 
     def __init__(self, args, vocab, normalization=L.BatchNormalization,
-                 attention=False, attn_fn=None, use_reinforce=True):
+                 attention=False, attn_fn=None, use_reinforce=True, use_skips=False):
         super(SPINN, self).__init__(
             embed=Embed(args.size, vocab.size, args.input_dropout_rate,
                         vectors=vocab.vectors, normalization=normalization,
@@ -165,11 +165,14 @@ class SPINN(Chain):
                 args.size, args.tracker_size,
                 predict=args.transition_weight is not None,
                 use_tracker_dropout=args.use_tracker_dropout,
-                tracker_dropout_rate=args.tracker_dropout_rate))
+                tracker_dropout_rate=args.tracker_dropout_rate, use_skips=use_skips))
         self.transition_weight = args.transition_weight
         self.use_history = args.use_history
         self.save_stack = args.save_stack
         self.use_reinforce = use_reinforce
+        self.use_skips = use_skips
+        choices = [T_SHIFT, T_REDUCE, T_SKIP] if use_skips else [T_SHIFT, T_REDUCE]
+        self.choices = np.array(choices, dtype=np.int32)
 
     def reset_state(self):
         self.memories = []
@@ -196,24 +199,24 @@ class SPINN(Chain):
                         use_internal_parser=use_internal_parser,
                         validate_transitions=validate_transitions)
 
-    def validate(self, transitions, preds):
+    def validate(self, transitions, preds, stacks, buffers_t, buffers_n):
         # TODO: Almost definitely these don't work as expected because of how
         # things are initialized and because of the SKIP action.
 
         DEFAULT_CHOICE = T_SHIFT
-        cant_skip = np.array([tp == T_SKIP and t != T_SKIP for t, tp in zip(transitions, preds)])
+        cant_skip = np.array([p == T_SKIP and t != T_SKIP for t, p in zip(transitions, preds)])
         preds[cant_skip] = DEFAULT_CHOICE
 
         # Cannot reduce on too small a stack
-        must_shift = np.array([len(stack) < 2 for stack in self.stacks])
-        preds[must_shift] = 0
+        must_shift = np.array([len(stack) < 2 for stack in stacks])
+        preds[must_shift] = T_SHIFT
 
         # Cannot shift if stack has to be reduced
-        must_reduce = np.array([self.buffers_t[i] >= self.buffers_n[i] for i in range(len(self.stacks))])
-        preds[must_reduce] = 1
+        must_reduce = np.array([buf_t >= buf_n for buf_t, buf_n in zip(buffers_t, buffers_n)])
+        preds[must_reduce] = T_REDUCE
 
         must_skip = np.array([t == T_SKIP for t in transitions])
-        preds[must_skip] = 2
+        preds[must_skip] = T_SKIP
 
         return preds
 
@@ -241,7 +244,9 @@ class SPINN(Chain):
             else:
             #     transition_arr = [0]*len(self.bufs)
                 raise Exception('Running without transitions not implemented')
-            if hasattr(self, 'tracker'):
+
+            cant_skip = np.array([t != T_SKIP for t in transitions])
+            if hasattr(self, 'tracker') and (self.use_skips or sum(cant_skip) > 0):
                 transition_hyp = self.tracker(self.bufs, self.stacks)
                 if transition_hyp is not None and run_internal_parser:
                     transition_hyp = to_cpu(transition_hyp)
@@ -249,48 +254,60 @@ class SPINN(Chain):
                         memory = {}
                         if self.use_reinforce:
                             probas = F.softmax(transition_hyp)
-                            choices = np.array([T_SHIFT, T_REDUCE, T_SKIP], dtype=np.int32)
-                            transition_preds = np.array([np.random.choice(choices, 1, p=proba)[0] for proba in probas.data])
+                            samples = np.array([T_SKIP for _ in self.bufs], dtype=np.int32)
+                            samples[cant_skip] = np.array([np.random.choice(self.choices, 1, p=proba)[0] for proba in probas.data[cant_skip]])
 
-                            if validate_transitions:
-                                transition_preds = self.validate(transition_arr, transition_preds)
-
-                            local_transition_acc = F.accuracy(
-                                probas, transitions)
-                            transition_acc += local_transition_acc
-                            transition_loss += F.softmax_cross_entropy(
-                                probas, transition_preds,
-                                normalize=False)
+                            transition_preds = samples
+                            hyp_acc = probas
+                            hyp_xent = probas
+                            truth_acc = transitions
+                            truth_xent = samples
 
                             memory["probas"] = probas
 
                         else:
                             transition_preds = transition_hyp.data.argmax(axis=1)
-                            if validate_transitions:
-                                transition_preds = self.validate(transition_arr, transition_preds)
+                            hyp_acc = transition_hyp
+                            hyp_xent = transition_hyp
+                            truth_acc = transitions
+                            truth_xent = transitions
 
-                            transition_loss += F.softmax_cross_entropy(
-                                transition_hyp, transitions,
-                                normalize=False)
-                            transition_acc += F.accuracy(
-                                transition_hyp, transitions)
+                        if validate_transitions:
+                            transition_preds = self.validate(transition_arr, transition_preds,
+                                self.stacks, self.buffers_t, self.buffers_n)
 
-                        memory["logits"] = transition_hyp,
+                        memory["logits"] = transition_hyp
                         memory["preds"]  = transition_preds
+
+                        if not self.use_skips:
+                            hyp_acc = hyp_acc.data[cant_skip]
+                            truth_acc = truth_acc[cant_skip]
+
+                            cant_skip_mask = np.tile(np.expand_dims(cant_skip, axis=1), (1, 2))
+                            hyp_xent = F.where(cant_skip_mask, hyp_xent, Variable(0.5*np.ones_like(hyp_xent.data), volatile='auto'))
+                            truth_xent = np.where(cant_skip_mask[:,0], truth_xent, T_SHIFT*np.ones_like(truth_xent))
+                            relevant = sum(cant_skip)
+                        else:
+                            relevant = len(cant_skip)
+                        
+                        memory["relevant"] = relevant
                         self.memories.append(memory)
+
+                        transition_acc += F.accuracy(
+                            hyp_acc, truth_acc)
+                        transition_loss += F.softmax_cross_entropy(
+                            hyp_xent, truth_xent,
+                            normalize=False)
 
                         if use_internal_parser:
                             transition_arr = transition_preds.tolist()
 
             lefts, rights, trackings, attentions = [], [], [], []
             batch = zip(transition_arr, self.bufs, self.stacks, self.history,
-                        self.tracker.states if hasattr(self, 'tracker')
+                        self.tracker.states if hasattr(self, 'tracker') and self.tracker.h is not None
                         else itertools.repeat(None),
                         self.attention if self.attention is not None
                         else itertools.repeat(None))
-
-            assert len(transition_arr) == len(self.bufs)
-            assert len(self.stacks) == len(self.bufs)
 
             for ii, (transition, buf, stack, history, tracking, attention) in enumerate(batch):
                 must_shift = len(stack) < 2
@@ -336,8 +353,10 @@ class SPINN(Chain):
         if print_transitions:
             print()
         if self.transition_weight is not None and transition_loss is not 0:
-            reporter.report({'transition_accuracy': transition_acc / num_transitions,
-                             'transition_loss': transition_loss / num_transitions}, self)
+            # if skipping skips, acc/loss is slightly skewed towards batches with many skips.
+            relevancy = len(self.memories)
+            reporter.report({'transition_accuracy': transition_acc / relevancy,
+                             'transition_loss': transition_loss / relevancy}, self)
             transition_loss *= self.transition_weight
         else:
             transition_loss = None
@@ -357,10 +376,10 @@ class BaseModel(Chain):
                  transition_weight=None,
                  use_tracking_lstm=True,
                  use_shift_composition=True,
-                 make_logits=False,
                  use_history=False,
                  save_stack=False,
                  use_reinforce=False,
+                 use_skips=False,
                  use_sentence_pair=False,
                  **kwargs
                 ):
@@ -410,7 +429,7 @@ class BaseModel(Chain):
         vocab = argparse.Namespace(**vocab)
 
         self.add_link('spinn', SPINN(args, vocab, normalization=L.BatchNormalization,
-                 attention=False, attn_fn=None, use_reinforce=use_reinforce))
+                 attention=False, attn_fn=None, use_reinforce=use_reinforce, use_skips=use_skips))
 
 
     def build_example(self, sentences, transitions, train):
