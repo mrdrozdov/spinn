@@ -176,10 +176,9 @@ class SPINN(Chain):
 
     def __call__(self, example, attention=None, print_transitions=False, use_internal_parser=False):
         self.bufs = self.embed(example.tokens)
-        # prepend with NULL NULL:
-        # This exists specifically for the tracker.
         self.stacks = [[] for buf in self.bufs]
         self.buffers_t = [0 for buf in self.bufs]
+        # There are 2 * N - 1 transitons, so (|transitions| + 1) / 2 should equal N.
         self.buffers_n = [(len([t for t in ts if t != T_SKIP]) + 1) / 2 for ts in example.transitions]
         for stack, buf in zip(self.stacks, self.bufs):
             for ss in stack:
@@ -245,26 +244,22 @@ class SPINN(Chain):
                 if transition_hyp is not None and run_internal_parser:
                     transition_hyp = to_cpu(transition_hyp)
                     if hasattr(self, 'transitions'):
+                        memory = {}
                         if self.use_reinforce:
                             probas = F.softmax(transition_hyp)
-                            samples = np.array([np.random.choice(3, 1, p=proba)[0] for proba in probas.data])
+                            transition_preds = np.array([np.random.choice(3, 1, p=proba)[0] for proba in probas.data])
 
                             if validate_preds:
-                                samples = self.validate(transition_arr, samples)
+                                transition_preds = self.validate(transition_arr, transition_preds)
 
                             local_transition_acc = F.accuracy(
-                                probas, transitions, ignore_label=T_SKIP)
+                                probas, transitions)
                             transition_acc += local_transition_acc
                             transition_loss += F.softmax_cross_entropy(
-                                probas, samples.astype('int32'),
+                                probas, transition_preds,
                                 normalize=True)
 
-                            self.memories.append({
-                                "logits": transition_hyp,
-                                "preds": samples.astype('int32').tolist()
-                                })
-                            if use_internal_parser:
-                                transition_arr = samples.astype('int32').tolist()
+                            memory["probas"] = probas
 
                         else:
                             transition_preds = transition_hyp.data.argmax(axis=1)
@@ -274,16 +269,15 @@ class SPINN(Chain):
                             transition_loss += F.softmax_cross_entropy(
                                 transition_hyp, transitions,
                                 normalize=True)
-                            local_transition_acc = F.accuracy(
-                                transition_hyp, transitions, ignore_label=T_SKIP)
-                            transition_acc += local_transition_acc
-                            
-                            self.memories.append({
-                                "logits": transition_hyp,
-                                "preds": transition_preds
-                                })
-                            if use_internal_parser:
-                                transition_arr = transition_preds.tolist()
+                            transition_acc += F.accuracy(
+                                transition_hyp, transitions)
+
+                        memory["logits"] = transition_hyp,
+                        memory["preds"]  = transition_preds
+                        self.memories.append(memory)
+
+                        if use_internal_parser:
+                            transition_arr = transition_preds.tolist()
 
             lefts, rights, trackings, attentions = [], [], [], []
             batch = zip(transition_arr, self.bufs, self.stacks, self.history,
