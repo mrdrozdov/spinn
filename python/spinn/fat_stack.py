@@ -361,7 +361,7 @@ class SPINN(Chain):
         else:
             transition_loss = None
 
-        return [stack.pop() for stack in self.stacks], transition_loss
+        return [stack[-1] for stack in self.stacks], transition_loss
 
 
 class BaseModel(Chain):
