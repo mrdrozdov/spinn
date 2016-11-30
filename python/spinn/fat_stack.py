@@ -165,7 +165,7 @@ class SPINN(Chain):
                 args.size, args.tracker_size,
                 predict=args.transition_weight is not None,
                 use_tracker_dropout=args.use_tracker_dropout,
-                tracker_dropout_rate=args.tracker_dropout_rate, use_skips=False))
+                tracker_dropout_rate=args.tracker_dropout_rate, use_skips=use_skips))
         self.transition_weight = args.transition_weight
         self.use_history = args.use_history
         self.save_stack = args.save_stack
@@ -303,7 +303,7 @@ class SPINN(Chain):
 
             lefts, rights, trackings, attentions = [], [], [], []
             batch = zip(transition_arr, self.bufs, self.stacks, self.history,
-                        self.tracker.states if hasattr(self, 'tracker')
+                        self.tracker.states if hasattr(self, 'tracker') and self.tracker.h is not None
                         else itertools.repeat(None),
                         self.attention if self.attention is not None
                         else itertools.repeat(None))
