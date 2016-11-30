@@ -370,6 +370,8 @@ def run(only_forward=False):
             if hasattr(transition_loss, 'backward') and not FLAGS.use_reinforce:
                 total_loss += transition_loss
 
+            # [(n,w.grad) for n,w in model.namedparams()]
+
             total_loss.backward()
 
             if FLAGS.gradient_check:

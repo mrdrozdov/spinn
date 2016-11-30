@@ -283,7 +283,8 @@ class SPINN(Chain):
                         if not self.use_skips:
                             hyp_acc = hyp_acc.data[cant_skip]
                             truth_acc = truth_acc[cant_skip]
-                            hyp_xent = hyp_xent.data[cant_skip]
+                            hyp_xent = F.split_axis(transition_hyp, transition_hyp.shape[0], axis=0)
+                            hyp_xent = F.concat([hyp_xent[i] for i, y in enumerate(cant_skip) if y], axis=0)
                             truth_xent = truth_xent[cant_skip]
 
                         transition_acc += F.accuracy(
