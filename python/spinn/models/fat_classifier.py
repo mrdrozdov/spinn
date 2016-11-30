@@ -443,15 +443,6 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("save_stack", False, "")
     gflags.DEFINE_boolean("use_tracking_lstm", True,
                           "Whether to use LSTM in the tracking unit")
-    gflags.DEFINE_boolean("make_logits", False, "Predict parser actions.")
-    gflags.DEFINE_boolean("predict_use_cell", False,
-                          "For models which predict parser actions, use "
-                          "both the tracking LSTM hidden and cell values as "
-                          "input to the prediction layer")
-    gflags.DEFINE_boolean("context_sensitive_shift", False,
-        "Use LSTM hidden state and word embedding to determine the vector to be pushed")
-    gflags.DEFINE_boolean("context_sensitive_use_relu", False,
-        "Use ReLU Layer to combine embedding and tracking unit hidden state")
     gflags.DEFINE_float("semantic_classifier_keep_rate", 0.9,
         "Used for dropout in the semantic task classifier.")
     gflags.DEFINE_float("embedding_keep_rate", 0.9,
@@ -462,24 +453,6 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("use_classifier_norm", True, "")
     gflags.DEFINE_float("tracker_dropout_rate", 0.1, "")
     gflags.DEFINE_boolean("lstm_composition", True, "")
-    gflags.DEFINE_enum("classifier_type", "MLP", ["MLP", "Highway", "ResNet"], "")
-    gflags.DEFINE_integer("resnet_unit_depth", 2, "")
-    # gflags.DEFINE_integer("num_composition_layers", 1, "")
-    gflags.DEFINE_integer("num_sentence_pair_combination_layers", 2, "")
-    gflags.DEFINE_integer("sentence_pair_combination_layer_dim", 1024, "")
-    gflags.DEFINE_float("scheduled_sampling_exponent_base", 0.99,
-        "Used for scheduled sampling, with probability of Model 1 over Model 2 being base^#training_steps")
-    gflags.DEFINE_boolean("use_difference_feature", True,
-        "Supply the sentence pair classifier with sentence difference features.")
-    gflags.DEFINE_boolean("use_product_feature", True,
-        "Supply the sentence pair classifier with sentence product features.")
-    gflags.DEFINE_boolean("connect_tracking_comp", True,
-        "Connect tracking unit and composition unit. Can only be true if using LSTM in both units.")
-    gflags.DEFINE_boolean("initialize_hyp_tracking_state", False,
-        "Initialize the c state of the tracking unit of hypothesis model with the final"
-        "tracking unit c state of the premise model.")
-    gflags.DEFINE_boolean("use_gru", False,
-                          "Use GRU units instead of LSTM units.")
 
     # Optimization settings.
     gflags.DEFINE_integer("training_steps", 500000, "Stop training after this point.")
@@ -509,9 +482,6 @@ if __name__ == '__main__':
         "as the number of eval sets.")
     gflags.DEFINE_boolean("write_predicted_label", False,
         "Write the predicted labels in a <eval_output_name>.lbl file.")
-    gflags.DEFINE_boolean("skip_saved_unsavables", False,
-        "Assume that variables marked as not savable will appear in checkpoints anyway, and "
-        "skip them when loading. This should be used only when loading old checkpoints.")
 
     # Parse command line flags.
     FLAGS(sys.argv)
