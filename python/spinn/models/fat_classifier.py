@@ -84,7 +84,16 @@ def build_rewards(logits, y):
     return F.accuracy(logits, y) - 0.5
 
 
-def evaluate(classifier_trainer, eval_set, logger, step, use_internal_parser=False):
+def hamming_distance(s1, s2):
+    """ source: https://en.wikipedia.org/wiki/Hamming_distance
+        Return the Hamming distance between equal-length sequences
+    """
+    if len(s1) != len(s2):
+        raise ValueError("Undefined for sequences of unequal length")
+    return sum(el1 != el2 for el1, el2 in zip(s1, s2))
+
+
+def evaluate(classifier_trainer, eval_set, logger, step, use_internal_parser=False, vocabulary=None):
     # Evaluate
     acc_accum = 0.0
     action_acc_accum = 0.0
@@ -92,6 +101,16 @@ def evaluate(classifier_trainer, eval_set, logger, step, use_internal_parser=Fal
     total_batches = len(eval_set[1])
     progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
+
+    if vocabulary:
+        inv_vocab = {v: k for k, v in vocabulary.iteritems()}
+
+    if FLAGS.print_tree:
+        graph_path = "graphs" if not FLAGS.use_reinforce else "graphs-rl"
+        summaries_file = "{}/summaries.txt".format(graph_path)
+        with open(summaries_file, "w") as f:
+            f.write("id,hamming,gold,pred\n")
+
     for i, (eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch) in enumerate(eval_set[1]):
         # Calculate Local Accuracies
         ret = classifier_trainer.forward({
@@ -115,23 +134,25 @@ def evaluate(classifier_trainer, eval_set, logger, step, use_internal_parser=Fal
                 print(i, ii)
                 sentence = eval_X_batch[ii]
                 sentence = [s for s in sentence if s != 0]
+                sentence = [inv_vocab[s] for s in sentence]
                 transitions = eval_transitions_batch[ii]
                 offset = len(transitions)
                 transitions = [t for t in transitions if t != 2]
                 offset = offset - len(transitions)
                 preds = np.array(all_preds[offset:])[:, ii]
 
-                try:
-                    print_tree(sentence, transitions, "graphs/gold/tree_{:03}_{:03}.png".format(i, ii))
-                except  Exception, e:
-                    import ipdb; ipdb.set_trace()
-                    pass
+                tree_id = "{:03}_{:03}".format(i, ii)
 
-                try:
-                    print_tree(sentence, preds, "graphs/pred/tree_{:03}_{:03}.png".format(i, ii))
-                except  Exception, e:
-                    import ipdb; ipdb.set_trace()
-                    pass
+                print_tree(sentence, transitions, "{}/gold/tree_{}.png".format(graph_path, tree_id))
+                print_tree(sentence, preds, "{}/pred/tree_{}.png".format(graph_path, tree_id))
+
+                with open(summaries_file, "a") as f:
+                    f.write("{},{},{},{}\n".format(
+                        tree_id,
+                        hamming_distance(transitions, preds),
+                        "".join([str(t) for t in transitions]),
+                        "".join([str(t) for t in preds]),
+                        ))
 
         # Print Progress
         progress_bar.step(i+1, total=total_batches)
@@ -279,7 +300,7 @@ def run(only_forward=False):
     # Do an evaluation-only run.
     if only_forward:
         for index, eval_set in enumerate(eval_iterators):
-            acc = evaluate(classifier_trainer, eval_set, logger, step, FLAGS.use_internal_parser)
+            acc = evaluate(classifier_trainer, eval_set, logger, step, FLAGS.use_internal_parser, vocabulary)
     else:
          # Train
         logger.Log("Training.")
