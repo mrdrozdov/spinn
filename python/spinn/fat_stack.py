@@ -174,7 +174,8 @@ class SPINN(Chain):
     def reset_state(self):
         self.memories = []
 
-    def __call__(self, example, attention=None, print_transitions=False, use_internal_parser=False):
+    def __call__(self, example, attention=None, print_transitions=False,
+                 use_internal_parser=False, validate_transitions=True):
         self.bufs = self.embed(example.tokens)
         self.stacks = [[] for buf in self.bufs]
         self.buffers_t = [0 for buf in self.bufs]
@@ -191,7 +192,9 @@ class SPINN(Chain):
         if hasattr(example, 'transitions'):
             self.transitions = example.transitions
         self.attention = attention
-        return self.run(run_internal_parser=True, use_internal_parser=use_internal_parser)
+        return self.run(run_internal_parser=True,
+                        use_internal_parser=use_internal_parser,
+                        validate_transitions=validate_transitions)
 
     def validate(self, transitions, preds):
         # TODO: Almost definitely these don't work as expected because of how
@@ -215,7 +218,7 @@ class SPINN(Chain):
         return preds
 
     def run(self, print_transitions=False, run_internal_parser=False,
-            use_internal_parser=False):
+            use_internal_parser=False, validate_transitions=True):
         # how to use:
         # encoder.bufs = bufs, unbundled
         # encoder.stacks = stacks, unbundled
@@ -240,7 +243,6 @@ class SPINN(Chain):
                 raise Exception('Running without transitions not implemented')
             if hasattr(self, 'tracker'):
                 transition_hyp = self.tracker(self.bufs, self.stacks)
-                validate_preds = True
                 if transition_hyp is not None and run_internal_parser:
                     transition_hyp = to_cpu(transition_hyp)
                     if hasattr(self, 'transitions'):
@@ -250,7 +252,7 @@ class SPINN(Chain):
                             choices = np.array([T_SHIFT, T_REDUCE, T_SKIP], dtype=np.int32)
                             transition_preds = np.array([np.random.choice(choices, 1, p=proba)[0] for proba in probas.data])
 
-                            if validate_preds:
+                            if validate_transitions:
                                 transition_preds = self.validate(transition_arr, transition_preds)
 
                             local_transition_acc = F.accuracy(
@@ -264,7 +266,7 @@ class SPINN(Chain):
 
                         else:
                             transition_preds = transition_hyp.data.argmax(axis=1)
-                            if validate_preds:
+                            if validate_transitions:
                                 transition_preds = self.validate(transition_arr, transition_preds)
 
                             transition_loss += F.softmax_cross_entropy(
@@ -415,13 +417,15 @@ class BaseModel(Chain):
         raise Exception('Not implemented.')
 
 
-    def run_spinn(self, example, train, use_internal_parser):
+    def run_spinn(self, example, train, use_internal_parser, validate_transitions=True):
         r = reporter.Reporter()
         r.add_observer('spinn', self.spinn)
         observation = {}
         with r.scope(observation):
             self.spinn.reset_state()
-            h_both, _ = self.spinn(example, use_internal_parser=use_internal_parser)
+            h_both, _ = self.spinn(example,
+                                   use_internal_parser=use_internal_parser,
+                                   validate_transitions=validate_transitions)
 
         transition_acc = observation.get('spinn/transition_accuracy', 0.0)
         transition_loss = observation.get('spinn/transition_loss', None)
@@ -450,9 +454,10 @@ class BaseModel(Chain):
         return y
 
 
-    def __call__(self, sentences, transitions, y_batch=None, train=True, use_internal_parser=False):
+    def __call__(self, sentences, transitions, y_batch=None, train=True,
+                 use_internal_parser=False, validate_transitions=True):
         example = self.build_example(sentences, transitions, train)
-        h, transition_acc, transition_loss = self.run_spinn(example, train, use_internal_parser)
+        h, transition_acc, transition_loss = self.run_spinn(example, train, use_internal_parser, validate_transitions)
         y = self.run_mlp(h, train)
 
         # Calculate Loss & Accuracy.
@@ -490,8 +495,9 @@ class SentencePairModel(BaseModel):
         return example
 
 
-    def run_spinn(self, example, train, use_internal_parser=False):
-        h_both, transition_acc, transition_loss = super(SentencePairModel, self).run_spinn(example, train, use_internal_parser)
+    def run_spinn(self, example, train, use_internal_parser=False, validate_transitions=True):
+        h_both, transition_acc, transition_loss = super(SentencePairModel, self).run_spinn(
+            example, train, use_internal_parser, validate_transitions)
         h_premise = F.concat(h_both[:batch_size], axis=0)
         h_hypothesis = F.concat(h_both[batch_size:], axis=0)
         h = F.concat([h_premise, h_hypothesis], axis=1)
@@ -517,7 +523,8 @@ class SentenceModel(BaseModel):
         return example
 
 
-    def run_spinn(self, example, train, use_internal_parser=False):
-        h, transition_acc, transition_loss = super(SentenceModel, self).run_spinn(example, train, use_internal_parser)
+    def run_spinn(self, example, train, use_internal_parser=False, validate_transitions=True):
+        h, transition_acc, transition_loss = super(SentenceModel, self).run_spinn(
+            example, train, use_internal_parser, validate_transitions)
         h = F.concat(h, axis=0)
         return h, transition_acc, transition_loss

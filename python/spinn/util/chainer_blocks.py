@@ -311,14 +311,16 @@ class BaseSentencePairTrainer(object):
     def update(self):
         self.optimizer.update()
 
-    def forward(self, x_batch, y_batch=None, train=True, predict=False, use_internal_parser=False):
+    def forward(self, x_batch, y_batch=None, train=True, predict=False,
+                use_internal_parser=False, validate_transitions=True):
         assert "sentences" in x_batch and "transitions" in x_batch, \
             "Input must contain dictionary of sentences and transitions."
 
         sentences = x_batch["sentences"]
         transitions = x_batch["transitions"]
 
-        ret = self.model(sentences, transitions, y_batch, train=train, use_internal_parser=use_internal_parser)
+        ret = self.model(sentences, transitions, y_batch, train=train,
+            use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
         y = ret[0]
         if predict:
             preds = self.__mod.argmax(y.data, 1).tolist()

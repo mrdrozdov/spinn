@@ -93,7 +93,8 @@ def hamming_distance(s1, s2):
     return sum(el1 != el2 for el1, el2 in zip(s1, s2))
 
 
-def evaluate(classifier_trainer, eval_set, logger, step, use_internal_parser=False, vocabulary=None):
+def evaluate(classifier_trainer, eval_set, logger, step,
+             use_internal_parser=False, vocabulary=None):
     # Evaluate
     acc_accum = 0.0
     action_acc_accum = 0.0
@@ -116,7 +117,9 @@ def evaluate(classifier_trainer, eval_set, logger, step, use_internal_parser=Fal
         ret = classifier_trainer.forward({
             "sentences": eval_X_batch,
             "transitions": eval_transitions_batch,
-            }, eval_y_batch, train=False, predict=False, use_internal_parser=use_internal_parser)
+            }, eval_y_batch, train=False, predict=False,
+            use_internal_parser=use_internal_parser,
+            validate_transitions=FLAGS.validate_transitions)
         y, loss, class_loss, transition_acc, transition_loss = ret
         acc_value = float(classifier_trainer.model.accuracy.data)
         action_acc_value = transition_acc
@@ -333,7 +336,7 @@ def run(only_forward=False):
             ret = classifier_trainer.forward({
                 "sentences": X_batch,
                 "transitions": transitions_batch,
-                }, y_batch, train=True, predict=False)
+                }, y_batch, train=True, predict=False, validate_transitions=FLAGS.validate_transitions)
             y, xent_loss, class_acc, transition_acc, transition_loss = ret
 
             if FLAGS.use_reinforce:
@@ -483,6 +486,8 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("use_reinforce", False, "Use RL to provide tracking lstm gradients")
     gflags.DEFINE_boolean("use_shift_composition", True, "")
     gflags.DEFINE_boolean("use_history", False, "")
+    gflags.DEFINE_boolean("validate_transitions", True, "Constrain predicted transitions to ones"
+                                                        "that give a valid parse tree.")
     gflags.DEFINE_boolean("save_stack", False, "")
     gflags.DEFINE_boolean("use_tracking_lstm", True,
                           "Whether to use LSTM in the tracking unit")
