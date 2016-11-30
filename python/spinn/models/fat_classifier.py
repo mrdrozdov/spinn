@@ -45,6 +45,8 @@ import spinn.nti
 from chainer import optimizers
 import chainer.functions as F
 
+from spinn.util.data import print_tree
+
 
 FLAGS = gflags.FLAGS
 
@@ -82,7 +84,17 @@ def build_rewards(logits, y):
     return F.accuracy(logits, y) - 0.5
 
 
-def evaluate(classifier_trainer, eval_set, logger, step):
+def hamming_distance(s1, s2):
+    """ source: https://en.wikipedia.org/wiki/Hamming_distance
+        Return the Hamming distance between equal-length sequences
+    """
+    if len(s1) != len(s2):
+        raise ValueError("Undefined for sequences of unequal length")
+    return sum(el1 != el2 for el1, el2 in zip(s1, s2))
+
+
+def evaluate(classifier_trainer, eval_set, logger, step,
+             use_internal_parser=False, vocabulary=None):
     # Evaluate
     acc_accum = 0.0
     action_acc_accum = 0.0
@@ -90,12 +102,24 @@ def evaluate(classifier_trainer, eval_set, logger, step):
     total_batches = len(eval_set[1])
     progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
+
+    if vocabulary:
+        inv_vocab = {v: k for k, v in vocabulary.iteritems()}
+
+    if FLAGS.print_tree:
+        graph_path = "graphs" if not FLAGS.use_reinforce else "graphs-rl"
+        summaries_file = "{}/summaries.txt".format(graph_path)
+        with open(summaries_file, "w") as f:
+            f.write("id,hamming,gold,pred\n")
+
     for i, (eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch) in enumerate(eval_set[1]):
         # Calculate Local Accuracies
         ret = classifier_trainer.forward({
             "sentences": eval_X_batch,
             "transitions": eval_transitions_batch,
-            }, eval_y_batch, train=False, predict=False)
+            }, eval_y_batch, train=False, predict=False,
+            use_internal_parser=use_internal_parser,
+            validate_transitions=FLAGS.validate_transitions)
         y, loss, class_loss, transition_acc, transition_loss = ret
         acc_value = float(classifier_trainer.model.accuracy.data)
         action_acc_value = transition_acc
@@ -104,6 +128,34 @@ def evaluate(classifier_trainer, eval_set, logger, step):
         acc_accum += acc_value
         action_acc_accum += action_acc_value
         eval_batches += 1.0
+
+        memories = classifier_trainer.model.spinn.memories
+        all_preds = [el['preds'] for el in memories]
+
+        if FLAGS.print_tree:
+            for ii in range(len(eval_X_batch)):
+                print(i, ii)
+                sentence = eval_X_batch[ii]
+                sentence = [s for s in sentence if s != 0]
+                sentence = [inv_vocab[s] for s in sentence]
+                transitions = eval_transitions_batch[ii]
+                offset = len(transitions)
+                transitions = [t for t in transitions if t != 2]
+                offset = offset - len(transitions)
+                preds = np.array(all_preds[offset:])[:, ii]
+
+                tree_id = "{:03}_{:03}".format(i, ii)
+
+                print_tree(sentence, transitions, "{}/gold/tree_{}.png".format(graph_path, tree_id))
+                print_tree(sentence, preds, "{}/pred/tree_{}.png".format(graph_path, tree_id))
+
+                with open(summaries_file, "a") as f:
+                    f.write("{},{},{},{}\n".format(
+                        tree_id,
+                        hamming_distance(transitions, preds),
+                        "".join([str(t) for t in transitions]),
+                        "".join([str(t) for t in preds]),
+                        ))
 
         # Print Progress
         progress_bar.step(i+1, total=total_batches)
@@ -251,7 +303,7 @@ def run(only_forward=False):
     # Do an evaluation-only run.
     if only_forward:
         for index, eval_set in enumerate(eval_iterators):
-            acc = evaluate(classifier_trainer, eval_set, logger, step)
+            acc = evaluate(classifier_trainer, eval_set, logger, step, FLAGS.use_internal_parser, vocabulary)
     else:
          # Train
         logger.Log("Training.")
@@ -284,7 +336,7 @@ def run(only_forward=False):
             ret = classifier_trainer.forward({
                 "sentences": X_batch,
                 "transitions": transitions_batch,
-                }, y_batch, train=True, predict=False)
+                }, y_batch, train=True, predict=False, validate_transitions=FLAGS.validate_transitions)
             y, xent_loss, class_acc, transition_acc, transition_loss = ret
 
             if FLAGS.use_reinforce:
@@ -364,7 +416,7 @@ def run(only_forward=False):
             if step > 0 and step % FLAGS.eval_interval_steps == 0:
                 for index, eval_set in enumerate(eval_iterators):
                     acc = evaluate(classifier_trainer, eval_set, logger, step)
-                    if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > 1000:
+                    if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                         best_dev_error = 1 - acc
                         logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
                         classifier_trainer.save(checkpoint_path, step, best_dev_error)
@@ -388,6 +440,7 @@ if __name__ == '__main__':
     gflags.DEFINE_integer("profile_steps", 3, "Specify how many steps to profile.")
     gflags.DEFINE_string("branch_name", "", "")
     gflags.DEFINE_string("sha", "", "")
+    gflags.DEFINE_boolean("print_tree", False, "Print trees to file.")
 
     # Experiment naming.
     gflags.DEFINE_string("experiment_name", "", "")
@@ -408,6 +461,7 @@ if __name__ == '__main__':
     gflags.DEFINE_string("eval_data_path", None, "Can contain multiple file paths, separated "
         "using ':' tokens. The first file should be the dev set, and is used for determining "
         "when to save the early stopping 'best' checkpoints.")
+    gflags.DEFINE_integer("ckpt_step", 1000, "Steps to run before considering saving checkpoint.")
     gflags.DEFINE_integer("seq_length", 30, "")
     gflags.DEFINE_integer("eval_seq_length", 30, "")
     gflags.DEFINE_boolean("smart_batching", True, "Organize batches using sequence length.")
@@ -432,6 +486,8 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("use_reinforce", False, "Use RL to provide tracking lstm gradients")
     gflags.DEFINE_boolean("use_shift_composition", True, "")
     gflags.DEFINE_boolean("use_history", False, "")
+    gflags.DEFINE_boolean("validate_transitions", True, "Constrain predicted transitions to ones"
+                                                        "that give a valid parse tree.")
     gflags.DEFINE_boolean("save_stack", False, "")
     gflags.DEFINE_boolean("use_tracking_lstm", True,
                           "Whether to use LSTM in the tracking unit")
