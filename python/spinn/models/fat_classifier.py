@@ -203,13 +203,13 @@ def run(only_forward=False):
         raise Exception("Requested unimplemented model type %s" % FLAGS.model_type)
 
 
-    if data_manager.SENTENCE_PAIR_DATA:
-        if hasattr(model_module, 'SentencePairTrainer') and hasattr(model_module, 'SentencePairModel'):
-            trainer_cls = model_module.SentencePairTrainer
-            model_cls = model_module.SentencePairModel
-        else:
-            raise Exception("Unimplemented for model type %s" % FLAGS.model_type)
+    if hasattr(model_module, 'SentencePairTrainer') and hasattr(model_module, 'SentencePairModel'):
+        trainer_cls = model_module.SentenceTrainer
+        model_cls = model_module.SentenceModel
+    else:
+        raise Exception("Unimplemented for model type %s" % FLAGS.model_type)
 
+    if data_manager.SENTENCE_PAIR_DATA:
         num_classes = len(data_manager.LABEL_MAP)
         use_sentence_pair = True
         classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
@@ -218,12 +218,6 @@ def run(only_forward=False):
                               use_sentence_pair,
                               FLAGS.gpu)
     else:
-        if hasattr(model_module, 'SentencePairTrainer') and hasattr(model_module, 'SentencePairModel'):
-            trainer_cls = model_module.SentenceTrainer
-            model_cls = model_module.SentenceModel
-        else:
-            raise Exception("Unimplemented for model type %s" % FLAGS.model_type)
-
         num_classes = len(data_manager.LABEL_MAP)
         use_sentence_pair = False
         classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
@@ -277,10 +271,8 @@ def run(only_forward=False):
         progress_bar = SimpleProgressBar(msg="Training", bar_length=60, enabled=FLAGS.show_progress_bar)
         avg_class_acc = 0
         avg_trans_acc = 0
-        avg_trans_acc = 0
         for step in range(step, FLAGS.training_steps):
-            X_batch, transitions_batch, y_batch, num_transitions_batch = training_data_iter.next()
-            learning_rate = FLAGS.learning_rate * (FLAGS.learning_rate_decay_per_10k_steps ** (step / 10000.0))
+            X_batch, transitions_batch, y_batch, _ = training_data_iter.next()
 
             # Reset cached gradients.
             classifier_trainer.optimizer.zero_grads()
@@ -296,7 +288,6 @@ def run(only_forward=False):
                 rewards = build_rewards(y, y_batch)
 
             # Boilerplate for calculating loss.
-            xent_cost_val = xent_loss.data
             transition_cost_val = transition_loss.data if transition_loss is not None else 0.0
             avg_trans_acc += transition_acc
             avg_class_acc += class_acc
@@ -306,12 +297,11 @@ def run(only_forward=False):
 
             # Extract L2 Cost
             l2_loss = l2_cost(model, FLAGS.l2_lambda)
-            l2_cost_val = l2_loss.data
 
             # Accumulate Total Loss Data
             total_cost_val = 0.0
-            total_cost_val += xent_cost_val
-            total_cost_val += l2_cost_val
+            total_cost_val += xent_loss.data
+            total_cost_val += l2_loss.data
             if not FLAGS.use_reinforce:
                 total_cost_val += transition_cost_val
 
@@ -349,7 +339,6 @@ def run(only_forward=False):
                 transition_optimizer.update()
 
             # Accumulate accuracy for current interval.
-            action_acc_val = 0.0
             acc_val = float(classifier_trainer.model.accuracy.data)
 
             if FLAGS.write_summaries:
@@ -365,7 +354,7 @@ def run(only_forward=False):
                 avg_trans_acc /= FLAGS.statistics_interval_steps
                 logger.Log(
                     "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %5f"
-                    % (step, avg_class_acc, avg_trans_acc, total_cost_val, xent_cost_val, transition_cost_val, l2_cost_val))
+                    % (step, avg_class_acc, avg_trans_acc, total_cost_val, xent_loss.data, transition_cost_val, l2_loss.data))
                 avg_trans_acc = 0
                 avg_class_acc = 0
 
