@@ -246,7 +246,7 @@ class SPINN(Chain):
                 raise Exception('Running without transitions not implemented')
 
             cant_skip = np.array([t != T_SKIP for t in transitions])
-            if hasattr(self, 'tracker') and sum(cant_skip) > 0:
+            if hasattr(self, 'tracker') and (self.use_skips or sum(cant_skip) > 0):
                 transition_hyp = self.tracker(self.bufs, self.stacks)
                 if transition_hyp is not None and run_internal_parser:
                     transition_hyp = to_cpu(transition_hyp)
