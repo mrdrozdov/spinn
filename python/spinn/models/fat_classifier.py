@@ -67,7 +67,6 @@ def build_sentence_pair_model(model_cls, trainer_cls, vocab_size, model_dim, wor
              transition_weight=FLAGS.transition_weight,
              use_tracking_lstm=FLAGS.use_tracking_lstm,
              use_shift_composition=FLAGS.use_shift_composition,
-             make_logits=FLAGS.make_logits,
              use_history=FLAGS.use_history,
              save_stack=FLAGS.save_stack,
              use_sentence_pair=use_sentence_pair,

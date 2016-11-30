@@ -375,7 +375,6 @@ class BaseModel(Chain):
                  transition_weight=None,
                  use_tracking_lstm=True,
                  use_shift_composition=True,
-                 make_logits=False,
                  use_history=False,
                  save_stack=False,
                  use_reinforce=False,
