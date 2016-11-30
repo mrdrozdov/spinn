@@ -38,7 +38,6 @@ from spinn.util.data import SimpleProgressBar
 from spinn.util.chainer_blocks import gradient_check, l2_cost
 
 import spinn.fat_stack
-import spinn.plain_rnn_chainer
 import spinn.cbow
 import spinn.nti
 
@@ -207,13 +206,13 @@ def run(only_forward=False):
         raise Exception("Requested unimplemented model type %s" % FLAGS.model_type)
 
 
-    if data_manager.SENTENCE_PAIR_DATA:
-        if hasattr(model_module, 'SentencePairTrainer') and hasattr(model_module, 'SentencePairModel'):
-            trainer_cls = model_module.SentencePairTrainer
-            model_cls = model_module.SentencePairModel
-        else:
-            raise Exception("Unimplemented for model type %s" % FLAGS.model_type)
+    if hasattr(model_module, 'SentencePairTrainer') and hasattr(model_module, 'SentencePairModel'):
+        trainer_cls = model_module.SentenceTrainer
+        model_cls = model_module.SentenceModel
+    else:
+        raise Exception("Unimplemented for model type %s" % FLAGS.model_type)
 
+    if data_manager.SENTENCE_PAIR_DATA:
         num_classes = len(data_manager.LABEL_MAP)
         use_sentence_pair = True
         classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
@@ -222,12 +221,6 @@ def run(only_forward=False):
                               use_sentence_pair,
                               FLAGS.gpu)
     else:
-        if hasattr(model_module, 'SentencePairTrainer') and hasattr(model_module, 'SentencePairModel'):
-            trainer_cls = model_module.SentenceTrainer
-            model_cls = model_module.SentenceModel
-        else:
-            raise Exception("Unimplemented for model type %s" % FLAGS.model_type)
-
         num_classes = len(data_manager.LABEL_MAP)
         use_sentence_pair = False
         classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
@@ -281,10 +274,8 @@ def run(only_forward=False):
         progress_bar = SimpleProgressBar(msg="Training", bar_length=60, enabled=FLAGS.show_progress_bar)
         avg_class_acc = 0
         avg_trans_acc = 0
-        avg_trans_acc = 0
         for step in range(step, FLAGS.training_steps):
-            X_batch, transitions_batch, y_batch, num_transitions_batch = training_data_iter.next()
-            learning_rate = FLAGS.learning_rate * (FLAGS.learning_rate_decay_per_10k_steps ** (step / 10000.0))
+            X_batch, transitions_batch, y_batch, _ = training_data_iter.next()
 
             # Reset cached gradients.
             classifier_trainer.optimizer.zero_grads()
@@ -300,7 +291,6 @@ def run(only_forward=False):
                 rewards = build_rewards(y, y_batch)
 
             # Boilerplate for calculating loss.
-            xent_cost_val = xent_loss.data
             transition_cost_val = transition_loss.data if transition_loss is not None else 0.0
             avg_trans_acc += transition_acc
             avg_class_acc += class_acc
@@ -310,12 +300,11 @@ def run(only_forward=False):
 
             # Extract L2 Cost
             l2_loss = l2_cost(model, FLAGS.l2_lambda)
-            l2_cost_val = l2_loss.data
 
             # Accumulate Total Loss Data
             total_cost_val = 0.0
-            total_cost_val += xent_cost_val
-            total_cost_val += l2_cost_val
+            total_cost_val += xent_loss.data
+            total_cost_val += l2_loss.data
             if not FLAGS.use_reinforce:
                 total_cost_val += transition_cost_val
 
@@ -353,7 +342,6 @@ def run(only_forward=False):
                 transition_optimizer.update()
 
             # Accumulate accuracy for current interval.
-            action_acc_val = 0.0
             acc_val = float(classifier_trainer.model.accuracy.data)
 
             if FLAGS.write_summaries:
@@ -369,7 +357,7 @@ def run(only_forward=False):
                 avg_trans_acc /= FLAGS.statistics_interval_steps
                 logger.Log(
                     "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %5f"
-                    % (step, avg_class_acc, avg_trans_acc, total_cost_val, xent_cost_val, transition_cost_val, l2_cost_val))
+                    % (step, avg_class_acc, avg_trans_acc, total_cost_val, xent_loss.data, transition_cost_val, l2_loss.data))
                 avg_trans_acc = 0
                 avg_class_acc = 0
 
@@ -447,15 +435,6 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("save_stack", False, "")
     gflags.DEFINE_boolean("use_tracking_lstm", True,
                           "Whether to use LSTM in the tracking unit")
-    gflags.DEFINE_boolean("make_logits", False, "Predict parser actions.")
-    gflags.DEFINE_boolean("predict_use_cell", False,
-                          "For models which predict parser actions, use "
-                          "both the tracking LSTM hidden and cell values as "
-                          "input to the prediction layer")
-    gflags.DEFINE_boolean("context_sensitive_shift", False,
-        "Use LSTM hidden state and word embedding to determine the vector to be pushed")
-    gflags.DEFINE_boolean("context_sensitive_use_relu", False,
-        "Use ReLU Layer to combine embedding and tracking unit hidden state")
     gflags.DEFINE_float("semantic_classifier_keep_rate", 0.9,
         "Used for dropout in the semantic task classifier.")
     gflags.DEFINE_float("embedding_keep_rate", 0.9,
@@ -466,24 +445,6 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("use_classifier_norm", True, "")
     gflags.DEFINE_float("tracker_dropout_rate", 0.1, "")
     gflags.DEFINE_boolean("lstm_composition", True, "")
-    gflags.DEFINE_enum("classifier_type", "MLP", ["MLP", "Highway", "ResNet"], "")
-    gflags.DEFINE_integer("resnet_unit_depth", 2, "")
-    # gflags.DEFINE_integer("num_composition_layers", 1, "")
-    gflags.DEFINE_integer("num_sentence_pair_combination_layers", 2, "")
-    gflags.DEFINE_integer("sentence_pair_combination_layer_dim", 1024, "")
-    gflags.DEFINE_float("scheduled_sampling_exponent_base", 0.99,
-        "Used for scheduled sampling, with probability of Model 1 over Model 2 being base^#training_steps")
-    gflags.DEFINE_boolean("use_difference_feature", True,
-        "Supply the sentence pair classifier with sentence difference features.")
-    gflags.DEFINE_boolean("use_product_feature", True,
-        "Supply the sentence pair classifier with sentence product features.")
-    gflags.DEFINE_boolean("connect_tracking_comp", True,
-        "Connect tracking unit and composition unit. Can only be true if using LSTM in both units.")
-    gflags.DEFINE_boolean("initialize_hyp_tracking_state", False,
-        "Initialize the c state of the tracking unit of hypothesis model with the final"
-        "tracking unit c state of the premise model.")
-    gflags.DEFINE_boolean("use_gru", False,
-                          "Use GRU units instead of LSTM units.")
 
     # Optimization settings.
     gflags.DEFINE_integer("training_steps", 500000, "Stop training after this point.")
@@ -513,9 +474,6 @@ if __name__ == '__main__':
         "as the number of eval sets.")
     gflags.DEFINE_boolean("write_predicted_label", False,
         "Write the predicted labels in a <eval_output_name>.lbl file.")
-    gflags.DEFINE_boolean("skip_saved_unsavables", False,
-        "Assume that variables marked as not savable will appear in checkpoints anyway, and "
-        "skip them when loading. This should be used only when loading old checkpoints.")
 
     # Parse command line flags.
     FLAGS(sys.argv)
