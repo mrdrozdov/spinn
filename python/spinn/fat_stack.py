@@ -260,7 +260,7 @@ class SPINN(Chain):
                             transition_acc += local_transition_acc
                             transition_loss += F.softmax_cross_entropy(
                                 probas, transition_preds,
-                                normalize=True)
+                                normalize=False)
 
                             memory["probas"] = probas
 
@@ -271,7 +271,7 @@ class SPINN(Chain):
 
                             transition_loss += F.softmax_cross_entropy(
                                 transition_hyp, transitions,
-                                normalize=True)
+                                normalize=False)
                             transition_acc += F.accuracy(
                                 transition_hyp, transitions)
 
