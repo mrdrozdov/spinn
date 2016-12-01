@@ -76,9 +76,9 @@ def create_binary_classes(input_path, output_path):
 if __name__ == "__main__":
     # Demo:
     if len(sys.argv) > 1 and sys.argv[1] == 'binary':
-        create_binary_classes('sst/dev.txt', 'sst/dev-binary.txt')
-        create_binary_classes('sst/test.txt', 'sst/test-binary.txt')
-        create_binary_classes('sst/train.txt', 'sst/train-binary.txt')
+        create_binary_classes('../sst/dev.txt', '../sst/dev-binary.txt')
+        create_binary_classes('../sst/test.txt', '../sst/test-binary.txt')
+        create_binary_classes('../sst/train.txt', '../sst/train-binary.txt')
     else:
         examples = convert_unary_binary_bracketed_data('sst/dev.txt')
         print examples[0]
