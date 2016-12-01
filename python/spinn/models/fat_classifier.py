@@ -35,7 +35,7 @@ from spinn.data.boolean import load_boolean_data
 from spinn.data.sst import load_sst_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
-from spinn.util.chainer_blocks import gradient_check, l2_cost
+from spinn.util.chainer_blocks import gradient_check, l2_cost, flatten
 
 import spinn.fat_stack
 import spinn.cbow
@@ -46,7 +46,7 @@ from chainer import optimizers
 import chainer.functions as F
 
 from spinn.util.data import print_tree
-from sklearn.metrics import confusion_matrix
+from sklearn import metrics
 
 
 FLAGS = gflags.FLAGS
@@ -426,17 +426,15 @@ def run(only_forward=False):
                 avg_trans_acc = 0
                 avg_class_acc = 0
                 if FLAGS.print_confusion_matrix:
-                    print(confusion_matrix(
-                        np.concatenate(accum_preds).ravel(),
-                        np.concatenate(accum_truth).ravel()
-                        ))
-                    cm = confusion_matrix(
-                        np.concatenate(accum_preds).ravel(),
-                        np.concatenate(accum_truth).ravel(),
+                    cm = metrics.confusion_matrix(
+                        np.array(flatten(accum_preds)),
+                        np.array(flatten(accum_truth)),
                         )
-                    print(cm)
-                    cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
-                    print(cm)
+                    logger.Log("{}".format(cm))
+                    cm = cm.astype(np.float32) / cm.sum(axis=1)[:, np.newaxis]
+                    logger.Log("{}".format(cm))
+                    acc = metrics.accuracy_score(flatten(accum_preds), flatten(accum_truth))
+                    logger.Log("SKLEARN ACC: {}".format(acc))
                 accum_preds = []
                 accum_truth = []
 

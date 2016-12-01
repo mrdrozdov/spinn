@@ -291,7 +291,6 @@ class SPINN(Chain):
                             relevant = len(cant_skip)
                         
                         memory["relevant"] = relevant
-                        self.memories.append(memory)
 
                         transition_acc += F.accuracy(
                             hyp_acc, truth_acc)
@@ -302,10 +301,10 @@ class SPINN(Chain):
                         if use_internal_parser:
                             transition_arr = transition_preds.tolist()
 
-                        self.memories.append({
-                            "preds": transition_preds,
-                            "truth": transitions
-                            })
+                        memory["preds"] = np.array(transition_preds[cant_skip])
+                        memory["truth"] = np.array(transitions[cant_skip])
+
+                        self.memories.append(memory)
 
             lefts, rights, trackings, attentions = [], [], [], []
             batch = zip(transition_arr, self.bufs, self.stacks, self.history,
