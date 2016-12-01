@@ -82,8 +82,11 @@ def build_sentence_pair_model(model_cls, trainer_cls, vocab_size, model_dim, wor
     return classifier_trainer
 
 
-def build_rewards(logits, y):
-    return metrics.accuracy_score(logits.data.argmax(axis=1), y)
+def build_rewards(logits, y, xent_reward=False):
+    if xent_reward:
+        return np.mean(logits.data[np.arange(y.shape[0]), y])
+    else:
+        return metrics.accuracy_score(logits.data.argmax(axis=1), y)
 
 
 def hamming_distance(s1, s2):
@@ -355,8 +358,12 @@ def run(only_forward=False):
             accum_truth.append(truth)
 
             if FLAGS.use_reinforce:
+<<<<<<< HEAD
                 rewards = build_rewards(y, y_batch)
                 logger.Log("\nReward :"+str(rewards))
+=======
+                rewards = build_rewards(y, y_batch, FLAGS.xent_reward)
+>>>>>>> Add flag for xent reward
 
             # Boilerplate for calculating loss.
             transition_cost_val = transition_loss.data if transition_loss is not None else 0.0
@@ -505,7 +512,10 @@ if __name__ == '__main__':
 
     gflags.DEFINE_float("transition_weight", None, "")
     gflags.DEFINE_integer("tracking_lstm_hidden_dim", 4, "")
+
     gflags.DEFINE_boolean("use_reinforce", False, "Use RL to provide tracking lstm gradients")
+    gflags.DEFINE_boolean("xent_reward", False, "Use cross entropy instead of accuracy as RL reward")
+
     gflags.DEFINE_boolean("use_shift_composition", True, "")
     gflags.DEFINE_boolean("use_history", False, "")
     gflags.DEFINE_boolean("use_skips", False, "Pad transitions with SKIP actions.")
