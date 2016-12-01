@@ -328,7 +328,6 @@ def run(only_forward=False):
         # New Training Loop
         progress_bar = SimpleProgressBar(msg="Training", bar_length=60, enabled=FLAGS.show_progress_bar)
         avg_class_acc = 0
-        avg_trans_acc = 0
         accum_preds = []
         accum_truth = []
         for step in range(step, FLAGS.training_steps):
@@ -345,8 +344,8 @@ def run(only_forward=False):
             y, xent_loss, class_acc, transition_acc, transition_loss = ret
 
             # Accumulate stats for confusion matrix.
-            preds = [m["preds"] for m in model.spinn.memories]
-            truth = [m["truth"] for m in model.spinn.memories]
+            preds = [m["preds_cm"] for m in model.spinn.memories]
+            truth = [m["truth_cm"] for m in model.spinn.memories]
             accum_preds.append(preds)
             accum_truth.append(truth)
 
@@ -355,9 +354,7 @@ def run(only_forward=False):
 
             # Boilerplate for calculating loss.
             transition_cost_val = transition_loss.data if transition_loss is not None else 0.0
-            avg_trans_acc += transition_acc
             avg_class_acc += class_acc
-
             if FLAGS.show_intermediate_stats and step % 5 == 0 and step % FLAGS.statistics_interval_steps > 0:
                 print("Accuracies so far : ", avg_class_acc / (step % FLAGS.statistics_interval_steps), avg_trans_acc / (step % FLAGS.statistics_interval_steps))
 
@@ -419,11 +416,10 @@ def run(only_forward=False):
             if step % FLAGS.statistics_interval_steps == 0:
                 progress_bar.finish()
                 avg_class_acc /= FLAGS.statistics_interval_steps
-                avg_trans_acc /= FLAGS.statistics_interval_steps
+                avg_trans_acc = metrics.accuracy_score(flatten(accum_preds), flatten(accum_truth))
                 logger.Log(
                     "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %5f"
                     % (step, avg_class_acc, avg_trans_acc, total_cost_val, xent_loss.data, transition_cost_val, l2_loss.data))
-                avg_trans_acc = 0
                 avg_class_acc = 0
                 if FLAGS.print_confusion_matrix:
                     cm = metrics.confusion_matrix(
@@ -433,8 +429,6 @@ def run(only_forward=False):
                     logger.Log("{}".format(cm))
                     cm = cm.astype(np.float32) / cm.sum(axis=1)[:, np.newaxis]
                     logger.Log("{}".format(cm))
-                    acc = metrics.accuracy_score(flatten(accum_preds), flatten(accum_truth))
-                    logger.Log("SKLEARN ACC: {}".format(acc))
                 accum_preds = []
                 accum_truth = []
 
