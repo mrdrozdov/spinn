@@ -255,7 +255,7 @@ class SPINN(Chain):
                         if self.use_reinforce:
                             probas = F.softmax(transition_hyp)
                             samples = np.array([T_SKIP for _ in self.bufs], dtype=np.int32)
-                            samples[cant_skip] = np.array([np.random.choice(self.choices, 1, p=proba)[0] for proba in probas.data[cant_skip]])
+                            samples[cant_skip] = [np.random.choice(self.choices, 1, p=proba)[0] for proba in probas.data[cant_skip]]
 
                             transition_preds = samples
                             hyp_acc = probas
