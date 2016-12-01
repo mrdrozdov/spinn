@@ -83,7 +83,7 @@ def build_sentence_pair_model(model_cls, trainer_cls, vocab_size, model_dim, wor
 
 
 def build_rewards(logits, y):
-    return metrics.accuracy_score(logits.data.argmax(axis=1), y) - 0.5
+    return metrics.accuracy_score(logits.data.argmax(axis=1), y)
 
 
 def hamming_distance(s1, s2):
@@ -356,6 +356,7 @@ def run(only_forward=False):
 
             if FLAGS.use_reinforce:
                 rewards = build_rewards(y, y_batch)
+                logger.Log("\nReward :"+str(rewards))
 
             # Boilerplate for calculating loss.
             transition_cost_val = transition_loss.data if transition_loss is not None else 0.0
