@@ -416,15 +416,17 @@ def run(only_forward=False):
             if step % FLAGS.statistics_interval_steps == 0:
                 progress_bar.finish()
                 avg_class_acc /= FLAGS.statistics_interval_steps
-                avg_trans_acc = metrics.accuracy_score(flatten(accum_preds), flatten(accum_truth))
+                all_preds = flatten(accum_preds)
+                all_truth = flatten(accum_truth)
+                avg_trans_acc = metrics.accuracy_score(all_preds, all_truth)
                 logger.Log(
                     "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %5f"
                     % (step, avg_class_acc, avg_trans_acc, total_cost_val, xent_loss.data, transition_cost_val, l2_loss.data))
                 avg_class_acc = 0
                 if FLAGS.print_confusion_matrix:
                     cm = metrics.confusion_matrix(
-                        np.array(flatten(accum_preds)),
-                        np.array(flatten(accum_truth)),
+                        np.array(all_preds),
+                        np.array(all_truth),
                         )
                     logger.Log("{}".format(cm))
                     cm = cm.astype(np.float32) / cm.sum(axis=1)[:, np.newaxis]
