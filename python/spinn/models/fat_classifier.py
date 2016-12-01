@@ -24,6 +24,7 @@ import os
 import pprint
 import sys
 import time
+from collections import deque
 
 import gflags
 import numpy as np
@@ -327,9 +328,9 @@ def run(only_forward=False):
 
         # New Training Loop
         progress_bar = SimpleProgressBar(msg="Training", bar_length=60, enabled=FLAGS.show_progress_bar)
-        avg_class_acc = 0
-        accum_preds = []
-        accum_truth = []
+        accum_class_acc = deque(maxlen=FLAGS.deq_length)
+        accum_preds = deque(maxlen=FLAGS.deq_length)
+        accum_truth = deque(maxlen=FLAGS.deq_length)
         for step in range(step, FLAGS.training_steps):
             X_batch, transitions_batch, y_batch, _ = training_data_iter.next()
 
@@ -354,9 +355,7 @@ def run(only_forward=False):
 
             # Boilerplate for calculating loss.
             transition_cost_val = transition_loss.data if transition_loss is not None else 0.0
-            avg_class_acc += class_acc
-            if FLAGS.show_intermediate_stats and step % 5 == 0 and step % FLAGS.statistics_interval_steps > 0:
-                print("Accuracies so far : ", avg_class_acc / (step % FLAGS.statistics_interval_steps), avg_trans_acc / (step % FLAGS.statistics_interval_steps))
+            accum_class_acc.append(class_acc)
 
             # Extract L2 Cost
             l2_loss = l2_cost(model, FLAGS.l2_lambda)
@@ -415,14 +414,13 @@ def run(only_forward=False):
 
             if step % FLAGS.statistics_interval_steps == 0:
                 progress_bar.finish()
-                avg_class_acc /= FLAGS.statistics_interval_steps
+                avg_class_acc = np.array(accum_class_acc).mean()
                 all_preds = flatten(accum_preds)
                 all_truth = flatten(accum_truth)
                 avg_trans_acc = metrics.accuracy_score(all_preds, all_truth)
                 logger.Log(
                     "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %5f"
                     % (step, avg_class_acc, avg_trans_acc, total_cost_val, xent_loss.data, transition_cost_val, l2_loss.data))
-                avg_class_acc = 0
                 if FLAGS.print_confusion_matrix:
                     cm = metrics.confusion_matrix(
                         np.array(all_preds),
@@ -431,8 +429,9 @@ def run(only_forward=False):
                     logger.Log("{}".format(cm))
                     cm = cm.astype(np.float32) / cm.sum(axis=1)[:, np.newaxis]
                     logger.Log("{}".format(cm))
-                accum_preds = []
-                accum_truth = []
+                accum_class_acc.clear()
+                accum_preds.clear()
+                accum_truth.clear()
 
             if step > 0 and step % FLAGS.eval_interval_steps == 0:
                 for index, eval_set in enumerate(eval_iterators):
@@ -484,6 +483,7 @@ if __name__ == '__main__':
         "using ':' tokens. The first file should be the dev set, and is used for determining "
         "when to save the early stopping 'best' checkpoints.")
     gflags.DEFINE_integer("ckpt_step", 1000, "Steps to run before considering saving checkpoint.")
+    gflags.DEFINE_integer("deq_length", 10, "Max trailing examples to use for statistics.")
     gflags.DEFINE_integer("seq_length", 30, "")
     gflags.DEFINE_integer("eval_seq_length", 30, "")
     gflags.DEFINE_boolean("smart_batching", True, "Organize batches using sequence length.")
