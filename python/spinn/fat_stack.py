@@ -262,9 +262,6 @@ class SPINN(Chain):
                             hyp_xent = probas
                             truth_acc = transitions
                             truth_xent = samples
-
-                            memory["probas"] = probas
-
                         else:
                             transition_preds = transition_hyp.data.argmax(axis=1)
                             hyp_acc = transition_hyp
@@ -284,23 +281,22 @@ class SPINN(Chain):
                             truth_acc = truth_acc[cant_skip]
 
                             cant_skip_mask = np.tile(np.expand_dims(cant_skip, axis=1), (1, 2))
-                            hyp_xent = F.where(cant_skip_mask, hyp_xent, Variable(0.5*np.ones_like(hyp_xent.data), volatile='auto'))
-                            truth_xent = np.where(cant_skip_mask[:,0], truth_xent, T_SHIFT*np.ones_like(truth_xent))
-                            relevant = sum(cant_skip)
-                        else:
-                            relevant = len(cant_skip)
-                        
-                        memory["relevant"] = relevant
-                        self.memories.append(memory)
+                            hyp_xent = F.split_axis(transition_hyp, transition_hyp.shape[0], axis=0)
+                            hyp_xent = F.concat([hyp_xent[i] for i, y in enumerate(cant_skip) if y], axis=0)
+                            truth_xent = truth_xent[cant_skip]
 
-                        transition_acc += F.accuracy(
-                            hyp_acc, truth_acc)
-                        transition_loss += F.softmax_cross_entropy(
-                            hyp_xent, truth_xent,
-                            normalize=False)
+                        memory["hyp_acc"] = hyp_acc
+                        memory["truth_acc"] = truth_acc
+                        memory["hyp_xent"] = hyp_xent
+                        memory["truth_xent"] = truth_xent
+
+                        memory["preds_cm"] = np.array(transition_preds[cant_skip])
+                        memory["truth_cm"] = np.array(transitions[cant_skip])
 
                         if use_internal_parser:
                             transition_arr = transition_preds.tolist()
+
+                        self.memories.append(memory)
 
             lefts, rights, trackings, attentions = [], [], [], []
             batch = zip(transition_arr, self.bufs, self.stacks, self.history,
@@ -352,11 +348,29 @@ class SPINN(Chain):
                             history.append(stack[-1])
         if print_transitions:
             print()
-        if self.transition_weight is not None and transition_loss is not 0:
-            # if skipping skips, acc/loss is slightly skewed towards batches with many skips.
-            relevancy = len(self.memories)
-            reporter.report({'transition_accuracy': transition_acc / relevancy,
-                             'transition_loss': transition_loss / relevancy}, self)
+        if self.transition_weight is not None:
+            # We compute statistics after the fact, since sub-batches can
+            # have different sizes when not using skips.
+            statistics = zip(*[
+                (m["hyp_acc"], m["truth_acc"], m["hyp_xent"], m["truth_xent"])
+                for m in self.memories])
+
+            statistics = [
+                F.squeeze(F.concat([F.expand_dims(ss, 1) for ss in s], axis=0))
+                if isinstance(s[0], Variable) else
+                np.array(reduce(lambda x, y: x + y.tolist(), s, []))
+                for s in statistics]
+
+            hyp_acc, truth_acc, hyp_xent, truth_xent = statistics
+
+            transition_acc = F.accuracy(
+                hyp_acc, truth_acc.astype(np.int32))
+            transition_loss = F.softmax_cross_entropy(
+                hyp_xent, truth_xent.astype(np.int32),
+                normalize=False)
+
+            reporter.report({'transition_accuracy': transition_acc,
+                             'transition_loss': transition_loss}, self)
             transition_loss *= self.transition_weight
         else:
             transition_loss = None

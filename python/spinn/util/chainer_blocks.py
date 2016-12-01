@@ -55,6 +55,13 @@ def l2_cost(model, l2_lambda):
     return cost
 
 
+def flatten(l):
+    if hasattr(l, '__len__'):
+        return reduce(lambda x, y: x + flatten(y), l, [])
+    else:
+        return [l]
+
+
 def the_gpu():
     return the_gpu.gpu
 

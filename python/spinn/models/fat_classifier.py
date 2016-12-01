@@ -35,7 +35,7 @@ from spinn.data.boolean import load_boolean_data
 from spinn.data.sst import load_sst_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
-from spinn.util.chainer_blocks import gradient_check, l2_cost
+from spinn.util.chainer_blocks import gradient_check, l2_cost, flatten
 
 import spinn.fat_stack
 import spinn.cbow
@@ -46,6 +46,7 @@ from chainer import optimizers
 import chainer.functions as F
 
 from spinn.util.data import print_tree
+from sklearn import metrics
 
 
 FLAGS = gflags.FLAGS
@@ -327,7 +328,8 @@ def run(only_forward=False):
         # New Training Loop
         progress_bar = SimpleProgressBar(msg="Training", bar_length=60, enabled=FLAGS.show_progress_bar)
         avg_class_acc = 0
-        avg_trans_acc = 0
+        accum_preds = []
+        accum_truth = []
         for step in range(step, FLAGS.training_steps):
             X_batch, transitions_batch, y_batch, _ = training_data_iter.next()
 
@@ -341,14 +343,18 @@ def run(only_forward=False):
                 }, y_batch, train=True, predict=False, validate_transitions=FLAGS.validate_transitions)
             y, xent_loss, class_acc, transition_acc, transition_loss = ret
 
+            # Accumulate stats for confusion matrix.
+            preds = [m["preds_cm"] for m in model.spinn.memories]
+            truth = [m["truth_cm"] for m in model.spinn.memories]
+            accum_preds.append(preds)
+            accum_truth.append(truth)
+
             if FLAGS.use_reinforce:
                 rewards = build_rewards(y, y_batch)
 
             # Boilerplate for calculating loss.
             transition_cost_val = transition_loss.data if transition_loss is not None else 0.0
-            avg_trans_acc += transition_acc
             avg_class_acc += class_acc
-
             if FLAGS.show_intermediate_stats and step % 5 == 0 and step % FLAGS.statistics_interval_steps > 0:
                 print("Accuracies so far : ", avg_class_acc / (step % FLAGS.statistics_interval_steps), avg_trans_acc / (step % FLAGS.statistics_interval_steps))
 
@@ -410,12 +416,21 @@ def run(only_forward=False):
             if step % FLAGS.statistics_interval_steps == 0:
                 progress_bar.finish()
                 avg_class_acc /= FLAGS.statistics_interval_steps
-                avg_trans_acc /= FLAGS.statistics_interval_steps
+                avg_trans_acc = metrics.accuracy_score(flatten(accum_preds), flatten(accum_truth))
                 logger.Log(
                     "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %5f"
                     % (step, avg_class_acc, avg_trans_acc, total_cost_val, xent_loss.data, transition_cost_val, l2_loss.data))
-                avg_trans_acc = 0
                 avg_class_acc = 0
+                if FLAGS.print_confusion_matrix:
+                    cm = metrics.confusion_matrix(
+                        np.array(flatten(accum_preds)),
+                        np.array(flatten(accum_truth)),
+                        )
+                    logger.Log("{}".format(cm))
+                    cm = cm.astype(np.float32) / cm.sum(axis=1)[:, np.newaxis]
+                    logger.Log("{}".format(cm))
+                accum_preds = []
+                accum_truth = []
 
             if step > 0 and step % FLAGS.eval_interval_steps == 0:
                 for index, eval_set in enumerate(eval_iterators):
@@ -435,6 +450,7 @@ def run(only_forward=False):
 if __name__ == '__main__':
     # Debug settings.
     gflags.DEFINE_bool("debug", True, "Set to True to disable debug_mode and type_checking.")
+    gflags.DEFINE_bool("print_confusion_matrix", False, "Periodically print CM on transitions.")
     gflags.DEFINE_bool("gradient_check", False, "Randomly check that gradients match estimates.")
     gflags.DEFINE_bool("profile", False, "Set to True to quit after a few batches.")
     gflags.DEFINE_bool("write_summaries", False, "Toggle which controls whether summaries are written.")
