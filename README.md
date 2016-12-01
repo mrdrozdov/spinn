@@ -71,7 +71,7 @@ sed -i -e 's/)/\ )/g' ./sst/train.txt
 Creating Binary SST data:
 
 ```
-python python/spinn/data/sst/load_sst_data.py binary
+cd python && python -m spinn.data.sst.load_sst_data binary
 ```
 
 ## License
