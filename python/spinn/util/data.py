@@ -262,7 +262,7 @@ def MakeTrainingIterator(sources, batch_size, smart_batches=True, use_peano=True
     return train_iter()
 
 
-def MakeEvalIterator(sources, batch_size, limit=-1):
+def MakeEvalIterator(sources, batch_size, limit=-1, shuffle=False, rseed=123):
     # Make a list of minibatches from a dataset to use as an iterator.
     # TODO(SB): Pad out the last few examples in the eval set if they don't
     # form a batch.
@@ -270,6 +270,10 @@ def MakeEvalIterator(sources, batch_size, limit=-1):
     print "WARNING: May be discarding eval examples."
 
     dataset_size = limit if limit >= 0 else len(sources[0])
+    order = range(dataset_size)
+    if shuffle:
+        random.seed(rseed)
+        random.shuffle(order)
     data_iter = []
     start = -batch_size
     while True:
@@ -278,7 +282,8 @@ def MakeEvalIterator(sources, batch_size, limit=-1):
         if start >= dataset_size:
             break
 
-        candidate_batch = tuple(source[start:start + batch_size]
+        batch_indices = order[start:start + batch_size]
+        candidate_batch = tuple(source[batch_indices]
                                for source in sources)
 
         if len(candidate_batch[0]) == batch_size:

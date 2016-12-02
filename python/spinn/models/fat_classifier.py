@@ -249,9 +249,10 @@ def run(only_forward=False):
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             for_rnn=FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW",
             use_left_padding=FLAGS.use_left_padding)
-        eval_iterators.append((filename,
-            util.MakeEvalIterator((e_X, e_transitions, e_y, e_num_transitions),
-                FLAGS.batch_size, FLAGS.eval_data_limit)))
+        eval_it = util.MakeEvalIterator((e_X, e_transitions, e_y, e_num_transitions),
+            FLAGS.batch_size, FLAGS.eval_data_limit,
+            shuffle=FLAGS.shuffle_eval, rseed=FLAGS.shuffle_eval_seed)
+        eval_iterators.append((filename, eval_it))
 
     # Set up the placeholders.
 
@@ -498,6 +499,8 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("smart_batching", True, "Organize batches using sequence length.")
     gflags.DEFINE_boolean("use_peano", True, "A mind-blowing sorting key.")
     gflags.DEFINE_integer("eval_data_limit", -1, "Truncate evaluation set. -1 indicates no truncation.")
+    gflags.DEFINE_boolean("shuffle_eval", False, "Shuffle evaluation data.")
+    gflags.DEFINE_integer("shuffle_eval_seed", 123, "Seed shuffling of eval data.")
     gflags.DEFINE_string("embedding_data_path", None,
         "If set, load GloVe-formatted embeddings from here.")
 
