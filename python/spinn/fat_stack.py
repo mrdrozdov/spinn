@@ -531,6 +531,7 @@ class SentencePairModel(BaseModel):
     def run_spinn(self, example, train, use_internal_parser=False, validate_transitions=True):
         h_both, transition_acc, transition_loss = super(SentencePairModel, self).run_spinn(
             example, train, use_internal_parser, validate_transitions)
+        batch_size = len(h_both) / 2
         h_premise = F.concat(h_both[:batch_size], axis=0)
         h_hypothesis = F.concat(h_both[batch_size:], axis=0)
         h = F.concat([h_premise, h_hypothesis], axis=1)
