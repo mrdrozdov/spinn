@@ -396,7 +396,7 @@ class Embed(Chain):
                 the embedding of the corresponding token along with ``tokens``
                 and ``transitions`` attributes.
         """
-        b, l = tokens.data.shape
+        b, l = tokens.data.shape[:2]
         if self.vectors is None:
             embeds = self.embed(to_gpu(F.reshape(tokens, (-1,))))
         else:

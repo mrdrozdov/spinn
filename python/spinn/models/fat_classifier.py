@@ -269,13 +269,13 @@ def run(only_forward=False):
         raise Exception("Requested unimplemented model type %s" % FLAGS.model_type)
 
 
-    if hasattr(model_module, 'SentencePairTrainer') and hasattr(model_module, 'SentencePairModel'):
-        trainer_cls = model_module.SentenceTrainer
-        model_cls = model_module.SentenceModel
-    else:
-        raise Exception("Unimplemented for model type %s" % FLAGS.model_type)
-
     if data_manager.SENTENCE_PAIR_DATA:
+        if hasattr(model_module, 'SentencePairTrainer') and hasattr(model_module, 'SentencePairModel'):
+            trainer_cls = model_module.SentencePairTrainer
+            model_cls = model_module.SentencePairModel
+        else:
+            raise Exception("Unimplemented for model type %s" % FLAGS.model_type)
+
         num_classes = len(data_manager.LABEL_MAP)
         use_sentence_pair = True
         classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
@@ -284,6 +284,12 @@ def run(only_forward=False):
                               use_sentence_pair,
                               FLAGS.gpu)
     else:
+        if hasattr(model_module, 'SentenceTrainer') and hasattr(model_module, 'SentenceModel'):
+            trainer_cls = model_module.SentenceTrainer
+            model_cls = model_module.SentenceModel
+        else:
+            raise Exception("Unimplemented for model type %s" % FLAGS.model_type)
+
         num_classes = len(data_manager.LABEL_MAP)
         use_sentence_pair = False
         classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
