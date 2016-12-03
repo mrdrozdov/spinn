@@ -406,11 +406,6 @@ class BaseModel(Chain):
         self.add_link('l1', L.Linear(mlp_dim, mlp_dim))
         self.add_link('l2', L.Linear(mlp_dim, num_classes))
 
-        if use_classifier_norm:
-            self.add_link('bn_0', L.BatchNormalization(mlp_input_dim))
-            self.add_link('bn_1', L.BatchNormalization(mlp_dim))
-            self.add_link('bn_2', L.BatchNormalization(mlp_dim))
-
         self.classifier = CrossEntropyClassifier(gpu)
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
@@ -468,19 +463,10 @@ class BaseModel(Chain):
     def run_mlp(self, h, train):
         # Pass through MLP Classifier.
         h = to_gpu(h)
-        if hasattr(self, 'bn_0'):
-            h = self.bn_0(h, not train)
-        h = F.dropout(h, self.classifier_dropout_rate, train)
         h = self.l0(h)
         h = F.relu(h)
-        if hasattr(self, 'bn_1'):
-            h = self.bn_1(h, not train)
-        h = F.dropout(h, self.classifier_dropout_rate, train)
         h = self.l1(h)
         h = F.relu(h)
-        if hasattr(self, 'bn_2'):
-            h = self.bn_2(h, not train)
-        h = F.dropout(h, self.classifier_dropout_rate, train)
         h = self.l2(h)
         y = h
 
