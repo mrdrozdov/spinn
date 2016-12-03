@@ -536,8 +536,8 @@ if __name__ == '__main__':
         "Used for dropout on transformed embeddings.")
     gflags.DEFINE_boolean("use_input_dropout", False, "")
     gflags.DEFINE_boolean("use_input_norm", False, "")
-    gflags.DEFINE_boolean("use_tracker_dropout", True, "")
-    gflags.DEFINE_boolean("use_classifier_norm", True, "")
+    gflags.DEFINE_boolean("use_tracker_dropout", False, "")
+    gflags.DEFINE_boolean("use_classifier_norm", False, "")
     gflags.DEFINE_float("tracker_dropout_rate", 0.1, "")
     gflags.DEFINE_boolean("lstm_composition", True, "")
 

@@ -195,7 +195,7 @@ def unbundle(state):
         state.both, state.both.data.shape[0], axis=0, force_tuple=True)
 
 
-def treelstm(c_left, c_right, gates):
+def treelstm(c_left, c_right, gates, use_dropout=False):
     hidden_dim = c_left.shape[1]
 
     assert gates.shape[1] == hidden_dim * 5, "Need to have 5 gates."
@@ -216,7 +216,6 @@ def treelstm(c_left, c_right, gates):
 
     # Compute new cell and hidden value
     i_val = i_gate * cell_inp
-    use_dropout = True
     dropout_rate = 0.1
     if use_dropout:
         i_val = F.dropout(i_val, dropout_rate, train=i_val.volatile == False)
