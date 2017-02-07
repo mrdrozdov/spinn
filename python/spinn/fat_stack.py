@@ -212,25 +212,25 @@ class SPINN(nn.Module):
 
             cant_skip = np.array([t != T_SKIP for t in transitions])
             if hasattr(self, 'tracker') and (self.use_skips or sum(cant_skip) > 0):
-                transition_hyp = self.tracker(self.bufs, self.stacks)
-                if transition_hyp is not None and run_internal_parser:
-                    transition_hyp = to_cpu(transition_hyp)
+                tracker_output = self.tracker(self.bufs, self.stacks)
+                if tracker_output is not None and run_internal_parser:
+                    tracker_output = to_cpu(tracker_output)
                     if hasattr(self, 'transitions'):
                         memory = {}
                         if self.use_reinforce:
-                            probas = F.softmax(transition_hyp)
-                            samples = np.array([T_SKIP for _ in self.bufs], dtype=np.int32)
-                            samples[cant_skip] = [np.random.choice(self.choices, 1, p=proba)[0] for proba in probas.data[cant_skip]]
+                            transition_dist = F.softmax(tracker_output)
+                            sampled_transitions = np.array([T_SKIP for _ in self.bufs], dtype=np.int32)
+                            sampled_transitions[cant_skip] = [np.random.choice(self.choices, 1, p=t_dist)[0] for t_dist in transition_dist.data[cant_skip]]
 
-                            transition_preds = samples
-                            hyp_acc = probas
-                            hyp_xent = probas
+                            transition_preds = sampled_transitions
+                            hyp_acc = transition_dist
+                            hyp_xent = transition_dist
                             truth_acc = transitions
-                            truth_xent = samples
+                            truth_xent = sampled_transitions
                         else:
-                            transition_preds = transition_hyp.data.max(1)[1]
-                            hyp_acc = transition_hyp
-                            hyp_xent = transition_hyp
+                            transition_preds = tracker_output.data.max(1)[1]
+                            hyp_acc = tracker_output
+                            hyp_xent = tracker_output
                             truth_acc = transitions
                             truth_xent = transitions
 
@@ -238,7 +238,7 @@ class SPINN(nn.Module):
                             transition_preds = self.validate(transition_arr, transition_preds,
                                 self.stacks, self.buffers_t, self.buffers_n)
 
-                        memory["logits"] = transition_hyp
+                        memory["logits"] = tracker_output
                         memory["preds"]  = transition_preds
 
                         if not self.use_skips:
@@ -246,7 +246,7 @@ class SPINN(nn.Module):
                             truth_acc = truth_acc[cant_skip]
 
                             cant_skip_mask = np.tile(np.expand_dims(cant_skip, axis=1), (1, 2))
-                            hyp_xent = torch.chunk(transition_hyp, transition_hyp.size()[0], 0)
+                            hyp_xent = torch.chunk(tracker_output, tracker_output.size()[0], 0)
                             hyp_xent = torch.cat([hyp_xent[i] for i, y in enumerate(cant_skip) if y], 0)
                             truth_xent = truth_xent[cant_skip]
 
