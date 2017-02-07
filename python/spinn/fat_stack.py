@@ -333,13 +333,12 @@ class SPINN(nn.Module):
 
             hyp_acc, truth_acc, hyp_xent, truth_xent = statistics
 
-            transition_acc = (hyp_acc.argmax(axis=1) == truth_acc).sum() / float(hyp_acc.shape[0])
+            self.transition_acc = (hyp_acc.argmax(axis=1) == truth_acc).sum() / float(hyp_acc.shape[0])
             t_logits = F.log_softmax(hyp_xent)
             transition_loss = nn.NLLLoss()(t_logits, to_gpu(Variable(
                 torch.from_numpy(truth_xent), volatile=t_logits.volatile)))
 
             transition_loss *= self.transition_weight
-            self.transition_accuracy = transition_acc
             self.transition_loss = transition_loss
         else:
             transition_loss = None
@@ -415,7 +414,7 @@ class BaseModel(nn.Module):
                                use_internal_parser=use_internal_parser,
                                validate_transitions=validate_transitions)
 
-        transition_acc = self.spinn.transition_accuracy if hasattr(self.spinn, 'transition_acc') else 0.0
+        transition_acc = self.spinn.transition_acc if hasattr(self.spinn, 'transition_acc') else 0.0
         transition_loss = self.spinn.transition_loss if hasattr(self.spinn, 'transition_loss') else None
         return h_both, transition_acc, transition_loss
 
@@ -446,9 +445,6 @@ class BaseModel(nn.Module):
 
         preds = logits.data.max(1)[1]
         self.accuracy = preds.eq(target.data).sum() / float(preds.size(0))
-
-        if hasattr(transition_acc, 'data'):
-          transition_acc = transition_acc.data
 
         return logits, accum_loss, self.accuracy, transition_acc, transition_loss
 

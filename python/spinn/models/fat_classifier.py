@@ -107,13 +107,11 @@ def evaluate(classifier_trainer, eval_set, logger, step,
             }, eval_y_batch, train=False,
             use_internal_parser=use_internal_parser,
             validate_transitions=FLAGS.validate_transitions)
-        y, loss, class_loss, transition_acc, transition_loss = ret
-        acc_value = float(classifier_trainer.model.accuracy)
-        action_acc_value = float(classifier_trainer.model.spinn.transition_accuracy)
+        y, loss, class_acc, transition_acc, transition_loss = ret
 
         # Update Aggregate Accuracies
-        acc_accum += acc_value
-        action_acc_accum += action_acc_value
+        acc_accum += class_acc
+        action_acc_accum += transition_acc
         eval_batches += 1.0
 
         # Print Progress
@@ -355,9 +353,6 @@ def run(only_forward=False):
             if FLAGS.use_reinforce:
                 transition_optimizer.zero_grads()
                 optimizer_lr, baseline = reinforce(transition_optimizer, optimizer_lr, baseline, mu, rewards, transition_loss)
-
-            # Accumulate accuracy for current interval.
-            acc_val = float(classifier_trainer.model.accuracy)
 
             if step % FLAGS.statistics_interval_steps == 0:
                 progress_bar.step(i=FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)

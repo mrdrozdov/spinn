@@ -236,7 +236,6 @@ class BaseSentencePairTrainer(object):
 
         ret = self.model(sentences, transitions, y_batch, train=train,
             use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
-        y = ret[0]
         return ret
 
     def save(self, filename, step, best_dev_error):
