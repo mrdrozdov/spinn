@@ -98,8 +98,8 @@ class LSTMState:
     @property
     def both(self):
         if not hasattr(self, '_both'):
-            self._both = F.concat(
-                (to_cpu(self._c), to_cpu(self._h)), axis=1)
+            self._both = torch.cat(
+                (to_cpu(self._c), to_cpu(self._h)), 1)
         return self._both
 
 
@@ -110,7 +110,7 @@ def get_h(state, hidden_dim):
     return state[:, :hidden_dim]
 
 def get_state(c, h):
-    return F.concat([h, c], axis=1)
+    return torch.cat([h, c], 1)
 
 
 def bundle(lstm_iter):
@@ -154,8 +154,8 @@ def unbundle(state):
         return itertools.repeat(None)
     if not isinstance(state, LSTMState):
         state = LSTMState(state)
-    return F.split_axis(
-        state.both, state.both.data.shape[0], axis=0, force_tuple=True)
+    return torch.chunk(
+        state.both, state.both.data.size()[0], 0)
 
 
 def extract_gates(x, n):
@@ -178,9 +178,9 @@ def lstm(c_prev, x):
 
 
 def treelstm(c_left, c_right, gates, use_dropout=False):
-    hidden_dim = c_left.shape[1]
+    hidden_dim = c_left.size()[1]
 
-    assert gates.shape[1] == hidden_dim * 5, "Need to have 5 gates."
+    assert gates.size()[1] == hidden_dim * 5, "Need to have 5 gates."
 
     def slice_gate(gate_data, i):
         return gate_data[:, i * hidden_dim:(i + 1) * hidden_dim]

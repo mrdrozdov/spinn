@@ -187,6 +187,8 @@ class SPINN(nn.Module):
         # TODO: Almost definitely these don't work as expected because of how
         # things are initialized and because of the SKIP action.
 
+        preds = preds.numpy()
+
         DEFAULT_CHOICE = T_SHIFT
         cant_skip = np.array([p == T_SKIP and t != T_SKIP for t, p in zip(transitions, preds)])
         preds[cant_skip] = DEFAULT_CHOICE
@@ -202,7 +204,7 @@ class SPINN(nn.Module):
         must_skip = np.array([t == T_SKIP for t in transitions])
         preds[must_skip] = T_SKIP
 
-        return preds
+        return torch.LongTensor(preds)
 
     def run(self, print_transitions=False, run_internal_parser=False,
             use_internal_parser=False, validate_transitions=True):
@@ -261,12 +263,12 @@ class SPINN(nn.Module):
                         memory["preds"]  = transition_preds
 
                         if not self.use_skips:
-                            hyp_acc = hyp_acc.data[cant_skip]
+                            hyp_acc = hyp_acc.data.numpy()[cant_skip]
                             truth_acc = truth_acc[cant_skip]
 
                             cant_skip_mask = np.tile(np.expand_dims(cant_skip, axis=1), (1, 2))
-                            hyp_xent = F.split_axis(transition_hyp, transition_hyp.shape[0], axis=0)
-                            hyp_xent = F.concat([hyp_xent[i] for i, y in enumerate(cant_skip) if y], axis=0)
+                            hyp_xent = torch.chunk(transition_hyp, transition_hyp.size()[0], 0)
+                            hyp_xent = torch.cat([hyp_xent[i] for i, y in enumerate(cant_skip) if y], 0)
                             truth_xent = truth_xent[cant_skip]
 
                         memory["hyp_acc"] = hyp_acc
@@ -274,7 +276,7 @@ class SPINN(nn.Module):
                         memory["hyp_xent"] = hyp_xent
                         memory["truth_xent"] = truth_xent
 
-                        memory["preds_cm"] = np.array(transition_preds[cant_skip])
+                        memory["preds_cm"] = np.array(transition_preds.numpy()[cant_skip])
                         memory["truth_cm"] = np.array(transitions[cant_skip])
 
                         if use_internal_parser:
