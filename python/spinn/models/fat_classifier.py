@@ -36,7 +36,7 @@ from spinn.data.boolean import load_boolean_data
 from spinn.data.sst import load_sst_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
-from spinn.util.chainer_blocks import gradient_check, l2_cost, flatten
+from spinn.util.chainer_blocks import l2_cost, flatten
 
 import spinn.fat_stack
 
@@ -332,9 +332,9 @@ def run(only_forward=False):
             lr=FLAGS.learning_rate,
             )
 
-        model = classifier_trainer.optimizer.target
+        model = classifier_trainer.model
 
-        print(sum([reduce(lambda x, y: x * y, w.data.shape, 1.0) for w in model.params()]))
+        print(sum([reduce(lambda x, y: x * y, w.size(), 1.0) for w in model.parameters()]))
 
         if FLAGS.use_reinforce:
             optimizer_lr = 0.01
@@ -352,7 +352,7 @@ def run(only_forward=False):
             X_batch, transitions_batch, y_batch, _ = training_data_iter.next()
 
             # Reset cached gradients.
-            classifier_trainer.optimizer.zero_grads()
+            classifier_trainer.optimizer.zero_grad()
 
             # Calculate loss and update parameters.
             ret = classifier_trainer.forward({
@@ -392,18 +392,8 @@ def run(only_forward=False):
             if hasattr(transition_loss, 'backward') and not FLAGS.use_reinforce:
                 total_loss += transition_loss
 
-            # [(n,w.grad) for n,w in model.namedparams()]
-
+            # Backward pass.
             total_loss.backward()
-
-            if FLAGS.gradient_check:
-                def get_loss():
-                    _, check_loss, _, _ = classifier_trainer.forward({
-                    "sentences": X_batch,
-                    "transitions": transitions_batch,
-                    }, y_batch, train=True, predict=False)
-                    return check_loss
-                gradient_check(classifier_trainer.model, get_loss)
 
             try:
                 classifier_trainer.update()
@@ -465,7 +455,6 @@ if __name__ == '__main__':
     # Debug settings.
     gflags.DEFINE_bool("debug", True, "Set to True to disable debug_mode and type_checking.")
     gflags.DEFINE_bool("print_confusion_matrix", False, "Periodically print CM on transitions.")
-    gflags.DEFINE_bool("gradient_check", False, "Randomly check that gradients match estimates.")
     gflags.DEFINE_bool("profile", False, "Set to True to quit after a few batches.")
     gflags.DEFINE_bool("write_summaries", False, "Toggle which controls whether summaries are written.")
     gflags.DEFINE_bool("show_progress_bar", True, "Turn this off when running experiments on HPC.")

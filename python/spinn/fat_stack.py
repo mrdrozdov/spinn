@@ -64,18 +64,12 @@ def HeKaimingInit(shape, real_shape=None):
 
 class SentencePairTrainer(BaseSentencePairTrainer):
     def init_params(self, **kwargs):
-        for name, param in self.model.namedparams():
-            data = param.data
-            print("Init: {}:{}".format(name, data.shape))
-            if len(data.shape) >= 2:
-                data[:] = HeKaimingInit(data.shape)
-            else:
-                data[:] = np.random.uniform(-0.1, 0.1, data.shape)
+        # TODO
+        pass
 
     def init_optimizer(self, lr=0.01, **kwargs):
-        self.optimizer = optimizers.Adam(alpha=0.0003, beta1=0.9, beta2=0.999, eps=1e-08)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0003, betas=(0.9, 0.999), eps=1e-08)
         # self.optimizer = optimizers.SGD(lr=0.01)
-        self.optimizer.setup(self.model)
         # self.optimizer.add_hook(chainer.optimizer.GradientClipping(40))
         # self.optimizer.add_hook(chainer.optimizer.WeightDecay(0.00003))
 
@@ -145,7 +139,7 @@ class SPINN(nn.Module):
                  attention=False, attn_fn=None, use_reinforce=True, use_skips=False):
         super(SPINN, self).__init__()
         self.embed = Embed(args.size, vocab.size, args.input_dropout_rate,
-                        vectors=vocab.vectors, normalization=normalization,
+                        vectors=vocab.vectors,
                         use_input_dropout=args.use_input_dropout,
                         use_input_norm=args.use_input_norm,
                         )
@@ -399,7 +393,6 @@ class BaseModel(nn.Module):
         self.classifier = CrossEntropyClassifier(gpu)
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
-        self.accFun = accuracy.accuracy
         self.initial_embeddings = initial_embeddings
         self.classifier_dropout_rate = 1. - classifier_keep_rate
         self.use_classifier_norm = use_classifier_norm
@@ -471,7 +464,7 @@ class BaseModel(nn.Module):
 
         # Calculate Loss & Accuracy.
         accum_loss = self.classifier(y, Variable(y_batch, volatile=not train), train)
-        self.accuracy = self.accFun(y, self.__mod.array(y_batch))
+        self.accuracy = y.data.eq(y_batch) / y.size(0)
 
         if hasattr(transition_acc, 'data'):
           transition_acc = transition_acc.data

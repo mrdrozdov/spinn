@@ -9,40 +9,9 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 
-def gradient_check(model, get_loss, rtol=0, atol=1e-2, to_check=10):
-    epsilon = 1e-3
-    cached_grads = [w.grad.ravel().copy() for (n,w) in model.namedparams()]
-    checked = []
-
-    # TODO: Only consider non-zero gradients.
-    for (_, w), cached in zip(model.namedparams(), cached_grads):
-        chosen = range(len(cached))
-        random.shuffle(chosen)
-        chosen = chosen[:to_check]
-        for c in chosen:
-            # Find Y1
-            w.data.ravel()[c] += epsilon
-            check_loss_1 = get_loss()
-
-            # Find Y2
-            w.data.ravel()[c] -= 2 * epsilon
-            check_loss_2 = get_loss()
-
-            # Reset Param
-            w.data.ravel()[c] += epsilon
-
-            # Check that: Gradient ~ (Y1 - Y2) / (2 * epsilon)
-            estimate = (check_loss_1.data - check_loss_2.data) / (2 * epsilon)
-            checked.append((estimate, cached[c]))
-
-    estimates, grads = zip(*checked)
-    estimates, grads = np.array(estimates), np.array(grads)
-    testing.assert_allclose(estimates, grads, rtol=rtol, atol=atol, verbose=True), "Gradient check failed."
-
-
 def l2_cost(model, l2_lambda):
     cost = 0.0
-    for _, w in model.namedparams():
+    for _, w in model.parameters():
         cost += l2_lambda * F.sum(F.square(w))
     return cost
 
@@ -266,14 +235,12 @@ class BaseSentencePairTrainer(object):
 
     def init_model(self, model):
         self.model = model
-        self.model.add_persistent('best_dev_error', 0.0)
-        self.model.add_persistent('step', 0)
+        self.model.best_dev_error = 0.0
+        self.model.step = 0
 
     def init_params(self, **kwargs):
-        for name, param in self.model.namedparams():
-            data = param.data
-            print("Init: {}:{}".format(name, data.shape))
-            data[:] = np.random.uniform(-0.1, 0.1, data.shape)
+        # TODO
+        pass
 
     def init_optimizer(self, lr=0.01, **kwargs):
         self.optimizer = optimizers.SGD(lr=lr)
@@ -329,10 +296,11 @@ class Embed(nn.Module):
                  make_buffers=True, activation=None,
                  use_input_dropout=False, use_input_norm=False):
         size = 2 * size if make_buffers else size
+        super(Embed, self).__init__()
         if vectors is None:
-            super(Embed, self).__init__(embed=L.EmbedID(vocab_size, size))
+            raise NotImplementedError
         else:
-            super(Embed, self).__init__(projection=L.Linear(vectors.shape[1], size))
+            self.projection = nn.Linear(vectors.shape[1], size)
         self.vectors = vectors
         self.dropout = dropout
         self.make_buffers = make_buffers
