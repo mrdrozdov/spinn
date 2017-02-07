@@ -55,10 +55,10 @@ FLAGS = gflags.FLAGS
 
 
 def build_model(model_cls, trainer_cls, vocab_size, model_dim, word_embedding_dim,
-                              seq_length, num_classes, initial_embeddings, use_sentence_pair,
+                              num_classes, initial_embeddings, use_sentence_pair,
                               gpu):
     model = model_cls(model_dim, word_embedding_dim, vocab_size,
-             seq_length, initial_embeddings, num_classes, mlp_dim=1024,
+             initial_embeddings, num_classes, mlp_dim=1024,
              input_keep_rate=FLAGS.embedding_keep_rate,
              classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
              use_input_dropout=FLAGS.use_input_dropout,
@@ -210,7 +210,9 @@ def run(only_forward=False):
     for filename, raw_eval_set in raw_eval_sets:
         logger.Log("Preprocessing eval data: " + filename)
         e_X, e_transitions, e_y, e_num_transitions = util.PreprocessDataset(
-            raw_eval_set, vocabulary, FLAGS.seq_length, data_manager, eval_mode=True, logger=logger,
+            raw_eval_set, vocabulary,
+            FLAGS.eval_seq_length if FLAGS.eval_seq_length is not None else FLAGS.seq_length,
+            data_manager, eval_mode=True, logger=logger,
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             for_rnn=FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW",
             use_left_padding=FLAGS.use_left_padding)
@@ -240,7 +242,7 @@ def run(only_forward=False):
         use_sentence_pair = True
         classifier_trainer = build_model(model_cls, trainer_cls,
                               len(vocabulary), FLAGS.model_dim, FLAGS.word_embedding_dim,
-                              FLAGS.seq_length, num_classes, initial_embeddings,
+                              num_classes, initial_embeddings,
                               use_sentence_pair,
                               FLAGS.gpu)
     else:
@@ -250,7 +252,7 @@ def run(only_forward=False):
         use_sentence_pair = False
         classifier_trainer = build_model(model_cls, trainer_cls,
                               len(vocabulary), FLAGS.model_dim, FLAGS.word_embedding_dim,
-                              FLAGS.seq_length, num_classes, initial_embeddings,
+                              num_classes, initial_embeddings,
                               use_sentence_pair,
                               FLAGS.gpu)
 
@@ -429,7 +431,7 @@ if __name__ == '__main__':
     gflags.DEFINE_integer("ckpt_step", 1000, "Steps to run before considering saving checkpoint.")
     gflags.DEFINE_integer("deque_length", None, "Max trailing examples to use for statistics.")
     gflags.DEFINE_integer("seq_length", 30, "")
-    gflags.DEFINE_integer("eval_seq_length", 30, "")
+    gflags.DEFINE_integer("eval_seq_length", None, "")
     gflags.DEFINE_boolean("smart_batching", True, "Organize batches using sequence length.")
     gflags.DEFINE_boolean("use_peano", True, "A mind-blowing sorting key.")
     gflags.DEFINE_integer("eval_data_limit", -1, "Truncate evaluation set. -1 indicates no truncation.")
