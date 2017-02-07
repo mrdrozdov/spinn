@@ -1,20 +1,12 @@
 import numpy as np
 import random
 
-# Chainer imports
-import chainer
-from chainer import cuda, Function, gradient_check, report, training, utils, Variable
-from chainer import datasets, iterators, optimizers, serializers
-from chainer import Link, Chain, ChainList
-import chainer.functions as F
-from chainer.functions.connection import embed_id
-from chainer.functions.normalization.batch_normalization import batch_normalization
-from chainer.functions.evaluation import accuracy
-import chainer.links as L
-from chainer.training import extensions
-from chainer import testing
-
-from chainer.utils import type_check
+# PyTorch
+import torch
+import torch.nn as nn
+from torch.autograd import Variable
+import torch.nn.functional as F
+import torch.optim as optim
 
 
 def gradient_check(model, get_loss, rtol=0, atol=1e-2, to_check=10):
@@ -226,7 +218,7 @@ def treelstm(c_left, c_right, gates, use_dropout=False):
 
 
 
-class CrossEntropyClassifier(Chain):
+class CrossEntropyClassifier(nn.Module):
     def __init__(self, gpu=-1):
         super(CrossEntropyClassifier, self).__init__()
         self.__gpu = gpu
@@ -260,33 +252,6 @@ class CrossEntropyClassifier(Chain):
             accum_loss = F.softmax_cross_entropy(y, y_batch)
 
         return accum_loss
-
-class MLP(ChainList):
-    def __init__(self, dimensions,
-                 prefix="MLP",
-                 keep_rate=0.5,
-                 gpu=-1,
-                 ):
-        super(MLP, self).__init__()
-        self.keep_rate = keep_rate
-        self.__gpu = gpu
-        self.__mod = cuda.cupy if gpu >= 0 else np
-        self.layers = []
-
-        assert len(dimensions) >= 2, "Must initialize MLP with 2 or more layers."
-        for l0_dim, l1_dim in zip(dimensions[:-1], dimensions[1:]):
-            self.add_link(L.Linear(l0_dim, l1_dim))
-
-    def __call__(self, x_batch, train=True):
-        ratio = 1 - self.keep_rate
-        layers = self.layers
-        h = x_batch
-
-        for l0 in self.children():
-            h = F.dropout(h, ratio, train)
-            h = F.relu(l0(h))
-        y = h
-        return y
 
 
 class BaseSentencePairTrainer(object):
@@ -344,7 +309,7 @@ class BaseSentencePairTrainer(object):
         return self.model.step, self.model.best_dev_error
 
 
-class Embed(Chain):
+class Embed(nn.Module):
     """Flexible word embedding module for SPINN.
 
     It supports either word vectors trained from scratch or word vectors
@@ -360,7 +325,7 @@ class Embed(Chain):
             ~chainer.links.BatchNormalization).
     """
 
-    def __init__(self, size, vocab_size, dropout, vectors, normalization=None,
+    def __init__(self, size, vocab_size, dropout, vectors,
                  make_buffers=True, activation=None,
                  use_input_dropout=False, use_input_norm=False):
         size = 2 * size if make_buffers else size
@@ -368,8 +333,6 @@ class Embed(Chain):
             super(Embed, self).__init__(embed=L.EmbedID(vocab_size, size))
         else:
             super(Embed, self).__init__(projection=L.Linear(vectors.shape[1], size))
-        if use_input_norm:
-            self.add_link('normalization', normalization(size))
         self.vectors = vectors
         self.dropout = dropout
         self.make_buffers = make_buffers
@@ -407,9 +370,6 @@ class Embed(Chain):
         if not self.make_buffers:
             return self.activation(F.reshape(embeds, (b, l, -1)))
 
-        if self.use_input_norm:
-            embeds = self.normalization(embeds, embeds.volatile == 'on')
-
         if self.use_input_dropout:
             embeds = F.dropout(embeds, self.dropout, embeds.volatile == 'off')
 
@@ -425,7 +385,7 @@ class Embed(Chain):
         return buffers
 
 
-class Reduce(Chain):
+class Reduce(nn.Module):
     """TreeLSTM composition module for SPINN.
 
     The TreeLSTM has two to four inputs: the first two are the left and right
@@ -443,15 +403,11 @@ class Reduce(Chain):
     """
 
     def __init__(self, size, tracker_size=None, attend=False, attn_fn=None):
-        super(Reduce, self).__init__(
-            left=L.Linear(size, 5 * size),
-            right=L.Linear(size, 5 * size, nobias=True))
+        super(Reduce, self).__init__()
+        self.left = nn.Linear(size, 5 * size)
+        self.right = nn.Linear(size, 5 * size, bias=False)
         if tracker_size is not None:
-            self.add_link('track',
-                          L.Linear(tracker_size, 5 * size, nobias=True))
-        if attend:
-            self.add_link('attend', L.Linear(size, 5 * size, nobias=True))
-        self.attn_fn = lambda l, r, t, a: a if attn_fn is None else attn_fn
+            self.track = nn.Linear(tracker_size, 5 * size, bias=False)
 
     def __call__(self, left_in, right_in, tracking=None, attend=None):
         """Perform batched TreeLSTM composition.
@@ -499,8 +455,6 @@ class Reduce(Chain):
         lstm_in += self.right(right.h)
         if hasattr(self, 'track'):
             lstm_in += self.track(tracking.h)
-        if hasattr(self, 'attend'):
-            lstm_in += self.attend(attend.h)
         out = unbundle(treelstm(left.c, right.c, lstm_in))
         for o, l, r in zip(out, left_in, right_in):
             if hasattr(l, 'buf'):

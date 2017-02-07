@@ -5,25 +5,15 @@ import itertools
 import numpy as np
 from spinn import util
 
-# Chainer imports
-import chainer
-from chainer import reporter, initializers
-from chainer import cuda, Function, gradient_check, report, training, utils, Variable
-from chainer import datasets, iterators, optimizers, serializers
-from chainer import Link, Chain, ChainList
-import chainer.functions as F
-from chainer.functions.connection import embed_id
-from chainer.functions.normalization.batch_normalization import batch_normalization
-from chainer.functions.evaluation import accuracy
-import chainer.links as L
-from chainer.training import extensions
-
-from chainer.functions.activation import slstm
-from chainer.utils import type_check
+# PyTorch
+import torch
+import torch.nn as nn
+from torch.autograd import Variable
+import torch.nn.functional as F
+import torch.optim as optim
 
 from spinn.util.chainer_blocks import BaseSentencePairTrainer, Reduce
 from spinn.util.chainer_blocks import LSTMState, Embed
-from spinn.util.chainer_blocks import MLP
 from spinn.util.chainer_blocks import CrossEntropyClassifier
 from spinn.util.chainer_blocks import bundle, unbundle, the_gpu, to_cpu, to_gpu, treelstm
 
@@ -93,16 +83,16 @@ class SentencePairTrainer(BaseSentencePairTrainer):
 class SentenceTrainer(SentencePairTrainer):
     pass
 
-class Tracker(Chain):
+class Tracker(nn.Module):
 
     def __init__(self, size, tracker_size, predict, use_tracker_dropout=True, tracker_dropout_rate=0.1, use_skips=False):
-        super(Tracker, self).__init__(
-            lateral=L.Linear(tracker_size, 4 * tracker_size),
-            buf=L.Linear(size, 4 * tracker_size, nobias=True),
-            stack1=L.Linear(size, 4 * tracker_size, nobias=True),
-            stack2=L.Linear(size, 4 * tracker_size, nobias=True))
+        super(Tracker, self).__init__()
+        self.lateral = nn.Linear(tracker_size, 4 * tracker_size),
+        self.buf = nn.Linear(size, 4 * tracker_size, bias=False),
+        self.stack1 = nn.Linear(size, 4 * tracker_size, bias=False),
+        self.stack2 = nn.Linear(size, 4 * tracker_size, bias=False)
         if predict:
-            self.add_link('transition', L.Linear(tracker_size, 3 if use_skips else 2))
+            self.transition = nn.Linear(tracker_size, 3 if use_skips else 2)
         self.state_size = tracker_size
         self.tracker_dropout_rate = tracker_dropout_rate
         self.use_tracker_dropout = use_tracker_dropout
@@ -149,23 +139,23 @@ class Tracker(Chain):
             self.c, self.h = state.c, state.h
 
 
-class SPINN(Chain):
+class SPINN(nn.Module):
 
-    def __init__(self, args, vocab, normalization=L.BatchNormalization,
+    def __init__(self, args, vocab,
                  attention=False, attn_fn=None, use_reinforce=True, use_skips=False):
-        super(SPINN, self).__init__(
-            embed=Embed(args.size, vocab.size, args.input_dropout_rate,
+        super(SPINN, self).__init__()
+        self.embed = Embed(args.size, vocab.size, args.input_dropout_rate,
                         vectors=vocab.vectors, normalization=normalization,
                         use_input_dropout=args.use_input_dropout,
                         use_input_norm=args.use_input_norm,
-                        ),
-            reduce=Reduce(args.size, args.tracker_size, attention, attn_fn))
+                        )
+        self.reduce = Reduce(args.size, args.tracker_size, attention, attn_fn)
         if args.tracker_size is not None:
-            self.add_link('tracker', Tracker(
+            self.tracker = Tracker(
                 args.size, args.tracker_size,
                 predict=args.transition_weight is not None,
                 use_tracker_dropout=args.use_tracker_dropout,
-                tracker_dropout_rate=args.tracker_dropout_rate, use_skips=use_skips))
+                tracker_dropout_rate=args.tracker_dropout_rate, use_skips=use_skips)
         self.transition_weight = args.transition_weight
         self.use_history = args.use_history
         self.save_stack = args.save_stack
@@ -378,7 +368,7 @@ class SPINN(Chain):
         return [stack[-1] for stack in self.stacks], transition_loss
 
 
-class BaseModel(Chain):
+class BaseModel(nn.Module):
     def __init__(self, model_dim, word_embedding_dim, vocab_size,
                  seq_length, initial_embeddings, num_classes, mlp_dim,
                  input_keep_rate, classifier_keep_rate,
@@ -402,9 +392,9 @@ class BaseModel(Chain):
         the_gpu.gpu = gpu
 
         mlp_input_dim = model_dim * 2 if use_sentence_pair else model_dim
-        self.add_link('l0', L.Linear(mlp_input_dim, mlp_dim))
-        self.add_link('l1', L.Linear(mlp_dim, mlp_dim))
-        self.add_link('l2', L.Linear(mlp_dim, num_classes))
+        self.l0 = nn.Linear(mlp_input_dim, mlp_dim)
+        self.l1 = nn.Linear(mlp_dim, mlp_dim)
+        self.l2 = nn.Linear(mlp_dim, num_classes)
 
         self.classifier = CrossEntropyClassifier(gpu)
         self.__gpu = gpu
@@ -437,8 +427,8 @@ class BaseModel(Chain):
         }
         vocab = argparse.Namespace(**vocab)
 
-        self.add_link('spinn', SPINN(args, vocab, normalization=L.BatchNormalization,
-                 attention=False, attn_fn=None, use_reinforce=use_reinforce, use_skips=use_skips))
+        self.spinn = SPINN(args, vocab,
+                 attention=False, attn_fn=None, use_reinforce=use_reinforce, use_skips=use_skips)
 
 
     def build_example(self, sentences, transitions, train):

@@ -39,12 +39,13 @@ from spinn.util.data import SimpleProgressBar
 from spinn.util.chainer_blocks import gradient_check, l2_cost, flatten
 
 import spinn.fat_stack
-import spinn.cbow
-import spinn.nti
 
-# Try to avoid chainer imports as much as possible.
-from chainer import optimizers
-import chainer.functions as F
+# PyTorch
+import torch
+import torch.nn as nn
+from torch.autograd import Variable
+import torch.nn.functional as F
+import torch.optim as optim
 
 from spinn.util.data import print_tree
 from sklearn import metrics
