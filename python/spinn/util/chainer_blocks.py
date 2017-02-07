@@ -28,21 +28,26 @@ def the_gpu():
 
 the_gpu.gpu = -1
 
+def to_cuda(var, gpu):
+    if gpu >= 0:
+        return var.cuda()
+    return var
+
 # Chainer already has a method for moving a variable to/from GPU in-place,
 # but that messes with backpropagation. So I do it with a copy. Note that
 # cuda.get_device() actually returns the dummy device, not the current one
 # -- but F.copy will move it to the active GPU anyway (!)
 def to_gpu(var):
-    return F.copy(var, the_gpu())
+    return to_cuda(var, the_gpu())
 
 
 def to_cpu(var):
-    return F.copy(var, -1)
+    return to_cuda(var, -1)
 
 
 def arr_to_gpu(arr):
     if the_gpu() >= 0:
-        return cuda.to_gpu(arr)
+        return torch.cuda.FloatTensor(arr)
     else:
         return arr
 
@@ -76,7 +81,7 @@ class LSTMState:
             self._c, self._h = inpt
         else:
             self._both = inpt
-            self.size = inpt.data.shape[1] // 2
+            self.size = inpt.data.size()[1] // 2
 
     @property
     def h(self):
@@ -127,10 +132,7 @@ def bundle(lstm_iter):
     lstm_iter = tuple(lstm_iter)
     if lstm_iter[0] is None:
         return None
-    try:
-        return LSTMState(F.concat(lstm_iter, axis=0))
-    except:
-        import ipdb; ipdb.set_trace()
+    return LSTMState(torch.cat(lstm_iter, 0))
 
 
 def unbundle(state):
@@ -154,6 +156,25 @@ def unbundle(state):
         state = LSTMState(state)
     return F.split_axis(
         state.both, state.both.data.shape[0], axis=0, force_tuple=True)
+
+
+def extract_gates(x, n):
+    r = x.view(x.size(0), x.size(1) // n, n)
+    return [r[:, :, i] for i in range(n)]
+
+
+def lstm(c_prev, x):
+    a, i, f, o = extract_gates(x, 4)
+
+    a = F.tanh(a)
+    i = F.sigmoid(i)
+    f = F.sigmoid(f)
+    o = F.sigmoid(o)
+
+    c = a * i + f * c_prev
+    h = o * F.tanh(c)
+
+    return c, h
 
 
 def treelstm(c_left, c_right, gates, use_dropout=False):
@@ -326,14 +347,13 @@ class Embed(nn.Module):
                 the embedding of the corresponding token along with ``tokens``
                 and ``transitions`` attributes.
         """
-        b, l = tokens.data.shape[:2]
+        b, l = tokens.size()[:2]
         if self.vectors is None:
             embeds = self.embed(to_gpu(F.reshape(tokens, (-1,))))
         else:
-            embeds = Variable(
-                arr_to_gpu(
-                    self.vectors.take(tokens.data.ravel(), axis=0)),
-                volatile=tokens.volatile)
+            embeds = arr_to_gpu(
+                    self.vectors.take(tokens.data.numpy().ravel(), axis=0))
+            embeds = Variable(torch.from_numpy(embeds), volatile=tokens.volatile)
             embeds = self.projection(embeds)
         if not self.make_buffers:
             return self.activation(F.reshape(embeds, (b, l, -1)))
@@ -343,8 +363,8 @@ class Embed(nn.Module):
 
         # if not self.make_buffers:
         #     return F.reshape(embeds, (b, l, -1))
-        embeds = F.split_axis(to_cpu(embeds), b, axis=0, force_tuple=True)
-        embeds = [F.split_axis(x, l, axis=0, force_tuple=True) for x in embeds]
+        embeds = torch.chunk(to_cpu(embeds), b, 0)
+        embeds = [torch.chunk(x, l, 0) for x in embeds]
         buffers = [list(reversed(x)) for x in embeds]
         # for ex, buf in zip(list(tokens), buffers):
         #     for tok, var in zip(ex, reversed(buf)):

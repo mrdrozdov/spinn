@@ -15,7 +15,7 @@ import torch.optim as optim
 from spinn.util.chainer_blocks import BaseSentencePairTrainer, Reduce
 from spinn.util.chainer_blocks import LSTMState, Embed
 from spinn.util.chainer_blocks import CrossEntropyClassifier
-from spinn.util.chainer_blocks import bundle, unbundle, the_gpu, to_cpu, to_gpu, treelstm
+from spinn.util.chainer_blocks import bundle, unbundle, the_gpu, to_cpu, to_gpu, treelstm, lstm
 
 """
 Style Guide:
@@ -81,9 +81,9 @@ class Tracker(nn.Module):
 
     def __init__(self, size, tracker_size, predict, use_tracker_dropout=True, tracker_dropout_rate=0.1, use_skips=False):
         super(Tracker, self).__init__()
-        self.lateral = nn.Linear(tracker_size, 4 * tracker_size),
-        self.buf = nn.Linear(size, 4 * tracker_size, bias=False),
-        self.stack1 = nn.Linear(size, 4 * tracker_size, bias=False),
+        self.lateral = nn.Linear(tracker_size, 4 * tracker_size)
+        self.buf = nn.Linear(size, 4 * tracker_size, bias=False)
+        self.stack1 = nn.Linear(size, 4 * tracker_size, bias=False)
         self.stack2 = nn.Linear(size, 4 * tracker_size, bias=False)
         if predict:
             self.transition = nn.Linear(tracker_size, 3 if use_skips else 2)
@@ -97,8 +97,8 @@ class Tracker(nn.Module):
 
     def __call__(self, bufs, stacks):
         self.batch_size = len(bufs)
-        zeros = Variable(np.zeros(bufs[0][0].shape, dtype=bufs[0][0].data.dtype),
-                         volatile='auto')
+        zeros = np.zeros(bufs[0][0].size(), dtype=np.float32)
+        zeros = to_gpu(Variable(torch.from_numpy(zeros), volatile=bufs[0][0].volatile))
         buf = bundle(buf[-1] for buf in bufs)
         stack1 = bundle(stack[-1] if len(stack) > 0 else zeros for stack in stacks)
         stack2 = bundle(stack[-2] if len(stack) > 1 else zeros for stack in stacks)
@@ -109,15 +109,15 @@ class Tracker(nn.Module):
         if self.h is not None:
             lstm_in += self.lateral(self.h)
         if self.c is None:
-            self.c = Variable(
-                self.xp.zeros((self.batch_size, self.state_size),
-                              dtype=lstm_in.data.dtype),
-                volatile='auto')
+            self.c = to_gpu(Variable(torch.from_numpy(
+                np.zeros((self.batch_size, self.state_size),
+                              dtype=np.float32)),
+                volatile=zeros.volatile))
 
         if self.use_tracker_dropout:
             lstm_in = F.dropout(lstm_in, self.tracker_dropout_rate, train=lstm_in.volatile == False)
 
-        self.c, self.h = F.lstm(self.c, lstm_in)
+        self.c, self.h = lstm(self.c, lstm_in)
         if hasattr(self, 'transition'):
             return self.transition(self.h)
         return None
@@ -247,7 +247,7 @@ class SPINN(nn.Module):
                             truth_acc = transitions
                             truth_xent = samples
                         else:
-                            transition_preds = transition_hyp.data.argmax(axis=1)
+                            transition_preds = transition_hyp.data.max(1)[1]
                             hyp_acc = transition_hyp
                             hyp_xent = transition_hyp
                             truth_acc = transitions
@@ -353,9 +353,9 @@ class SPINN(nn.Module):
                 hyp_xent, truth_xent.astype(np.int32),
                 normalize=False)
 
-            reporter.report({'transition_accuracy': transition_acc,
-                             'transition_loss': transition_loss}, self)
             transition_loss *= self.transition_weight
+            self.transition_accuracy = transition_acc
+            self.transition_loss = transition_loss
         else:
             transition_loss = None
 
@@ -429,17 +429,13 @@ class BaseModel(nn.Module):
 
 
     def run_spinn(self, example, train, use_internal_parser, validate_transitions=True):
-        r = reporter.Reporter()
-        r.add_observer('spinn', self.spinn)
-        observation = {}
-        with r.scope(observation):
-            self.spinn.reset_state()
-            h_both, _ = self.spinn(example,
-                                   use_internal_parser=use_internal_parser,
-                                   validate_transitions=validate_transitions)
+        self.spinn.reset_state()
+        h_both, _ = self.spinn(example,
+                               use_internal_parser=use_internal_parser,
+                               validate_transitions=validate_transitions)
 
-        transition_acc = observation.get('spinn/transition_accuracy', 0.0)
-        transition_loss = observation.get('spinn/transition_loss', None)
+        transition_acc = self.spinn.transition_accuracy if hasattr(self.spinn, 'transition_acc') else 0.0
+        transition_loss = self.spinn.transition_loss if hasattr(self.spinn, 'transition_loss') else None
         return h_both, transition_acc, transition_loss
 
 
@@ -489,7 +485,7 @@ class SentencePairModel(BaseModel):
         assert batch_size * 2 == t.shape[0]
 
         example = {
-            'tokens': Variable(x, volatile=not train),
+            'tokens': Variable(torch.from_numpy(x), volatile=not train),
             'transitions': t
         }
         example = argparse.Namespace(**example)
