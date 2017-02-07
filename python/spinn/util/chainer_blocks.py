@@ -11,8 +11,8 @@ import torch.optim as optim
 
 def l2_cost(model, l2_lambda):
     cost = 0.0
-    for _, w in model.parameters():
-        cost += l2_lambda * F.sum(F.square(w))
+    for w in model.parameters():
+        cost += l2_lambda * torch.sum(torch.pow(w, 2))
     return cost
 
 
@@ -268,7 +268,7 @@ class BaseSentencePairTrainer(object):
         self.optimizer.setup(self.model)
 
     def update(self):
-        self.optimizer.update()
+        self.optimizer.step()
 
     def forward(self, x_batch, y_batch=None, train=True, predict=False,
                 use_internal_parser=False, validate_transitions=True):

@@ -372,7 +372,7 @@ def run(only_forward=False):
                 logger.Log("\nReward :"+str(rewards))
 
             # Boilerplate for calculating loss.
-            transition_cost_val = transition_loss.data if transition_loss is not None else 0.0
+            transition_cost_val = transition_loss.data[0] if transition_loss is not None else 0.0
             accum_class_acc.append(class_acc)
 
             # Extract L2 Cost
@@ -380,8 +380,8 @@ def run(only_forward=False):
 
             # Accumulate Total Loss Data
             total_cost_val = 0.0
-            total_cost_val += xent_loss.data
-            total_cost_val += l2_loss.data
+            total_cost_val += xent_loss.data[0]
+            total_cost_val += l2_loss.data[0]
             if not FLAGS.use_reinforce:
                 total_cost_val += transition_cost_val
 
@@ -395,18 +395,15 @@ def run(only_forward=False):
             # Backward pass.
             total_loss.backward()
 
-            try:
-                classifier_trainer.update()
-            except:
-                import ipdb; ipdb.set_trace()
-                pass
+            # Gradient descent step.
+            classifier_trainer.update()
 
             if FLAGS.use_reinforce:
                 transition_optimizer.zero_grads()
                 optimizer_lr, baseline = reinforce(transition_optimizer, optimizer_lr, baseline, mu, rewards, transition_loss)
 
             # Accumulate accuracy for current interval.
-            acc_val = float(classifier_trainer.model.accuracy.data)
+            acc_val = float(classifier_trainer.model.accuracy)
 
             if FLAGS.write_summaries:
                 train_summary_logger.log(step=step, loss=total_cost_val, accuracy=acc_val)
@@ -423,7 +420,7 @@ def run(only_forward=False):
                 avg_trans_acc = metrics.accuracy_score(all_preds, all_truth)
                 logger.Log(
                     "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %5f"
-                    % (step, avg_class_acc, avg_trans_acc, total_cost_val, xent_loss.data, transition_cost_val, l2_loss.data))
+                    % (step, avg_class_acc, avg_trans_acc, total_cost_val, xent_loss.data[0], transition_cost_val, l2_loss.data[0]))
                 if FLAGS.print_confusion_matrix:
                     cm = metrics.confusion_matrix(
                         np.array(all_preds),

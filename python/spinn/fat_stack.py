@@ -328,7 +328,10 @@ class SPINN(nn.Module):
                         transition_arr, self.stacks, self.history):
                     if transition == T_REDUCE: # reduce
                         new_stack_item = next(reduced)
-                        assert isinstance(new_stack_item.data, np.ndarray), "Pushing cupy array to stack"
+                        if not hasattr(self, 'stack_cls'):
+                            self.stack_cls = type(new_stack_item.data)
+                        else:
+                            assert isinstance(new_stack_item.data, self.stack_cls), "Heterogeneous types in stack."
                         stack.append(new_stack_item)
                         if self.use_history:
                             history.append(stack[-1])
@@ -342,18 +345,17 @@ class SPINN(nn.Module):
                 for m in self.memories])
 
             statistics = [
-                F.squeeze(F.concat([F.expand_dims(ss, 1) for ss in s], axis=0))
+                torch.squeeze(torch.cat([ss.unsqueeze(1) for ss in s], 0))
                 if isinstance(s[0], Variable) else
                 np.array(reduce(lambda x, y: x + y.tolist(), s, []))
                 for s in statistics]
 
             hyp_acc, truth_acc, hyp_xent, truth_xent = statistics
 
-            transition_acc = F.accuracy(
-                hyp_acc, truth_acc.astype(np.int32))
-            transition_loss = F.softmax_cross_entropy(
-                hyp_xent, truth_xent.astype(np.int32),
-                normalize=False)
+            transition_acc = (hyp_acc.argmax(axis=1) == truth_acc).sum() / float(hyp_acc.shape[0])
+            t_logits = F.log_softmax(hyp_xent)
+            transition_loss = nn.NLLLoss()(t_logits, Variable(
+                torch.from_numpy(truth_xent), volatile=t_logits.volatile))
 
             transition_loss *= self.transition_weight
             self.transition_accuracy = transition_acc
@@ -392,7 +394,6 @@ class BaseModel(nn.Module):
         self.l1 = nn.Linear(mlp_dim, mlp_dim)
         self.l2 = nn.Linear(mlp_dim, num_classes)
 
-        self.classifier = CrossEntropyClassifier(gpu)
         self.__gpu = gpu
         self.__mod = cuda.cupy if gpu >= 0 else np
         self.initial_embeddings = initial_embeddings
@@ -461,13 +462,17 @@ class BaseModel(nn.Module):
         y = self.run_mlp(h, train)
 
         # Calculate Loss & Accuracy.
-        accum_loss = self.classifier(y, Variable(y_batch, volatile=not train), train)
-        self.accuracy = y.data.eq(y_batch) / y.size(0)
+        logits = F.log_softmax(y)
+        target = Variable(torch.from_numpy(y_batch).long(), volatile=not train)
+        accum_loss = nn.NLLLoss()(logits, target)
+        
+        preds = logits.data.max(1)[1]
+        self.accuracy = preds.eq(target.data).sum() / float(preds.size(0))
 
         if hasattr(transition_acc, 'data'):
           transition_acc = transition_acc.data
 
-        return y, accum_loss, self.accuracy.data, transition_acc, transition_loss
+        return logits, accum_loss, self.accuracy, transition_acc, transition_loss
 
 class SentencePairModel(BaseModel):
     def build_example(self, sentences, transitions, train):
@@ -499,9 +504,9 @@ class SentencePairModel(BaseModel):
         h_both, transition_acc, transition_loss = super(SentencePairModel, self).run_spinn(
             example, train, use_internal_parser, validate_transitions)
         batch_size = len(h_both) / 2
-        h_premise = F.concat(h_both[:batch_size], axis=0)
-        h_hypothesis = F.concat(h_both[batch_size:], axis=0)
-        h = F.concat([h_premise, h_hypothesis], axis=1)
+        h_premise = torch.cat(h_both[:batch_size], 0)
+        h_hypothesis = torch.cat(h_both[batch_size:], 0)
+        h = torch.cat([h_premise, h_hypothesis], 1)
         return h, transition_acc, transition_loss
 
 
