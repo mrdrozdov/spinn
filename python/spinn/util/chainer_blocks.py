@@ -244,13 +244,16 @@ class BaseSentencePairTrainer(object):
         return ret
 
     def save(self, filename, step, best_dev_error):
-        self.model.step = step
-        self.model.best_dev_error = best_dev_error
-        chainer.serializers.save_npz(filename, self.model)
+        torch.save({
+            'step': step,
+            'best_dev_error': best_dev_error,
+            'state_dict': self.model.state_dict(),
+        }, filename)
 
     def load(self, filename):
-        chainer.serializers.load_npz(filename, self.model)
-        return self.model.step, self.model.best_dev_error
+        checkpoint = torch.load(filename)
+        self.model.load_state_dict(checkpoint['state_dict'])
+        return checkpoint['step'], checkpoint['best_dev_error']
 
 
 class Embed(nn.Module):
