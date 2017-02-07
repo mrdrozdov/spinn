@@ -27,9 +27,6 @@ CORE_VOCABULARY = {PADDING_TOKEN: 0,
 NUM_TRANSITION_TYPES = 2
 
 
-import pydot
-
-
 def create_tree(words, transitions):
     template_start = """
     digraph G {
@@ -62,10 +59,12 @@ def create_tree(words, transitions):
 
 
 def print_tree(sentence, transitions, output_file):
-    _, tree = create_tree(sentence, transitions)
-    graphs = pydot.graph_from_dot_data(tree)
-    open(output_file, 'wb').write(graphs[0].create_jpeg())
-    return graphs[0]
+    return None
+
+    # _, tree = create_tree(sentence, transitions)
+    # graphs = pydot.graph_from_dot_data(tree)
+    # open(output_file, 'wb').write(graphs[0].create_jpeg())
+    # return graphs[0]
 
 
 def TrimDataset(dataset, seq_length, eval_mode=False, sentence_pair_data=False):
