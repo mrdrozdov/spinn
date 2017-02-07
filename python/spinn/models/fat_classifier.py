@@ -123,12 +123,12 @@ def evaluate(classifier_trainer, eval_set, logger, step,
         ret = classifier_trainer.forward({
             "sentences": eval_X_batch,
             "transitions": eval_transitions_batch,
-            }, eval_y_batch, train=False, predict=False,
+            }, eval_y_batch, train=False,
             use_internal_parser=use_internal_parser,
             validate_transitions=FLAGS.validate_transitions)
         y, loss, class_loss, transition_acc, transition_loss = ret
-        acc_value = float(classifier_trainer.model.accuracy.data)
-        action_acc_value = transition_acc
+        acc_value = float(classifier_trainer.model.accuracy)
+        action_acc_value = float(classifier_trainer.model.spinn.transition_accuracy)
 
         # Update Aggregate Accuracies
         acc_accum += acc_value
@@ -358,7 +358,7 @@ def run(only_forward=False):
             ret = classifier_trainer.forward({
                 "sentences": X_batch,
                 "transitions": transitions_batch,
-                }, y_batch, train=True, predict=False, validate_transitions=FLAGS.validate_transitions)
+                }, y_batch, train=True, validate_transitions=FLAGS.validate_transitions)
             y, xent_loss, class_acc, transition_acc, transition_loss = ret
 
             # Accumulate stats for confusion matrix.

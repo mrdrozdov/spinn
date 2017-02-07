@@ -308,9 +308,10 @@ class SPINN(nn.Module):
                         if len(stack) > 0:
                             lr.append(stack.pop())
                         else:
-                            zeros = Variable(np.zeros(buf[0].shape,
-                                dtype=buf[0].data.dtype),
-                                volatile='auto')
+                            # NOTE: Only happens on cropped data.
+                            zeros = to_gpu(Variable(
+                                torch.from_numpy(np.zeros(buf[0].size(), dtype=np.float32)),
+                                volatile=buf[0].volatile))
                             if self.save_stack:
                                 zeros.buf = buf[:]
                                 zeros.stack = stack[:]
