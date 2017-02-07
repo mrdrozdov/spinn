@@ -52,10 +52,6 @@ def arr_to_gpu(arr):
         return arr
 
 
-def is_train(var):
-    return var.volatile == False
-
-
 class LSTMState:
     """Class for intelligent LSTM state object.
 
@@ -319,15 +315,9 @@ class Embed(nn.Module):
         if self.use_input_dropout:
             embeds = F.dropout(embeds, self.dropout, embeds.volatile == 'off')
 
-        # if not self.make_buffers:
-        #     return F.reshape(embeds, (b, l, -1))
         embeds = torch.chunk(to_cpu(embeds), b, 0)
         embeds = [torch.chunk(x, l, 0) for x in embeds]
         buffers = [list(reversed(x)) for x in embeds]
-        # for ex, buf in zip(list(tokens), buffers):
-        #     for tok, var in zip(ex, reversed(buf)):
-        #         var.tokens = [tok]
-        #         var.transitions = [0]
         return buffers
 
 
@@ -406,7 +396,6 @@ class Reduce(nn.Module):
             if hasattr(l, 'buf'):
                 o.left, o.right = l, r
                 o.buf = o.left.buf
-                # o.left.parent, o.right.parent = o, o
                 o.transitions = o.left.transitions + o.right.transitions + [1]
                 o.tokens = o.left.tokens + o.right.tokens
                 o.stack = o.left.stack

@@ -150,7 +150,6 @@ class SPINN(nn.Module):
                 use_tracker_dropout=args.use_tracker_dropout,
                 tracker_dropout_rate=args.tracker_dropout_rate, use_skips=use_skips)
         self.transition_weight = args.transition_weight
-        self.use_history = args.use_history
         self.save_stack = args.save_stack
         self.use_reinforce = use_reinforce
         self.use_skips = use_skips
@@ -183,9 +182,6 @@ class SPINN(nn.Module):
                         validate_transitions=validate_transitions)
 
     def validate(self, transitions, preds, stacks, buffers_t, buffers_n):
-        # TODO: Almost definitely these don't work as expected because of how
-        # things are initialized and because of the SKIP action.
-
         preds = preds.cpu().numpy()
 
         DEFAULT_CHOICE = T_SHIFT
@@ -207,14 +203,6 @@ class SPINN(nn.Module):
 
     def run(self, print_transitions=False, run_internal_parser=False,
             use_internal_parser=False, validate_transitions=True):
-        # how to use:
-        # encoder.bufs = bufs, unbundled
-        # encoder.stacks = stacks, unbundled
-        # encoder.tracker.state = trackings, unbundled
-        # encoder.transitions = ExampleList of Examples, padded with n
-        # encoder.run()
-        self.history = [[] for buf in self.bufs] if self.use_history is not None \
-                        else itertools.repeat(None)
 
         transition_loss, transition_acc = 0, 0
         if hasattr(self, 'transitions'):
@@ -284,13 +272,13 @@ class SPINN(nn.Module):
                         self.memories.append(memory)
 
             lefts, rights, trackings, attentions = [], [], [], []
-            batch = zip(transition_arr, self.bufs, self.stacks, self.history,
+            batch = zip(transition_arr, self.bufs, self.stacks,
                         self.tracker.states if hasattr(self, 'tracker') and self.tracker.h is not None
                         else itertools.repeat(None),
                         self.attention if self.attention is not None
                         else itertools.repeat(None))
 
-            for ii, (transition, buf, stack, history, tracking, attention) in enumerate(batch):
+            for ii, (transition, buf, stack, tracking, attention) in enumerate(batch):
                 must_shift = len(stack) < 2
 
                 if transition == T_SHIFT: # shift
@@ -300,8 +288,6 @@ class SPINN(nn.Module):
                         buf[-1].tracking = tracking
                     stack.append(buf.pop())
                     self.buffers_t[ii] += 1
-                    if self.use_history:
-                        history.append(stack[-1])
                 elif transition == T_REDUCE: # reduce
                     for lr in [rights, lefts]:
                         if len(stack) > 0:
@@ -318,14 +304,11 @@ class SPINN(nn.Module):
                             lr.append(zeros)
                     trackings.append(tracking)
                     attentions.append(attention)
-                else:
-                    if self.use_history:
-                        history.append(buf[-1])  # pad history so it can be stacked/transposed
             if len(rights) > 0:
                 reduced = iter(self.reduce(
                     lefts, rights, trackings, attentions))
-                for transition, stack, history in zip(
-                        transition_arr, self.stacks, self.history):
+                for transition, stack, in zip(
+                        transition_arr, self.stacks):
                     if transition == T_REDUCE: # reduce
                         new_stack_item = next(reduced)
                         if not hasattr(self, 'stack_cls'):
@@ -333,8 +316,6 @@ class SPINN(nn.Module):
                         else:
                             assert isinstance(new_stack_item.data, self.stack_cls), "Heterogeneous types in stack."
                         stack.append(new_stack_item)
-                        if self.use_history:
-                            history.append(stack[-1])
         if print_transitions:
             print()
         if self.transition_weight is not None:
@@ -378,7 +359,6 @@ class BaseModel(nn.Module):
                  transition_weight=None,
                  use_tracking_lstm=True,
                  use_shift_composition=True,
-                 use_history=False,
                  save_stack=False,
                  use_reinforce=False,
                  use_skips=False,
@@ -406,7 +386,6 @@ class BaseModel(nn.Module):
             'size': model_dim/2,
             'tracker_size': tracking_lstm_hidden_dim if use_tracking_lstm else None,
             'transition_weight': transition_weight,
-            'use_history': use_history,
             'save_stack': save_stack,
             'input_dropout_rate': 1. - input_keep_rate,
             'use_input_dropout': use_input_dropout,

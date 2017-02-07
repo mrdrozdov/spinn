@@ -54,7 +54,7 @@ from sklearn import metrics
 FLAGS = gflags.FLAGS
 
 
-def build_sentence_pair_model(model_cls, trainer_cls, vocab_size, model_dim, word_embedding_dim,
+def build_model(model_cls, trainer_cls, vocab_size, model_dim, word_embedding_dim,
                               seq_length, num_classes, initial_embeddings, use_sentence_pair,
                               gpu):
     model = model_cls(model_dim, word_embedding_dim, vocab_size,
@@ -70,7 +70,6 @@ def build_sentence_pair_model(model_cls, trainer_cls, vocab_size, model_dim, wor
              transition_weight=FLAGS.transition_weight,
              use_tracking_lstm=FLAGS.use_tracking_lstm,
              use_shift_composition=FLAGS.use_shift_composition,
-             use_history=FLAGS.use_history,
              save_stack=FLAGS.save_stack,
              use_sentence_pair=use_sentence_pair,
              gpu=gpu,
@@ -88,15 +87,6 @@ def build_rewards(logits, y, xent_reward=False):
         return np.mean(logits.data[np.arange(y.shape[0]), y])
     else:
         return metrics.accuracy_score(logits.data.argmax(axis=1), y)
-
-
-def hamming_distance(s1, s2):
-    """ source: https://en.wikipedia.org/wiki/Hamming_distance
-        Return the Hamming distance between equal-length sequences
-    """
-    if len(s1) != len(s2):
-        raise ValueError("Undefined for sequences of unequal length")
-    return sum(el1 != el2 for el1, el2 in zip(s1, s2))
 
 
 def evaluate(classifier_trainer, eval_set, logger, step,
@@ -240,7 +230,7 @@ def run(only_forward=False):
         model_cls = model_module.SentencePairModel
         num_classes = len(data_manager.LABEL_MAP)
         use_sentence_pair = True
-        classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
+        classifier_trainer = build_model(model_cls, trainer_cls,
                               len(vocabulary), FLAGS.model_dim, FLAGS.word_embedding_dim,
                               FLAGS.seq_length, num_classes, initial_embeddings,
                               use_sentence_pair,
@@ -250,7 +240,7 @@ def run(only_forward=False):
         model_cls = model_module.SentenceModel
         num_classes = len(data_manager.LABEL_MAP)
         use_sentence_pair = False
-        classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
+        classifier_trainer = build_model(model_cls, trainer_cls,
                               len(vocabulary), FLAGS.model_dim, FLAGS.word_embedding_dim,
                               FLAGS.seq_length, num_classes, initial_embeddings,
                               use_sentence_pair,
@@ -444,7 +434,6 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("xent_reward", False, "Use cross entropy instead of accuracy as RL reward")
 
     gflags.DEFINE_boolean("use_shift_composition", True, "")
-    gflags.DEFINE_boolean("use_history", False, "")
     gflags.DEFINE_boolean("use_skips", False, "Pad transitions with SKIP actions.")
     gflags.DEFINE_boolean("use_left_padding", True, "Pad transitions only on the RHS.")
     gflags.DEFINE_boolean("validate_transitions", True, "Constrain predicted transitions to ones"
