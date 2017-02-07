@@ -14,7 +14,6 @@ import torch.optim as optim
 
 from spinn.util.chainer_blocks import BaseSentencePairTrainer, Reduce
 from spinn.util.chainer_blocks import LSTMState, Embed
-from spinn.util.chainer_blocks import CrossEntropyClassifier
 from spinn.util.chainer_blocks import bundle, unbundle, the_gpu, to_cpu, to_gpu, treelstm, lstm
 
 """
@@ -187,7 +186,7 @@ class SPINN(nn.Module):
         # TODO: Almost definitely these don't work as expected because of how
         # things are initialized and because of the SKIP action.
 
-        preds = preds.numpy()
+        preds = preds.cpu().numpy()
 
         DEFAULT_CHOICE = T_SHIFT
         cant_skip = np.array([p == T_SKIP and t != T_SKIP for t, p in zip(transitions, preds)])
@@ -263,7 +262,7 @@ class SPINN(nn.Module):
                         memory["preds"]  = transition_preds
 
                         if not self.use_skips:
-                            hyp_acc = hyp_acc.data.numpy()[cant_skip]
+                            hyp_acc = hyp_acc.data.cpu().numpy()[cant_skip]
                             truth_acc = truth_acc[cant_skip]
 
                             cant_skip_mask = np.tile(np.expand_dims(cant_skip, axis=1), (1, 2))
@@ -276,7 +275,7 @@ class SPINN(nn.Module):
                         memory["hyp_xent"] = hyp_xent
                         memory["truth_xent"] = truth_xent
 
-                        memory["preds_cm"] = np.array(transition_preds.numpy()[cant_skip])
+                        memory["preds_cm"] = np.array(transition_preds.cpu().numpy()[cant_skip])
                         memory["truth_cm"] = np.array(transitions[cant_skip])
 
                         if use_internal_parser:
@@ -355,8 +354,8 @@ class SPINN(nn.Module):
 
             transition_acc = (hyp_acc.argmax(axis=1) == truth_acc).sum() / float(hyp_acc.shape[0])
             t_logits = F.log_softmax(hyp_xent)
-            transition_loss = nn.NLLLoss()(t_logits, Variable(
-                torch.from_numpy(truth_xent), volatile=t_logits.volatile))
+            transition_loss = nn.NLLLoss()(t_logits, to_gpu(Variable(
+                torch.from_numpy(truth_xent), volatile=t_logits.volatile)))
 
             transition_loss *= self.transition_weight
             self.transition_accuracy = transition_acc
@@ -396,7 +395,6 @@ class BaseModel(nn.Module):
         self.l2 = nn.Linear(mlp_dim, num_classes)
 
         self.__gpu = gpu
-        self.__mod = cuda.cupy if gpu >= 0 else np
         self.initial_embeddings = initial_embeddings
         self.classifier_dropout_rate = 1. - classifier_keep_rate
         self.use_classifier_norm = use_classifier_norm
@@ -464,9 +462,9 @@ class BaseModel(nn.Module):
 
         # Calculate Loss & Accuracy.
         logits = F.log_softmax(y)
-        target = Variable(torch.from_numpy(y_batch).long(), volatile=not train)
+        target = to_gpu(Variable(torch.from_numpy(y_batch).long(), volatile=not train))
         accum_loss = nn.NLLLoss()(logits, target)
-        
+
         preds = logits.data.max(1)[1]
         self.accuracy = preds.eq(target.data).sum() / float(preds.size(0))
 
@@ -493,7 +491,7 @@ class SentencePairModel(BaseModel):
         assert batch_size * 2 == t.shape[0]
 
         example = {
-            'tokens': Variable(torch.from_numpy(x), volatile=not train),
+            'tokens': to_gpu(Variable(torch.from_numpy(x), volatile=not train)),
             'transitions': t
         }
         example = argparse.Namespace(**example)
@@ -522,7 +520,7 @@ class SentenceModel(BaseModel):
         t = transitions
 
         example = {
-            'tokens': Variable(x, volatile=not train),
+            'tokens': to_gpu(Variable(x, volatile=not train)),
             'transitions': t
         }
         example = argparse.Namespace(**example)

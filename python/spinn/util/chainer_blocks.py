@@ -207,52 +207,12 @@ def treelstm(c_left, c_right, gates, use_dropout=False):
     return (c_t, h_t)
 
 
-
-class CrossEntropyClassifier(nn.Module):
-    def __init__(self, gpu=-1):
-        super(CrossEntropyClassifier, self).__init__()
-        self.__gpu = gpu
-        self.__mod = cuda.cupy if gpu >= 0 else np
-
-    def check_type_forward(self, in_types):
-        type_check.expect(in_types.size() == 2)
-        pred_type, y_type = in_types
-
-        type_check.expect(
-            pred_type.dtype == 'f',
-            pred_type.ndim >= 1,
-        )
-
-        type_check.expect(
-            y_type.dtype == 'i',
-            y_type.ndim >= 1,
-        )
-
-    def __call__(self, y, y_batch, train=True):
-        # BEGIN: Type Check
-        in_data = tuple([x.data for x in [y, y_batch]])
-        in_types = type_check.get_types(in_data, 'in_types', False)
-        self.check_type_forward(in_types)
-        # END: Type Check
-
-        accum_loss = 0 if train else None
-        if train:
-            if self.__gpu >= 0:
-                y_batch = cuda.to_gpu(y_batch.data)
-            accum_loss = F.softmax_cross_entropy(y, y_batch)
-
-        return accum_loss
-
-
 class BaseSentencePairTrainer(object):
 
     def __init__(self, model, gpu=-1, **kwargs):
         self.__gpu = gpu
         self.init_model(model)
         self.init_params()
-        if gpu >= 0:
-            cuda.get_device(gpu).use()
-            self.model.to_gpu()
 
     def init_model(self, model):
         self.model = model
@@ -347,9 +307,8 @@ class Embed(nn.Module):
         if self.vectors is None:
             embeds = self.embed(to_gpu(F.reshape(tokens, (-1,))))
         else:
-            embeds = arr_to_gpu(
-                    self.vectors.take(tokens.data.numpy().ravel(), axis=0))
-            embeds = Variable(torch.from_numpy(embeds), volatile=tokens.volatile)
+            embeds = self.vectors.take(tokens.data.cpu().numpy().ravel(), axis=0)
+            embeds = to_gpu(Variable(torch.from_numpy(embeds), volatile=tokens.volatile))
             embeds = self.projection(embeds)
         if not self.make_buffers:
             return self.activation(F.reshape(embeds, (b, l, -1)))

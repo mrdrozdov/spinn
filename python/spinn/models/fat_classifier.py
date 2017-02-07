@@ -319,6 +319,10 @@ def run(only_forward=False):
         train_summary_logger = TFLogger(summary_dir=os.path.join(FLAGS.summary_dir, FLAGS.experiment_name, 'train'))
         dev_summary_logger = TFLogger(summary_dir=os.path.join(FLAGS.summary_dir, FLAGS.experiment_name, 'dev'))
 
+    model = classifier_trainer.model
+    if FLAGS.gpu >= 0:
+        model.cuda()
+
     # Do an evaluation-only run.
     if only_forward:
         for index, eval_set in enumerate(eval_iterators):
@@ -332,7 +336,6 @@ def run(only_forward=False):
             lr=FLAGS.learning_rate,
             )
 
-        model = classifier_trainer.model
 
         print(sum([reduce(lambda x, y: x * y, w.size(), 1.0) for w in model.parameters()]))
 
