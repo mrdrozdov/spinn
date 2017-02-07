@@ -12,9 +12,9 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 
-from spinn.util.chainer_blocks import BaseSentencePairTrainer, Reduce
-from spinn.util.chainer_blocks import LSTMState, Embed
-from spinn.util.chainer_blocks import bundle, unbundle, the_gpu, to_cpu, to_gpu, treelstm, lstm
+from spinn.util.blocks import BaseSentencePairTrainer, Reduce
+from spinn.util.blocks import LSTMState, Embed
+from spinn.util.blocks import bundle, unbundle, the_gpu, to_cpu, to_gpu, treelstm, lstm
 
 """
 Style Guide:
@@ -62,15 +62,7 @@ def HeKaimingInit(shape, real_shape=None):
 
 
 class SentencePairTrainer(BaseSentencePairTrainer):
-    def init_params(self, **kwargs):
-        # TODO
-        pass
-
-    def init_optimizer(self, lr=0.01, **kwargs):
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0003, betas=(0.9, 0.999), eps=1e-08)
-        # self.optimizer = optimizers.SGD(lr=0.01)
-        # self.optimizer.add_hook(chainer.optimizer.GradientClipping(40))
-        # self.optimizer.add_hook(chainer.optimizer.WeightDecay(0.00003))
+    pass
 
 
 class SentenceTrainer(SentencePairTrainer):

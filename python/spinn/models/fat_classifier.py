@@ -77,7 +77,7 @@ def build_model(model_cls, trainer_cls, vocab_size, model_dim, word_embedding_di
              use_skips=FLAGS.use_skips,
             )
 
-    classifier_trainer = trainer_cls(model, gpu=gpu)
+    classifier_trainer = trainer_cls(model)
 
     return classifier_trainer
 
@@ -139,7 +139,7 @@ def reinforce(optimizer, lr, baseline, mu, reward, transition_loss):
     transition_loss.backward()
     transition_loss.unchain_backward()
     optimizer.lr = new_lr
-    optimizer.update()
+    optimizer.step()
 
     return new_lr, baseline
 
@@ -296,10 +296,13 @@ def run(only_forward=False):
          # Train
         logger.Log("Training.")
 
-        classifier_trainer.init_optimizer(
-            clip=FLAGS.clipping_max_value, decay=FLAGS.l2_lambda,
-            lr=FLAGS.learning_rate,
-            )
+        # Build optimizer.
+        if FLAGS.optimizer_type == "Adam":
+            optimizer = optim.Adam(model.parameters(), lr=FLAGS.learning_rate, betas=(0.9, 0.999), eps=1e-08)
+        elif FLAGS.optimizer_type == "RMSProp":
+            optimizer = optim.RMSprop(model.parameters(), lr=FLAGS.learning_rate, eps=1e-08)
+        else:
+            raise NotImplementedError
 
         if FLAGS.use_reinforce:
             optimizer_lr = 0.01
@@ -322,7 +325,7 @@ def run(only_forward=False):
             total_tokens = num_transitions_batch.ravel().sum()
 
             # Reset cached gradients.
-            classifier_trainer.optimizer.zero_grad()
+            optimizer.zero_grad()
 
             # Calculate loss and update parameters.
             ret = classifier_trainer.forward({
@@ -366,7 +369,7 @@ def run(only_forward=False):
             total_loss.backward()
 
             # Gradient descent step.
-            classifier_trainer.update()
+            optimizer.step()
 
             if FLAGS.use_reinforce:
                 transition_optimizer.zero_grads()
@@ -474,6 +477,7 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("lstm_composition", True, "")
 
     # Optimization settings.
+    gflags.DEFINE_enum("optimizer_type", "Adam", ["Adam", "RMSprop"], "")
     gflags.DEFINE_integer("training_steps", 500000, "Stop training after this point.")
     gflags.DEFINE_integer("batch_size", 32, "SGD minibatch size.")
     gflags.DEFINE_float("learning_rate", 0.001, "Used in RMSProp.")

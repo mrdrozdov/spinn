@@ -205,26 +205,8 @@ def treelstm(c_left, c_right, gates, use_dropout=False):
 
 class BaseSentencePairTrainer(object):
 
-    def __init__(self, model, gpu=-1, **kwargs):
-        self.__gpu = gpu
-        self.init_model(model)
-        self.init_params()
-
-    def init_model(self, model):
+    def __init__(self, model):
         self.model = model
-        self.model.best_dev_error = 0.0
-        self.model.step = 0
-
-    def init_params(self, **kwargs):
-        # TODO
-        pass
-
-    def init_optimizer(self, lr=0.01, **kwargs):
-        self.optimizer = optimizers.SGD(lr=lr)
-        self.optimizer.setup(self.model)
-
-    def update(self):
-        self.optimizer.step()
 
     def forward(self, x_batch, y_batch=None, train=True,
                 use_internal_parser=False, validate_transitions=True):
