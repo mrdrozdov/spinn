@@ -2,6 +2,10 @@ import numpy as np
 from collections import deque
 
 
+def time_per_token(num_tokens, total_time):
+    return sum(total_time) / float(sum(num_tokens))
+
+
 class Accumulator(object):
     """Accumulator. Makes it easy to keep a trailing list of statistics."""
 

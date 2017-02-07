@@ -218,8 +218,6 @@ def MakeTrainingIterator(sources, batch_size, smart_batches=True, use_peano=True
                 if len(batch) == batch_size:
                     batches.append(batch)
                     batch = []
-            if len(batch) > 0:
-                print "WARNING: May be discarding {} train examples.".format(len(batch))
         return batches
 
     def batch_iter():

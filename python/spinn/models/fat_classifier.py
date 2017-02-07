@@ -37,7 +37,7 @@ from spinn.data.sst import load_sst_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import l2_cost, flatten
-from spinn.util.misc import Accumulator
+from spinn.util.misc import Accumulator, time_per_token
 
 import spinn.fat_stack
 
@@ -98,6 +98,10 @@ def evaluate(classifier_trainer, eval_set, logger, step,
     total_batches = len(eval_set[1])
     progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
+    total_tokens = 0
+    start = time.time()
+
+    classifier_trainer.model.eval()
 
     for i, (eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch) in enumerate(eval_set[1]):
         # Calculate Local Accuracies
@@ -113,12 +117,18 @@ def evaluate(classifier_trainer, eval_set, logger, step,
         acc_accum += class_acc
         action_acc_accum += transition_acc
         eval_batches += 1.0
+        total_tokens += eval_num_transitions_batch.ravel().sum()
 
         # Print Progress
         progress_bar.step(i+1, total=total_batches)
     progress_bar.finish()
-    logger.Log("Step: %i\tEval acc: %f\t %f\t%s" %
-              (step, acc_accum / eval_batches, action_acc_accum / eval_batches, eval_set[0]))
+
+    end = time.time()
+    total_time = end - start
+
+    time_metric = time_per_token([total_tokens], [total_time])
+    logger.Log("Step: %i\tEval acc: %f\t %f\t%s Time: %5f" %
+              (step, acc_accum / eval_batches, action_acc_accum / eval_batches, eval_set[0], time_metric))
     return acc_accum / eval_batches
 
 
@@ -301,7 +311,13 @@ def run(only_forward=False):
         progress_bar.step(i=0, total=FLAGS.statistics_interval_steps)
 
         for step in range(step, FLAGS.training_steps):
-            X_batch, transitions_batch, y_batch, _ = training_data_iter.next()
+            classifier_trainer.model.train()
+
+            start = time.time()
+
+            X_batch, transitions_batch, y_batch, num_transitions_batch = training_data_iter.next()
+
+            total_tokens = num_transitions_batch.ravel().sum()
 
             # Reset cached gradients.
             classifier_trainer.optimizer.zero_grad()
@@ -354,6 +370,13 @@ def run(only_forward=False):
                 transition_optimizer.zero_grads()
                 optimizer_lr, baseline = reinforce(transition_optimizer, optimizer_lr, baseline, mu, rewards, transition_loss)
 
+            end = time.time()
+
+            total_time = end - start
+
+            A.add('total_tokens', total_tokens)
+            A.add('total_time', total_time)
+
             if step % FLAGS.statistics_interval_steps == 0:
                 progress_bar.step(i=FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
                 progress_bar.finish()
@@ -361,9 +384,10 @@ def run(only_forward=False):
                 all_preds = flatten(A.get('preds'))
                 all_truth = flatten(A.get('truth'))
                 avg_trans_acc = metrics.accuracy_score(all_preds, all_truth)
+                time_metric = time_per_token(A.get('total_tokens'), A.get('total_time'))
                 logger.Log(
-                    "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %5f"
-                    % (step, avg_class_acc, avg_trans_acc, total_cost_val, xent_loss.data[0], transition_cost_val, l2_loss.data[0]))
+                    "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %5f Time: %5f"
+                    % (step, avg_class_acc, avg_trans_acc, total_cost_val, xent_loss.data[0], transition_cost_val, l2_loss.data[0], time_metric))
 
             if step > 0 and step % FLAGS.eval_interval_steps == 0:
                 for index, eval_set in enumerate(eval_iterators):
