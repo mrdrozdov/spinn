@@ -520,7 +520,7 @@ class SentenceModel(BaseModel):
         t = transitions
 
         example = {
-            'tokens': to_gpu(Variable(x, volatile=not train)),
+            'tokens': to_gpu(Variable(torch.from_numpy(x), volatile=not train)),
             'transitions': t
         }
         example = argparse.Namespace(**example)
@@ -531,5 +531,5 @@ class SentenceModel(BaseModel):
     def run_spinn(self, example, train, use_internal_parser=False, validate_transitions=True):
         h, transition_acc, transition_loss = super(SentenceModel, self).run_spinn(
             example, train, use_internal_parser, validate_transitions)
-        h = F.concat(h, axis=0)
+        h = torch.cat(h, 0)
         return h, transition_acc, transition_loss
