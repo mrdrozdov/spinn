@@ -333,6 +333,8 @@ def run(only_forward=False):
 
         model = classifier_trainer.optimizer.target
 
+        print(sum([reduce(lambda x, y: x * y, w.data.shape, 1.0) for w in model.params()]))
+
         if FLAGS.use_reinforce:
             optimizer_lr = 0.01
             baseline = 0
