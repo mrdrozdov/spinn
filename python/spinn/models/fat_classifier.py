@@ -37,6 +37,7 @@ from spinn.data.sst import load_sst_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import l2_cost, flatten
+from spinn.util.misc import Accumulator
 
 import spinn.fat_stack
 
@@ -47,7 +48,6 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 
-from spinn.util.data import print_tree
 from sklearn import metrics
 
 
@@ -109,15 +109,6 @@ def evaluate(classifier_trainer, eval_set, logger, step,
     progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
 
-    if vocabulary:
-        inv_vocab = {v: k for k, v in vocabulary.iteritems()}
-
-    if FLAGS.print_tree:
-        graph_path = "graphs" if not FLAGS.use_reinforce else "graphs-rl"
-        summaries_file = "{}/summaries.txt".format(graph_path)
-        with open(summaries_file, "w") as f:
-            f.write("id,hamming,gold,pred\n")
-
     for i, (eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch) in enumerate(eval_set[1]):
         # Calculate Local Accuracies
         ret = classifier_trainer.forward({
@@ -134,33 +125,6 @@ def evaluate(classifier_trainer, eval_set, logger, step,
         acc_accum += acc_value
         action_acc_accum += action_acc_value
         eval_batches += 1.0
-
-        if FLAGS.print_tree:
-            memories = classifier_trainer.model.spinn.memories
-            all_preds = [el['preds'] for el in memories]
-            for ii in range(len(eval_X_batch)):
-                print(i, ii)
-                sentence = eval_X_batch[ii]
-                sentence = [s for s in sentence if s != 0]
-                sentence = [inv_vocab[s] for s in sentence]
-                transitions = eval_transitions_batch[ii]
-                offset = len(transitions)
-                transitions = [t for t in transitions if t != 2]
-                offset = offset - len(transitions)
-                preds = np.array(all_preds[offset:])[:, ii]
-
-                tree_id = "{:03}_{:03}".format(i, ii)
-
-                print_tree(sentence, transitions, "{}/gold/tree_{}.png".format(graph_path, tree_id))
-                print_tree(sentence, preds, "{}/pred/tree_{}.png".format(graph_path, tree_id))
-
-                with open(summaries_file, "a") as f:
-                    f.write("{},{},{},{}\n".format(
-                        tree_id,
-                        hamming_distance(transitions, preds),
-                        "".join([str(t) for t in transitions]),
-                        "".join([str(t) for t in preds]),
-                        ))
 
         # Print Progress
         progress_bar.step(i+1, total=total_batches)
@@ -185,6 +149,7 @@ def reinforce(optimizer, lr, baseline, mu, reward, transition_loss):
 def run(only_forward=False):
     logger = afs_safe_logger.Logger(os.path.join(FLAGS.log_path, FLAGS.experiment_name) + ".log")
 
+    # Select data format.
     if FLAGS.data_type == "bl":
         data_manager = load_boolean_data
     elif FLAGS.data_type == "sst":
@@ -242,6 +207,7 @@ def run(only_forward=False):
     training_data_iter = util.MakeTrainingIterator(
         training_data, FLAGS.batch_size, FLAGS.smart_batching, FLAGS.use_peano)
 
+    # Preprocess eval sets.
     eval_iterators = []
     for filename, raw_eval_set in raw_eval_sets:
         logger.Log("Preprocessing eval data: " + filename)
@@ -255,10 +221,8 @@ def run(only_forward=False):
             shuffle=FLAGS.shuffle_eval, rseed=FLAGS.shuffle_eval_seed)
         eval_iterators.append((filename, eval_it))
 
-    # Set up the placeholders.
-
+    # Choose model.
     logger.Log("Building model.")
-
     if FLAGS.model_type == "CBOW":
         model_module = spinn.cbow
     elif FLAGS.model_type == "RNN":
@@ -270,14 +234,10 @@ def run(only_forward=False):
     else:
         raise Exception("Requested unimplemented model type %s" % FLAGS.model_type)
 
-
+    # Build model.
     if data_manager.SENTENCE_PAIR_DATA:
-        if hasattr(model_module, 'SentencePairTrainer') and hasattr(model_module, 'SentencePairModel'):
-            trainer_cls = model_module.SentencePairTrainer
-            model_cls = model_module.SentencePairModel
-        else:
-            raise Exception("Unimplemented for model type %s" % FLAGS.model_type)
-
+        trainer_cls = model_module.SentencePairTrainer
+        model_cls = model_module.SentencePairModel
         num_classes = len(data_manager.LABEL_MAP)
         use_sentence_pair = True
         classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
@@ -286,12 +246,8 @@ def run(only_forward=False):
                               use_sentence_pair,
                               FLAGS.gpu)
     else:
-        if hasattr(model_module, 'SentenceTrainer') and hasattr(model_module, 'SentenceModel'):
-            trainer_cls = model_module.SentenceTrainer
-            model_cls = model_module.SentenceModel
-        else:
-            raise Exception("Unimplemented for model type %s" % FLAGS.model_type)
-
+        trainer_cls = model_module.SentenceTrainer
+        model_cls = model_module.SentenceModel
         num_classes = len(data_manager.LABEL_MAP)
         use_sentence_pair = False
         classifier_trainer = build_sentence_pair_model(model_cls, trainer_cls,
@@ -300,10 +256,13 @@ def run(only_forward=False):
                               use_sentence_pair,
                               FLAGS.gpu)
 
+    # Set checkpoint path.
     if ".ckpt" in FLAGS.ckpt_path:
         checkpoint_path = FLAGS.ckpt_path
     else:
         checkpoint_path = os.path.join(FLAGS.ckpt_path, FLAGS.experiment_name + ".ckpt")
+    
+    # Load checkpoint if available.
     if os.path.isfile(checkpoint_path):
         # TODO: Check that resuming works fine with tf summaries.
         logger.Log("Found checkpoint, restoring.")
@@ -314,14 +273,20 @@ def run(only_forward=False):
         step = 0
         best_dev_error = 1.0
 
-    if FLAGS.write_summaries:
-        from spinn.tf_logger import TFLogger
-        train_summary_logger = TFLogger(summary_dir=os.path.join(FLAGS.summary_dir, FLAGS.experiment_name, 'train'))
-        dev_summary_logger = TFLogger(summary_dir=os.path.join(FLAGS.summary_dir, FLAGS.experiment_name, 'dev'))
-
     model = classifier_trainer.model
+
+    # Print model size.
+    total_params = sum([reduce(lambda x, y: x * y, w.size(), 1.0) for w in model.parameters()])
+    logger.Log("Total params: {}".format(total_params))
+
+    # GPU support.
     if FLAGS.gpu >= 0:
         model.cuda()
+    else:
+        model.cpu()
+
+    # Accumulate useful statistics.
+    A = Accumulator(maxlen=FLAGS.deque_length)
 
     # Do an evaluation-only run.
     if only_forward:
@@ -336,9 +301,6 @@ def run(only_forward=False):
             lr=FLAGS.learning_rate,
             )
 
-
-        print(sum([reduce(lambda x, y: x * y, w.size(), 1.0) for w in model.parameters()]))
-
         if FLAGS.use_reinforce:
             optimizer_lr = 0.01
             baseline = 0
@@ -348,9 +310,8 @@ def run(only_forward=False):
 
         # New Training Loop
         progress_bar = SimpleProgressBar(msg="Training", bar_length=60, enabled=FLAGS.show_progress_bar)
-        accum_class_acc = deque(maxlen=FLAGS.deq_length)
-        accum_preds = deque(maxlen=FLAGS.deq_length)
-        accum_truth = deque(maxlen=FLAGS.deq_length)
+        progress_bar.step(i=0, total=FLAGS.statistics_interval_steps)
+
         for step in range(step, FLAGS.training_steps):
             X_batch, transitions_batch, y_batch, _ = training_data_iter.next()
 
@@ -367,8 +328,8 @@ def run(only_forward=False):
             # Accumulate stats for confusion matrix.
             preds = [m["preds_cm"] for m in model.spinn.memories]
             truth = [m["truth_cm"] for m in model.spinn.memories]
-            accum_preds.append(preds)
-            accum_truth.append(truth)
+            A.add('preds', preds)
+            A.add('truth', truth)
 
             if FLAGS.use_reinforce:
                 rewards = build_rewards(y, y_batch)
@@ -376,7 +337,7 @@ def run(only_forward=False):
 
             # Boilerplate for calculating loss.
             transition_cost_val = transition_loss.data[0] if transition_loss is not None else 0.0
-            accum_class_acc.append(class_acc)
+            A.add('class_acc', class_acc)
 
             # Extract L2 Cost
             l2_loss = l2_cost(model, FLAGS.l2_lambda)
@@ -408,33 +369,16 @@ def run(only_forward=False):
             # Accumulate accuracy for current interval.
             acc_val = float(classifier_trainer.model.accuracy)
 
-            if FLAGS.write_summaries:
-                train_summary_logger.log(step=step, loss=total_cost_val, accuracy=acc_val)
-
-            progress_bar.step(
-                i=max(0, step-1) % FLAGS.statistics_interval_steps + 1,
-                total=FLAGS.statistics_interval_steps)
-
             if step % FLAGS.statistics_interval_steps == 0:
+                progress_bar.step(i=FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
                 progress_bar.finish()
-                avg_class_acc = np.array(accum_class_acc).mean()
-                all_preds = flatten(accum_preds)
-                all_truth = flatten(accum_truth)
+                avg_class_acc = A.get_avg('class_acc')
+                all_preds = flatten(A.get('preds'))
+                all_truth = flatten(A.get('truth'))
                 avg_trans_acc = metrics.accuracy_score(all_preds, all_truth)
                 logger.Log(
                     "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %5f"
                     % (step, avg_class_acc, avg_trans_acc, total_cost_val, xent_loss.data[0], transition_cost_val, l2_loss.data[0]))
-                if FLAGS.print_confusion_matrix:
-                    cm = metrics.confusion_matrix(
-                        np.array(all_preds),
-                        np.array(all_truth),
-                        )
-                    logger.Log("{}".format(cm))
-                    cm = cm.astype(np.float32) / cm.sum(axis=1)[:, np.newaxis]
-                    logger.Log("{}".format(cm))
-                accum_class_acc.clear()
-                accum_preds.clear()
-                accum_truth.clear()
 
             if step > 0 and step % FLAGS.eval_interval_steps == 0:
                 for index, eval_set in enumerate(eval_iterators):
@@ -443,27 +387,17 @@ def run(only_forward=False):
                         best_dev_error = 1 - acc
                         logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
                         classifier_trainer.save(checkpoint_path, step, best_dev_error)
-                    if FLAGS.write_summaries:
-                        dev_summary_logger.log(step=step, loss=0.0, accuracy=acc)
                 progress_bar.reset()
 
-            if FLAGS.profile and step >= FLAGS.profile_steps:
-                break
+            progress_bar.step(i=step % FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
 
 
 if __name__ == '__main__':
     # Debug settings.
     gflags.DEFINE_bool("debug", True, "Set to True to disable debug_mode and type_checking.")
-    gflags.DEFINE_bool("print_confusion_matrix", False, "Periodically print CM on transitions.")
-    gflags.DEFINE_bool("profile", False, "Set to True to quit after a few batches.")
-    gflags.DEFINE_bool("write_summaries", False, "Toggle which controls whether summaries are written.")
     gflags.DEFINE_bool("show_progress_bar", True, "Turn this off when running experiments on HPC.")
-    gflags.DEFINE_bool("show_intermediate_stats", False, "Print stats more frequently than regular interval."
-                                                         "Mostly to retain timing with progress bar")
-    gflags.DEFINE_integer("profile_steps", 3, "Specify how many steps to profile.")
     gflags.DEFINE_string("branch_name", "", "")
     gflags.DEFINE_string("sha", "", "")
-    gflags.DEFINE_boolean("print_tree", False, "Print trees to file.")
 
     # Experiment naming.
     gflags.DEFINE_string("experiment_name", "", "")
@@ -477,7 +411,6 @@ if __name__ == '__main__':
         "a filename or a directory. In the latter case, the experiment name serves as the "
         "base for the filename.")
     gflags.DEFINE_string("log_path", ".", "A directory in which to write logs.")
-    gflags.DEFINE_string("summary_dir", ".", "A directory in which to write summaries.")
 
     # Data settings.
     gflags.DEFINE_string("training_data_path", None, "")
@@ -485,7 +418,7 @@ if __name__ == '__main__':
         "using ':' tokens. The first file should be the dev set, and is used for determining "
         "when to save the early stopping 'best' checkpoints.")
     gflags.DEFINE_integer("ckpt_step", 1000, "Steps to run before considering saving checkpoint.")
-    gflags.DEFINE_integer("deq_length", 10, "Max trailing examples to use for statistics.")
+    gflags.DEFINE_integer("deque_length", None, "Max trailing examples to use for statistics.")
     gflags.DEFINE_integer("seq_length", 30, "")
     gflags.DEFINE_integer("eval_seq_length", 30, "")
     gflags.DEFINE_boolean("smart_batching", True, "Organize batches using sequence length.")
@@ -500,9 +433,6 @@ if __name__ == '__main__':
     gflags.DEFINE_enum("model_type", "RNN",
                        ["CBOW", "RNN", "SPINN", "NTI"],
                        "")
-    gflags.DEFINE_boolean("allow_gt_transitions_in_eval", False,
-        "Whether to use ground truth transitions in evaluation when appropriate "
-        "(i.e., in Model 1 and Model 2S.)")
     gflags.DEFINE_integer("gpu", -1, "")
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")
@@ -541,12 +471,10 @@ if __name__ == '__main__':
     gflags.DEFINE_float("clipping_max_value", 5.0, "")
     gflags.DEFINE_float("l2_lambda", 1e-5, "")
     gflags.DEFINE_float("init_range", 0.005, "Mainly used for softmax parameters. Range for uniform random init.")
-    gflags.DEFINE_float("transition_cost_scale", 1.0, "Multiplied by the transition cost.")
 
     # Display settings.
     gflags.DEFINE_integer("statistics_interval_steps", 100, "Print training set results at this interval.")
     gflags.DEFINE_integer("eval_interval_steps", 100, "Evaluate at this interval.")
-
     gflags.DEFINE_integer("ckpt_interval_steps", 5000, "Update the checkpoint on disk at this interval.")
     gflags.DEFINE_boolean("ckpt_on_best_dev_error", True, "If error on the first eval set (the dev set) is "
         "at most 0.99 of error at the previous checkpoint, save a special 'best' checkpoint.")
@@ -556,11 +484,6 @@ if __name__ == '__main__':
         "If set, a checkpoint is loaded and a forward pass is done to get the predicted "
         "transitions. The inferred parses are written to the supplied file(s) along with example-"
         "by-example accuracy information. Requirements: Must specify checkpoint path.")
-    gflags.DEFINE_string("eval_output_paths", None,
-        "Used when expanded_eval_only_mode is set. The number of supplied paths should be same"
-        "as the number of eval sets.")
-    gflags.DEFINE_boolean("write_predicted_label", False,
-        "Write the predicted labels in a <eval_output_name>.lbl file.")
 
     # Parse command line flags.
     FLAGS(sys.argv)
@@ -572,10 +495,6 @@ if __name__ == '__main__':
             FLAGS.model_type,
             timestamp,
             )
-
-    if not FLAGS.debug:
-        chainer.set_debug(False)
-        os.environ['CHAINER_TYPE_CHECK'] = '0'
 
     if not FLAGS.branch_name:
         FLAGS.branch_name = os.popen('git rev-parse --abbrev-ref HEAD').read().strip()

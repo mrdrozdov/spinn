@@ -1,24 +1,26 @@
 import numpy as np
+from collections import deque
 
 
 class Accumulator(object):
-    """Accumulator. Makes it easy to keep a list of metrics."""
+    """Accumulator. Makes it easy to keep a trailing list of statistics."""
 
     cache = dict()
 
-    def __init__(self, trail=100):
-        self.trail = trail
+    def __init__(self, maxlen=100):
+        self.maxlen = maxlen
 
     def add(self, key, val):
-        self.cache.setdefault(key, deque(maxlen=self.trail)).append(val)
+        self.cache.setdefault(key, deque(maxlen=self.maxlen)).append(val)
 
-    def get(self, key):
+    def get(self, key, clear=True):
         ret = self.cache.get(key, [])
-        try:
-            del self.cache[key]
-        except:
-            pass
+        if clear:
+            try:
+                del self.cache[key]
+            except:
+                pass
         return ret
 
-    def get_avg(self, key):
-        return np.array(self.get(key)).mean()
+    def get_avg(self, key, clear=True):
+        return np.array(self.get(key, clear)).mean()
