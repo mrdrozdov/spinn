@@ -36,7 +36,7 @@ from spinn.data.boolean import load_boolean_data
 from spinn.data.sst import load_sst_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
-from spinn.util.chainer_blocks import l2_cost, flatten
+from spinn.util.blocks import l2_cost, flatten
 
 import spinn.fat_stack
 
