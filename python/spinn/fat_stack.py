@@ -30,17 +30,19 @@ class SentenceTrainer(SentencePairTrainer): pass
 
 class Tracker(nn.Module):
 
-    def __init__(self, size, tracker_size, predict, use_tracker_dropout=True, tracker_dropout_rate=0.1, use_skips=False):
+    def __init__(self, size, tracker_size, use_tracker_dropout=True, tracker_dropout_rate=0.1):
         super(Tracker, self).__init__()
+
+        # Initialize layers.
         self.lateral = nn.Linear(tracker_size, 4 * tracker_size)
         self.buf = nn.Linear(size, 4 * tracker_size, bias=False)
         self.stack1 = nn.Linear(size, 4 * tracker_size, bias=False)
         self.stack2 = nn.Linear(size, 4 * tracker_size, bias=False)
-        if predict:
-            self.transition = nn.Linear(tracker_size, 3 if use_skips else 2)
+
         self.state_size = tracker_size
         self.tracker_dropout_rate = tracker_dropout_rate
         self.use_tracker_dropout = use_tracker_dropout
+
         self.reset_state()
 
     def reset_state(self):
@@ -68,10 +70,10 @@ class Tracker(nn.Module):
         if self.use_tracker_dropout:
             lstm_in = F.dropout(lstm_in, self.tracker_dropout_rate, train=lstm_in.volatile == False)
 
+        # Run tracking lstm.
         self.c, self.h = lstm(self.c, lstm_in)
-        if hasattr(self, 'transition'):
-            return self.transition(self.h)
-        return None
+
+        return self.c, self.h
 
     @property
     def states(self):
@@ -97,9 +99,11 @@ class SPINN(nn.Module):
         if args.tracker_size is not None:
             self.tracker = Tracker(
                 args.size, args.tracker_size,
-                predict=args.transition_weight is not None,
                 use_tracker_dropout=args.use_tracker_dropout,
-                tracker_dropout_rate=args.tracker_dropout_rate, use_skips=use_skips)
+                tracker_dropout_rate=args.tracker_dropout_rate)
+            if args.transition_weight is not None:
+                # TODO: Might be interesting to try a different network here.
+                self.transition_net = nn.Linear(args.tracker_size, 3 if use_skips else 2)
         self.transition_weight = args.transition_weight
         self.use_reinforce = use_reinforce
         self.use_skips = use_skips
@@ -117,9 +121,11 @@ class SPINN(nn.Module):
         self.buffers_n = [(len([t for t in ts if t != T_SKIP]) + 1) / 2 for ts in example.transitions]
         if hasattr(self, 'tracker'):
             self.tracker.reset_state()
-        if hasattr(example, 'transitions'):
-            self.transitions = example.transitions
-        return self.run(run_internal_parser=True,
+        if not hasattr(example, 'transitions'):
+            # TODO: Support no transitions. In the meantime, must at least pass dummy transitions.
+            raise ValueError('Transitions must be included.')
+        return self.run(example.transitions,
+                        run_internal_parser=True,
                         use_internal_parser=use_internal_parser,
                         validate_transitions=validate_transitions)
 
@@ -143,87 +149,90 @@ class SPINN(nn.Module):
 
         return preds
 
-    def run(self, run_internal_parser=False, use_internal_parser=False, validate_transitions=True):
+    def run(self, inp_transitions, run_internal_parser=False, use_internal_parser=False, validate_transitions=True):
         transition_loss, transition_acc = 0, 0
-        if hasattr(self, 'transitions'):
-            num_transitions = self.transitions.shape[1]
-        else:
-            num_transitions = len(self.bufs[0]) * 2 - 3
+        num_transitions = inp_transitions.shape[1]
 
         for i in range(num_transitions):
-            if hasattr(self, 'transitions'):
-                transitions = self.transitions[:, i]
-                transition_arr = list(transitions)
-            else:
-            #     transition_arr = [0]*len(self.bufs)
-                raise Exception('Running without transitions not implemented')
+            transitions = inp_transitions[:, i]
+            transition_arr = list(transitions)
 
+            # A mask to select all non-SKIP transitions.
             cant_skip = np.array([t != T_SKIP for t in transitions])
+
+            # Run if:
+            # A. We have a tracking component and,
+            # B. There is at least one transition that will not be skipped.
             if hasattr(self, 'tracker') and (self.use_skips or sum(cant_skip) > 0):
-                tracker_output = self.tracker(self.bufs, self.stacks)
-                if tracker_output is not None and run_internal_parser:
-                    tracker_output = to_cpu(tracker_output)
-                    if hasattr(self, 'transitions'):
-                        memory = {}
-                        if self.use_reinforce:
-                            transition_dist = F.softmax(tracker_output)
-                            sampled_transitions = np.array([T_SKIP for _ in self.bufs], dtype=np.int32)
-                            sampled_transitions[cant_skip] = [np.random.choice(self.choices, 1, p=t_dist)[0] for t_dist in transition_dist.data[cant_skip]]
 
-                            transition_preds = sampled_transitions
-                            acc_dist = transition_dist.data.cpu().numpy()
-                            xent_dist = transition_dist
-                            xent_target = sampled_transitions
-                        else:
-                            transition_preds = tracker_output.data.max(1)[1].view(-1)
-                            acc_dist = tracker_output.data.cpu().numpy()
-                            xent_dist = tracker_output
-                            xent_target = transitions
+                # Get hidden output from the tracker. Used to predict transitions.
+                tracker_c, tracker_h = self.tracker(self.bufs, self.stacks)
 
-                        if validate_transitions:
-                            transition_preds = self.validate(transition_arr, transition_preds,
-                                self.stacks, self.buffers_t, self.buffers_n)
+                if hasattr(self, 'transition_net'):
+                    # TODO: is to_cpu needed here?
+                    transition_output = to_cpu(self.transition_net(tracker_h))
 
-                        acc_target = transitions
-                        acc_preds = transition_preds
+                if hasattr(self, 'transition_net') and run_internal_parser:
+                    memory = {}
+                    if self.use_reinforce:
+                        transition_dist = F.softmax(transition_output)
+                        sampled_transitions = np.array([T_SKIP for _ in self.bufs], dtype=np.int32)
+                        sampled_transitions[cant_skip] = [np.random.choice(self.choices, 1, p=t_dist)[0] for t_dist in transition_dist.data[cant_skip]]
 
-                        if not self.use_skips:
-                            acc_dist = acc_dist[cant_skip]
-                            acc_target = acc_target[cant_skip]
-                            acc_preds = acc_preds[cant_skip]
-                            xent_target = xent_target[cant_skip]
+                        transition_preds = sampled_transitions
+                        acc_dist = transition_dist.data.cpu().numpy()
+                        xent_dist = transition_dist
+                        xent_target = sampled_transitions
+                    else:
+                        transition_preds = transition_output.data.max(1)[1].view(-1)
+                        acc_dist = transition_output.data.cpu().numpy()
+                        xent_dist = transition_output
+                        xent_target = transitions
 
-                            xent_dist = torch.chunk(tracker_output, tracker_output.size()[0], 0)
-                            xent_dist = torch.cat([xent_dist[i] for i, y in enumerate(cant_skip) if y], 0)
+                    if validate_transitions:
+                        transition_preds = self.validate(transition_arr, transition_preds,
+                            self.stacks, self.buffers_t, self.buffers_n)
 
-                        # Memories
-                        # ========
-                        # Keep track of key values to determine accuracy and loss.
-                        # (optional) Filter to only non-skipped transitions. When filtering values
-                        # that will be backpropagated over, be careful that gradient flow isn't broken.
+                    acc_target = transitions
+                    acc_preds = transition_preds
 
-                        # Distribution of transition predictions. Used to measure transition accuracy.
-                        memory["acc_dist"] = acc_dist
+                    if not self.use_skips:
+                        acc_dist = acc_dist[cant_skip]
+                        acc_target = acc_target[cant_skip]
+                        acc_preds = acc_preds[cant_skip]
+                        xent_target = xent_target[cant_skip]
 
-                        # Actual transition predictions. Used to measure transition accuracy.
-                        memory["acc_preds"] = acc_preds
+                        xent_dist = torch.chunk(transition_output, transition_output.size()[0], 0)
+                        xent_dist = torch.cat([xent_dist[i] for i, y in enumerate(cant_skip) if y], 0)
 
-                        # Given transitions.
-                        memory["acc_target"] = acc_target
+                    # Memories
+                    # ========
+                    # Keep track of key values to determine accuracy and loss.
+                    # (optional) Filter to only non-skipped transitions. When filtering values
+                    # that will be backpropagated over, be careful that gradient flow isn't broken.
 
-                        # Distribution of transitions use to calculate transition loss.
-                        memory["xent_dist"] = xent_dist
+                    # Distribution of transition predictions. Used to measure transition accuracy.
+                    memory["acc_dist"] = acc_dist
 
-                        # Target in transition loss. This might be different in the RL setting from the
-                        # the supervised setting.
-                        memory["xent_target"] = xent_target
+                    # Actual transition predictions. Used to measure transition accuracy.
+                    memory["acc_preds"] = acc_preds
 
-                        # TODO: Write tests to make sure these values look right in the various settings.
+                    # Given transitions.
+                    memory["acc_target"] = acc_target
 
-                        if use_internal_parser:
-                            transition_arr = transition_preds.tolist()
+                    # Distribution of transitions use to calculate transition loss.
+                    memory["xent_dist"] = xent_dist
 
-                        self.memories.append(memory)
+                    # Target in transition loss. This might be different in the RL setting from the
+                    # the supervised setting.
+                    memory["xent_target"] = xent_target
+
+                    # TODO: Write tests to make sure these values look right in the various settings.
+
+                    if use_internal_parser:
+                        transition_arr = transition_preds.tolist()
+
+                    self.memories.append(memory)
 
             lefts, rights, trackings = [], [], []
             batch = zip(transition_arr, self.bufs, self.stacks,
