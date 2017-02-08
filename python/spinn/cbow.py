@@ -1,115 +1,130 @@
-"""Theano-based sum-of-words implementations."""
+from functools import partial
+import argparse
+import itertools
 
 import numpy as np
-
 from spinn import util
 
-# Chainer imports
-import chainer
-from chainer import cuda, Function, gradient_check, report, training, utils, Variable
-from chainer import datasets, iterators, optimizers, serializers
-from chainer import Link, Chain, ChainList
-import chainer.functions as F
-from chainer.functions.connection import embed_id
-from chainer.functions.normalization.batch_normalization import batch_normalization
-from chainer.functions.evaluation import accuracy
-import chainer.links as L
-from chainer.training import extensions
+# PyTorch
+import torch
+import torch.nn as nn
+from torch.autograd import Variable
+import torch.nn.functional as F
+import torch.optim as optim
 
-from chainer.utils import type_check
-
-import spinn.util.chainer_blocks as CB
-
-from chainer.functions.loss import softmax_cross_entropy
-from spinn.util.chainer_blocks import MLP
-from spinn.util.chainer_blocks import CrossEntropyClassifier
-from spinn.util.chainer_blocks import BaseSentencePairTrainer
+from spinn.util.blocks import BaseSentencePairTrainer, Embed, to_gpu
+from spinn.util.misc import Args, Vocab
 
 
-def HeKaimingInit(shape, real_shape=None):
-        # Calculate fan-in / fan-out using real shape if given as override
-        fan = real_shape or shape
-
-        return np.random.normal(scale=np.sqrt(4.0/(fan[0] + fan[1])),
-                                size=shape)
+class SentencePairTrainer(BaseSentencePairTrainer): pass
 
 
-class SentencePairTrainer(BaseSentencePairTrainer):
-    def init_params(self, **kwargs):
-        for name, param in self.model.namedparams():
-            data = param.data
-            print("Init: {}:{}".format(name, data.shape))
-            # data[:] = np.random.uniform(-1.0, 1.0, data.shape)
-            if len(data.shape) >= 2:
-                data[:] = HeKaimingInit(data.shape)
-            else:
-                data[:] = np.random.uniform(-0.1, 0.1, data.shape)
-
-    def init_optimizer(self, lr=0.01, **kwargs):
-        self.optimizer = optimizers.Adam(alpha=0.0003, beta1=0.9, beta2=0.999, eps=1e-08)
-        # self.optimizer = optimizers.SGD(lr=0.001)
-        self.optimizer.setup(self.model)
-        # self.optimizer.add_hook(chainer.optimizer.GradientClipping(40))
-        # self.optimizer.add_hook(chainer.optimizer.WeightDecay(0.00003))
+class SentenceTrainer(SentencePairTrainer): pass
 
 
-class SentencePairModel(Chain):
-    def __init__(self, model_dim, word_embedding_dim,
-                 seq_length, initial_embeddings, num_classes, mlp_dim,
-                 keep_rate,
-                 gpu=-1,
+class BaseModel(nn.Module):
+
+    def __init__(self, model_dim, word_embedding_dim, vocab_size,
+                 initial_embeddings, num_classes, mlp_dim,
+                 embedding_keep_rate, classifier_keep_rate,
+                 use_sentence_pair=False,
+                 use_input_dropout=False,
+                 use_input_norm=False,
                  **kwargs
-                 ):
-        super(SentencePairModel, self).__init__(
-            # batch_norm_0=L.BatchNormalization(model_dim*2, model_dim*2),
-            # batch_norm_1=L.BatchNormalization(mlp_dim, mlp_dim),
-            # batch_norm_2=L.BatchNormalization(mlp_dim, mlp_dim),
-            l0=L.Linear(model_dim*2, mlp_dim),
-            l1=L.Linear(mlp_dim, mlp_dim),
-            l2=L.Linear(mlp_dim, num_classes)
-        )
-        self.__gpu = gpu
-        self.__mod = cuda.cupy if gpu >= 0 else np
-        self.accFun = accuracy.accuracy
-        self.lossFun = softmax_cross_entropy.softmax_cross_entropy
-        self.keep_rate = keep_rate
-        self.word_embedding_dim = word_embedding_dim
+                ):
+        super(BaseModel, self).__init__()
+
         self.model_dim = model_dim
-        self.num_classes = num_classes
-        self.initial_embeddings = initial_embeddings
 
-    def __call__(self, sentences, transitions, y_batch=None, train=True):
-        ratio = 1 - self.keep_rate
+        args = Args()
+        args.size = model_dim
+        args.input_dropout_rate = 1. - embedding_keep_rate
+        args.use_input_dropout = use_input_dropout
+        args.use_input_norm = use_input_norm
 
-        # Get Embeddings
-        sentences = self.initial_embeddings.take(sentences, axis=0
-            ).astype(np.float32)
+        vocab = Vocab()
+        vocab.size = initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size
+        vocab.vectors = initial_embeddings
 
-        # Get Embeddings
-        x_prem = Variable(sentences[:,:,0])
-        x_hyp = Variable(sentences[:,:,1])
+        self.embed = Embed(args.size, vocab.size, args.input_dropout_rate,
+                        vectors=vocab.vectors, make_buffers=False,
+                        use_input_dropout=args.use_input_dropout,
+                        use_input_norm=args.use_input_norm,
+                        )
 
-        # Sum and Concatenate both Sentences
-        h_l = F.sum(x_prem, axis=1)
-        h_r = F.sum(x_hyp, axis=1)
-        h = F.concat([h_l, h_r], axis=1)
+        mlp_input_dim = word_embedding_dim * 2 if use_sentence_pair else model_dim
 
-        # Pass through Classifier
-        # h = self.batch_norm_0(h, test=not train)
-        # h = F.dropout(h, ratio, train)
-        # h = F.relu(h)
+        self.l0 = nn.Linear(mlp_input_dim, mlp_dim)
+        self.l1 = nn.Linear(mlp_dim, mlp_dim)
+        self.l2 = nn.Linear(mlp_dim, num_classes)
+
+    def run_mlp(self, h, train):
         h = self.l0(h)
-        # h = self.batch_norm_1(h, test=not train)
-        # h = F.dropout(h, ratio, train)
         h = F.relu(h)
         h = self.l1(h)
-        # h = self.batch_norm_2(h, test=not train)
-        # h = F.dropout(h, ratio, train)
         h = F.relu(h)
         h = self.l2(h)
         y = h
+        return y
 
-        accum_loss = self.lossFun(y, y_batch)
-        self.accuracy = self.accFun(y, y_batch)
 
-        return y, accum_loss, self.accuracy.data, 0.0
+class SentencePairModel(BaseModel):
+
+    def build_example(self, sentences, transitions, train):
+        batch_size = sentences.shape[0]
+
+        # Build Tokens
+        x_prem = sentences[:,:,0]
+        x_hyp = sentences[:,:,1]
+        x = np.concatenate([x_prem, x_hyp], axis=0)
+
+        return to_gpu(Variable(torch.from_numpy(x), volatile=not train))
+
+    def forward(self, sentences, transitions, y_batch=None, train=True, **kwargs):
+        batch_size = sentences.shape[0]
+
+        # Build Tokens
+        x = self.build_example(sentences, transitions, train)
+
+        emb = self.embed(x)
+
+        hh = torch.squeeze(torch.sum(emb, 1))
+        h = torch.cat([hh[:batch_size], hh[batch_size:]], 1)
+        logits = F.log_softmax(self.run_mlp(h, train))
+
+        if y_batch is not None:
+            target = torch.from_numpy(y_batch).long()
+            loss = nn.NLLLoss()(logits, Variable(target, volatile=not train))
+            pred = logits.data.max(1)[1] # get the index of the max log-probability
+            class_acc = pred.eq(target).sum() / float(target.size(0))
+
+        transition_acc = 0.0
+        transition_loss = None
+
+        return logits, loss, class_acc, transition_acc, transition_loss
+
+
+class SentenceModel(BaseModel):
+
+    def build_example(self, sentences, transitions, train):
+        return to_gpu(Variable(torch.from_numpy(x), volatile=not train))
+
+    def forward(self, sentences, transitions, y_batch=None, train=True, **kwargs):
+        # Build Tokens
+        x = self.build_example(sentences, transitions, train)
+
+        emb = self.embed(x)
+
+        h = torch.squeeze(torch.sum(emb, 1))
+        logits = F.log_softmax(self.run_mlp(h, train))
+
+        if y_batch is not None:
+            target = torch.from_numpy(y_batch).long()
+            loss = nn.NLLLoss()(logits, Variable(target, volatile=not train))
+            pred = logits.data.max(1)[1] # get the index of the max log-probability
+            class_acc = pred.eq(target).sum() / float(target.size(0))
+
+        transition_acc = 0.0
+        transition_loss = None
+
+        return logits, loss, class_acc, transition_acc, transition_loss

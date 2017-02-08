@@ -40,6 +40,7 @@ from spinn.util.misc import Accumulator, time_per_token
 
 import spinn.fat_stack
 import spinn.plain_rnn
+import spinn.cbow
 
 # PyTorch
 import torch
