@@ -12,7 +12,7 @@ import torch.optim as optim
 
 from spinn.util.blocks import BaseSentencePairTrainer, Reduce
 from spinn.util.blocks import LSTMState, Embed
-from spinn.util.blocks import bundle, unbundle, the_gpu, to_cpu, to_gpu, treelstm, lstm
+from spinn.util.blocks import bundle, unbundle, to_cpu, to_gpu, treelstm, lstm
 from spinn.util.misc import Args, Vocab, Example
 
 
@@ -292,7 +292,6 @@ class BaseModel(nn.Module):
                  use_tracker_dropout=True, tracker_dropout_rate=0.1,
                  use_input_dropout=False, use_input_norm=False,
                  use_classifier_norm=True,
-                 gpu=-1,
                  tracking_lstm_hidden_dim=4,
                  transition_weight=None,
                  use_tracking_lstm=True,
@@ -304,14 +303,11 @@ class BaseModel(nn.Module):
                 ):
         super(BaseModel, self).__init__()
 
-        the_gpu.gpu = gpu
-
         mlp_input_dim = model_dim * 2 if use_sentence_pair else model_dim
         self.l0 = nn.Linear(mlp_input_dim, mlp_dim)
         self.l1 = nn.Linear(mlp_dim, mlp_dim)
         self.l2 = nn.Linear(mlp_dim, num_classes)
 
-        self.__gpu = gpu
         self.initial_embeddings = initial_embeddings
         self.classifier_dropout_rate = 1. - classifier_keep_rate
         self.use_classifier_norm = use_classifier_norm

@@ -35,7 +35,7 @@ from spinn.data.boolean import load_boolean_data
 from spinn.data.sst import load_sst_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
-from spinn.util.blocks import l2_cost, flatten
+from spinn.util.blocks import the_gpu, l2_cost, flatten
 from spinn.util.misc import Accumulator, time_per_token
 
 import spinn.fat_stack
@@ -49,15 +49,12 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 
-from sklearn import metrics
-
 
 FLAGS = gflags.FLAGS
 
 
 def build_model(model_cls, trainer_cls, vocab_size, model_dim, word_embedding_dim,
-                              num_classes, initial_embeddings, use_sentence_pair,
-                              gpu):
+                              num_classes, initial_embeddings, use_sentence_pair):
     model = model_cls(model_dim, word_embedding_dim, vocab_size,
              initial_embeddings, num_classes, mlp_dim=1024,
              embedding_keep_rate=FLAGS.embedding_keep_rate,
@@ -72,7 +69,6 @@ def build_model(model_cls, trainer_cls, vocab_size, model_dim, word_embedding_di
              use_tracking_lstm=FLAGS.use_tracking_lstm,
              use_shift_composition=FLAGS.use_shift_composition,
              use_sentence_pair=use_sentence_pair,
-             gpu=gpu,
              use_reinforce=FLAGS.use_reinforce,
              use_skips=FLAGS.use_skips,
             )
@@ -264,8 +260,7 @@ def run(only_forward=False):
         classifier_trainer = build_model(model_cls, trainer_cls,
                               len(vocabulary), FLAGS.model_dim, FLAGS.word_embedding_dim,
                               num_classes, initial_embeddings,
-                              use_sentence_pair,
-                              FLAGS.gpu)
+                              use_sentence_pair)
     else:
         trainer_cls = model_module.SentenceTrainer
         model_cls = model_module.SentenceModel
@@ -274,8 +269,7 @@ def run(only_forward=False):
         classifier_trainer = build_model(model_cls, trainer_cls,
                               len(vocabulary), FLAGS.model_dim, FLAGS.word_embedding_dim,
                               num_classes, initial_embeddings,
-                              use_sentence_pair,
-                              FLAGS.gpu)
+                              use_sentence_pair)
 
     # Set checkpoint path.
     if ".ckpt" in FLAGS.ckpt_path:
@@ -302,6 +296,7 @@ def run(only_forward=False):
     logger.Log("Total params: {}".format(total_params))
 
     # GPU support.
+    the_gpu.gpu = FLAGS.gpu
     if FLAGS.gpu >= 0:
         model.cuda()
     else:
