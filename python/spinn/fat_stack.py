@@ -126,15 +126,14 @@ class Tracker(nn.Module):
 
 class SPINN(nn.Module):
 
-    def __init__(self, args, vocab,
-                 attention=False, attn_fn=None, use_reinforce=True, use_skips=False):
+    def __init__(self, args, vocab, use_reinforce=True, use_skips=False):
         super(SPINN, self).__init__()
         self.embed = Embed(args.size, vocab.size, args.input_dropout_rate,
                         vectors=vocab.vectors,
                         use_input_dropout=args.use_input_dropout,
                         use_input_norm=args.use_input_norm,
                         )
-        self.reduce = Reduce(args.size, args.tracker_size, attention, attn_fn)
+        self.reduce = Reduce(args.size, args.tracker_size)
         if args.tracker_size is not None:
             self.tracker = Tracker(
                 args.size, args.tracker_size,
@@ -151,8 +150,7 @@ class SPINN(nn.Module):
     def reset_state(self):
         self.memories = []
 
-    def __call__(self, example, attention=None, print_transitions=False,
-                 use_internal_parser=False, validate_transitions=True):
+    def __call__(self, example, use_internal_parser=False, validate_transitions=True):
         self.bufs = self.embed(example.tokens)
         self.stacks = [[] for buf in self.bufs]
         self.buffers_t = [0 for buf in self.bufs]
@@ -168,7 +166,6 @@ class SPINN(nn.Module):
             self.tracker.reset_state()
         if hasattr(example, 'transitions'):
             self.transitions = example.transitions
-        self.attention = attention
         return self.run(run_internal_parser=True,
                         use_internal_parser=use_internal_parser,
                         validate_transitions=validate_transitions)
@@ -193,8 +190,7 @@ class SPINN(nn.Module):
 
         return preds
 
-    def run(self, print_transitions=False, run_internal_parser=False,
-            use_internal_parser=False, validate_transitions=True):
+    def run(self, run_internal_parser=False, use_internal_parser=False, validate_transitions=True):
 
         transition_loss, transition_acc = 0, 0
         if hasattr(self, 'transitions'):
@@ -277,14 +273,12 @@ class SPINN(nn.Module):
 
                         self.memories.append(memory)
 
-            lefts, rights, trackings, attentions = [], [], [], []
+            lefts, rights, trackings = [], [], []
             batch = zip(transition_arr, self.bufs, self.stacks,
                         self.tracker.states if hasattr(self, 'tracker') and self.tracker.h is not None
-                        else itertools.repeat(None),
-                        self.attention if self.attention is not None
                         else itertools.repeat(None))
 
-            for ii, (transition, buf, stack, tracking, attention) in enumerate(batch):
+            for ii, (transition, buf, stack, tracking) in enumerate(batch):
                 if transition == T_SHIFT: # shift
                     if self.save_stack:
                         buf[-1].buf = buf[:]
@@ -307,10 +301,9 @@ class SPINN(nn.Module):
                                 zeros.tracking = tracking
                             lr.append(zeros)
                     trackings.append(tracking)
-                    attentions.append(attention)
             if len(rights) > 0:
                 reduced = iter(self.reduce(
-                    lefts, rights, trackings, attentions))
+                    lefts, rights, trackings))
                 for transition, stack, in zip(
                         transition_arr, self.stacks):
                     if transition == T_REDUCE: # reduce
@@ -402,8 +395,7 @@ class BaseModel(nn.Module):
         }
         vocab = argparse.Namespace(**vocab)
 
-        self.spinn = SPINN(args, vocab,
-                 attention=False, attn_fn=None, use_reinforce=use_reinforce, use_skips=use_skips)
+        self.spinn = SPINN(args, vocab, use_reinforce=use_reinforce, use_skips=use_skips)
 
 
     def build_example(self, sentences, transitions, train):

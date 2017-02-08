@@ -305,39 +305,34 @@ class Embed(nn.Module):
 class Reduce(nn.Module):
     """TreeLSTM composition module for SPINN.
 
-    The TreeLSTM has two to four inputs: the first two are the left and right
+    The TreeLSTM has two to three inputs: the first two are the left and right
     children being composed; the third is the current state of the tracker
-    LSTM if one is present in the SPINN model; the fourth is an optional
-    attentional input.
+    LSTM if one is present in the SPINN model.
 
     Args:
         size: The size of the model state.
         tracker_size: The size of the tracker LSTM hidden state, or None if no
             tracker is present.
-        attend (bool): Whether to accept an additional attention input.
-        attn_fn (function): A callback function to compute the attention value
-            given the left, right, tracker, and attention inputs. TODO
     """
 
-    def __init__(self, size, tracker_size=None, attend=False, attn_fn=None):
+    def __init__(self, size, tracker_size=None):
         super(Reduce, self).__init__()
         self.left = nn.Linear(size, 5 * size)
         self.right = nn.Linear(size, 5 * size, bias=False)
         if tracker_size is not None:
             self.track = nn.Linear(tracker_size, 5 * size, bias=False)
 
-    def __call__(self, left_in, right_in, tracking=None, attend=None):
+    def __call__(self, left_in, right_in, tracking=None):
         """Perform batched TreeLSTM composition.
 
         This implements the REDUCE operation of a SPINN in parallel for a
         batch of nodes. The batch size is flexible; only provide this function
         the nodes that actually need to be REDUCEd.
 
-        The TreeLSTM has two to four inputs: the first two are the left and
+        The TreeLSTM has two to three inputs: the first two are the left and
         right children being composed; the third is the current state of the
-        tracker LSTM if one is present in the SPINN model; the fourth is an
-        optional attentional input. All are provided as iterables and batched
-        internally into tensors.
+        tracker LSTM if one is present in the SPINN model. All are provided
+        as iterables and batched internally into tensors.
 
         Additionally augments each new node with pointers to its children as
         well as concatenated attributes ``transitions`` and ``tokens`` and
@@ -355,9 +350,6 @@ class Reduce(nn.Module):
             tracking: Iterable of ``B`` ~chainer.Variable objects containing
                 ``c`` and ``h`` concatenated for the tracker LSTM state of
                 each node in the batch, or None.
-            attend: Iterable of ``B`` ~chainer.Variable objects containing
-                ``c`` and ``h`` concatenated for the attention state to be fed
-                into each node in the batch, or None.
 
         Returns:
             out: Tuple of ``B`` ~chainer.Variable objects containing ``c`` and
@@ -367,7 +359,7 @@ class Reduce(nn.Module):
                 ``tracking`` attributes.
         """
         left, right = bundle(left_in), bundle(right_in)
-        tracking, attend = bundle(tracking), bundle(attend)
+        tracking = bundle(tracking)
         lstm_in = self.left(left.h)
         lstm_in += self.right(right.h)
         if hasattr(self, 'track'):
