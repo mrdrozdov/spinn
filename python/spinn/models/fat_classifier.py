@@ -70,7 +70,6 @@ def build_model(model_cls, trainer_cls, vocab_size, model_dim, word_embedding_di
              transition_weight=FLAGS.transition_weight,
              use_tracking_lstm=FLAGS.use_tracking_lstm,
              use_shift_composition=FLAGS.use_shift_composition,
-             save_stack=FLAGS.save_stack,
              use_sentence_pair=use_sentence_pair,
              gpu=gpu,
              use_reinforce=FLAGS.use_reinforce,
@@ -465,7 +464,6 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("use_internal_parser", False, "Use predicted parse.")
     gflags.DEFINE_boolean("validate_transitions", True, "Constrain predicted transitions to ones"
                                                         "that give a valid parse tree.")
-    gflags.DEFINE_boolean("save_stack", False, "")
     gflags.DEFINE_boolean("use_tracking_lstm", True,
                           "Whether to use LSTM in the tracking unit")
     gflags.DEFINE_float("semantic_classifier_keep_rate", 0.9,

@@ -141,7 +141,6 @@ class SPINN(nn.Module):
                 use_tracker_dropout=args.use_tracker_dropout,
                 tracker_dropout_rate=args.tracker_dropout_rate, use_skips=use_skips)
         self.transition_weight = args.transition_weight
-        self.save_stack = args.save_stack
         self.use_reinforce = use_reinforce
         self.use_skips = use_skips
         choices = [T_SHIFT, T_REDUCE, T_SKIP] if use_skips else [T_SHIFT, T_REDUCE]
@@ -156,12 +155,6 @@ class SPINN(nn.Module):
         self.buffers_t = [0 for buf in self.bufs]
         # There are 2 * N - 1 transitons, so (|transitions| + 1) / 2 should equal N.
         self.buffers_n = [(len([t for t in ts if t != T_SKIP]) + 1) / 2 for ts in example.transitions]
-        for stack, buf in zip(self.stacks, self.bufs):
-            for ss in stack:
-                if self.save_stack:
-                    ss.buf = buf[:]
-                    ss.stack = stack[:]
-                    ss.tracking = None
         if hasattr(self, 'tracker'):
             self.tracker.reset_state()
         if hasattr(example, 'transitions'):
@@ -280,10 +273,6 @@ class SPINN(nn.Module):
 
             for ii, (transition, buf, stack, tracking) in enumerate(batch):
                 if transition == T_SHIFT: # shift
-                    if self.save_stack:
-                        buf[-1].buf = buf[:]
-                        buf[-1].stack = stack[:]
-                        buf[-1].tracking = tracking
                     stack.append(buf.pop())
                     self.buffers_t[ii] += 1
                 elif transition == T_REDUCE: # reduce
@@ -295,10 +284,6 @@ class SPINN(nn.Module):
                             zeros = to_gpu(Variable(
                                 torch.from_numpy(np.zeros(buf[0].size(), dtype=np.float32)),
                                 volatile=buf[0].volatile))
-                            if self.save_stack:
-                                zeros.buf = buf[:]
-                                zeros.stack = stack[:]
-                                zeros.tracking = tracking
                             lr.append(zeros)
                     trackings.append(tracking)
             if len(rights) > 0:
@@ -353,7 +338,6 @@ class BaseModel(nn.Module):
                  transition_weight=None,
                  use_tracking_lstm=True,
                  use_shift_composition=True,
-                 save_stack=False,
                  use_reinforce=False,
                  use_skips=False,
                  use_sentence_pair=False,
@@ -380,7 +364,6 @@ class BaseModel(nn.Module):
             'size': model_dim/2,
             'tracker_size': tracking_lstm_hidden_dim if use_tracking_lstm else None,
             'transition_weight': transition_weight,
-            'save_stack': save_stack,
             'input_dropout_rate': 1. - input_keep_rate,
             'use_input_dropout': use_input_dropout,
             'use_input_norm': use_input_norm,
