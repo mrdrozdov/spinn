@@ -288,7 +288,7 @@ class BaseModel(nn.Module):
 
     def __init__(self, model_dim, word_embedding_dim, vocab_size,
                  initial_embeddings, num_classes, mlp_dim,
-                 input_keep_rate, classifier_keep_rate,
+                 embedding_keep_rate, classifier_keep_rate,
                  use_tracker_dropout=True, tracker_dropout_rate=0.1,
                  use_input_dropout=False, use_input_norm=False,
                  use_classifier_norm=True,
@@ -323,7 +323,7 @@ class BaseModel(nn.Module):
         args.size = model_dim/2
         args.tracker_size = tracking_lstm_hidden_dim if use_tracking_lstm else None
         args.transition_weight = transition_weight
-        args.input_dropout_rate = 1. - input_keep_rate
+        args.input_dropout_rate = 1. - embedding_keep_rate
         args.use_input_dropout = use_input_dropout
         args.use_input_norm = use_input_norm
         args.use_tracker_dropout = use_tracker_dropout

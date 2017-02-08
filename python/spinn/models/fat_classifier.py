@@ -39,6 +39,7 @@ from spinn.util.blocks import l2_cost, flatten
 from spinn.util.misc import Accumulator, time_per_token
 
 import spinn.fat_stack
+import spinn.plain_rnn
 
 # PyTorch
 import torch
@@ -58,7 +59,7 @@ def build_model(model_cls, trainer_cls, vocab_size, model_dim, word_embedding_di
                               gpu):
     model = model_cls(model_dim, word_embedding_dim, vocab_size,
              initial_embeddings, num_classes, mlp_dim=1024,
-             input_keep_rate=FLAGS.embedding_keep_rate,
+             embedding_keep_rate=FLAGS.embedding_keep_rate,
              classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
              use_input_dropout=FLAGS.use_input_dropout,
              use_input_norm=FLAGS.use_input_norm,
@@ -223,9 +224,7 @@ def run(only_forward=False):
     if FLAGS.model_type == "CBOW":
         model_module = spinn.cbow
     elif FLAGS.model_type == "RNN":
-        model_module = spinn.plain_rnn_chainer
-    elif FLAGS.model_type == "NTI":
-        model_module = spinn.nti
+        model_module = spinn.plain_rnn
     elif FLAGS.model_type == "SPINN":
         model_module = spinn.fat_stack
     else:
@@ -273,6 +272,7 @@ def run(only_forward=False):
     model = classifier_trainer.model
 
     # Print model size.
+    logger.Log("Architecture: {}".format(model))
     total_params = sum([reduce(lambda x, y: x * y, w.size(), 1.0) for w in model.parameters()])
     logger.Log("Total params: {}".format(total_params))
 
@@ -335,10 +335,11 @@ def run(only_forward=False):
             y, xent_loss, class_acc, transition_acc, transition_loss = ret
 
             # Accumulate stats for confusion matrix.
-            preds = [m["acc_preds"] for m in model.spinn.memories]
-            truth = [m["acc_target"] for m in model.spinn.memories]
-            A.add('preds', preds)
-            A.add('truth', truth)
+            if transition_loss is not None:
+                preds = [m["acc_preds"] for m in model.spinn.memories]
+                truth = [m["acc_target"] for m in model.spinn.memories]
+                A.add('preds', preds)
+                A.add('truth', truth)
 
             if FLAGS.use_reinforce:
                 rewards = build_rewards(y, y_batch)
@@ -386,9 +387,12 @@ def run(only_forward=False):
                 progress_bar.step(i=FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
                 progress_bar.finish()
                 avg_class_acc = A.get_avg('class_acc')
-                all_preds = flatten(A.get('preds'))
-                all_truth = flatten(A.get('truth'))
-                avg_trans_acc = metrics.accuracy_score(all_preds, all_truth)
+                if transition_loss is not None:
+                    all_preds = np.array(flatten(A.get('preds')))
+                    all_truth = np.array(flatten(A.get('truth')))
+                    avg_trans_acc = (all_preds == all_truth).sum() / float(all_truth.shape[0])
+                else:
+                    avg_trans_acc = 0.0
                 time_metric = time_per_token(A.get('total_tokens'), A.get('total_time'))
                 logger.Log(
                     "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %5f Time: %5f"
@@ -444,9 +448,7 @@ if __name__ == '__main__':
         "If set, load GloVe-formatted embeddings from here.")
 
     # Model architecture settings.
-    gflags.DEFINE_enum("model_type", "RNN",
-                       ["CBOW", "RNN", "SPINN", "NTI"],
-                       "")
+    gflags.DEFINE_enum("model_type", "RNN", ["CBOW", "RNN", "SPINN"], "")
     gflags.DEFINE_integer("gpu", -1, "")
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")

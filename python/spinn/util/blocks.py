@@ -291,7 +291,7 @@ class Embed(nn.Module):
             embeds = to_gpu(Variable(torch.from_numpy(embeds), volatile=tokens.volatile))
             embeds = self.projection(embeds)
         if not self.make_buffers:
-            return self.activation(F.reshape(embeds, (b, l, -1)))
+            return self.activation(embeds.view(b, l, -1))
 
         if self.use_input_dropout:
             embeds = F.dropout(embeds, self.dropout, embeds.volatile == 'off')
