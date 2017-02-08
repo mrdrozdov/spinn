@@ -179,18 +179,16 @@ class SPINN(nn.Module):
                     # Predict Actions
                     # ===============
 
+                    t_logits = F.log_softmax(transition_output)
+                    t_given = transitions
+
                     if self.use_reinforce:
                         transition_dist = F.softmax(transition_output)
                         sampled_transitions = np.array([T_SKIP for _ in self.bufs], dtype=np.int32)
                         sampled_transitions[cant_skip] = [np.random.choice(self.choices, 1, p=t_dist)[0] for t_dist in transition_dist.data[cant_skip]]
-
                         transition_preds = sampled_transitions
-                        xent_dist = transition_dist
-                        xent_target = sampled_transitions
                     else:
                         transition_preds = transition_output.data.max(1)[1].view(-1)
-                        xent_dist = transition_output
-                        xent_target = transitions
 
                     # Constrain to valid actions
                     # ==========================
@@ -199,21 +197,19 @@ class SPINN(nn.Module):
                         transition_preds = self.validate(transition_arr, transition_preds,
                             self.stacks, self.buffers_t, self.buffers_n)
 
-                    acc_target = transitions
-                    acc_preds = transition_preds
+                    t_preds = transition_preds
 
                     # Filter to non-SKIP values
                     # =========================
 
                     if not self.use_skips:
-                        acc_target = acc_target[cant_skip]
-                        acc_preds = acc_preds[cant_skip]
-                        xent_target = xent_target[cant_skip]
+                        t_preds = t_preds[cant_skip]
+                        t_given = t_given[cant_skip]
 
                         # Be careful when filtering distributions. These values are used to
                         # calculate loss and need to be used in backprop.
-                        xent_dist = torch.chunk(transition_output, transition_output.size()[0], 0)
-                        xent_dist = torch.cat([xent_dist[i] for i, y in enumerate(cant_skip) if y], 0)
+                        t_logits = torch.chunk(transition_output, transition_output.size()[0], 0)
+                        t_logits = torch.cat([t_logits[i] for i, y in enumerate(cant_skip) if y], 0)
 
                     # Memories
                     # ========
@@ -224,20 +220,17 @@ class SPINN(nn.Module):
                     memory = {}
 
                     # Actual transition predictions. Used to measure transition accuracy.
-                    memory["acc_preds"] = acc_preds
-
-                    # Given transitions.
-                    memory["acc_target"] = acc_target
+                    memory["t_preds"] = t_preds
 
                     # Distribution of transitions use to calculate transition loss.
-                    memory["xent_dist"] = xent_dist
+                    memory["t_logits"] = t_logits
 
-                    # Target in transition loss. This might be different in the RL setting from the
-                    # the supervised setting.
-                    memory["xent_target"] = xent_target
+                    # Given transitions.
+                    memory["t_given"] = t_given
 
                     # TODO: Write tests to make sure these values look right in the various settings.
 
+                    # If this FLAG is set, then use the predicted actions rather than the given.
                     if use_internal_parser:
                         transition_arr = transition_preds.tolist()
 
@@ -286,7 +279,7 @@ class SPINN(nn.Module):
             # We compute statistics after the fact, since sub-batches can
             # have different sizes when not using skips.
             statistics = zip(*[
-                (m["acc_preds"], m["acc_target"], m["xent_dist"], m["xent_target"])
+                (m["t_preds"], m["t_logits"], m["t_given"])
                 for m in self.memories])
 
             statistics = [
@@ -295,12 +288,11 @@ class SPINN(nn.Module):
                 np.array(reduce(lambda x, y: x + y.tolist(), s, []))
                 for s in statistics]
 
-            acc_preds, acc_target, xent_dist, xent_target = statistics
+            t_preds, t_logits, t_given = statistics
 
-            self.transition_acc = (acc_preds == acc_target).sum() / float(acc_preds.shape[0])
-            t_logits = F.log_softmax(xent_dist) # TODO: This might be causing problems in RL with a potential double softmax.
+            self.transition_acc = (t_preds == t_given).sum() / float(t_preds.shape[0])
             transition_loss = nn.NLLLoss()(t_logits, to_gpu(Variable(
-                torch.from_numpy(xent_target), volatile=t_logits.volatile)))
+                torch.from_numpy(t_given), volatile=t_logits.volatile)))
 
             transition_loss *= self.transition_weight
             self.transition_loss = transition_loss

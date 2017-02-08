@@ -121,8 +121,8 @@ def evaluate(classifier_trainer, eval_set, logger, step, vocabulary=None):
 
         # Accumulate stats for transition accuracy.
         if transition_loss is not None:
-            transition_preds.append([m["acc_preds"] for m in model.spinn.memories])
-            transition_targets.append([m["acc_target"] for m in model.spinn.memories])
+            transition_preds.append([m["t_preds"] for m in model.spinn.memories])
+            transition_targets.append([m["t_given"] for m in model.spinn.memories])
 
         # Print Progress
         progress_bar.step(i+1, total=total_batches)
@@ -374,8 +374,8 @@ def run(only_forward=False):
 
             # Accumulate stats for transition accuracy.
             if transition_loss is not None:
-                preds = [m["acc_preds"] for m in model.spinn.memories]
-                truth = [m["acc_target"] for m in model.spinn.memories]
+                preds = [m["t_preds"] for m in model.spinn.memories]
+                truth = [m["t_given"] for m in model.spinn.memories]
                 A.add('preds', preds)
                 A.add('truth', truth)
 
