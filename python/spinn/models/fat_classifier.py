@@ -60,6 +60,26 @@ def build_rewards(logits, y, xent_reward=False):
         return metrics.accuracy_score(logits.data.argmax(axis=1), y)
 
 
+def truncate(X_batch, transitions_batch, num_transitions_batch):
+    # Truncate each batch to max length within the batch.
+    X_batch_is_left_padded = not FLAGS.use_left_padding
+    transitions_batch_is_left_padded = FLAGS.use_left_padding
+    max_transitions = np.max(num_transitions_batch)
+    seq_length = X_batch.shape[1]
+
+    if X_batch_is_left_padded:
+        X_batch = X_batch[:, seq_length - max_transitions:]
+    else:
+        X_batch = X_batch[:, :max_transitions]
+
+    if transitions_batch_is_left_padded:
+        transitions_batch = transitions_batch[:, seq_length - max_transitions:]
+    else:
+        transitions_batch = transitions_batch[:, :max_transitions]
+
+    return X_batch, transitions_batch
+
+
 def evaluate(classifier_trainer, eval_set, logger, step, vocabulary=None):
     filename, dataset = eval_set
 
@@ -81,6 +101,10 @@ def evaluate(classifier_trainer, eval_set, logger, step, vocabulary=None):
     transition_targets = []
 
     for i, (eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch) in enumerate(dataset):
+        if FLAGS.truncate_eval_batch:
+            eval_X_batch, eval_transitions_batch = truncate(
+                eval_X_batch, eval_transitions_batch, eval_num_transitions_batch)
+
         # Calculate Local Accuracies
         ret = classifier_trainer.forward({
             "sentences": eval_X_batch,
@@ -329,6 +353,10 @@ def run(only_forward=False):
 
             X_batch, transitions_batch, y_batch, num_transitions_batch = training_data_iter.next()
 
+            if FLAGS.truncate_train_batch:
+                X_batch, transitions_batch = truncate(
+                    X_batch, transitions_batch, num_transitions_batch)
+
             total_tokens = num_transitions_batch.ravel().sum()
 
             # Reset cached gradients.
@@ -459,6 +487,8 @@ if __name__ == '__main__':
     gflags.DEFINE_integer("deque_length", None, "Max trailing examples to use for statistics.")
     gflags.DEFINE_integer("seq_length", 30, "")
     gflags.DEFINE_integer("eval_seq_length", None, "")
+    gflags.DEFINE_boolean("truncate_eval_batch", True, "Shorten batches to max transition length.")
+    gflags.DEFINE_boolean("truncate_train_batch", True, "Shorten batches to max transition length.")
     gflags.DEFINE_boolean("smart_batching", True, "Organize batches using sequence length.")
     gflags.DEFINE_boolean("use_peano", True, "A mind-blowing sorting key.")
     gflags.DEFINE_integer("eval_data_limit", -1, "Truncate evaluation set. -1 indicates no truncation.")
