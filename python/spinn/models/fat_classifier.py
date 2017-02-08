@@ -256,6 +256,8 @@ def run(only_forward=False):
          use_sentence_pair=use_sentence_pair,
          use_reinforce=FLAGS.use_reinforce,
          use_skips=FLAGS.use_skips,
+         use_difference_feature=FLAGS.use_difference_feature,
+         use_product_feature=FLAGS.use_product_feature,
         )
 
     # Build optimizer.
@@ -478,6 +480,8 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("xent_reward", False, "Use cross entropy instead of accuracy as RL reward")
 
     gflags.DEFINE_boolean("use_shift_composition", True, "")
+    gflags.DEFINE_boolean("use_difference_feature", True, "")
+    gflags.DEFINE_boolean("use_product_feature", True, "")
     gflags.DEFINE_boolean("use_skips", False, "Pad transitions with SKIP actions.")
     gflags.DEFINE_boolean("use_left_padding", True, "Pad transitions only on the LHS.")
     gflags.DEFINE_boolean("use_internal_parser", False, "Use predicted parse.")

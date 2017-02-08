@@ -296,12 +296,25 @@ class BaseModel(nn.Module):
                  use_reinforce=False,
                  use_skips=False,
                  use_sentence_pair=False,
+                 use_difference_feature=False,
+                 use_product_feature=False,
                  **kwargs
                 ):
         super(BaseModel, self).__init__()
 
+        self.use_sentence_pair = use_sentence_pair
+        self.use_difference_feature = use_difference_feature
+        self.use_product_feature = use_product_feature
+
         self.hidden_dim = hidden_dim = model_dim / 2
         features_dim = hidden_dim * 2 if use_sentence_pair else hidden_dim
+
+        if self.use_sentence_pair:
+            if self.use_difference_feature:
+                features_dim += self.hidden_dim
+            if self.use_product_feature:
+                features_dim += self.hidden_dim
+
         self.l0 = nn.Linear(features_dim, mlp_dim)
         self.l1 = nn.Linear(mlp_dim, mlp_dim)
         self.l2 = nn.Linear(mlp_dim, num_classes)
@@ -344,6 +357,17 @@ class BaseModel(nn.Module):
 
     def run_mlp(self, h, train):
         # Pass through MLP Classifier.
+        if self.use_sentence_pair:
+            h_prem, h_hyp = h
+            features = [h_prem, h_hyp]
+            if self.use_difference_feature:
+                features.append(h_prem - h_hyp)
+            if self.use_product_feature:
+                features.append(h_prem * h_hyp)
+            h = torch.cat(features, 1)
+        else:
+            h = h[0]
+
         h = to_gpu(h)
         h = self.l0(h)
         h = F.relu(h)
@@ -398,8 +422,7 @@ class SentencePairModel(BaseModel):
         batch_size = len(state_both) / 2
         h_premise = get_h(torch.cat(state_both[:batch_size], 0), self.hidden_dim)
         h_hypothesis = get_h(torch.cat(state_both[batch_size:], 0), self.hidden_dim)
-        h = torch.cat([h_premise, h_hypothesis], 1)
-        return h, transition_acc, transition_loss
+        return [h_premise, h_hypothesis], transition_acc, transition_loss
 
 
 class SentenceModel(BaseModel):
@@ -423,4 +446,4 @@ class SentenceModel(BaseModel):
         state, transition_acc, transition_loss = super(SentenceModel, self).run_spinn(
             example, train, use_internal_parser, validate_transitions)
         h = get_h(torch.cat(state, 0), self.hidden_dim)
-        return h, transition_acc, transition_loss
+        return [h], transition_acc, transition_loss
