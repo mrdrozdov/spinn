@@ -251,10 +251,6 @@ class SPINN(nn.Module):
                         transition_arr, self.stacks):
                     if transition == T_REDUCE: # reduce
                         new_stack_item = next(reduced)
-                        if not hasattr(self, 'stack_cls'):
-                            self.stack_cls = type(new_stack_item.data)
-                        else:
-                            assert isinstance(new_stack_item.data, self.stack_cls), "Heterogeneous types in stack."
                         stack.append(new_stack_item)
         if self.transition_weight is not None:
             # We compute statistics after the fact, since sub-batches can
@@ -387,9 +383,6 @@ class SentencePairModel(BaseModel):
         t_prem = transitions[:,:,0]
         t_hyp = transitions[:,:,1]
         t = np.concatenate([t_prem, t_hyp], axis=0)
-
-        assert batch_size * 2 == x.shape[0]
-        assert batch_size * 2 == t.shape[0]
 
         example = Example()
         example.tokens = to_gpu(Variable(torch.from_numpy(x), volatile=not train))
