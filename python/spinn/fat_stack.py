@@ -1,5 +1,3 @@
-from functools import partial
-import argparse
 import itertools
 
 import numpy as np
@@ -15,58 +13,19 @@ import torch.optim as optim
 from spinn.util.blocks import BaseSentencePairTrainer, Reduce
 from spinn.util.blocks import LSTMState, Embed
 from spinn.util.blocks import bundle, unbundle, the_gpu, to_cpu, to_gpu, treelstm, lstm
+from spinn.util.misc import Args, Vocab, Example
 
-"""
-Style Guide:
-
-1. Each __call__() or forward() should be documented with its
-   input and output types/dimensions.
-2. Every ChainList/Chain/Link needs to have assigned a __gpu and __mod.
-3. Each __call__() or forward() should have `train` as a parameter,
-   and Variables need to be set to Volatile=True during evaluation.
-4. Each __call__() or forward() should have an accompanying `check_type_forward`
-   called along the lines of:
-
-   ```
-   in_data = tuple([x.data for x in [input_1, input_2]])
-   in_types = type_check.get_types(in_data, 'in_types', False)
-   self.check_type_forward(in_types)
-   ```
-
-   This is mimicing the behavior seen in Chainer Functions.
-5. Each __call__() or forward() should have a chainer.Variable as input.
-   There may be slight exceptions to this rule, since at a times
-   especially in this model a list is preferred, but try to stick to
-   this as close as possible. When avoiding this rule, consider setting
-   a property rather than passing the variable. For instance:
-
-   ```
-   link.transitions = transitions
-   loss = link(sentences)
-   ```
-6. Each link should be made to run on GPU and CPU.
-7. Type checking should be disabled using an environment variable.
-
-"""
 
 T_SKIP   = 2
 T_SHIFT  = 0
 T_REDUCE = 1
 
-def HeKaimingInit(shape, real_shape=None):
-    # Calculate fan-in / fan-out using real shape if given as override
-    fan = real_shape or shape
 
-    return np.random.normal(scale=np.sqrt(4.0/(fan[0] + fan[1])),
-                            size=shape)
+class SentencePairTrainer(BaseSentencePairTrainer): pass
 
 
-class SentencePairTrainer(BaseSentencePairTrainer):
-    pass
+class SentenceTrainer(SentencePairTrainer): pass
 
-
-class SentenceTrainer(SentencePairTrainer):
-    pass
 
 class Tracker(nn.Module):
 
@@ -184,7 +143,6 @@ class SPINN(nn.Module):
         return preds
 
     def run(self, run_internal_parser=False, use_internal_parser=False, validate_transitions=True):
-
         transition_loss, transition_acc = 0, 0
         if hasattr(self, 'transitions'):
             num_transitions = self.transitions.shape[1]
@@ -327,6 +285,7 @@ class SPINN(nn.Module):
 
 
 class BaseModel(nn.Module):
+
     def __init__(self, model_dim, word_embedding_dim, vocab_size,
                  initial_embeddings, num_classes, mlp_dim,
                  input_keep_rate, classifier_keep_rate,
@@ -360,30 +319,24 @@ class BaseModel(nn.Module):
         self.model_dim = model_dim
         self.use_reinforce = use_reinforce
 
-        args = {
-            'size': model_dim/2,
-            'tracker_size': tracking_lstm_hidden_dim if use_tracking_lstm else None,
-            'transition_weight': transition_weight,
-            'input_dropout_rate': 1. - input_keep_rate,
-            'use_input_dropout': use_input_dropout,
-            'use_input_norm': use_input_norm,
-            'use_tracker_dropout': use_tracker_dropout,
-            'tracker_dropout_rate': tracker_dropout_rate,
-        }
-        args = argparse.Namespace(**args)
+        args = Args()
+        args.size = model_dim/2
+        args.tracker_size = tracking_lstm_hidden_dim if use_tracking_lstm else None
+        args.transition_weight = transition_weight
+        args.input_dropout_rate = 1. - input_keep_rate
+        args.use_input_dropout = use_input_dropout
+        args.use_input_norm = use_input_norm
+        args.use_tracker_dropout = use_tracker_dropout
+        args.tracker_dropout_rate = tracker_dropout_rate
 
-        vocab = {
-            'size': initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size,
-            'vectors': initial_embeddings,
-        }
-        vocab = argparse.Namespace(**vocab)
+        vocab = Vocab()
+        vocab.size = initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size
+        vocab.vectors = initial_embeddings
 
         self.spinn = SPINN(args, vocab, use_reinforce=use_reinforce, use_skips=use_skips)
 
-
     def build_example(self, sentences, transitions, train):
         raise Exception('Not implemented.')
-
 
     def run_spinn(self, example, train, use_internal_parser, validate_transitions=True):
         self.spinn.reset_state()
@@ -394,7 +347,6 @@ class BaseModel(nn.Module):
         transition_acc = self.spinn.transition_acc if hasattr(self.spinn, 'transition_acc') else 0.0
         transition_loss = self.spinn.transition_loss if hasattr(self.spinn, 'transition_loss') else None
         return h_both, transition_acc, transition_loss
-
 
     def run_mlp(self, h, train):
         # Pass through MLP Classifier.
@@ -407,7 +359,6 @@ class BaseModel(nn.Module):
         y = h
 
         return y
-
 
     def __call__(self, sentences, transitions, y_batch=None, train=True,
                  use_internal_parser=False, validate_transitions=True):
@@ -425,7 +376,9 @@ class BaseModel(nn.Module):
 
         return logits, accum_loss, self.accuracy, transition_acc, transition_loss
 
+
 class SentencePairModel(BaseModel):
+
     def build_example(self, sentences, transitions, train):
         batch_size = sentences.shape[0]
 
@@ -442,14 +395,11 @@ class SentencePairModel(BaseModel):
         assert batch_size * 2 == x.shape[0]
         assert batch_size * 2 == t.shape[0]
 
-        example = {
-            'tokens': to_gpu(Variable(torch.from_numpy(x), volatile=not train)),
-            'transitions': t
-        }
-        example = argparse.Namespace(**example)
+        example = Example()
+        example.tokens = to_gpu(Variable(torch.from_numpy(x), volatile=not train))
+        example.transitions = t
 
         return example
-
 
     def run_spinn(self, example, train, use_internal_parser=False, validate_transitions=True):
         h_both, transition_acc, transition_loss = super(SentencePairModel, self).run_spinn(
@@ -462,6 +412,7 @@ class SentencePairModel(BaseModel):
 
 
 class SentenceModel(BaseModel):
+
     def build_example(self, sentences, transitions, train):
         batch_size = sentences.shape[0]
 
@@ -471,14 +422,11 @@ class SentenceModel(BaseModel):
         # Build Transitions
         t = transitions
 
-        example = {
-            'tokens': to_gpu(Variable(torch.from_numpy(x), volatile=not train)),
-            'transitions': t
-        }
-        example = argparse.Namespace(**example)
+        example = Example()
+        example.tokens = to_gpu(Variable(torch.from_numpy(x), volatile=not train))
+        example.transitions = t
 
         return example
-
 
     def run_spinn(self, example, train, use_internal_parser=False, validate_transitions=True):
         h, transition_acc, transition_loss = super(SentenceModel, self).run_spinn(

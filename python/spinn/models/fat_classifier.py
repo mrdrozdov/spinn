@@ -19,7 +19,6 @@ Note: If you get an error starting with "TypeError: ('Wrong number of dimensions
     Move or delete it as appropriate.
 """
 
-from functools import partial
 import os
 import pprint
 import sys

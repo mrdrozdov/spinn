@@ -2,6 +2,22 @@ import numpy as np
 from collections import deque
 
 
+class GenericClass():
+
+    def __repr__(self):
+        s = "{}"
+        return s.format(self.__dict__)
+
+
+class Args(GenericClass): pass
+
+
+class Vocab(GenericClass): pass
+
+
+class Example(GenericClass): pass
+
+
 def time_per_token(num_tokens, total_time):
     return sum(total_time) / float(sum(num_tokens))
 
