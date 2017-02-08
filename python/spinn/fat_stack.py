@@ -191,7 +191,7 @@ class SPINN(nn.Module):
         must_skip = np.array([t == T_SKIP for t in transitions])
         preds[must_skip] = T_SKIP
 
-        return torch.LongTensor(preds)
+        return preds
 
     def run(self, print_transitions=False, run_internal_parser=False,
             use_internal_parser=False, validate_transitions=True):
@@ -223,40 +223,54 @@ class SPINN(nn.Module):
                             sampled_transitions[cant_skip] = [np.random.choice(self.choices, 1, p=t_dist)[0] for t_dist in transition_dist.data[cant_skip]]
 
                             transition_preds = sampled_transitions
-                            hyp_acc = transition_dist
-                            hyp_xent = transition_dist
-                            truth_acc = transitions
-                            truth_xent = sampled_transitions
+                            acc_dist = transition_dist.data.cpu().numpy()
+                            xent_dist = transition_dist
+                            xent_target = sampled_transitions
                         else:
-                            transition_preds = tracker_output.data.max(1)[1]
-                            hyp_acc = tracker_output
-                            hyp_xent = tracker_output
-                            truth_acc = transitions
-                            truth_xent = transitions
+                            transition_preds = tracker_output.data.max(1)[1].view(-1)
+                            acc_dist = tracker_output.data.cpu().numpy()
+                            xent_dist = tracker_output
+                            xent_target = transitions
 
                         if validate_transitions:
                             transition_preds = self.validate(transition_arr, transition_preds,
                                 self.stacks, self.buffers_t, self.buffers_n)
 
-                        memory["logits"] = tracker_output
-                        memory["preds"]  = transition_preds
+                        acc_target = transitions
+                        acc_preds = transition_preds
 
                         if not self.use_skips:
-                            hyp_acc = hyp_acc.data.cpu().numpy()[cant_skip]
-                            truth_acc = truth_acc[cant_skip]
+                            acc_dist = acc_dist[cant_skip]
+                            acc_target = acc_target[cant_skip]
+                            acc_preds = acc_preds[cant_skip]
+                            xent_target = xent_target[cant_skip]
 
-                            cant_skip_mask = np.tile(np.expand_dims(cant_skip, axis=1), (1, 2))
-                            hyp_xent = torch.chunk(tracker_output, tracker_output.size()[0], 0)
-                            hyp_xent = torch.cat([hyp_xent[i] for i, y in enumerate(cant_skip) if y], 0)
-                            truth_xent = truth_xent[cant_skip]
+                            xent_dist = torch.chunk(tracker_output, tracker_output.size()[0], 0)
+                            xent_dist = torch.cat([xent_dist[i] for i, y in enumerate(cant_skip) if y], 0)
 
-                        memory["hyp_acc"] = hyp_acc
-                        memory["truth_acc"] = truth_acc
-                        memory["hyp_xent"] = hyp_xent
-                        memory["truth_xent"] = truth_xent
+                        # Memories
+                        # ========
+                        # Keep track of key values to determine accuracy and loss.
+                        # (optional) Filter to only non-skipped transitions. When filtering values
+                        # that will be backpropagated over, be careful that gradient flow isn't broken.
 
-                        memory["preds_cm"] = np.array(transition_preds.cpu().numpy()[cant_skip])
-                        memory["truth_cm"] = np.array(transitions[cant_skip])
+                        # Distribution of transition predictions. Used to measure transition accuracy.
+                        memory["acc_dist"] = acc_dist
+
+                        # Actual transition predictions. Used to measure transition accuracy.
+                        memory["acc_preds"] = acc_preds
+
+                        # Given transitions.
+                        memory["acc_target"] = acc_target
+
+                        # Distribution of transitions use to calculate transition loss.
+                        memory["xent_dist"] = xent_dist
+
+                        # Target in transition loss. This might be different in the RL setting from the
+                        # the supervised setting.
+                        memory["xent_target"] = xent_target
+
+                        # TODO: Write tests to make sure these values look right in the various settings.
 
                         if use_internal_parser:
                             transition_arr = transition_preds.tolist()
@@ -271,8 +285,6 @@ class SPINN(nn.Module):
                         else itertools.repeat(None))
 
             for ii, (transition, buf, stack, tracking, attention) in enumerate(batch):
-                must_shift = len(stack) < 2
-
                 if transition == T_SHIFT: # shift
                     if self.save_stack:
                         buf[-1].buf = buf[:]
@@ -308,13 +320,11 @@ class SPINN(nn.Module):
                         else:
                             assert isinstance(new_stack_item.data, self.stack_cls), "Heterogeneous types in stack."
                         stack.append(new_stack_item)
-        if print_transitions:
-            print()
         if self.transition_weight is not None:
             # We compute statistics after the fact, since sub-batches can
             # have different sizes when not using skips.
             statistics = zip(*[
-                (m["hyp_acc"], m["truth_acc"], m["hyp_xent"], m["truth_xent"])
+                (m["acc_dist"], m["acc_preds"], m["acc_target"], m["xent_dist"], m["xent_target"])
                 for m in self.memories])
 
             statistics = [
@@ -323,12 +333,12 @@ class SPINN(nn.Module):
                 np.array(reduce(lambda x, y: x + y.tolist(), s, []))
                 for s in statistics]
 
-            hyp_acc, truth_acc, hyp_xent, truth_xent = statistics
+            acc_dist, acc_preds, acc_target, xent_dist, xent_target = statistics
 
-            self.transition_acc = (hyp_acc.argmax(axis=1) == truth_acc).sum() / float(hyp_acc.shape[0])
-            t_logits = F.log_softmax(hyp_xent)
+            self.transition_acc = (acc_preds == acc_target).sum() / float(acc_preds.shape[0])
+            t_logits = F.log_softmax(xent_dist) # TODO: This might be causing problems in RL with a potential double softmax.
             transition_loss = nn.NLLLoss()(t_logits, to_gpu(Variable(
-                torch.from_numpy(truth_xent), volatile=t_logits.volatile)))
+                torch.from_numpy(xent_target), volatile=t_logits.volatile)))
 
             transition_loss *= self.transition_weight
             self.transition_loss = transition_loss

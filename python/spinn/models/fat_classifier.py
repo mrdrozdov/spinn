@@ -89,8 +89,7 @@ def build_rewards(logits, y, xent_reward=False):
         return metrics.accuracy_score(logits.data.argmax(axis=1), y)
 
 
-def evaluate(classifier_trainer, eval_set, logger, step,
-             use_internal_parser=False, vocabulary=None):
+def evaluate(classifier_trainer, eval_set, logger, step, vocabulary=None):
     # Evaluate
     acc_accum = 0.0
     action_acc_accum = 0.0
@@ -109,7 +108,7 @@ def evaluate(classifier_trainer, eval_set, logger, step,
             "sentences": eval_X_batch,
             "transitions": eval_transitions_batch,
             }, eval_y_batch, train=False,
-            use_internal_parser=use_internal_parser,
+            use_internal_parser=FLAGS.use_internal_parser,
             validate_transitions=FLAGS.validate_transitions)
         y, loss, class_acc, transition_acc, transition_loss = ret
 
@@ -291,7 +290,7 @@ def run(only_forward=False):
     # Do an evaluation-only run.
     if only_forward:
         for index, eval_set in enumerate(eval_iterators):
-            acc = evaluate(classifier_trainer, eval_set, logger, step, FLAGS.use_internal_parser, vocabulary)
+            acc = evaluate(classifier_trainer, eval_set, logger, step, vocabulary)
     else:
          # Train
         logger.Log("Training.")
@@ -331,12 +330,15 @@ def run(only_forward=False):
             ret = classifier_trainer.forward({
                 "sentences": X_batch,
                 "transitions": transitions_batch,
-                }, y_batch, train=True, validate_transitions=FLAGS.validate_transitions)
+                }, y_batch, train=True,
+                use_internal_parser=FLAGS.use_internal_parser,
+                validate_transitions=FLAGS.validate_transitions
+                )
             y, xent_loss, class_acc, transition_acc, transition_loss = ret
 
             # Accumulate stats for confusion matrix.
-            preds = [m["preds_cm"] for m in model.spinn.memories]
-            truth = [m["truth_cm"] for m in model.spinn.memories]
+            preds = [m["acc_preds"] for m in model.spinn.memories]
+            truth = [m["acc_target"] for m in model.spinn.memories]
             A.add('preds', preds)
             A.add('truth', truth)
 
@@ -459,7 +461,8 @@ if __name__ == '__main__':
 
     gflags.DEFINE_boolean("use_shift_composition", True, "")
     gflags.DEFINE_boolean("use_skips", False, "Pad transitions with SKIP actions.")
-    gflags.DEFINE_boolean("use_left_padding", True, "Pad transitions only on the RHS.")
+    gflags.DEFINE_boolean("use_left_padding", True, "Pad transitions only on the LHS.")
+    gflags.DEFINE_boolean("use_internal_parser", False, "Use predicted parse.")
     gflags.DEFINE_boolean("validate_transitions", True, "Constrain predicted transitions to ones"
                                                         "that give a valid parse tree.")
     gflags.DEFINE_boolean("save_stack", False, "")
