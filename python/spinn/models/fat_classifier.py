@@ -241,7 +241,7 @@ def run(only_forward=False):
         use_sentence_pair = False
 
     model = model_cls(FLAGS.model_dim, FLAGS.word_embedding_dim, vocab_size,
-         initial_embeddings, num_classes, mlp_dim=1024,
+         initial_embeddings, num_classes, mlp_dim=FLAGS.mlp_dim,
          embedding_keep_rate=FLAGS.embedding_keep_rate,
          classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
          use_input_dropout=FLAGS.use_input_dropout,
@@ -470,7 +470,7 @@ if __name__ == '__main__':
     gflags.DEFINE_integer("gpu", -1, "")
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")
-
+    gflags.DEFINE_integer("mlp_dim", 1024, "")
     gflags.DEFINE_float("transition_weight", None, "")
     gflags.DEFINE_integer("tracking_lstm_hidden_dim", 4, "")
 

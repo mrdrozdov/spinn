@@ -82,13 +82,13 @@ class LSTMState:
     @property
     def h(self):
         if not hasattr(self, '_h'):
-            self._h = to_gpu(self._both[:, self.size:])
+            self._h = to_gpu(get_h(self._both, self.size))
         return self._h
 
     @property
     def c(self):
         if not hasattr(self, '_c'):
-            self._c = to_gpu(self._both[:, :self.size])
+            self._c = to_gpu(get_c(self._both, self.size))
         return self._c
 
     @property
@@ -99,10 +99,10 @@ class LSTMState:
         return self._both
 
 
-def get_c(state, hidden_dim):
+def get_h(state, hidden_dim):
     return state[:, hidden_dim:]
 
-def get_h(state, hidden_dim):
+def get_c(state, hidden_dim):
     return state[:, :hidden_dim]
 
 def get_state(c, h):

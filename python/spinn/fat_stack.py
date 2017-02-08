@@ -13,6 +13,7 @@ import torch.optim as optim
 from spinn.util.blocks import BaseSentencePairTrainer, Reduce
 from spinn.util.blocks import LSTMState, Embed
 from spinn.util.blocks import bundle, unbundle, to_cpu, to_gpu, treelstm, lstm
+from spinn.util.blocks import get_h, get_c
 from spinn.util.misc import Args, Vocab, Example
 
 
@@ -299,8 +300,9 @@ class BaseModel(nn.Module):
                 ):
         super(BaseModel, self).__init__()
 
-        mlp_input_dim = model_dim * 2 if use_sentence_pair else model_dim
-        self.l0 = nn.Linear(mlp_input_dim, mlp_dim)
+        self.hidden_dim = hidden_dim = model_dim / 2
+        features_dim = hidden_dim * 2 if use_sentence_pair else hidden_dim
+        self.l0 = nn.Linear(features_dim, mlp_dim)
         self.l1 = nn.Linear(mlp_dim, mlp_dim)
         self.l2 = nn.Linear(mlp_dim, num_classes)
 
@@ -332,13 +334,13 @@ class BaseModel(nn.Module):
 
     def run_spinn(self, example, train, use_internal_parser, validate_transitions=True):
         self.spinn.reset_state()
-        h_both, _ = self.spinn(example,
+        state, _ = self.spinn(example,
                                use_internal_parser=use_internal_parser,
                                validate_transitions=validate_transitions)
 
         transition_acc = self.spinn.transition_acc if hasattr(self.spinn, 'transition_acc') else 0.0
         transition_loss = self.spinn.transition_loss if hasattr(self.spinn, 'transition_loss') else None
-        return h_both, transition_acc, transition_loss
+        return state, transition_acc, transition_loss
 
     def run_mlp(self, h, train):
         # Pass through MLP Classifier.
@@ -391,11 +393,11 @@ class SentencePairModel(BaseModel):
         return example
 
     def run_spinn(self, example, train, use_internal_parser=False, validate_transitions=True):
-        h_both, transition_acc, transition_loss = super(SentencePairModel, self).run_spinn(
+        state_both, transition_acc, transition_loss = super(SentencePairModel, self).run_spinn(
             example, train, use_internal_parser, validate_transitions)
-        batch_size = len(h_both) / 2
-        h_premise = torch.cat(h_both[:batch_size], 0)
-        h_hypothesis = torch.cat(h_both[batch_size:], 0)
+        batch_size = len(state_both) / 2
+        h_premise = get_h(torch.cat(state_both[:batch_size], 0), self.hidden_dim)
+        h_hypothesis = get_h(torch.cat(state_both[batch_size:], 0), self.hidden_dim)
         h = torch.cat([h_premise, h_hypothesis], 1)
         return h, transition_acc, transition_loss
 
@@ -418,7 +420,7 @@ class SentenceModel(BaseModel):
         return example
 
     def run_spinn(self, example, train, use_internal_parser=False, validate_transitions=True):
-        h, transition_acc, transition_loss = super(SentenceModel, self).run_spinn(
+        state, transition_acc, transition_loss = super(SentenceModel, self).run_spinn(
             example, train, use_internal_parser, validate_transitions)
-        h = torch.cat(h, 0)
+        h = get_h(torch.cat(state, 0), self.hidden_dim)
         return h, transition_acc, transition_loss
