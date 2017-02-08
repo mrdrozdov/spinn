@@ -205,8 +205,9 @@ def treelstm(c_left, c_right, gates, use_dropout=False):
 
 class BaseSentencePairTrainer(object):
 
-    def __init__(self, model):
+    def __init__(self, model, optimizer):
         self.model = model
+        self.optimizer = optimizer
 
     def forward(self, x_batch, y_batch=None, train=True,
                 use_internal_parser=False, validate_transitions=True):
@@ -224,12 +225,14 @@ class BaseSentencePairTrainer(object):
         torch.save({
             'step': step,
             'best_dev_error': best_dev_error,
-            'state_dict': self.model.state_dict(),
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
         }, filename)
 
     def load(self, filename):
         checkpoint = torch.load(filename)
-        self.model.load_state_dict(checkpoint['state_dict'])
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         return checkpoint['step'], checkpoint['best_dev_error']
 
 

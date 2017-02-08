@@ -53,31 +53,6 @@ import torch.optim as optim
 FLAGS = gflags.FLAGS
 
 
-def build_model(model_cls, trainer_cls, vocab_size, model_dim, word_embedding_dim,
-                              num_classes, initial_embeddings, use_sentence_pair):
-    model = model_cls(model_dim, word_embedding_dim, vocab_size,
-             initial_embeddings, num_classes, mlp_dim=1024,
-             embedding_keep_rate=FLAGS.embedding_keep_rate,
-             classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
-             use_input_dropout=FLAGS.use_input_dropout,
-             use_input_norm=FLAGS.use_input_norm,
-             tracker_dropout_rate=FLAGS.tracker_dropout_rate,
-             use_tracker_dropout=FLAGS.use_tracker_dropout,
-             use_classifier_norm=FLAGS.use_classifier_norm,
-             tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
-             transition_weight=FLAGS.transition_weight,
-             use_tracking_lstm=FLAGS.use_tracking_lstm,
-             use_shift_composition=FLAGS.use_shift_composition,
-             use_sentence_pair=use_sentence_pair,
-             use_reinforce=FLAGS.use_reinforce,
-             use_skips=FLAGS.use_skips,
-            )
-
-    classifier_trainer = trainer_cls(model)
-
-    return classifier_trainer
-
-
 def build_rewards(logits, y, xent_reward=False):
     if xent_reward:
         return np.mean(logits.data[np.arange(y.shape[0]), y])
@@ -252,24 +227,47 @@ def run(only_forward=False):
         raise Exception("Requested unimplemented model type %s" % FLAGS.model_type)
 
     # Build model.
+    vocab_size = len(vocabulary)
+    num_classes = len(data_manager.LABEL_MAP)
+
     if data_manager.SENTENCE_PAIR_DATA:
         trainer_cls = model_module.SentencePairTrainer
         model_cls = model_module.SentencePairModel
-        num_classes = len(data_manager.LABEL_MAP)
         use_sentence_pair = True
-        classifier_trainer = build_model(model_cls, trainer_cls,
-                              len(vocabulary), FLAGS.model_dim, FLAGS.word_embedding_dim,
-                              num_classes, initial_embeddings,
-                              use_sentence_pair)
     else:
         trainer_cls = model_module.SentenceTrainer
         model_cls = model_module.SentenceModel
         num_classes = len(data_manager.LABEL_MAP)
         use_sentence_pair = False
-        classifier_trainer = build_model(model_cls, trainer_cls,
-                              len(vocabulary), FLAGS.model_dim, FLAGS.word_embedding_dim,
-                              num_classes, initial_embeddings,
-                              use_sentence_pair)
+
+    model = model_cls(FLAGS.model_dim, FLAGS.word_embedding_dim, vocab_size,
+         initial_embeddings, num_classes, mlp_dim=1024,
+         embedding_keep_rate=FLAGS.embedding_keep_rate,
+         classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
+         use_input_dropout=FLAGS.use_input_dropout,
+         use_input_norm=FLAGS.use_input_norm,
+         tracker_dropout_rate=FLAGS.tracker_dropout_rate,
+         use_tracker_dropout=FLAGS.use_tracker_dropout,
+         use_classifier_norm=FLAGS.use_classifier_norm,
+         tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
+         transition_weight=FLAGS.transition_weight,
+         use_tracking_lstm=FLAGS.use_tracking_lstm,
+         use_shift_composition=FLAGS.use_shift_composition,
+         use_sentence_pair=use_sentence_pair,
+         use_reinforce=FLAGS.use_reinforce,
+         use_skips=FLAGS.use_skips,
+        )
+
+    # Build optimizer.
+    if FLAGS.optimizer_type == "Adam":
+        optimizer = optim.Adam(model.parameters(), lr=FLAGS.learning_rate, betas=(0.9, 0.999), eps=1e-08)
+    elif FLAGS.optimizer_type == "RMSProp":
+        optimizer = optim.RMSprop(model.parameters(), lr=FLAGS.learning_rate, eps=1e-08)
+    else:
+        raise NotImplementedError
+
+    # Build trainer.
+    classifier_trainer = trainer_cls(model, optimizer)
 
     # Set checkpoint path.
     if ".ckpt" in FLAGS.ckpt_path:
@@ -287,8 +285,6 @@ def run(only_forward=False):
         assert not only_forward, "Can't run an eval-only run without a checkpoint. Supply a checkpoint."
         step = 0
         best_dev_error = 1.0
-
-    model = classifier_trainer.model
 
     # Print model size.
     logger.Log("Architecture: {}".format(model))
@@ -312,14 +308,6 @@ def run(only_forward=False):
     else:
          # Train
         logger.Log("Training.")
-
-        # Build optimizer.
-        if FLAGS.optimizer_type == "Adam":
-            optimizer = optim.Adam(model.parameters(), lr=FLAGS.learning_rate, betas=(0.9, 0.999), eps=1e-08)
-        elif FLAGS.optimizer_type == "RMSProp":
-            optimizer = optim.RMSprop(model.parameters(), lr=FLAGS.learning_rate, eps=1e-08)
-        else:
-            raise NotImplementedError
 
         if FLAGS.use_reinforce:
             optimizer_lr = 0.01
