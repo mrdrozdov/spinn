@@ -153,6 +153,9 @@ class SPINN(nn.Module):
         transition_loss, transition_acc = 0, 0
         num_transitions = inp_transitions.shape[1]
 
+        # Transition Loop
+        # ===============
+
         for i in range(num_transitions):
             transitions = inp_transitions[:, i]
             transition_arr = list(transitions)
@@ -169,25 +172,28 @@ class SPINN(nn.Module):
                 tracker_c, tracker_h = self.tracker(self.bufs, self.stacks)
 
                 if hasattr(self, 'transition_net'):
-                    # TODO: is to_cpu needed here?
-                    transition_output = to_cpu(self.transition_net(tracker_h))
+                    transition_output = self.transition_net(tracker_h)
 
                 if hasattr(self, 'transition_net') and run_internal_parser:
-                    memory = {}
+
+                    # Predict Actions
+                    # ===============
+
                     if self.use_reinforce:
                         transition_dist = F.softmax(transition_output)
                         sampled_transitions = np.array([T_SKIP for _ in self.bufs], dtype=np.int32)
                         sampled_transitions[cant_skip] = [np.random.choice(self.choices, 1, p=t_dist)[0] for t_dist in transition_dist.data[cant_skip]]
 
                         transition_preds = sampled_transitions
-                        acc_dist = transition_dist.data.cpu().numpy()
                         xent_dist = transition_dist
                         xent_target = sampled_transitions
                     else:
                         transition_preds = transition_output.data.max(1)[1].view(-1)
-                        acc_dist = transition_output.data.cpu().numpy()
                         xent_dist = transition_output
                         xent_target = transitions
+
+                    # Constrain to valid actions
+                    # ==========================
 
                     if validate_transitions:
                         transition_preds = self.validate(transition_arr, transition_preds,
@@ -196,12 +202,16 @@ class SPINN(nn.Module):
                     acc_target = transitions
                     acc_preds = transition_preds
 
+                    # Filter to non-SKIP values
+                    # =========================
+
                     if not self.use_skips:
-                        acc_dist = acc_dist[cant_skip]
                         acc_target = acc_target[cant_skip]
                         acc_preds = acc_preds[cant_skip]
                         xent_target = xent_target[cant_skip]
 
+                        # Be careful when filtering distributions. These values are used to
+                        # calculate loss and need to be used in backprop.
                         xent_dist = torch.chunk(transition_output, transition_output.size()[0], 0)
                         xent_dist = torch.cat([xent_dist[i] for i, y in enumerate(cant_skip) if y], 0)
 
@@ -211,8 +221,7 @@ class SPINN(nn.Module):
                     # (optional) Filter to only non-skipped transitions. When filtering values
                     # that will be backpropagated over, be careful that gradient flow isn't broken.
 
-                    # Distribution of transition predictions. Used to measure transition accuracy.
-                    memory["acc_dist"] = acc_dist
+                    memory = {}
 
                     # Actual transition predictions. Used to measure transition accuracy.
                     memory["acc_preds"] = acc_preds
@@ -234,6 +243,9 @@ class SPINN(nn.Module):
 
                     self.memories.append(memory)
 
+            # Action Phase
+            # ============
+
             lefts, rights, trackings = [], [], []
             batch = zip(transition_arr, self.bufs, self.stacks,
                         self.tracker.states if hasattr(self, 'tracker') and self.tracker.h is not None
@@ -254,6 +266,10 @@ class SPINN(nn.Module):
                                 volatile=buf[0].volatile))
                             lr.append(zeros)
                     trackings.append(tracking)
+
+            # Reduce Phase
+            # ============
+
             if len(rights) > 0:
                 reduced = iter(self.reduce(
                     lefts, rights, trackings))
@@ -262,11 +278,15 @@ class SPINN(nn.Module):
                     if transition == T_REDUCE: # reduce
                         new_stack_item = next(reduced)
                         stack.append(new_stack_item)
+
+        # Loss Phase
+        # ==========
+
         if self.transition_weight is not None:
             # We compute statistics after the fact, since sub-batches can
             # have different sizes when not using skips.
             statistics = zip(*[
-                (m["acc_dist"], m["acc_preds"], m["acc_target"], m["xent_dist"], m["xent_target"])
+                (m["acc_preds"], m["acc_target"], m["xent_dist"], m["xent_target"])
                 for m in self.memories])
 
             statistics = [
@@ -275,7 +295,7 @@ class SPINN(nn.Module):
                 np.array(reduce(lambda x, y: x + y.tolist(), s, []))
                 for s in statistics]
 
-            acc_dist, acc_preds, acc_target, xent_dist, xent_target = statistics
+            acc_preds, acc_target, xent_dist, xent_target = statistics
 
             self.transition_acc = (acc_preds == acc_target).sum() / float(acc_preds.shape[0])
             t_logits = F.log_softmax(xent_dist) # TODO: This might be causing problems in RL with a potential double softmax.
