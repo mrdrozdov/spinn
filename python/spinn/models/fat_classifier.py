@@ -90,19 +90,26 @@ def build_rewards(logits, y, xent_reward=False):
 
 
 def evaluate(classifier_trainer, eval_set, logger, step, vocabulary=None):
+    filename, dataset = eval_set
+
     # Evaluate
     acc_accum = 0.0
     action_acc_accum = 0.0
     eval_batches = 0.0
-    total_batches = len(eval_set[1])
+    total_batches = len(dataset)
     progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
     total_tokens = 0
     start = time.time()
 
-    classifier_trainer.model.eval()
+    model = classifier_trainer.model
 
-    for i, (eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch) in enumerate(eval_set[1]):
+    model.eval()
+
+    transition_preds = []
+    transition_targets = []
+
+    for i, (eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch) in enumerate(dataset):
         # Calculate Local Accuracies
         ret = classifier_trainer.forward({
             "sentences": eval_X_batch,
@@ -114,9 +121,13 @@ def evaluate(classifier_trainer, eval_set, logger, step, vocabulary=None):
 
         # Update Aggregate Accuracies
         acc_accum += class_acc
-        action_acc_accum += transition_acc
         eval_batches += 1.0
         total_tokens += eval_num_transitions_batch.ravel().sum()
+
+        # Accumulate stats for transition accuracy.
+        if transition_loss is not None:
+            transition_preds.append([m["acc_preds"] for m in model.spinn.memories])
+            transition_targets.append([m["acc_target"] for m in model.spinn.memories])
 
         # Print Progress
         progress_bar.step(i+1, total=total_batches)
@@ -125,10 +136,23 @@ def evaluate(classifier_trainer, eval_set, logger, step, vocabulary=None):
     end = time.time()
     total_time = end - start
 
+    # Get time per token.
     time_metric = time_per_token([total_tokens], [total_time])
+
+    # Get average class accuracy.
+    avg_class_acc = acc_accum / eval_batches
+
+    # Get average transition accuracy if applicable.
+    if len(transition_preds) > 0:
+        all_preds = np.array(flatten(transition_preds))
+        all_truth = np.array(flatten(transition_targets))
+        avg_trans_acc = (all_preds == all_truth).sum() / float(all_truth.shape[0])
+    else:
+        avg_trans_acc = 0.0
+
     logger.Log("Step: %i\tEval acc: %f\t %f\t%s Time: %5f" %
-              (step, acc_accum / eval_batches, action_acc_accum / eval_batches, eval_set[0], time_metric))
-    return acc_accum / eval_batches
+              (step, avg_class_acc, avg_trans_acc, filename, time_metric))
+    return avg_class_acc
 
 
 def reinforce(optimizer, lr, baseline, mu, reward, transition_loss):
@@ -335,7 +359,7 @@ def run(only_forward=False):
                 )
             y, xent_loss, class_acc, transition_acc, transition_loss = ret
 
-            # Accumulate stats for confusion matrix.
+            # Accumulate stats for transition accuracy.
             if transition_loss is not None:
                 preds = [m["acc_preds"] for m in model.spinn.memories]
                 truth = [m["acc_target"] for m in model.spinn.memories]
