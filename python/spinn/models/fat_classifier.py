@@ -377,6 +377,16 @@ def run(only_forward=False):
             # Backward pass.
             total_loss.backward()
 
+            # Hard Gradient Clipping
+            clip = FLAGS.clipping_max_value
+            for p in model.parameters():
+                if p.requires_grad:
+                    p.grad.data.clamp_(min=-clip, max=clip)
+
+            # Learning Rate Decay
+            if FLAGS.actively_decay_learning_rate:
+                optimizer.lr = FLAGS.learning_rate * (FLAGS.learning_rate_decay_per_10k_steps ** (step / 10000.0))
+
             # Gradient descent step.
             optimizer.step()
 
@@ -490,8 +500,9 @@ if __name__ == '__main__':
     gflags.DEFINE_enum("optimizer_type", "Adam", ["Adam", "RMSprop"], "")
     gflags.DEFINE_integer("training_steps", 500000, "Stop training after this point.")
     gflags.DEFINE_integer("batch_size", 32, "SGD minibatch size.")
-    gflags.DEFINE_float("learning_rate", 0.001, "Used in RMSProp.")
-    gflags.DEFINE_float("learning_rate_decay_per_10k_steps", 0.75, "Used in RMSProp.")
+    gflags.DEFINE_float("learning_rate", 0.001, "Used in optimizer.")
+    gflags.DEFINE_float("learning_rate_decay_per_10k_steps", 0.75, "Used in optimizer.")
+    gflags.DEFINE_boolean("actively_decay_learning_rate", False, "Used in optimizer.")
     gflags.DEFINE_float("clipping_max_value", 5.0, "")
     gflags.DEFINE_float("l2_lambda", 1e-5, "")
     gflags.DEFINE_float("init_range", 0.005, "Mainly used for softmax parameters. Range for uniform random init.")
