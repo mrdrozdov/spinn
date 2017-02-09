@@ -268,8 +268,6 @@ def run(only_forward=False):
          initial_embeddings, num_classes, mlp_dim=FLAGS.mlp_dim,
          embedding_keep_rate=FLAGS.embedding_keep_rate,
          classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
-         use_input_dropout=FLAGS.use_input_dropout,
-         use_input_norm=FLAGS.use_input_norm,
          tracker_dropout_rate=FLAGS.tracker_dropout_rate,
          use_tracker_dropout=FLAGS.use_tracker_dropout,
          tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
@@ -527,8 +525,6 @@ if __name__ == '__main__':
                           "Whether to use LSTM in the tracking unit")
     gflags.DEFINE_float("embedding_keep_rate", 0.9,
         "Used for dropout on transformed embeddings.")
-    gflags.DEFINE_boolean("use_input_dropout", False, "")
-    gflags.DEFINE_boolean("use_input_norm", False, "")
     gflags.DEFINE_boolean("use_tracker_dropout", False, "")
     gflags.DEFINE_float("tracker_dropout_rate", 0.1, "")
     gflags.DEFINE_boolean("lstm_composition", True, "")

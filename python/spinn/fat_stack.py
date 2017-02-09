@@ -95,10 +95,9 @@ class SPINN(nn.Module):
         self.use_skips = use_skips
 
         # Create dynamic embedding layer.
-        self.embed = Embed(args.size, vocab.size, args.input_dropout_rate,
+        self.embed = Embed(args.size, vocab.size,
+                        embedding_dropout_rate=args.input_dropout_rate,
                         vectors=vocab.vectors,
-                        use_input_dropout=args.use_input_dropout,
-                        use_input_norm=args.use_input_norm,
                         )
 
         # Reduce function for semantic composition.
@@ -384,7 +383,6 @@ class BaseModel(nn.Module):
                  initial_embeddings, num_classes, mlp_dim,
                  embedding_keep_rate, classifier_keep_rate,
                  use_tracker_dropout=True, tracker_dropout_rate=0.1,
-                 use_input_dropout=False, use_input_norm=False,
                  tracking_lstm_hidden_dim=4,
                  transition_weight=None,
                  use_tracking_lstm=True,
@@ -426,8 +424,6 @@ class BaseModel(nn.Module):
         args.tracker_size = tracking_lstm_hidden_dim if use_tracking_lstm else None
         args.transition_weight = transition_weight
         args.input_dropout_rate = 1. - embedding_keep_rate
-        args.use_input_dropout = use_input_dropout
-        args.use_input_norm = use_input_norm
         args.use_tracker_dropout = use_tracker_dropout
         args.tracker_dropout_rate = tracker_dropout_rate
 

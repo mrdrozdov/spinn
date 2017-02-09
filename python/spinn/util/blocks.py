@@ -252,9 +252,8 @@ class Embed(nn.Module):
             ~chainer.links.BatchNormalization).
     """
 
-    def __init__(self, size, vocab_size, dropout, vectors,
-                 make_buffers=True, activation=None,
-                 use_input_dropout=False, use_input_norm=False):
+    def __init__(self, size, vocab_size, vectors,
+                 make_buffers=True, activation=None, embedding_dropout_rate=None):
         size = 2 * size if make_buffers else size
         super(Embed, self).__init__()
         if vectors is None:
@@ -262,11 +261,9 @@ class Embed(nn.Module):
         else:
             self.projection = nn.Linear(vectors.shape[1], size)
         self.vectors = vectors
-        self.dropout = dropout
+        self.embedding_dropout_rate = embedding_dropout_rate
         self.make_buffers = make_buffers
         self.activation = (lambda x: x) if activation is None else activation
-        self.use_input_dropout = use_input_dropout
-        self.use_input_norm = use_input_norm
 
     def forward(self, tokens):
         """Embed a tensor of tokens into a list of SPINN buffers.
@@ -297,8 +294,7 @@ class Embed(nn.Module):
         if not self.make_buffers:
             return self.activation(embeds.view(b, l, -1))
 
-        if self.use_input_dropout:
-            embeds = F.dropout(embeds, self.dropout, embeds.volatile == 'off')
+        embeds = F.dropout(embeds, self.embedding_dropout_rate, training=self.training)
 
         embeds = torch.chunk(to_cpu(embeds), b, 0)
         embeds = [torch.chunk(x, l, 0) for x in embeds]
