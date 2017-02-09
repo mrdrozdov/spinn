@@ -287,6 +287,7 @@ class Embed(nn.Module):
                 and ``transitions`` attributes.
         """
         b, l = tokens.size()[:2]
+
         if self.vectors is None:
             embeds = self.embed(to_gpu(F.reshape(tokens, (-1,))))
         else:

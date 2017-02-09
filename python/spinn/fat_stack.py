@@ -48,24 +48,20 @@ class Tracker(nn.Module):
     def reset_state(self):
         self.c = self.h = None
 
-    def __call__(self, bufs, stacks):
-        self.batch_size = len(bufs)
-        zeros = np.zeros(bufs[0][0].size(), dtype=np.float32)
-        zeros = to_gpu(Variable(torch.from_numpy(zeros), volatile=bufs[0][0].volatile))
-        buf = bundle(buf[-1] for buf in bufs)
-        stack1 = bundle(stack[-1] if len(stack) > 0 else zeros for stack in stacks)
-        stack2 = bundle(stack[-2] if len(stack) > 1 else zeros for stack in stacks)
+    def __call__(self, top_buf, top_stack_1, top_stack_2):
+        lstm_in = self.buf(top_buf.h)
+        lstm_in += self.stack1(top_stack_1.h)
+        lstm_in += self.stack2(top_stack_2.h)
 
-        lstm_in = self.buf(buf.h)
-        lstm_in += self.stack1(stack1.h)
-        lstm_in += self.stack2(stack2.h)
+        batch_size = lstm_in.size(0)
+
         if self.h is not None:
             lstm_in += self.lateral(self.h)
         if self.c is None:
             self.c = to_gpu(Variable(torch.from_numpy(
-                np.zeros((self.batch_size, self.state_size),
+                np.zeros((batch_size, self.state_size),
                               dtype=np.float32)),
-                volatile=zeros.volatile))
+                volatile=lstm_in.volatile))
 
         if self.use_tracker_dropout:
             lstm_in = F.dropout(lstm_in, self.tracker_dropout_rate, train=lstm_in.volatile == False)
@@ -88,13 +84,24 @@ class Tracker(nn.Module):
 
 class SPINN(nn.Module):
 
-    def __init__(self, args, vocab, use_reinforce=True, use_skips=False):
+    def __init__(self, args, vocab, use_reinforce=True, use_skips=False, debug=True):
         super(SPINN, self).__init__()
+
+        # Optional debug mode.
+        self.debug = debug
+
+        self.transition_weight = args.transition_weight
+        self.use_reinforce = use_reinforce
+        self.use_skips = use_skips
+
+        # Create dynamic embedding layer.
         self.embed = Embed(args.size, vocab.size, args.input_dropout_rate,
                         vectors=vocab.vectors,
                         use_input_dropout=args.use_input_dropout,
                         use_input_norm=args.use_input_norm,
                         )
+
+        # Reduce function for semantic composition.
         self.reduce = Reduce(args.size, args.tracker_size)
         if args.tracker_size is not None:
             self.tracker = Tracker(
@@ -104,9 +111,8 @@ class SPINN(nn.Module):
             if args.transition_weight is not None:
                 # TODO: Might be interesting to try a different network here.
                 self.transition_net = nn.Linear(args.tracker_size, 3 if use_skips else 2)
-        self.transition_weight = args.transition_weight
-        self.use_reinforce = use_reinforce
-        self.use_skips = use_skips
+
+        # Predict 2 or 3 actions depending on whether SKIPs will be predicted.
         choices = [T_SHIFT, T_REDUCE, T_SKIP] if use_skips else [T_SHIFT, T_REDUCE]
         self.choices = np.array(choices, dtype=np.int32)
 
@@ -114,11 +120,30 @@ class SPINN(nn.Module):
         self.memories = []
 
     def __call__(self, example, use_internal_parser=False, validate_transitions=True):
+        self.buffers_n = (example.tokens.data != 0).long().sum(1).view(-1).tolist()
+
+        if self.debug:
+            seq_length = example.tokens.size(1)
+            assert all(buf_n <= (seq_length + 1) // 2 for buf_n in self.buffers_n), \
+                "All sentences (including cropped) must be the appropriate length."
+
         self.bufs = self.embed(example.tokens)
-        self.stacks = [[] for buf in self.bufs]
+
+        # Notes on adding zeros to bufs/stacks.
+        # - After the buffer is consumed, we need one zero on the buffer
+        #   used as input to the tracker.
+        # - For the first two steps, the stack would be empty, but we add
+        #   zeros so that the tracker still gets input.
+        zeros = to_gpu(Variable(torch.from_numpy(
+            np.zeros(self.bufs[0][0].size(), dtype=np.float32)),
+            volatile=self.bufs[0][0].volatile))
+
+        # Trim unused tokens.
+        self.bufs = [[zeros] + b[-b_n:] for b, b_n in zip(self.bufs, self.buffers_n)]
+
+        self.stacks = [[zeros, zeros] for buf in self.bufs]
         self.buffers_t = [0 for buf in self.bufs]
-        # There are 2 * N - 1 transitons, so (|transitions| + 1) / 2 should equal N.
-        self.buffers_n = [(len([t for t in ts if t != T_SKIP]) + 1) / 2 for ts in example.transitions]
+
         if hasattr(self, 'tracker'):
             self.tracker.reset_state()
         if not hasattr(example, 'transitions'):
@@ -166,8 +191,13 @@ class SPINN(nn.Module):
             # B. There is at least one transition that will not be skipped.
             if hasattr(self, 'tracker') and (self.use_skips or sum(cant_skip) > 0):
 
+                # Prepare tracker input.
+                top_buf = bundle(buf[-1] for buf in self.bufs)
+                top_stack_1 = bundle(stack[-1] for stack in self.stacks)
+                top_stack_2 = bundle(stack[-2] for stack in self.stacks)
+
                 # Get hidden output from the tracker. Used to predict transitions.
-                tracker_c, tracker_h = self.tracker(self.bufs, self.stacks)
+                tracker_c, tracker_h = self.tracker(top_buf, top_stack_1, top_stack_2)
 
                 if hasattr(self, 'transition_net'):
                     transition_output = self.transition_net(tracker_h)
@@ -252,6 +282,8 @@ class SPINN(nn.Module):
                         if len(stack) > 0:
                             reduce_inp.append(stack.pop())
                         else:
+                            if self.debug:
+                                raise IndexError
                             # If we try to Reduce, but there are less than 2 items on the stack,
                             # then treat any available item as the right input, and use zeros
                             # for any other inputs.

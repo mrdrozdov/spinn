@@ -69,11 +69,8 @@ class MockSentenceModel(SentenceModel):
 
 class SPINNTestCase(unittest.TestCase):
 
-    def _setup(self, batch_size=2, seq_length=4):
-        self.model = MockSentenceModel()
-
     def test_basic_stack(self):
-        self._setup(seq_length=4)
+        model = MockSentenceModel()
 
         train = False
 
@@ -92,11 +89,16 @@ class SPINNTestCase(unittest.TestCase):
 
         expected_stack_lens = [4, 2]
 
-        example = self.model.build_example(X, transitions, train)
-        _ = self.model.spinn(example)
-        stack_lens = [len(s) for s in self.model.spinn.stacks]
+        example = model.build_example(X, transitions, train)
+        _ = model.spinn(example)
+        stack_lens = [len(s) for s in model.spinn.stacks]
 
         np.testing.assert_equal(stack_lens, expected_stack_lens)
+
+    def test_validate_transitions(self):
+        model = MockSentenceModel()
+
+        train = False
 
 
 if __name__ == '__main__':
