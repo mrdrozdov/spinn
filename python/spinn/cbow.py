@@ -85,15 +85,9 @@ class SentencePairModel(BaseModel):
 
         hh = torch.squeeze(torch.sum(emb, 1))
         h = torch.cat([hh[:batch_size], hh[batch_size:]], 1)
-        logits = F.log_softmax(self.run_mlp(h, train))
+        output = self.run_mlp(h, train)
 
-        if y_batch is not None:
-            target = torch.from_numpy(y_batch).long()
-            loss = nn.NLLLoss()(logits, Variable(target, volatile=not train))
-            pred = logits.data.max(1)[1] # get the index of the max log-probability
-            class_acc = pred.eq(target).sum() / float(target.size(0))
-
-        return logits, loss, class_acc
+        return output
 
 
 class SentenceModel(BaseModel):
@@ -108,12 +102,6 @@ class SentenceModel(BaseModel):
         emb = self.embed(x)
 
         h = torch.squeeze(torch.sum(emb, 1))
-        logits = F.log_softmax(self.run_mlp(h, train))
+        output = self.run_mlp(h, train)
 
-        if y_batch is not None:
-            target = torch.from_numpy(y_batch).long()
-            loss = nn.NLLLoss()(logits, Variable(target, volatile=not train))
-            pred = logits.data.max(1)[1] # get the index of the max log-probability
-            class_acc = pred.eq(target).sum() / float(target.size(0))
-
-        return logits, loss, class_acc
+        return output

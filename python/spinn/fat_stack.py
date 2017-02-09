@@ -463,17 +463,9 @@ class BaseModel(nn.Module):
         else:
             features = h[0]
 
-        y = self.mlp(features, train)
+        output = self.mlp(features, train)
 
-        # Calculate Loss & Accuracy.
-        logits = F.log_softmax(y)
-        target = to_gpu(Variable(torch.from_numpy(y_batch).long(), volatile=not train))
-        accum_loss = nn.NLLLoss()(logits, target)
-
-        preds = logits.data.max(1)[1]
-        self.accuracy = preds.eq(target.data).sum() / float(preds.size(0))
-
-        return logits, accum_loss, self.accuracy
+        return output
 
 
 class SentencePairModel(BaseModel):

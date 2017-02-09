@@ -105,15 +105,23 @@ def evaluate(classifier_trainer, eval_set, logger, step, vocabulary=None):
             eval_X_batch, eval_transitions_batch = truncate(
                 eval_X_batch, eval_transitions_batch, eval_num_transitions_batch)
 
-        # Calculate Local Accuracies
-        ret = classifier_trainer.forward({
+        # Run model.
+        output = classifier_trainer.forward({
             "sentences": eval_X_batch,
             "transitions": eval_transitions_batch,
             }, eval_y_batch, train=False,
             use_internal_parser=FLAGS.use_internal_parser,
             validate_transitions=FLAGS.validate_transitions)
-        y, loss, class_acc = ret
 
+        # Normalize output.
+        logits = F.log_softmax(output)
+
+        # Calculate class accuracy.
+        target = torch.from_numpy(eval_y_batch).long()
+        pred = logits.data.max(1)[1] # get the index of the max log-probability
+        class_acc = pred.eq(target).sum() / float(target.size(0))
+
+        # Optionally calculate transition loss/acc.
         transition_acc = model.transition_acc if hasattr(model, 'transition_acc') else 0.0
         transition_loss = model.transition_loss if hasattr(model, 'transition_loss') else None
 
@@ -369,16 +377,27 @@ def run(only_forward=False):
             # Reset cached gradients.
             optimizer.zero_grad()
 
-            # Calculate loss and update parameters.
-            ret = classifier_trainer.forward({
+            # Run model.
+            output = classifier_trainer.forward({
                 "sentences": X_batch,
                 "transitions": transitions_batch,
                 }, y_batch, train=True,
                 use_internal_parser=FLAGS.use_internal_parser,
                 validate_transitions=FLAGS.validate_transitions
                 )
-            y, xent_loss, class_acc = ret
 
+            # Normalize output.
+            logits = F.log_softmax(output)
+
+            # Calculate class accuracy.
+            target = torch.from_numpy(y_batch).long()
+            pred = logits.data.max(1)[1] # get the index of the max log-probability
+            class_acc = pred.eq(target).sum() / float(target.size(0))
+
+            # Calculate class loss.
+            xent_loss = nn.NLLLoss()(logits, Variable(target, volatile=False))
+
+            # Optionally calculate transition loss/accuracy.
             transition_acc = model.transition_acc if hasattr(model, 'transition_acc') else 0.0
             transition_loss = model.transition_loss if hasattr(model, 'transition_loss') else None
 
