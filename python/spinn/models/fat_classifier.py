@@ -38,6 +38,7 @@ from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import the_gpu, l2_cost, flatten
 from spinn.util.misc import Accumulator, time_per_token
 
+import spinn.rl_spinn
 import spinn.fat_stack
 import spinn.plain_rnn
 import spinn.cbow
@@ -258,6 +259,8 @@ def run(only_forward=False):
         model_module = spinn.plain_rnn
     elif FLAGS.model_type == "SPINN":
         model_module = spinn.fat_stack
+    elif FLAGS.model_type == "RLSPINN":
+        model_module = spinn.rl_spinn
     else:
         raise Exception("Requested unimplemented model type %s" % FLAGS.model_type)
 
@@ -286,7 +289,6 @@ def run(only_forward=False):
          use_tracking_lstm=FLAGS.use_tracking_lstm,
          use_shift_composition=FLAGS.use_shift_composition,
          use_sentence_pair=use_sentence_pair,
-         use_reinforce=FLAGS.use_reinforce,
          use_skips=FLAGS.use_skips,
          use_difference_feature=FLAGS.use_difference_feature,
          use_product_feature=FLAGS.use_product_feature,
@@ -350,12 +352,12 @@ def run(only_forward=False):
          # Train
         logger.Log("Training.")
 
-        if FLAGS.use_reinforce:
-            optimizer_lr = 0.01
-            baseline = 0
-            mu = 0.1
-            transition_optimizer = optimizers.SGD(lr=optimizer_lr)
-            transition_optimizer.setup(model.spinn.tracker)
+        # if FLAGS.use_reinforce:
+        #     optimizer_lr = 0.01
+        #     baseline = 0
+        #     mu = 0.1
+        #     transition_optimizer = optimizers.SGD(lr=optimizer_lr)
+        #     transition_optimizer.setup(model.spinn.tracker)
 
         # New Training Loop
         progress_bar = SimpleProgressBar(msg="Training", bar_length=60, enabled=FLAGS.show_progress_bar)
@@ -408,9 +410,9 @@ def run(only_forward=False):
                 A.add('preds', preds)
                 A.add('truth', truth)
 
-            if FLAGS.use_reinforce:
-                rewards = build_rewards(y, y_batch)
-                logger.Log("\nReward :"+str(rewards))
+            # if FLAGS.use_reinforce:
+            #     rewards = build_rewards(y, y_batch)
+            #     logger.Log("\nReward :"+str(rewards))
 
             # Boilerplate for calculating loss.
             transition_cost_val = transition_loss.data[0] if transition_loss is not None else 0.0
@@ -423,14 +425,14 @@ def run(only_forward=False):
             total_cost_val = 0.0
             total_cost_val += xent_loss.data[0]
             total_cost_val += l2_loss.data[0]
-            if not FLAGS.use_reinforce:
-                total_cost_val += transition_cost_val
+            # if not FLAGS.use_reinforce:
+            #     total_cost_val += transition_cost_val
 
             # Accumulate Total Loss Variable
             total_loss = 0.0
             total_loss += xent_loss
             total_loss += l2_loss
-            if hasattr(transition_loss, 'backward') and not FLAGS.use_reinforce:
+            if hasattr(transition_loss, 'backward'):
                 total_loss += transition_loss
 
             # Backward pass.
@@ -449,9 +451,9 @@ def run(only_forward=False):
             # Gradient descent step.
             optimizer.step()
 
-            if FLAGS.use_reinforce:
-                transition_optimizer.zero_grads()
-                optimizer_lr, baseline = reinforce(transition_optimizer, optimizer_lr, baseline, mu, rewards, transition_loss)
+            # if FLAGS.use_reinforce:
+            #     transition_optimizer.zero_grads()
+            #     optimizer_lr, baseline = reinforce(transition_optimizer, optimizer_lr, baseline, mu, rewards, transition_loss)
 
             end = time.time()
 
@@ -533,14 +535,13 @@ if __name__ == '__main__':
         "If set, load GloVe-formatted embeddings from here.")
 
     # Model architecture settings.
-    gflags.DEFINE_enum("model_type", "RNN", ["CBOW", "RNN", "SPINN"], "")
+    gflags.DEFINE_enum("model_type", "RNN", ["CBOW", "RNN", "SPINN", "RLSPINN"], "")
     gflags.DEFINE_integer("gpu", -1, "")
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")
     gflags.DEFINE_float("transition_weight", None, "")
     gflags.DEFINE_integer("tracking_lstm_hidden_dim", 4, "")
 
-    gflags.DEFINE_boolean("use_reinforce", False, "Use RL to provide tracking lstm gradients")
     gflags.DEFINE_boolean("xent_reward", False, "Use cross entropy instead of accuracy as RL reward")
 
     gflags.DEFINE_boolean("use_shift_composition", True, "")

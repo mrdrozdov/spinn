@@ -84,14 +84,13 @@ class Tracker(nn.Module):
 
 class SPINN(nn.Module):
 
-    def __init__(self, args, vocab, use_reinforce=True, use_skips=False):
+    def __init__(self, args, vocab, use_skips=False):
         super(SPINN, self).__init__()
 
         # Optional debug mode.
         self.debug = False
 
         self.transition_weight = args.transition_weight
-        self.use_reinforce = use_reinforce
         self.use_skips = use_skips
 
         # Create dynamic embedding layer.
@@ -180,14 +179,10 @@ class SPINN(nn.Module):
 
         return preds
 
-    def predict_actions(self, transition_output):
-        if self.use_reinforce:
-            transition_dist = F.softmax(transition_output)
-            sampled_transitions = np.array([T_SKIP for _ in self.bufs], dtype=np.int32)
-            sampled_transitions[cant_skip] = [np.random.choice(self.choices, 1, p=t_dist)[0] for t_dist in transition_dist.data[cant_skip]]
-            transition_preds = sampled_transitions
-        else:
-            transition_preds = transition_output.data.max(1)[1].view(-1)
+    def predict_actions(self, transition_output, cant_skip):
+        transition_dist = F.log_softmax(transition_output)
+        transition_dist = transition_dist.data.cpu().numpy()
+        transition_preds = transition_dist.argmax(axis=1)
         return transition_preds
 
 
@@ -251,13 +246,13 @@ class SPINN(nn.Module):
                     # TODO: Mask before predicting. This should simplify things and reduce computation.
                     # The downside is that in the Action Phase, need to be smarter about which stacks/bufs
                     # are selected.
-                    transition_preds = self.predict_actions(transition_output)
+                    transition_preds = self.predict_actions(transition_output, cant_skip)
 
                     # Constrain to valid actions
                     # ==========================
 
                     if validate_transitions:
-                        transition_preds = self.validate(transition_arr, transition_preds.cpu().numpy(), self.stacks, self.bufs)
+                        transition_preds = self.validate(transition_arr, transition_preds, self.stacks, self.bufs)
 
                     t_preds = transition_preds
 
@@ -384,7 +379,6 @@ class BaseModel(nn.Module):
                  transition_weight=None,
                  use_tracking_lstm=True,
                  use_shift_composition=True,
-                 use_reinforce=False,
                  use_skips=False,
                  use_sentence_pair=False,
                  use_difference_feature=False,
@@ -413,7 +407,6 @@ class BaseModel(nn.Module):
         self.initial_embeddings = initial_embeddings
         self.word_embedding_dim = word_embedding_dim
         self.model_dim = model_dim
-        self.use_reinforce = use_reinforce
         classifier_dropout_rate = 1. - classifier_keep_rate
 
         args = Args()
@@ -428,10 +421,13 @@ class BaseModel(nn.Module):
         vocab.size = initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size
         vocab.vectors = initial_embeddings
 
-        self.spinn = SPINN(args, vocab, use_reinforce=use_reinforce, use_skips=use_skips)
+        self.spinn = self.build_spinn(args, vocab, use_skips)
 
         self.mlp = MLP(mlp_input_dim, mlp_dim, num_classes,
             num_mlp_layers, mlp_bn, classifier_dropout_rate)
+
+    def build_spinn(self, args, vocab, use_skips):
+        return SPINN(args, vocab, use_skips=use_skips)
 
     def build_example(self, sentences, transitions, train):
         raise Exception('Not implemented.')
