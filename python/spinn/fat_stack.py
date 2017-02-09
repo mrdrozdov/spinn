@@ -48,7 +48,7 @@ class Tracker(nn.Module):
     def reset_state(self):
         self.c = self.h = None
 
-    def __call__(self, top_buf, top_stack_1, top_stack_2):
+    def forward(self, top_buf, top_stack_1, top_stack_2):
         lstm_in = self.buf(top_buf.h)
         lstm_in += self.stack1(top_stack_1.h)
         lstm_in += self.stack2(top_stack_2.h)
@@ -119,7 +119,7 @@ class SPINN(nn.Module):
     def reset_state(self):
         self.memories = []
 
-    def __call__(self, example, use_internal_parser=False, validate_transitions=True):
+    def forward(self, example, use_internal_parser=False, validate_transitions=True):
         self.buffers_n = (example.tokens.data != 0).long().sum(1).view(-1).tolist()
 
         if self.debug:
@@ -461,7 +461,7 @@ class BaseModel(nn.Module):
 
         return y
 
-    def __call__(self, sentences, transitions, y_batch=None, train=True,
+    def forward(self, sentences, transitions, y_batch=None, train=True,
                  use_internal_parser=False, validate_transitions=True):
         example = self.build_example(sentences, transitions, train)
         h, transition_acc, transition_loss = self.run_spinn(example, train, use_internal_parser, validate_transitions)

@@ -268,7 +268,7 @@ class Embed(nn.Module):
         self.use_input_dropout = use_input_dropout
         self.use_input_norm = use_input_norm
 
-    def __call__(self, tokens):
+    def forward(self, tokens):
         """Embed a tensor of tokens into a list of SPINN buffers.
 
         Returns the embeddings as a list of lists of ~chainer.Variable objects
@@ -326,7 +326,7 @@ class Reduce(nn.Module):
         if tracker_size is not None:
             self.track = nn.Linear(tracker_size, 5 * size, bias=False)
 
-    def __call__(self, left_in, right_in, tracking=None):
+    def forward(self, left_in, right_in, tracking=None):
         """Perform batched TreeLSTM composition.
 
         This implements the REDUCE operation of a SPINN in parallel for a
