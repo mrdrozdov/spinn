@@ -112,7 +112,10 @@ def evaluate(classifier_trainer, eval_set, logger, step, vocabulary=None):
             }, eval_y_batch, train=False,
             use_internal_parser=FLAGS.use_internal_parser,
             validate_transitions=FLAGS.validate_transitions)
-        y, loss, class_acc, transition_acc, transition_loss = ret
+        y, loss, class_acc = ret
+
+        transition_acc = model.transition_acc if hasattr(model, 'transition_acc') else 0.0
+        transition_loss = model.transition_loss if hasattr(model, 'transition_loss') else None
 
         # Update Aggregate Accuracies
         acc_accum += class_acc
@@ -374,7 +377,10 @@ def run(only_forward=False):
                 use_internal_parser=FLAGS.use_internal_parser,
                 validate_transitions=FLAGS.validate_transitions
                 )
-            y, xent_loss, class_acc, transition_acc, transition_loss = ret
+            y, xent_loss, class_acc = ret
+
+            transition_acc = model.transition_acc if hasattr(model, 'transition_acc') else 0.0
+            transition_loss = model.transition_loss if hasattr(model, 'transition_loss') else None
 
             # Accumulate stats for transition accuracy.
             if transition_loss is not None:
@@ -453,11 +459,16 @@ def run(only_forward=False):
             if step > 0 and step % FLAGS.eval_interval_steps == 0:
                 for index, eval_set in enumerate(eval_iterators):
                     acc = evaluate(classifier_trainer, eval_set, logger, step)
+                    # TODO: Should ckpt every X steps.
                     if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                         best_dev_error = 1 - acc
                         logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
                         classifier_trainer.save(checkpoint_path, step, best_dev_error)
                 progress_bar.reset()
+
+            elif step % FLAGS.ckpt_interval_steps == 0 and step > FLAGS.ckpt_step:
+                logger.Log("Checkpointing.")
+                classifier_trainer.save(checkpoint_path, step, best_dev_error)
 
             progress_bar.step(i=step % FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
 

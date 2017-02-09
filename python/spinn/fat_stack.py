@@ -192,7 +192,8 @@ class SPINN(nn.Module):
 
 
     def run(self, inp_transitions, run_internal_parser=False, use_internal_parser=False, validate_transitions=True):
-        transition_loss, transition_acc = 0, 0
+        transition_loss = None
+        transition_acc = 0.0
         num_transitions = inp_transitions.shape[1]
 
         # Transition Loop
@@ -360,21 +361,17 @@ class SPINN(nn.Module):
 
             t_preds, t_logits, t_given = statistics
 
-            self.transition_acc = (t_preds == t_given).sum() / float(t_preds.shape[0])
+            transition_acc = (t_preds == t_given).sum() / float(t_preds.shape[0])
             transition_loss = nn.NLLLoss()(t_logits, to_gpu(Variable(
                 torch.from_numpy(t_given), volatile=t_logits.volatile)))
-
             transition_loss *= self.transition_weight
-            self.transition_loss = transition_loss
-        else:
-            transition_loss = None
 
         if self.debug:
             assert all(len(stack) == 3 for stack in self.stacks), \
                 "Stacks should be fully reduced and have 3 elements: " \
                 "two zeros and the sentence encoding."
 
-        return [stack[-1] for stack in self.stacks], transition_loss
+        return [stack[-1] for stack in self.stacks], transition_acc, transition_loss
 
 
 class BaseModel(nn.Module):
@@ -441,18 +438,18 @@ class BaseModel(nn.Module):
 
     def run_spinn(self, example, train, use_internal_parser, validate_transitions=True):
         self.spinn.reset_state()
-        state, _ = self.spinn(example,
+        state, transition_acc, transition_loss = self.spinn(example,
                                use_internal_parser=use_internal_parser,
                                validate_transitions=validate_transitions)
-
-        transition_acc = self.spinn.transition_acc if hasattr(self.spinn, 'transition_acc') else 0.0
-        transition_loss = self.spinn.transition_loss if hasattr(self.spinn, 'transition_loss') else None
         return state, transition_acc, transition_loss
 
     def forward(self, sentences, transitions, y_batch=None, train=True,
                  use_internal_parser=False, validate_transitions=True):
         example = self.build_example(sentences, transitions, train)
         h, transition_acc, transition_loss = self.run_spinn(example, train, use_internal_parser, validate_transitions)
+
+        self.transition_acc = transition_acc
+        self.transition_loss = transition_loss
 
         # Build features
         if self.use_sentence_pair:
@@ -476,7 +473,7 @@ class BaseModel(nn.Module):
         preds = logits.data.max(1)[1]
         self.accuracy = preds.eq(target.data).sum() / float(preds.size(0))
 
-        return logits, accum_loss, self.accuracy, transition_acc, transition_loss
+        return logits, accum_loss, self.accuracy
 
 
 class SentencePairModel(BaseModel):

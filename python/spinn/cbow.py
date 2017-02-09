@@ -28,8 +28,6 @@ class BaseModel(nn.Module):
                  initial_embeddings, num_classes, mlp_dim,
                  embedding_keep_rate, classifier_keep_rate,
                  use_sentence_pair=False,
-                 use_input_dropout=False,
-                 use_input_norm=False,
                  **kwargs
                 ):
         super(BaseModel, self).__init__()
@@ -39,17 +37,14 @@ class BaseModel(nn.Module):
         args = Args()
         args.size = model_dim
         args.input_dropout_rate = 1. - embedding_keep_rate
-        args.use_input_dropout = use_input_dropout
-        args.use_input_norm = use_input_norm
 
         vocab = Vocab()
         vocab.size = initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size
         vocab.vectors = initial_embeddings
 
-        self.embed = Embed(args.size, vocab.size, args.input_dropout_rate,
+        self.embed = Embed(args.size, vocab.size,
+                        embedding_dropout_rate=args.input_dropout_rate,
                         vectors=vocab.vectors, make_buffers=False,
-                        use_input_dropout=args.use_input_dropout,
-                        use_input_norm=args.use_input_norm,
                         )
 
         mlp_input_dim = word_embedding_dim * 2 if use_sentence_pair else model_dim
@@ -98,10 +93,7 @@ class SentencePairModel(BaseModel):
             pred = logits.data.max(1)[1] # get the index of the max log-probability
             class_acc = pred.eq(target).sum() / float(target.size(0))
 
-        transition_acc = 0.0
-        transition_loss = None
-
-        return logits, loss, class_acc, transition_acc, transition_loss
+        return logits, loss, class_acc
 
 
 class SentenceModel(BaseModel):
@@ -124,7 +116,4 @@ class SentenceModel(BaseModel):
             pred = logits.data.max(1)[1] # get the index of the max log-probability
             class_acc = pred.eq(target).sum() / float(target.size(0))
 
-        transition_acc = 0.0
-        transition_loss = None
-
-        return logits, loss, class_acc, transition_acc, transition_loss
+        return logits, loss, class_acc
