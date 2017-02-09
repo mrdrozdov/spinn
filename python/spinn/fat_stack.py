@@ -270,7 +270,7 @@ class SPINN(nn.Module):
                         # Be careful when filtering distributions. These values are used to
                         # calculate loss and need to be used in backprop.
                         index = (cant_skip * np.arange(cant_skip.shape[0]))[cant_skip]
-                        index = Variable(torch.from_numpy(index).long(), volatile=t_logits.volatile)
+                        index = to_gpu(Variable(torch.from_numpy(index).long(), volatile=t_logits.volatile))
                         t_logits = torch.index_select(t_logits, 0, index)
 
 
