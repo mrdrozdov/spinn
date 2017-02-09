@@ -482,7 +482,7 @@ def run(only_forward=False):
                     if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                         best_dev_error = 1 - acc
                         logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
-                        classifier_trainer.save(checkpoint_path, step, best_dev_error)
+                        classifier_trainer.save(checkpoint_path + "_best", step, best_dev_error)
                 progress_bar.reset()
 
             elif step % FLAGS.ckpt_interval_steps == 0 and step > FLAGS.ckpt_step:
