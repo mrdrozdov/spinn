@@ -259,7 +259,14 @@ def MakeTrainingIterator(sources, batch_size, smart_batches=True, use_peano=True
     return train_iter()
 
 
-def MakeEvalIterator(sources, batch_size, limit=-1, shuffle=False, rseed=123):
+def MakeEvalIterator(sources, batch_size, limit=-1, shuffle=False, rseed=123, bucket_eval=False):
+    if bucket_eval:
+        return MakeBucketEvalIterator(sources, batch_size)[:limit]
+    else:
+        return MakeStandardEvalIterator(sources, batch_size, limit, shuffle, rseed)
+
+
+def MakeStandardEvalIterator(sources, batch_size, limit=-1, shuffle=False, rseed=123):
     # Make a list of minibatches from a dataset to use as an iterator.
     # TODO(SB): Pad out the last few examples in the eval set if they don't
     # form a batch.
@@ -288,6 +295,46 @@ def MakeEvalIterator(sources, batch_size, limit=-1, shuffle=False, rseed=123):
         else:
             print "Skipping " + str(len(candidate_batch[0])) + " examples."
     return data_iter
+
+
+def MakeBucketEvalIterator(sources, batch_size):
+    # On SNLI with truncating, this is about a 1.5x speed increase on CPU.
+
+    print "WARNING: May be discarding eval examples."
+
+    def single_sentence_key(num_transitions):
+        import ipdb; ipdb.set_trace()
+        return num_transitions
+
+    def sentence_pair_key(num_transitions):
+        sent1_len, sent2_len = num_transitions
+        return peano(sent1_len, sent2_len)
+
+    dataset_size = len(sources[0])
+
+    # Sort examples by length. From longest to shortest.
+    num_transitions = sources[3]
+    sort_key = sentence_pair_key if num_transitions[0].shape[0] == 2 else single_sentence_key
+    order = sorted(zip(range(dataset_size), num_transitions), key=lambda x: sort_key(x[1]))
+    order = list(reversed(order))
+    order = [x[0] for x in order]
+
+    num_batches = dataset_size // batch_size
+    batches = []
+
+    # Roll examples into batches so they have similar length.
+    for i in range(num_batches):
+        batch_indices = order[i * batch_size:(i+1) * batch_size]
+        try:
+            batch = tuple(source[batch_indices] for source in sources)
+        except:
+            import ipdb; ipdb.set_trace()
+        batches.append(batch)
+
+    examples_skipped = dataset_size - num_batches * batch_size
+    print "Skipping " + str(examples_skipped) + " examples."
+
+    return batches
 
 
 def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=False, logger=None,
