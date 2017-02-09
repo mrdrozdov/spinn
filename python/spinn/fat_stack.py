@@ -142,7 +142,6 @@ class SPINN(nn.Module):
         self.bufs = [[zeros] + b[-b_n:] for b, b_n in zip(self.bufs, self.buffers_n)]
 
         self.stacks = [[zeros, zeros] for buf in self.bufs]
-        self.buffers_t = [0 for buf in self.bufs]
 
         if hasattr(self, 'tracker'):
             self.tracker.reset_state()
@@ -154,21 +153,31 @@ class SPINN(nn.Module):
                         use_internal_parser=use_internal_parser,
                         validate_transitions=validate_transitions)
 
-    def validate(self, transitions, preds, stacks, buffers_t, buffers_n):
-        DEFAULT_CHOICE = T_SHIFT
-        cant_skip = np.array([p == T_SKIP and t != T_SKIP for t, p in zip(transitions, preds)])
-        preds[cant_skip] = DEFAULT_CHOICE
+    def validate(self, transitions, preds, stacks, zero_padded=True):
+        # Note: There is one zero added to bufs, and two zeros added to stacks.
+        # Make sure to adjust for this if using lengths of either.
+        buf_adjust = 1 if zero_padded else 0
+        stack_adjust = 2 if zero_padded else 0
+
+        _transitions = np.array(transitions)
+
+        # Fixup predicted skips.
+        if len(self.choices) > 2:
+            raise NotImplementedError("Can only validate actions for 2 choices right now.")
+
+        buf_lens = [len(buf) - buf_adjust for buf in self.bufs]
+        stack_lens = [len(stack) - stack_adjust for stack in self.stacks]
 
         # Cannot reduce on too small a stack
-        must_shift = np.array([len(stack) < 2 for stack in stacks])
+        must_shift = np.array([length < 2 for length in stack_lens])
         preds[must_shift] = T_SHIFT
 
-        # Cannot shift if stack has to be reduced
-        must_reduce = np.array([buf_t >= buf_n for buf_t, buf_n in zip(buffers_t, buffers_n)])
+        # Cannot shift on too small buf
+        must_reduce = np.array([length < 1 for length in buf_lens])
         preds[must_reduce] = T_REDUCE
 
-        must_skip = np.array([t == T_SKIP for t in transitions])
-        preds[must_skip] = T_SKIP
+        # If the given action is skip, then must skip.
+        preds[_transitions[_transitions == T_SKIP]] = T_SKIP
 
         return preds
 
@@ -192,9 +201,28 @@ class SPINN(nn.Module):
             if hasattr(self, 'tracker') and (self.use_skips or sum(cant_skip) > 0):
 
                 # Prepare tracker input.
-                top_buf = bundle(buf[-1] for buf in self.bufs)
-                top_stack_1 = bundle(stack[-1] for stack in self.stacks)
-                top_stack_2 = bundle(stack[-2] for stack in self.stacks)
+                try:
+                    top_buf = bundle(buf[-1] for buf in self.bufs)
+                    top_stack_1 = bundle(stack[-1] for stack in self.stacks)
+                    top_stack_2 = bundle(stack[-2] for stack in self.stacks)
+                except:
+                    # To elaborate on this exception, when cropping examples it is possible
+                    # that your first 1 or 2 actions is a reduce action. It is unclear if this
+                    # is a bug in cropping or a bug in how we think about cropping. In the meantime,
+                    # turn on the truncate batch flag, and set the eval_seq_length very high.
+                    raise NotImplementedError("Warning: You are probably trying to encode examples"
+                          "with cropped transitions. Although, this is a reasonable"
+                          "feature, when predicting/validating transitions, you"
+                          "probably will not get the behavior that you expect. Disable"
+                          "this exception if you dare.")
+                    # Uncomment to handle weirdly placed actions like discussed in the above exception.
+                    # =========
+                    # zeros = to_gpu(Variable(torch.from_numpy(
+                    #     np.zeros(self.bufs[0][0].size(), dtype=np.float32)),
+                    #     volatile=self.bufs[0][0].volatile))
+                    # top_buf = bundle(buf[-1] for buf in self.bufs)
+                    # top_stack_1 = bundle(stack[-1] if len(stack) > 0 else zeros for stack in self.stacks)
+                    # top_stack_2 = bundle(stack[-2] if len(stack) > 1 else zeros for stack in self.stacks)
 
                 # Get hidden output from the tracker. Used to predict transitions.
                 tracker_c, tracker_h = self.tracker(top_buf, top_stack_1, top_stack_2)
@@ -222,8 +250,7 @@ class SPINN(nn.Module):
                     # ==========================
 
                     if validate_transitions:
-                        transition_preds = self.validate(transition_arr, transition_preds.cpu().numpy(),
-                            self.stacks, self.buffers_t, self.buffers_n)
+                        transition_preds = self.validate(transition_arr, transition_preds.cpu().numpy(), self.stacks)
 
                     t_preds = transition_preds
 
@@ -275,7 +302,6 @@ class SPINN(nn.Module):
             for batch_idx, (transition, buf, stack, tracking) in enumerate(batch):
                 if transition == T_SHIFT: # shift
                     stack.append(buf.pop())
-                    self.buffers_t[batch_idx] += 1
                 elif transition == T_REDUCE: # reduce
                     # The right-most input will be popped first.
                     for reduce_inp in [rights, lefts]:
