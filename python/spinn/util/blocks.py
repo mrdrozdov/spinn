@@ -378,3 +378,40 @@ class Reduce(nn.Module):
                 o.stack = o.left.stack
                 o.tracking = o.left.tracking
         return out
+
+
+class MLP(nn.Module):
+    def __init__(self, mlp_input_dim, mlp_dim, num_classes, num_mlp_layers, mlp_bn,
+                 classifier_dropout_rate=0.0):
+        super(MLP, self).__init__()
+
+        self.num_mlp_layers = num_mlp_layers
+        self.mlp_bn = mlp_bn
+        self.classifier_dropout_rate = classifier_dropout_rate
+
+        features_dim = mlp_input_dim
+
+        if mlp_bn:
+            self.bn_inp = nn.BatchNorm1d(features_dim)
+        for i in range(num_mlp_layers):
+            setattr(self, 'l{}'.format(i), nn.Linear(features_dim, mlp_dim))
+            if mlp_bn:
+                setattr(self, 'bn{}'.format(i), nn.BatchNorm1d(mlp_dim))
+            features_dim = mlp_dim
+        setattr(self, 'l{}'.format(num_mlp_layers), nn.Linear(features_dim, num_classes))
+
+    def forward(self, h, train):
+        if self.mlp_bn:
+            h = self.bn_inp(h)
+        h = F.dropout(h, self.classifier_dropout_rate, training=train)
+        for i in range(self.num_mlp_layers):
+            layer = getattr(self, 'l{}'.format(i))
+            h = layer(h)
+            h = F.relu(h)
+            if self.mlp_bn:
+                bn = getattr(self, 'bn{}'.format(i))
+                h = bn(h)
+            h = F.dropout(h, self.classifier_dropout_rate, training=train)
+        layer = getattr(self, 'l{}'.format(self.num_mlp_layers))
+        y = layer(h)
+        return y

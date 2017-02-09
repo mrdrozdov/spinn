@@ -11,7 +11,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 from spinn.util.blocks import BaseSentencePairTrainer, Reduce
-from spinn.util.blocks import LSTMState, Embed
+from spinn.util.blocks import LSTMState, Embed, MLP
 from spinn.util.blocks import bundle, unbundle, to_cpu, to_gpu, treelstm, lstm
 from spinn.util.blocks import get_h, get_c
 from spinn.util.misc import Args, Vocab, Example
@@ -385,7 +385,6 @@ class BaseModel(nn.Module):
                  embedding_keep_rate, classifier_keep_rate,
                  use_tracker_dropout=True, tracker_dropout_rate=0.1,
                  use_input_dropout=False, use_input_norm=False,
-                 use_classifier_norm=True,
                  tracking_lstm_hidden_dim=4,
                  transition_weight=None,
                  use_tracking_lstm=True,
@@ -395,6 +394,8 @@ class BaseModel(nn.Module):
                  use_sentence_pair=False,
                  use_difference_feature=False,
                  use_product_feature=False,
+                 num_mlp_layers=None,
+                 mlp_bn=None,
                  **kwargs
                 ):
         super(BaseModel, self).__init__()
@@ -412,16 +413,13 @@ class BaseModel(nn.Module):
             if self.use_product_feature:
                 features_dim += self.hidden_dim
 
-        self.l0 = nn.Linear(features_dim, mlp_dim)
-        self.l1 = nn.Linear(mlp_dim, mlp_dim)
-        self.l2 = nn.Linear(mlp_dim, num_classes)
+        mlp_input_dim = features_dim
 
         self.initial_embeddings = initial_embeddings
-        self.classifier_dropout_rate = 1. - classifier_keep_rate
-        self.use_classifier_norm = use_classifier_norm
         self.word_embedding_dim = word_embedding_dim
         self.model_dim = model_dim
         self.use_reinforce = use_reinforce
+        classifier_dropout_rate = 1. - classifier_keep_rate
 
         args = Args()
         args.size = model_dim/2
@@ -439,6 +437,9 @@ class BaseModel(nn.Module):
 
         self.spinn = SPINN(args, vocab, use_reinforce=use_reinforce, use_skips=use_skips)
 
+        self.mlp = MLP(mlp_input_dim, mlp_dim, num_classes,
+            num_mlp_layers, mlp_bn, classifier_dropout_rate)
+
     def build_example(self, sentences, transitions, train):
         raise Exception('Not implemented.')
 
@@ -452,8 +453,12 @@ class BaseModel(nn.Module):
         transition_loss = self.spinn.transition_loss if hasattr(self.spinn, 'transition_loss') else None
         return state, transition_acc, transition_loss
 
-    def run_mlp(self, h, train):
-        # Pass through MLP Classifier.
+    def forward(self, sentences, transitions, y_batch=None, train=True,
+                 use_internal_parser=False, validate_transitions=True):
+        example = self.build_example(sentences, transitions, train)
+        h, transition_acc, transition_loss = self.run_spinn(example, train, use_internal_parser, validate_transitions)
+
+        # Build features
         if self.use_sentence_pair:
             h_prem, h_hyp = h
             features = [h_prem, h_hyp]
@@ -461,25 +466,11 @@ class BaseModel(nn.Module):
                 features.append(h_prem - h_hyp)
             if self.use_product_feature:
                 features.append(h_prem * h_hyp)
-            h = torch.cat(features, 1)
+            features = torch.cat(features, 1)
         else:
-            h = h[0]
+            features = h[0]
 
-        h = to_gpu(h)
-        h = self.l0(h)
-        h = F.relu(h)
-        h = self.l1(h)
-        h = F.relu(h)
-        h = self.l2(h)
-        y = h
-
-        return y
-
-    def forward(self, sentences, transitions, y_batch=None, train=True,
-                 use_internal_parser=False, validate_transitions=True):
-        example = self.build_example(sentences, transitions, train)
-        h, transition_acc, transition_loss = self.run_spinn(example, train, use_internal_parser, validate_transitions)
-        y = self.run_mlp(h, train)
+        y = self.mlp(features, train)
 
         # Calculate Loss & Accuracy.
         logits = F.log_softmax(y)

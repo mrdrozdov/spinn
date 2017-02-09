@@ -272,7 +272,6 @@ def run(only_forward=False):
          use_input_norm=FLAGS.use_input_norm,
          tracker_dropout_rate=FLAGS.tracker_dropout_rate,
          use_tracker_dropout=FLAGS.use_tracker_dropout,
-         use_classifier_norm=FLAGS.use_classifier_norm,
          tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
          transition_weight=FLAGS.transition_weight,
          use_tracking_lstm=FLAGS.use_tracking_lstm,
@@ -282,6 +281,8 @@ def run(only_forward=False):
          use_skips=FLAGS.use_skips,
          use_difference_feature=FLAGS.use_difference_feature,
          use_product_feature=FLAGS.use_product_feature,
+         num_mlp_layers=FLAGS.num_mlp_layers,
+         mlp_bn=FLAGS.mlp_bn,
         )
 
     # Build optimizer.
@@ -508,7 +509,6 @@ if __name__ == '__main__':
     gflags.DEFINE_integer("gpu", -1, "")
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")
-    gflags.DEFINE_integer("mlp_dim", 1024, "")
     gflags.DEFINE_float("transition_weight", None, "")
     gflags.DEFINE_integer("tracking_lstm_hidden_dim", 4, "")
 
@@ -525,16 +525,20 @@ if __name__ == '__main__':
                                                         "that give a valid parse tree.")
     gflags.DEFINE_boolean("use_tracking_lstm", True,
                           "Whether to use LSTM in the tracking unit")
-    gflags.DEFINE_float("semantic_classifier_keep_rate", 0.9,
-        "Used for dropout in the semantic task classifier.")
     gflags.DEFINE_float("embedding_keep_rate", 0.9,
         "Used for dropout on transformed embeddings.")
     gflags.DEFINE_boolean("use_input_dropout", False, "")
     gflags.DEFINE_boolean("use_input_norm", False, "")
     gflags.DEFINE_boolean("use_tracker_dropout", False, "")
-    gflags.DEFINE_boolean("use_classifier_norm", False, "")
     gflags.DEFINE_float("tracker_dropout_rate", 0.1, "")
     gflags.DEFINE_boolean("lstm_composition", True, "")
+
+    # MLP settings.
+    gflags.DEFINE_integer("mlp_dim", 1024, "")
+    gflags.DEFINE_integer("num_mlp_layers", 2, "")
+    gflags.DEFINE_boolean("mlp_bn", True, "")
+    gflags.DEFINE_float("semantic_classifier_keep_rate", 0.9,
+        "Used for dropout in the semantic task classifier.")
 
     # Optimization settings.
     gflags.DEFINE_enum("optimizer_type", "Adam", ["Adam", "RMSprop"], "")
