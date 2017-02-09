@@ -30,7 +30,9 @@ def default_args():
     args['embedding_keep_rate'] = 1.0
     args['classifier_keep_rate'] = 1.0
 
-    initial_embeddings = np.zeros((args['vocab_size'], args['word_embedding_dim'])).astype(np.float32)
+    initial_embeddings = np.arange(args['vocab_size']).repeat(
+        args['word_embedding_dim']).reshape(
+        args['vocab_size'], -1)
 
     args['initial_embeddings'] = initial_embeddings
 
@@ -69,7 +71,7 @@ class MockSentenceModel(SentenceModel):
 
 class SPINNTestCase(unittest.TestCase):
 
-    def xtest_basic_stack(self):
+    def test_basic_stack(self):
         model = MockSentenceModel()
 
         train = False
@@ -87,13 +89,24 @@ class SPINNTestCase(unittest.TestCase):
             [0, 0, 1, 0, 0, 1, 1]
         ], dtype=np.int32)
 
-        expected_stack_lens = [4, 2]
+        class Projection(nn.Module):
+            def forward(self, x):
+                return x
+
+        class Reduce(nn.Module):
+            def forward(self, lefts, rights, tracking):
+                batch_size = len(lefts)
+                return torch.chunk(torch.cat(lefts, 0) - torch.cat(rights, 0), batch_size, 0)
+
+        model.spinn.embed.projection = Projection()
+        model.spinn.reduce = Reduce()
 
         example = model.build_example(X, transitions, train)
-        _ = model.spinn(example)
-        stack_lens = [len(s) for s in model.spinn.stacks]
+        outputs, _ = model.spinn(example)
 
-        np.testing.assert_equal(stack_lens, expected_stack_lens)
+        assert outputs[0][0].data[0] == (3 - (1 - (2 - 1)))
+        assert outputs[1][0].data[0] == ((3 - 2) - (4 - 5))
+
 
     def test_validate_transitions_cantskip(self):
         model = MockSentenceModel()
