@@ -130,8 +130,6 @@ class SPINN(nn.Module):
                         validate_transitions=validate_transitions)
 
     def validate(self, transitions, preds, stacks, buffers_t, buffers_n):
-        preds = preds.cpu().numpy()
-
         DEFAULT_CHOICE = T_SHIFT
         cant_skip = np.array([p == T_SKIP and t != T_SKIP for t, p in zip(transitions, preds)])
         preds[cant_skip] = DEFAULT_CHOICE
@@ -156,8 +154,8 @@ class SPINN(nn.Module):
         # Transition Loop
         # ===============
 
-        for i in range(num_transitions):
-            transitions = inp_transitions[:, i]
+        for t_step in range(num_transitions):
+            transitions = inp_transitions[:, t_step]
             transition_arr = list(transitions)
 
             # A mask to select all non-SKIP transitions.
@@ -194,7 +192,7 @@ class SPINN(nn.Module):
                     # ==========================
 
                     if validate_transitions:
-                        transition_preds = self.validate(transition_arr, transition_preds,
+                        transition_preds = self.validate(transition_arr, transition_preds.cpu().numpy(),
                             self.stacks, self.buffers_t, self.buffers_n)
 
                     t_preds = transition_preds
@@ -244,20 +242,26 @@ class SPINN(nn.Module):
                         self.tracker.states if hasattr(self, 'tracker') and self.tracker.h is not None
                         else itertools.repeat(None))
 
-            for ii, (transition, buf, stack, tracking) in enumerate(batch):
+            for batch_idx, (transition, buf, stack, tracking) in enumerate(batch):
                 if transition == T_SHIFT: # shift
                     stack.append(buf.pop())
-                    self.buffers_t[ii] += 1
+                    self.buffers_t[batch_idx] += 1
                 elif transition == T_REDUCE: # reduce
-                    for lr in [rights, lefts]:
+                    # The right-most input will be popped first.
+                    for reduce_inp in [rights, lefts]:
                         if len(stack) > 0:
-                            lr.append(stack.pop())
+                            reduce_inp.append(stack.pop())
                         else:
+                            # If we try to Reduce, but there are less than 2 items on the stack,
+                            # then treat any available item as the right input, and use zeros
+                            # for any other inputs.
                             # NOTE: Only happens on cropped data.
                             zeros = to_gpu(Variable(
                                 torch.from_numpy(np.zeros(buf[0].size(), dtype=np.float32)),
                                 volatile=buf[0].volatile))
-                            lr.append(zeros)
+                            reduce_inp.append(zeros)
+
+                    # The tracking output is used in the Reduce function.
                     trackings.append(tracking)
 
             # Reduce Phase

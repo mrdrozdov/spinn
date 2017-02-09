@@ -8,87 +8,69 @@ import pytest
 
 from spinn import util
 from spinn.fat_stack import SPINN
-# from spinn.fat_stack import HardStack
-# from spinn.stack import ThinStack
-# from spinn.recurrences import Recurrence, Model0
-# from spinn.util import cuda, VariableStore, CropAndPad, IdentityLayer, batch_subgraph_gradients
+from spinn.fat_stack import SentenceModel
 
-# Chainer imports
-import chainer
-from chainer import reporter, initializers
-from chainer import cuda, Function, gradient_check, report, training, utils, Variable
-from chainer import datasets, iterators, optimizers, serializers
-from chainer import Link, Chain, ChainList
-import chainer.functions as F
-from chainer.functions.connection import embed_id
-from chainer.functions.normalization.batch_normalization import batch_normalization
-from chainer.functions.evaluation import accuracy
-import chainer.links as L
-from chainer.training import extensions
+# PyTorch
+import torch
+import torch.nn as nn
+from torch.autograd import Variable
+import torch.nn.functional as F
+import torch.optim as optim
 
 
 def default_args():
-    model_dim = 10
-    use_tracking_lstm = True
-    transition_weight = 1.0
-    use_history = False
-    save_stack = False
-    input_keep_rate = 1.0
-    use_input_dropout = False
-    use_input_norm = False
-    use_tracker_dropout = False
-    tracker_dropout_rate = 0.0
-    tracking_lstm_hidden_dim = 4
+    args = {}
 
-    args = {
-        'size': model_dim/2,
-        'tracker_size': tracking_lstm_hidden_dim if use_tracking_lstm else None,
-        'transition_weight': transition_weight,
-        'use_history': use_history,
-        'save_stack': save_stack,
-        'input_dropout_rate': 1. - input_keep_rate,
-        'use_input_dropout': use_input_dropout,
-        'use_input_norm': use_input_norm,
-        'use_tracker_dropout': use_tracker_dropout,
-        'tracker_dropout_rate': tracker_dropout_rate,
-    }
-    args = argparse.Namespace(**args)
+    # Required Args
+    args['model_dim'] = 10
+    args['word_embedding_dim'] = 12
+    args['vocab_size'] = 14
+    args['num_classes'] = 3
+    args['mlp_dim'] = 16
+    args['embedding_keep_rate'] = 1.0
+    args['classifier_keep_rate'] = 1.0
+
+    initial_embeddings = np.zeros((args['vocab_size'], args['word_embedding_dim'])).astype(np.float32)
+
+    args['initial_embeddings'] = initial_embeddings
+
+    # Tracker Args
+    args['tracking_lstm_hidden_dim'] = 4
+    args['transition_weight'] = None
+    args['use_tracking_lstm'] = False
+
+    # Data Args
+    args['use_skips'] = False
 
     return args
 
 
-def default_embeddings(vocab_size, embedding_dim):
-    initial_embeddings = np.arange(vocab_size).reshape(
-            (vocab_size, 1)).repeat(embedding_dim, axis=1).astype(np.float32)
+class MockSentenceModel(SentenceModel):
 
-    vocab = {
-        'size': initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size,
-        'vectors': initial_embeddings,
-    }
-    vocab = argparse.Namespace(**vocab)
+    def __init__(self, **kwargs):
+        _kwargs = default_args()
 
-    return vocab, initial_embeddings
+        for k, v in kwargs.iteritems():
+            _kwargs[k] = v
+
+        super(MockSentenceModel, self).__init__(**_kwargs)
 
 
-def build_example(tokens, transitions, train=False):
-    example = {
-        'tokens': Variable(tokens, volatile=not train),
-        'transitions': transitions
-    }
-    example = argparse.Namespace(**example)
-    return example
+# def default_embeddings(vocab_size, embedding_dim):
+#     initial_embeddings = np.arange(vocab_size).reshape(
+#             (vocab_size, 1)).repeat(embedding_dim, axis=1).astype(np.float32)
+#     vocab = {
+#         'size': initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size,
+#         'vectors': initial_embeddings,
+#     }
+#     vocab = argparse.Namespace(**vocab)
+#     return vocab, initial_embeddings
 
 
 class SPINNTestCase(unittest.TestCase):
 
     def _setup(self, batch_size=2, seq_length=4):
-        self.batch_size = batch_size
-        self.embedding_dim = embedding_dim = 3
-        self.vocab_size = vocab_size = 10
-        self.seq_length = seq_length
-        args = default_args()
-        vocab, initial_embeddings = default_embeddings(vocab_size, embedding_dim)
-        self.model = SPINN(args, vocab, use_reinforce=False)
+        self.model = MockSentenceModel()
 
     def test_basic_stack(self):
         self._setup(seq_length=4)
@@ -110,9 +92,9 @@ class SPINNTestCase(unittest.TestCase):
 
         expected_stack_lens = [4, 2]
 
-        example = build_example(X, transitions)
-        _ = self.model(example)
-        stack_lens = [len(s) for s in self.model.stacks]\
+        example = self.model.build_example(X, transitions, train)
+        _ = self.model.spinn(example)
+        stack_lens = [len(s) for s in self.model.spinn.stacks]
 
         np.testing.assert_equal(stack_lens, expected_stack_lens)
 
