@@ -69,22 +69,22 @@ class MockSentenceModel(SentenceModel):
 
 class SPINNTestCase(unittest.TestCase):
 
-    def test_basic_stack(self):
+    def xtest_basic_stack(self):
         model = MockSentenceModel()
 
         train = False
 
         X = np.array([
-            [3, 1,  2, 0],
+            [3, 1,  2, 1],
             [3, 2,  4, 5]
         ], dtype=np.int32)
 
         transitions = np.array([
             # First input: push a bunch onto the stack
-            [0, 0, 0, 0],
+            [0, 0, 0, 0, 1, 1, 1],
             # Second input: push, then merge, then push more. (Leaves one item
             # on the buffer.)
-            [0, 0, 1, 0]
+            [0, 0, 1, 0, 0, 1, 1]
         ], dtype=np.int32)
 
         expected_stack_lens = [4, 2]
@@ -95,10 +95,50 @@ class SPINNTestCase(unittest.TestCase):
 
         np.testing.assert_equal(stack_lens, expected_stack_lens)
 
-    def test_validate_transitions(self):
+    def test_validate_transitions_cantskip(self):
         model = MockSentenceModel()
 
         train = False
+
+        # To Test:
+        # 1. Cant SKIP
+        # 2. Cant SHIFT
+        # 3. Cant REDUCE
+        # 4. No change SHIFT
+        # 5. No change REDUCE
+
+        bufs = [
+            [None],
+            [],
+            [None],
+            [None],
+            [None],
+            [],
+        ]
+
+        stacks = [
+            [None],
+            [None],
+            [None],
+            [],
+            [],
+            [None, None],
+        ]
+
+        transitions = [
+            2, 1, 0, 0, 0, 1
+            ]
+        preds = np.array([
+            0, 0, 1, 1, 0, 1
+            ]).astype(np.int32)
+
+
+        ret = model.spinn.validate(transitions, preds, stacks, bufs, zero_padded=False)
+        expected = np.array([
+            2, 1, 0, 0, 0, 1
+        ], dtype=np.int32)
+
+        assert all(p == e for p, e in zip(preds.ravel().tolist(), expected.ravel().tolist()))
 
 
 if __name__ == '__main__':

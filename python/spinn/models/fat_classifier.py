@@ -324,6 +324,11 @@ def run(only_forward=False):
     else:
         model.cpu()
 
+    # Debug
+    def set_debug(self):
+        self.debug = FLAGS.debug
+    model.apply(set_debug)
+
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
 
@@ -460,7 +465,7 @@ def run(only_forward=False):
 
 if __name__ == '__main__':
     # Debug settings.
-    gflags.DEFINE_bool("debug", True, "Set to True to disable debug_mode and type_checking.")
+    gflags.DEFINE_bool("debug", False, "Set to True to disable debug_mode and type_checking.")
     gflags.DEFINE_bool("show_progress_bar", True, "Turn this off when running experiments on HPC.")
     gflags.DEFINE_string("branch_name", "", "")
     gflags.DEFINE_string("sha", "", "")

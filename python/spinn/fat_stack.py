@@ -84,11 +84,11 @@ class Tracker(nn.Module):
 
 class SPINN(nn.Module):
 
-    def __init__(self, args, vocab, use_reinforce=True, use_skips=False, debug=True):
+    def __init__(self, args, vocab, use_reinforce=True, use_skips=False):
         super(SPINN, self).__init__()
 
         # Optional debug mode.
-        self.debug = debug
+        self.debug = False
 
         self.transition_weight = args.transition_weight
         self.use_reinforce = use_reinforce
@@ -153,7 +153,7 @@ class SPINN(nn.Module):
                         use_internal_parser=use_internal_parser,
                         validate_transitions=validate_transitions)
 
-    def validate(self, transitions, preds, stacks, zero_padded=True):
+    def validate(self, transitions, preds, stacks, bufs, zero_padded=True):
         # Note: There is one zero added to bufs, and two zeros added to stacks.
         # Make sure to adjust for this if using lengths of either.
         buf_adjust = 1 if zero_padded else 0
@@ -165,8 +165,8 @@ class SPINN(nn.Module):
         if len(self.choices) > 2:
             raise NotImplementedError("Can only validate actions for 2 choices right now.")
 
-        buf_lens = [len(buf) - buf_adjust for buf in self.bufs]
-        stack_lens = [len(stack) - stack_adjust for stack in self.stacks]
+        buf_lens = [len(buf) - buf_adjust for buf in bufs]
+        stack_lens = [len(stack) - stack_adjust for stack in stacks]
 
         # Cannot reduce on too small a stack
         must_shift = np.array([length < 2 for length in stack_lens])
@@ -177,9 +177,20 @@ class SPINN(nn.Module):
         preds[must_reduce] = T_REDUCE
 
         # If the given action is skip, then must skip.
-        preds[_transitions[_transitions == T_SKIP]] = T_SKIP
+        preds[_transitions == T_SKIP] = T_SKIP
 
         return preds
+
+    def predict_actions(self, transition_output):
+        if self.use_reinforce:
+            transition_dist = F.softmax(transition_output)
+            sampled_transitions = np.array([T_SKIP for _ in self.bufs], dtype=np.int32)
+            sampled_transitions[cant_skip] = [np.random.choice(self.choices, 1, p=t_dist)[0] for t_dist in transition_dist.data[cant_skip]]
+            transition_preds = sampled_transitions
+        else:
+            transition_preds = transition_output.data.max(1)[1].view(-1)
+        return transition_preds
+
 
     def run(self, inp_transitions, run_internal_parser=False, use_internal_parser=False, validate_transitions=True):
         transition_loss, transition_acc = 0, 0
@@ -237,20 +248,16 @@ class SPINN(nn.Module):
 
                     t_logits = F.log_softmax(transition_output)
                     t_given = transitions
-
-                    if self.use_reinforce:
-                        transition_dist = F.softmax(transition_output)
-                        sampled_transitions = np.array([T_SKIP for _ in self.bufs], dtype=np.int32)
-                        sampled_transitions[cant_skip] = [np.random.choice(self.choices, 1, p=t_dist)[0] for t_dist in transition_dist.data[cant_skip]]
-                        transition_preds = sampled_transitions
-                    else:
-                        transition_preds = transition_output.data.max(1)[1].view(-1)
+                    # TODO: Mask before predicting. This should simplify things and reduce computation.
+                    # The downside is that in the Action Phase, need to be smarter about which stacks/bufs
+                    # are selected.
+                    transition_preds = self.predict_actions(transition_output)
 
                     # Constrain to valid actions
                     # ==========================
 
                     if validate_transitions:
-                        transition_preds = self.validate(transition_arr, transition_preds.cpu().numpy(), self.stacks)
+                        transition_preds = self.validate(transition_arr, transition_preds.cpu().numpy(), self.stacks, self.bufs)
 
                     t_preds = transition_preds
 
@@ -263,8 +270,10 @@ class SPINN(nn.Module):
 
                         # Be careful when filtering distributions. These values are used to
                         # calculate loss and need to be used in backprop.
-                        t_logits = torch.chunk(transition_output, transition_output.size()[0], 0)
-                        t_logits = torch.cat([t_logits[i] for i, y in enumerate(cant_skip) if y], 0)
+                        index = (cant_skip * np.arange(cant_skip.shape[0]))[cant_skip]
+                        index = Variable(torch.from_numpy(index).long(), volatile=t_logits.volatile)
+                        t_logits = torch.index_select(t_logits, 0, index)
+
 
                     # Memories
                     # ========
@@ -360,6 +369,11 @@ class SPINN(nn.Module):
             self.transition_loss = transition_loss
         else:
             transition_loss = None
+
+        if self.debug:
+            assert all(len(stack) == 3 for stack in self.stacks), \
+                "Stacks should be fully reduced and have 3 elements: " \
+                "two zeros and the sentence encoding."
 
         return [stack[-1] for stack in self.stacks], transition_loss
 
