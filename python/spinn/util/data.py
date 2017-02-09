@@ -18,6 +18,8 @@ PADDING_TOKEN = "*PADDING*"
 UNK_TOKEN = "_"
 
 SKIP_SYMBOL = 2
+SHIFT_SYMBOL = 0
+REDUCE_SYMBOL = 1
 SENTENCE_PADDING_SYMBOL = 0
 
 CORE_VOCABULARY = {PADDING_TOKEN: 0,
@@ -403,14 +405,14 @@ def BuildVocabulary(raw_training_data, raw_eval_sets, embedding_path, logger=Non
     else:
         # Build a vocabulary of words in the data for which we have an
         # embedding.
-        vocabulary = BuildVocabularyForASCIIEmbeddingFile(
+        vocabulary = BuildVocabularyForTextEmbeddingFile(
             embedding_path, types_in_data, CORE_VOCABULARY)
 
     return vocabulary
 
 
-def BuildVocabularyForASCIIEmbeddingFile(path, types_in_data, core_vocabulary):
-    """Quickly iterates through a GloVe-formatted ASCII vector file to
+def BuildVocabularyForTextEmbeddingFile(path, types_in_data, core_vocabulary):
+    """Quickly iterates through a GloVe-formatted text vector file to
     extract a working vocabulary of words that occur both in the data and
     in the vector file."""
 
@@ -419,21 +421,22 @@ def BuildVocabularyForASCIIEmbeddingFile(path, types_in_data, core_vocabulary):
     vocabulary = {}
     vocabulary.update(core_vocabulary)
     next_index = len(vocabulary)
-    with open(path, 'r') as f:
+    with open(path, 'rU') as f:
         for line in f:
             spl = line.split(" ", 1)
-            word = spl[0]
-            if word in types_in_data:
+            word = unicode(spl[0].decode('UTF-8'))
+            if word in types_in_data and word not in vocabulary:
                 vocabulary[word] = next_index
                 next_index += 1
     return vocabulary
 
 
-def LoadEmbeddingsFromASCII(vocabulary, embedding_dim, path):
+def LoadEmbeddingsFromText(vocabulary, embedding_dim, path):
     """Prepopulates a numpy embedding matrix indexed by vocabulary with
-    values from a GloVe - format ASCII vector file.
+    values from a GloVe - format vector file.
 
     For now, values not found in the file will be set to zero."""
+    
     emb = np.zeros(
         (len(vocabulary), embedding_dim), dtype=np.float32)
     with open(path, 'r') as f:
