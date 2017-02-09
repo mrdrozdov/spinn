@@ -44,6 +44,23 @@ class MockLogger(object):
         pass
 
 
+def t_is_valid(ts):
+    buf_len = (len(ts) + 1) / 2
+    buf = [1] * buf_len
+    stack = []
+
+    try:
+        for t in ts:
+            if t == util.SHIFT_SYMBOL:
+                stack.append(buf.pop())
+            elif t == util.REDUCE_SYMBOL:
+                stack.append(stack.pop() + stack.pop())
+    except:
+        return False
+
+    return len(stack) == 1
+
+
 def t_is_left_padded(ts):
     assert len([t for t in ts if t == util.SKIP_SYMBOL]) > 0, \
         "Transitions must be padded for this check to work"
@@ -191,6 +208,68 @@ class SNLITestCase(unittest.TestCase):
             # The transitions should be padded on the left.
             assert t_is_left_padded(hyp_t)
             assert t_is_left_padded(prem_t)
+
+    def test_valid_transitions_train(self):
+        # TODO: Check on shorter length.
+        seq_length = 150
+        for_rnn = False
+        use_left_padding = True
+
+        data_manager = load_snli_data
+        raw_data, _ = data_manager.load_data(snli_data_path)
+        data_sets = [(snli_data_path, raw_data)]
+        vocabulary = util.BuildVocabulary(
+            raw_data, data_sets, embedding_data_path, logger=MockLogger(),
+            sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
+        initial_embeddings = util.LoadEmbeddingsFromText(
+            vocabulary, word_embedding_dim, embedding_data_path)
+
+        EOS_TOKEN = vocabulary["."]
+
+        data = util.PreprocessDataset(
+            raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
+            sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
+            for_rnn=for_rnn, use_left_padding=use_left_padding)
+
+        tokens, transitions, labels, num_transitions = data
+
+        for s, ts, (num_hyp_t, num_prem_t) in zip(tokens, transitions, num_transitions):
+            hyp_t = ts[:, 0]
+            prem_t = ts[:, 1]
+
+            assert t_is_valid(hyp_t)
+            assert t_is_valid(prem_t)
+
+    def test_valid_transitions_eval(self):
+        # TODO: Check on shorter length.
+        seq_length = 150
+        for_rnn = False
+        use_left_padding = True
+
+        data_manager = load_snli_data
+        raw_data, _ = data_manager.load_data(snli_data_path)
+        data_sets = [(snli_data_path, raw_data)]
+        vocabulary = util.BuildVocabulary(
+            raw_data, data_sets, embedding_data_path, logger=MockLogger(),
+            sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
+        initial_embeddings = util.LoadEmbeddingsFromText(
+            vocabulary, word_embedding_dim, embedding_data_path)
+
+        EOS_TOKEN = vocabulary["."]
+
+        data = util.PreprocessDataset(
+            raw_data, vocabulary, seq_length, data_manager, eval_mode=True, logger=MockLogger(),
+            sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
+            for_rnn=for_rnn, use_left_padding=use_left_padding)
+
+        tokens, transitions, labels, num_transitions = data
+
+        for s, ts, (num_hyp_t, num_prem_t) in zip(tokens, transitions, num_transitions):
+            hyp_t = ts[:, 0]
+            prem_t = ts[:, 1]
+
+            assert t_is_valid(hyp_t)
+            assert t_is_valid(prem_t)
 
 
 class SSTTestCase(unittest.TestCase):
