@@ -96,7 +96,7 @@ class RLBaseModel(BaseModel):
 
         log_p_action = torch.cat([t_logits[i, p] for i, p in enumerate(t_preds)], 0)
 
-        rl_loss = -1. * torch.sum(log_p_action * Variable(rewards, volatile=log_p_action.volatile))
+        rl_loss = -1. * torch.sum(log_p_action * to_gpu(Variable(rewards, volatile=log_p_action.volatile)))
         rl_loss /= log_p_action.size(0)
 
         return rl_loss
@@ -105,7 +105,7 @@ class RLBaseModel(BaseModel):
         if not self.training:
             return
 
-        logits = F.softmax(output).data
+        logits = F.softmax(output).data.cpu()
         target = torch.from_numpy(y_batch).long()
 
         # Get Reward.
