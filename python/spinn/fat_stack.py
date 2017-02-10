@@ -450,6 +450,9 @@ class BaseModel(nn.Module):
                                validate_transitions=validate_transitions)
         return state, transition_acc, transition_loss
 
+    def output_hook(self, output, sentences, transitions, y_batch=None, train=True):
+        pass
+
     def forward(self, sentences, transitions, y_batch=None, train=True,
                  use_internal_parser=False, validate_transitions=True):
         example = self.build_example(sentences, transitions, train)
@@ -471,6 +474,8 @@ class BaseModel(nn.Module):
             features = h[0]
 
         output = self.mlp(features, train)
+
+        self.output_hook(output, sentences, transitions, y_batch, train)
 
         return output
 

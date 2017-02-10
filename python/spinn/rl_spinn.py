@@ -47,6 +47,10 @@ class RLSPINN(SPINN):
         transition_preds = sampled_transitions
         return transition_preds
 
+    def output_hook(self, output, sentences, transitions, y_batch=None, train=True):
+        # TODO: Do REINFORCE stuff here.
+        pass
+
 
 class SentencePairModel(RLBaseModel):
 
