@@ -24,9 +24,15 @@ class SentenceTrainer(SentencePairTrainer): pass
 
 class BaseModel(nn.Module):
 
-    def __init__(self, model_dim, word_embedding_dim, vocab_size,
-                 initial_embeddings, num_classes, mlp_dim,
-                 embedding_keep_rate, classifier_keep_rate,
+    def __init__(self,
+                 model_dim=None,
+                 word_embedding_dim=None,
+                 vocab_size=None,
+                 initial_embeddings=None,
+                 num_classes=None,
+                 mlp_dim=None,
+                 embedding_keep_rate=None,
+                 classifier_keep_rate=None,
                  use_sentence_pair=False,
                  **kwargs
                 ):

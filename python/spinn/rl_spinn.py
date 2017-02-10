@@ -50,16 +50,36 @@ class RLBaseModel(BaseModel):
 
     optimize_transition_loss = False
 
+    def __init__(self, rl_mu=None, rl_baseline=None, rl_reward=None, **kwargs):
+        super(RLBaseModel, self).__init__(**kwargs)
+
+        self.rl_mu = rl_mu
+        self.rl_baseline = rl_baseline
+        self.rl_reward = rl_reward
+
+        self.register_buffer('baseline', torch.FloatTensor([0.0]))
+
     def build_spinn(self, args, vocab, use_skips):
         return RLSPINN(args, vocab, use_skips=use_skips)
 
     def build_reward(self, logits, target):
-        # Zero One Loss.
-        rewards = torch.eq(logits.max(1)[1], target).float()
-
-        # TODO: Cross Entropy Reward
+        if self.rl_reward == "standard": # Zero One Loss.
+            rewards = torch.eq(logits.max(1)[1], target).float()
+        else:
+            # TODO: Cross Entropy Reward
+            raise NotImplementedError
 
         return rewards
+
+    def build_baseline(self, output, rewards, sentences, transitions, y_batch=None):
+        if self.rl_baseline == "ema":
+            mu = self.rl_mu
+            self.baseline[0] = self.baseline[0] * (1 - mu) + rewards.mean() * mu
+            baseline = self.baseline[0]
+        else:
+            raise NotImplementedError
+
+        return baseline
 
     def reinforce(self, rewards):
         t_preds, t_logits, t_given, t_mask = self.spinn.get_statistics()
@@ -90,6 +110,12 @@ class RLBaseModel(BaseModel):
 
         # Get Reward.
         rewards = self.build_reward(logits, target)
+
+        # Get Baseline.
+        baseline = self.build_baseline(output, rewards, sentences, transitions, y_batch)
+
+        # Calculate advantage.
+        advantage = rewards - baseline
 
         # Assign REINFORCE output.
         self.rl_loss = self.reinforce(rewards)

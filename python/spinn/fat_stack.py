@@ -394,9 +394,14 @@ class BaseModel(nn.Module):
 
     optimize_transition_loss = True
 
-    def __init__(self, model_dim, word_embedding_dim, vocab_size,
-                 initial_embeddings, num_classes, mlp_dim,
-                 embedding_keep_rate, classifier_keep_rate,
+    def __init__(self, model_dim=None,
+                 word_embedding_dim=None,
+                 vocab_size=None,
+                 initial_embeddings=None,
+                 num_classes=None,
+                 mlp_dim=None,
+                 embedding_keep_rate=None,
+                 classifier_keep_rate=None,
                  use_tracker_dropout=True, tracker_dropout_rate=0.1,
                  tracking_lstm_hidden_dim=4,
                  transition_weight=None,

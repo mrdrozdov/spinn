@@ -278,8 +278,12 @@ def run(only_forward=False):
         num_classes = len(data_manager.LABEL_MAP)
         use_sentence_pair = False
 
-    model = model_cls(FLAGS.model_dim, FLAGS.word_embedding_dim, vocab_size,
-         initial_embeddings, num_classes, mlp_dim=FLAGS.mlp_dim,
+    model = model_cls(model_dim=FLAGS.model_dim,
+         word_embedding_dim=FLAGS.word_embedding_dim,
+         vocab_size=vocab_size,
+         initial_embeddings=initial_embeddings,
+         num_classes=num_classes,
+         mlp_dim=FLAGS.mlp_dim,
          embedding_keep_rate=FLAGS.embedding_keep_rate,
          classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
          tracker_dropout_rate=FLAGS.tracker_dropout_rate,
@@ -294,6 +298,9 @@ def run(only_forward=False):
          use_product_feature=FLAGS.use_product_feature,
          num_mlp_layers=FLAGS.num_mlp_layers,
          mlp_bn=FLAGS.mlp_bn,
+         rl_mu=FLAGS.rl_mu,
+         rl_baseline=FLAGS.rl_baseline,
+         rl_reward=FLAGS.rl_reward,
         )
 
     # Build optimizer.
@@ -351,13 +358,6 @@ def run(only_forward=False):
     else:
          # Train
         logger.Log("Training.")
-
-        # if FLAGS.use_reinforce:
-        #     optimizer_lr = 0.01
-        #     baseline = 0
-        #     mu = 0.1
-        #     transition_optimizer = optimizers.SGD(lr=optimizer_lr)
-        #     transition_optimizer.setup(model.spinn.tracker)
 
         # New Training Loop
         progress_bar = SimpleProgressBar(msg="Training", bar_length=60, enabled=FLAGS.show_progress_bar)
@@ -454,10 +454,6 @@ def run(only_forward=False):
 
             # Gradient descent step.
             optimizer.step()
-
-            # if FLAGS.use_reinforce:
-            #     transition_optimizer.zero_grads()
-            #     optimizer_lr, baseline = reinforce(transition_optimizer, optimizer_lr, baseline, mu, rewards, transition_loss)
 
             end = time.time()
 
@@ -576,6 +572,11 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("use_tracker_dropout", False, "")
     gflags.DEFINE_float("tracker_dropout_rate", 0.1, "")
     gflags.DEFINE_boolean("lstm_composition", True, "")
+
+    # RL settings.
+    gflags.DEFINE_float("rl_mu", 0.1, "")
+    gflags.DEFINE_enum("rl_baseline", "ema", ["ema", "greedy", "policy"], "")
+    gflags.DEFINE_enum("rl_reward", "standard", ["standard", "xent"], "")
 
     # MLP settings.
     gflags.DEFINE_integer("mlp_dim", 1024, "")
