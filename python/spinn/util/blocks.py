@@ -468,3 +468,11 @@ def Linear(initializer=DefaultUniformInitializer, bias_initializer=ZeroInitializ
             if self.bias is not None:
                 bias_initializer(self.bias)
     return CustomLinear
+
+
+def LSTM(initializer=DefaultUniformInitializer):
+    class CustomLSTM(nn.LSTM):
+        def reset_parameters(self):
+            for weight in self.parameters():
+                initializer(weight)
+    return CustomLSTM
