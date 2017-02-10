@@ -35,7 +35,7 @@ from spinn.data.boolean import load_boolean_data
 from spinn.data.sst import load_sst_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
-from spinn.util.blocks import the_gpu, l2_cost, flatten
+from spinn.util.blocks import the_gpu, to_gpu, l2_cost, flatten
 from spinn.util.misc import Accumulator, time_per_token
 
 import spinn.rl_spinn
@@ -119,7 +119,7 @@ def evaluate(classifier_trainer, eval_set, logger, step, vocabulary=None):
 
         # Calculate class accuracy.
         target = torch.from_numpy(eval_y_batch).long()
-        pred = logits.data.max(1)[1] # get the index of the max log-probability
+        pred = logits.data.max(1)[1].cpu() # get the index of the max log-probability
         class_acc = pred.eq(target).sum() / float(target.size(0))
 
         # Optionally calculate transition loss/acc.
@@ -319,7 +319,7 @@ def run(only_forward=False):
         checkpoint_path = FLAGS.ckpt_path
     else:
         checkpoint_path = os.path.join(FLAGS.ckpt_path, FLAGS.experiment_name + ".ckpt")
-    
+
     # Load checkpoint if available.
     if os.path.isfile(checkpoint_path):
         # TODO: Check that resuming works fine with tf summaries.
@@ -393,13 +393,13 @@ def run(only_forward=False):
 
             # Calculate class accuracy.
             target = torch.from_numpy(y_batch).long()
-            pred = logits.data.max(1)[1] # get the index of the max log-probability
+            pred = logits.data.max(1)[1].cpu() # get the index of the max log-probability
             class_acc = pred.eq(target).sum() / float(target.size(0))
 
             A.add('class_acc', class_acc)
 
             # Calculate class loss.
-            xent_loss = nn.NLLLoss()(logits, Variable(target, volatile=False))
+            xent_loss = nn.NLLLoss()(logits, to_gpu(Variable(target, volatile=False)))
 
             # Optionally calculate transition loss/accuracy.
             transition_acc = model.transition_acc if hasattr(model, 'transition_acc') else 0.0
