@@ -288,8 +288,6 @@ def run(only_forward=False):
          classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
          tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
          transition_weight=FLAGS.transition_weight,
-         use_tracking_lstm=FLAGS.use_tracking_lstm,
-         use_shift_composition=FLAGS.use_shift_composition,
          use_sentence_pair=use_sentence_pair,
          use_skips=FLAGS.use_skips,
          use_difference_feature=FLAGS.use_difference_feature,
@@ -510,9 +508,8 @@ if __name__ == '__main__':
     gflags.DEFINE_bool("debug", False, "Set to True to disable debug_mode and type_checking.")
     gflags.DEFINE_bool("show_progress_bar", True, "Turn this off when running experiments on HPC.")
     gflags.DEFINE_string("branch_name", "", "")
+    gflags.DEFINE_integer("deque_length", None, "Max trailing examples to use for statistics.")
     gflags.DEFINE_string("sha", "", "")
-
-    # Experiment naming.
     gflags.DEFINE_string("experiment_name", "", "")
 
     # Data types.
@@ -524,14 +521,13 @@ if __name__ == '__main__':
         "a filename or a directory. In the latter case, the experiment name serves as the "
         "base for the filename.")
     gflags.DEFINE_string("log_path", ".", "A directory in which to write logs.")
+    gflags.DEFINE_integer("ckpt_step", 1000, "Steps to run before considering saving checkpoint.")
 
     # Data settings.
     gflags.DEFINE_string("training_data_path", None, "")
     gflags.DEFINE_string("eval_data_path", None, "Can contain multiple file paths, separated "
         "using ':' tokens. The first file should be the dev set, and is used for determining "
         "when to save the early stopping 'best' checkpoints.")
-    gflags.DEFINE_integer("ckpt_step", 1000, "Steps to run before considering saving checkpoint.")
-    gflags.DEFINE_integer("deque_length", None, "Max trailing examples to use for statistics.")
     gflags.DEFINE_integer("seq_length", 30, "")
     gflags.DEFINE_integer("eval_seq_length", None, "")
     gflags.DEFINE_boolean("truncate_eval_batch", True, "Shorten batches to max transition length.")
@@ -545,29 +541,24 @@ if __name__ == '__main__':
     gflags.DEFINE_string("embedding_data_path", None,
         "If set, load GloVe-formatted embeddings from here.")
 
+    # Data preprocessing settings.
+    gflags.DEFINE_boolean("use_skips", False, "Pad transitions with SKIP actions.")
+    gflags.DEFINE_boolean("use_left_padding", True, "Pad transitions only on the LHS.")
+
     # Model architecture settings.
     gflags.DEFINE_enum("model_type", "RNN", ["CBOW", "RNN", "SPINN", "RLSPINN"], "")
     gflags.DEFINE_integer("gpu", -1, "")
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")
     gflags.DEFINE_float("transition_weight", None, "")
-    gflags.DEFINE_integer("tracking_lstm_hidden_dim", 4, "")
-
-    gflags.DEFINE_boolean("xent_reward", False, "Use cross entropy instead of accuracy as RL reward")
-
-    gflags.DEFINE_boolean("use_shift_composition", True, "")
-    gflags.DEFINE_boolean("use_difference_feature", True, "")
-    gflags.DEFINE_boolean("use_product_feature", True, "")
-    gflags.DEFINE_boolean("use_skips", False, "Pad transitions with SKIP actions.")
-    gflags.DEFINE_boolean("use_left_padding", True, "Pad transitions only on the LHS.")
+    gflags.DEFINE_integer("tracking_lstm_hidden_dim", None, "")
     gflags.DEFINE_boolean("use_internal_parser", False, "Use predicted parse.")
-    gflags.DEFINE_boolean("validate_transitions", True, "Constrain predicted transitions to ones"
-                                                        "that give a valid parse tree.")
-    gflags.DEFINE_boolean("use_tracking_lstm", True,
-                          "Whether to use LSTM in the tracking unit")
+    gflags.DEFINE_boolean("validate_transitions", True,
+        "Constrain predicted transitions to ones that give a valid parse tree.")
     gflags.DEFINE_float("embedding_keep_rate", 0.9,
         "Used for dropout on transformed embeddings.")
-    gflags.DEFINE_boolean("lstm_composition", True, "")
+    gflags.DEFINE_boolean("use_difference_feature", True, "")
+    gflags.DEFINE_boolean("use_product_feature", True, "")
 
     # RL settings.
     gflags.DEFINE_float("rl_mu", 0.1, "Use in exponential moving average baseline.")

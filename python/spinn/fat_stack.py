@@ -396,8 +396,6 @@ class BaseModel(nn.Module):
                  classifier_keep_rate=None,
                  tracking_lstm_hidden_dim=4,
                  transition_weight=None,
-                 use_tracking_lstm=True,
-                 use_shift_composition=True,
                  use_skips=False,
                  use_sentence_pair=False,
                  use_difference_feature=False,
@@ -430,7 +428,7 @@ class BaseModel(nn.Module):
 
         args = Args()
         args.size = model_dim/2
-        args.tracker_size = tracking_lstm_hidden_dim if use_tracking_lstm else None
+        args.tracker_size = tracking_lstm_hidden_dim
         args.transition_weight = transition_weight
         args.input_dropout_rate = 1. - embedding_keep_rate
 
