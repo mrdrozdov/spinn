@@ -286,8 +286,6 @@ def run(only_forward=False):
          mlp_dim=FLAGS.mlp_dim,
          embedding_keep_rate=FLAGS.embedding_keep_rate,
          classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
-         tracker_dropout_rate=FLAGS.tracker_dropout_rate,
-         use_tracker_dropout=FLAGS.use_tracker_dropout,
          tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
          transition_weight=FLAGS.transition_weight,
          use_tracking_lstm=FLAGS.use_tracking_lstm,
@@ -569,19 +567,19 @@ if __name__ == '__main__':
                           "Whether to use LSTM in the tracking unit")
     gflags.DEFINE_float("embedding_keep_rate", 0.9,
         "Used for dropout on transformed embeddings.")
-    gflags.DEFINE_boolean("use_tracker_dropout", False, "")
-    gflags.DEFINE_float("tracker_dropout_rate", 0.1, "")
     gflags.DEFINE_boolean("lstm_composition", True, "")
 
     # RL settings.
-    gflags.DEFINE_float("rl_mu", 0.1, "")
-    gflags.DEFINE_enum("rl_baseline", "ema", ["ema", "greedy", "policy"], "")
-    gflags.DEFINE_enum("rl_reward", "standard", ["standard", "xent"], "")
+    gflags.DEFINE_float("rl_mu", 0.1, "Use in exponential moving average baseline.")
+    gflags.DEFINE_enum("rl_baseline", "ema", ["ema", "greedy", "policy"],
+        "Different configurations to approximate reward function.")
+    gflags.DEFINE_enum("rl_reward", "standard", ["standard", "xent"],
+        "Different reward functions to use.")
 
     # MLP settings.
-    gflags.DEFINE_integer("mlp_dim", 1024, "")
-    gflags.DEFINE_integer("num_mlp_layers", 2, "")
-    gflags.DEFINE_boolean("mlp_bn", True, "")
+    gflags.DEFINE_integer("mlp_dim", 1024, "Dimension of intermediate MLP layers.")
+    gflags.DEFINE_integer("num_mlp_layers", 2, "Number of MLP layers.")
+    gflags.DEFINE_boolean("mlp_bn", True, "When True, batch normalization is used between MLP layers.")
     gflags.DEFINE_float("semantic_classifier_keep_rate", 0.9,
         "Used for dropout in the semantic task classifier.")
 

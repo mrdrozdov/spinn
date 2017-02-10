@@ -41,7 +41,7 @@ class SentenceTrainer(SentencePairTrainer): pass
 
 class Tracker(nn.Module):
 
-    def __init__(self, size, tracker_size, use_tracker_dropout=True, tracker_dropout_rate=0.1):
+    def __init__(self, size, tracker_size):
         super(Tracker, self).__init__()
 
         # Initialize layers.
@@ -51,8 +51,6 @@ class Tracker(nn.Module):
         self.stack2 = Linear()(size, 4 * tracker_size, bias=False)
 
         self.state_size = tracker_size
-        self.tracker_dropout_rate = tracker_dropout_rate
-        self.use_tracker_dropout = use_tracker_dropout
 
         self.reset_state()
 
@@ -73,9 +71,6 @@ class Tracker(nn.Module):
                 np.zeros((batch_size, self.state_size),
                               dtype=np.float32)),
                 volatile=lstm_in.volatile))
-
-        if self.use_tracker_dropout:
-            lstm_in = F.dropout(lstm_in, self.tracker_dropout_rate, training=self.training)
 
         # Run tracking lstm.
         self.c, self.h = lstm(self.c, lstm_in)
@@ -113,10 +108,7 @@ class SPINN(nn.Module):
         # Reduce function for semantic composition.
         self.reduce = Reduce(args.size, args.tracker_size)
         if args.tracker_size is not None:
-            self.tracker = Tracker(
-                args.size, args.tracker_size,
-                use_tracker_dropout=args.use_tracker_dropout,
-                tracker_dropout_rate=args.tracker_dropout_rate)
+            self.tracker = Tracker(args.size, args.tracker_size)
             if args.transition_weight is not None:
                 # TODO: Might be interesting to try a different network here.
                 self.transition_net = nn.Linear(args.tracker_size, 3 if use_skips else 2)
@@ -402,7 +394,6 @@ class BaseModel(nn.Module):
                  mlp_dim=None,
                  embedding_keep_rate=None,
                  classifier_keep_rate=None,
-                 use_tracker_dropout=True, tracker_dropout_rate=0.1,
                  tracking_lstm_hidden_dim=4,
                  transition_weight=None,
                  use_tracking_lstm=True,
@@ -442,8 +433,6 @@ class BaseModel(nn.Module):
         args.tracker_size = tracking_lstm_hidden_dim if use_tracking_lstm else None
         args.transition_weight = transition_weight
         args.input_dropout_rate = 1. - embedding_keep_rate
-        args.use_tracker_dropout = use_tracker_dropout
-        args.tracker_dropout_rate = tracker_dropout_rate
 
         vocab = Vocab()
         vocab.size = initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size
