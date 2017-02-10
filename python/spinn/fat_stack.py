@@ -392,6 +392,8 @@ class SPINN(nn.Module):
 
 class BaseModel(nn.Module):
 
+    optimize_transition_loss = True
+
     def __init__(self, model_dim, word_embedding_dim, vocab_size,
                  initial_embeddings, num_classes, mlp_dim,
                  embedding_keep_rate, classifier_keep_rate,

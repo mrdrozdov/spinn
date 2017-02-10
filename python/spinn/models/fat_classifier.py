@@ -396,12 +396,15 @@ def run(only_forward=False):
             pred = logits.data.max(1)[1] # get the index of the max log-probability
             class_acc = pred.eq(target).sum() / float(target.size(0))
 
+            A.add('class_acc', class_acc)
+
             # Calculate class loss.
             xent_loss = nn.NLLLoss()(logits, Variable(target, volatile=False))
 
             # Optionally calculate transition loss/accuracy.
             transition_acc = model.transition_acc if hasattr(model, 'transition_acc') else 0.0
             transition_loss = model.transition_loss if hasattr(model, 'transition_loss') else None
+            rl_loss = model.rl_loss if hasattr(model, 'rl_loss') else None
 
             # Accumulate stats for transition accuracy.
             if transition_loss is not None:
@@ -410,30 +413,31 @@ def run(only_forward=False):
                 A.add('preds', preds)
                 A.add('truth', truth)
 
-            # if FLAGS.use_reinforce:
-            #     rewards = build_rewards(y, y_batch)
-            #     logger.Log("\nReward :"+str(rewards))
-
-            # Boilerplate for calculating loss.
-            transition_cost_val = transition_loss.data[0] if transition_loss is not None else 0.0
-            A.add('class_acc', class_acc)
-
             # Extract L2 Cost
             l2_loss = l2_cost(model, FLAGS.l2_lambda)
+
+            # Boilerplate for calculating loss values.
+            xent_cost_val = xent_loss.data[0]
+            transition_cost_val = transition_loss.data[0] if transition_loss is not None else 0.0
+            l2_cost_val = l2_loss.data[0]
+            rl_cost_val = rl_loss.data[0] if rl_loss is not None else 0.0
 
             # Accumulate Total Loss Data
             total_cost_val = 0.0
             total_cost_val += xent_loss.data[0]
+            if transition_loss is not None and model.optimize_transition_loss:
+                total_cost_val += transition_cost_val
             total_cost_val += l2_loss.data[0]
-            # if not FLAGS.use_reinforce:
-            #     total_cost_val += transition_cost_val
+            total_cost_val += rl_cost_val
 
             # Accumulate Total Loss Variable
             total_loss = 0.0
             total_loss += xent_loss
             total_loss += l2_loss
-            if hasattr(transition_loss, 'backward'):
+            if transition_loss is not None and model.optimize_transition_loss:
                 total_loss += transition_loss
+            if rl_loss is not None:
+                total_loss += rl_loss
 
             # Backward pass.
             total_loss.backward()
@@ -473,9 +477,22 @@ def run(only_forward=False):
                 else:
                     avg_trans_acc = 0.0
                 time_metric = time_per_token(A.get('total_tokens'), A.get('total_time'))
-                logger.Log(
-                    "Step: %i\tAcc: %f\t%f\tCost: %5f %5f %5f %5f Time: %5f"
-                    % (step, avg_class_acc, avg_trans_acc, total_cost_val, xent_loss.data[0], transition_cost_val, l2_loss.data[0], time_metric))
+                stats_args = {
+                    "step": step,
+                    "class_acc": avg_class_acc,
+                    "transition_acc": avg_trans_acc,
+                    "total_cost": total_cost_val,
+                    "xent_cost": xent_cost_val,
+                    "transition_cost": transition_cost_val,
+                    "l2_cost": l2_cost_val,
+                    "rl_cost": rl_cost_val,
+                    "time": time_metric,
+                }
+                stats_str = "Step: {step}\tAcc: {class_acc:.5f}\t{transition_acc:.5f}\tCost: {total_cost:.5f} {xent_cost:.5f} {transition_cost:.5f} {l2_cost:.5f}"
+                if rl_loss is not None:
+                    stats_str += " {rl_cost:.5f}"
+                stats_str += " Time: {time:.5f}"
+                logger.Log(stats_str.format(**stats_args))
 
             if step > 0 and step % FLAGS.eval_interval_steps == 0:
                 for index, eval_set in enumerate(eval_iterators):
