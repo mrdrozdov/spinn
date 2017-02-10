@@ -318,10 +318,10 @@ class Reduce(nn.Module):
 
     def __init__(self, size, tracker_size=None):
         super(Reduce, self).__init__()
-        self.left = nn.Linear(size, 5 * size)
-        self.right = nn.Linear(size, 5 * size, bias=False)
+        self.left = Linear(initializer=HeKaimingInitializer)(size, 5 * size)
+        self.right = Linear(initializer=HeKaimingInitializer)(size, 5 * size, bias=False)
         if tracker_size is not None:
-            self.track = nn.Linear(tracker_size, 5 * size, bias=False)
+            self.track = Linear(initializer=HeKaimingInitializer)(tracker_size, 5 * size, bias=False)
 
     def forward(self, left_in, right_in, tracking=None):
         """Perform batched TreeLSTM composition.
@@ -391,11 +391,11 @@ class MLP(nn.Module):
         if mlp_bn:
             self.bn_inp = nn.BatchNorm1d(features_dim)
         for i in range(num_mlp_layers):
-            setattr(self, 'l{}'.format(i), Linear(initalizer=HeKaimingInitializer)(features_dim, mlp_dim))
+            setattr(self, 'l{}'.format(i), Linear(initializer=HeKaimingInitializer)(features_dim, mlp_dim))
             if mlp_bn:
                 setattr(self, 'bn{}'.format(i), nn.BatchNorm1d(mlp_dim))
             features_dim = mlp_dim
-        setattr(self, 'l{}'.format(num_mlp_layers), Linear(initalizer=HeKaimingInitializer)(features_dim, num_classes))
+        setattr(self, 'l{}'.format(num_mlp_layers), Linear(initializer=HeKaimingInitializer)(features_dim, num_classes))
 
     def forward(self, h, train):
         if self.mlp_bn:
@@ -494,10 +494,10 @@ def DoubleIdentityInitializer(param, range):
         UniformInitializer(param.clone(), range))
 
 
-def Linear(initalizer=DefaultUniformInitializer, bias_initializer=ZeroInitializer):
+def Linear(initializer=DefaultUniformInitializer, bias_initializer=ZeroInitializer):
     class CustomLinear(nn.Linear):
         def reset_parameters(self):
-            initalizer(self.weight)
+            initializer(self.weight)
             if self.bias is not None:
                 bias_initializer(self.bias)
     return CustomLinear

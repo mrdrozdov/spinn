@@ -15,11 +15,22 @@ from spinn.util.blocks import LSTMState, Embed, MLP, Linear
 from spinn.util.blocks import bundle, unbundle, to_cpu, to_gpu, treelstm, lstm
 from spinn.util.blocks import get_h, get_c
 from spinn.util.misc import Args, Vocab, Example
+from spinn.util.blocks import HeKaimingInitializer
 
 
 T_SKIP   = 2
 T_SHIFT  = 0
 T_REDUCE = 1
+
+
+"""
+
+Missing Features
+
+- [ ] Optionally use cell when predicting transitions.
+
+
+"""
 
 
 class SentencePairTrainer(BaseSentencePairTrainer): pass
@@ -34,7 +45,7 @@ class Tracker(nn.Module):
         super(Tracker, self).__init__()
 
         # Initialize layers.
-        self.lateral = Linear()(tracker_size, 4 * tracker_size)
+        self.lateral = Linear(initializer=HeKaimingInitializer)(tracker_size, 4 * tracker_size)
         self.buf = Linear()(size, 4 * tracker_size, bias=False)
         self.stack1 = Linear()(size, 4 * tracker_size, bias=False)
         self.stack2 = Linear()(size, 4 * tracker_size, bias=False)
