@@ -47,14 +47,14 @@ class RLSPINN(SPINN):
         transition_preds = sampled_transitions
         return transition_preds
 
-    def output_hook(self, output, sentences, transitions, y_batch=None, train=True):
+    def output_hook(self, output, sentences, transitions, y_batch=None):
         # TODO: Do REINFORCE stuff here.
         pass
 
 
 class SentencePairModel(RLBaseModel):
 
-    def build_example(self, sentences, transitions, train):
+    def build_example(self, sentences, transitions):
         batch_size = sentences.shape[0]
 
         # Build Tokens
@@ -68,14 +68,14 @@ class SentencePairModel(RLBaseModel):
         t = np.concatenate([t_prem, t_hyp], axis=0)
 
         example = Example()
-        example.tokens = to_gpu(Variable(torch.from_numpy(x), volatile=not train))
+        example.tokens = to_gpu(Variable(torch.from_numpy(x), volatile=not self.training))
         example.transitions = t
 
         return example
 
-    def run_spinn(self, example, train, use_internal_parser=False, validate_transitions=True):
+    def run_spinn(self, example, use_internal_parser=False, validate_transitions=True):
         state_both, transition_acc, transition_loss = super(SentencePairModel, self).run_spinn(
-            example, train, use_internal_parser, validate_transitions)
+            example, use_internal_parser, validate_transitions)
         batch_size = len(state_both) / 2
         h_premise = get_h(torch.cat(state_both[:batch_size], 0), self.hidden_dim)
         h_hypothesis = get_h(torch.cat(state_both[batch_size:], 0), self.hidden_dim)
@@ -84,7 +84,7 @@ class SentencePairModel(RLBaseModel):
 
 class SentenceModel(RLBaseModel):
 
-    def build_example(self, sentences, transitions, train):
+    def build_example(self, sentences, transitions):
         batch_size = sentences.shape[0]
 
         # Build Tokens
@@ -94,13 +94,13 @@ class SentenceModel(RLBaseModel):
         t = transitions
 
         example = Example()
-        example.tokens = to_gpu(Variable(torch.from_numpy(x), volatile=not train))
+        example.tokens = to_gpu(Variable(torch.from_numpy(x), volatile=not self.training))
         example.transitions = t
 
         return example
 
-    def run_spinn(self, example, train, use_internal_parser=False, validate_transitions=True):
+    def run_spinn(self, example, use_internal_parser=False, validate_transitions=True):
         state, transition_acc, transition_loss = super(SentenceModel, self).run_spinn(
-            example, train, use_internal_parser, validate_transitions)
+            example, use_internal_parser, validate_transitions)
         h = get_h(torch.cat(state, 0), self.hidden_dim)
         return [h], transition_acc, transition_loss

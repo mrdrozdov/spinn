@@ -110,7 +110,7 @@ def evaluate(classifier_trainer, eval_set, logger, step, vocabulary=None):
         output = classifier_trainer.forward({
             "sentences": eval_X_batch,
             "transitions": eval_transitions_batch,
-            }, eval_y_batch, train=False,
+            }, eval_y_batch,
             use_internal_parser=FLAGS.use_internal_parser,
             validate_transitions=FLAGS.validate_transitions)
 
@@ -364,7 +364,7 @@ def run(only_forward=False):
         progress_bar.step(i=0, total=FLAGS.statistics_interval_steps)
 
         for step in range(step, FLAGS.training_steps):
-            classifier_trainer.model.train()
+            model.train()
 
             start = time.time()
 
@@ -383,7 +383,7 @@ def run(only_forward=False):
             output = classifier_trainer.forward({
                 "sentences": X_batch,
                 "transitions": transitions_batch,
-                }, y_batch, train=True,
+                }, y_batch,
                 use_internal_parser=FLAGS.use_internal_parser,
                 validate_transitions=FLAGS.validate_transitions
                 )

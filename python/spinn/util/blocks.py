@@ -174,7 +174,7 @@ def lstm(c_prev, x):
     return c, h
 
 
-def treelstm(c_left, c_right, gates, use_dropout=False):
+def treelstm(c_left, c_right, gates, use_dropout=False, training=None):
     hidden_dim = c_left.size()[1]
 
     assert gates.size()[1] == hidden_dim * 5, "Need to have 5 gates."
@@ -197,7 +197,7 @@ def treelstm(c_left, c_right, gates, use_dropout=False):
     i_val = i_gate * cell_inp
     dropout_rate = 0.1
     if use_dropout:
-        i_val = F.dropout(i_val, dropout_rate, train=i_val.volatile == False)
+        i_val = F.dropout(i_val, dropout_rate, training=training)
     c_t = fl_gate * c_left + fr_gate * c_right + i_val
     h_t = o_gate * F.tanh(c_t)
 
@@ -210,7 +210,7 @@ class BaseSentencePairTrainer(object):
         self.model = model
         self.optimizer = optimizer
 
-    def forward(self, x_batch, y_batch=None, train=True,
+    def forward(self, x_batch, y_batch=None,
                 use_internal_parser=False, validate_transitions=True):
         assert "sentences" in x_batch and "transitions" in x_batch, \
             "Input must contain dictionary of sentences and transitions."
@@ -218,7 +218,7 @@ class BaseSentencePairTrainer(object):
         sentences = x_batch["sentences"]
         transitions = x_batch["transitions"]
 
-        ret = self.model(sentences, transitions, y_batch, train=train,
+        ret = self.model(sentences, transitions, y_batch,
             use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
         return ret
 
@@ -365,7 +365,7 @@ class Reduce(nn.Module):
         lstm_in += self.right(right.h)
         if hasattr(self, 'track'):
             lstm_in += self.track(tracking.h)
-        out = unbundle(treelstm(left.c, right.c, lstm_in))
+        out = unbundle(treelstm(left.c, right.c, lstm_in, training=self.training))
         for o, l, r in zip(out, left_in, right_in):
             if hasattr(l, 'buf'):
                 o.left, o.right = l, r
@@ -397,10 +397,10 @@ class MLP(nn.Module):
             features_dim = mlp_dim
         setattr(self, 'l{}'.format(num_mlp_layers), Linear(initializer=HeKaimingInitializer)(features_dim, num_classes))
 
-    def forward(self, h, train):
+    def forward(self, h):
         if self.mlp_bn:
             h = self.bn_inp(h)
-        h = F.dropout(h, self.classifier_dropout_rate, training=train)
+        h = F.dropout(h, self.classifier_dropout_rate, training=self.training)
         for i in range(self.num_mlp_layers):
             layer = getattr(self, 'l{}'.format(i))
             h = layer(h)
@@ -408,7 +408,7 @@ class MLP(nn.Module):
             if self.mlp_bn:
                 bn = getattr(self, 'bn{}'.format(i))
                 h = bn(h)
-            h = F.dropout(h, self.classifier_dropout_rate, training=train)
+            h = F.dropout(h, self.classifier_dropout_rate, training=self.training)
         layer = getattr(self, 'l{}'.format(self.num_mlp_layers))
         y = layer(h)
         return y

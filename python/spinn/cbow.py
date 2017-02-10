@@ -53,7 +53,7 @@ class BaseModel(nn.Module):
         self.l1 = nn.Linear(mlp_dim, mlp_dim)
         self.l2 = nn.Linear(mlp_dim, num_classes)
 
-    def run_mlp(self, h, train):
+    def run_mlp(self, h):
         h = self.l0(h)
         h = F.relu(h)
         h = self.l1(h)
@@ -65,7 +65,7 @@ class BaseModel(nn.Module):
 
 class SentencePairModel(BaseModel):
 
-    def build_example(self, sentences, transitions, train):
+    def build_example(self, sentences, transitions):
         batch_size = sentences.shape[0]
 
         # Build Tokens
@@ -73,35 +73,35 @@ class SentencePairModel(BaseModel):
         x_hyp = sentences[:,:,1]
         x = np.concatenate([x_prem, x_hyp], axis=0)
 
-        return to_gpu(Variable(torch.from_numpy(x), volatile=not train))
+        return to_gpu(Variable(torch.from_numpy(x), volatile=not self.training))
 
-    def forward(self, sentences, transitions, y_batch=None, train=True, **kwargs):
+    def forward(self, sentences, transitions, y_batch=None, **kwargs):
         batch_size = sentences.shape[0]
 
         # Build Tokens
-        x = self.build_example(sentences, transitions, train)
+        x = self.build_example(sentences, transitions)
 
         emb = self.embed(x)
 
         hh = torch.squeeze(torch.sum(emb, 1))
         h = torch.cat([hh[:batch_size], hh[batch_size:]], 1)
-        output = self.run_mlp(h, train)
+        output = self.run_mlp(h)
 
         return output
 
 
 class SentenceModel(BaseModel):
 
-    def build_example(self, sentences, transitions, train):
-        return to_gpu(Variable(torch.from_numpy(x), volatile=not train))
+    def build_example(self, sentences, transitions):
+        return to_gpu(Variable(torch.from_numpy(x), volatile=not self.training))
 
-    def forward(self, sentences, transitions, y_batch=None, train=True, **kwargs):
+    def forward(self, sentences, transitions, y_batch=None, **kwargs):
         # Build Tokens
-        x = self.build_example(sentences, transitions, train)
+        x = self.build_example(sentences, transitions)
 
         emb = self.embed(x)
 
         h = torch.squeeze(torch.sum(emb, 1))
-        output = self.run_mlp(h, train)
+        output = self.run_mlp(h)
 
         return output
