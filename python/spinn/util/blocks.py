@@ -258,7 +258,7 @@ class Embed(nn.Module):
         size = 2 * size if make_buffers else size
         super(Embed, self).__init__()
         if vectors is None:
-            raise NotImplementedError
+            self.embed = nn.Embedding(vocab_size, size)
         else:
             self.projection = nn.Linear(vectors.shape[1], size)
         self.vectors = vectors
@@ -287,7 +287,7 @@ class Embed(nn.Module):
         b, l = tokens.size()[:2]
 
         if self.vectors is None:
-            embeds = self.embed(to_gpu(F.reshape(tokens, (-1,))))
+            embeds = self.embed(tokens.contiguous().view(-1).long())
         else:
             embeds = self.vectors.take(tokens.data.cpu().numpy().ravel(), axis=0)
             embeds = to_gpu(Variable(torch.from_numpy(embeds), volatile=tokens.volatile))

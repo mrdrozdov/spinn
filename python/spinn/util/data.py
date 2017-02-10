@@ -305,7 +305,6 @@ def MakeBucketEvalIterator(sources, batch_size):
     print "WARNING: May be discarding eval examples."
 
     def single_sentence_key(num_transitions):
-        import ipdb; ipdb.set_trace()
         return num_transitions
 
     def sentence_pair_key(num_transitions):
@@ -316,7 +315,7 @@ def MakeBucketEvalIterator(sources, batch_size):
 
     # Sort examples by length. From longest to shortest.
     num_transitions = sources[3]
-    sort_key = sentence_pair_key if num_transitions[0].shape[0] == 2 else single_sentence_key
+    sort_key = sentence_pair_key if len(num_transitions.shape) == 2 else single_sentence_key
     order = sorted(zip(range(dataset_size), num_transitions), key=lambda x: sort_key(x[1]))
     order = list(reversed(order))
     order = [x[0] for x in order]

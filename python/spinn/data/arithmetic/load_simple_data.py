@@ -21,15 +21,15 @@ NUMBERS = range(-10, 11)
 OUTPUTS = range(-50, 50)
 NUM_CLASSES = len(OUTPUTS)
 
-FIXED_VOCABULARY = {str(x): x + min(NUMBERS) for x in NUMBERS}
+FIXED_VOCABULARY = {str(x): i + 1 for i, x in enumerate(NUMBERS)}
 FIXED_VOCABULARY.update({
-    util.PADDING_TOKEN: len(FIXED_VOCABULARY) + 0,
+    util.PADDING_TOKEN: 0,
     "+": len(FIXED_VOCABULARY) + 1,
     "-": len(FIXED_VOCABULARY) + 2
 })
 assert len(set(FIXED_VOCABULARY.values())) == len(FIXED_VOCABULARY.values())
 
-LABEL_MAP = {str(x): x - min(OUTPUTS) for x in OUTPUTS}
+LABEL_MAP = {str(x): i for i, x in enumerate(OUTPUTS)}
 
 def convert_binary_bracketed_data(filename):
     examples = []
