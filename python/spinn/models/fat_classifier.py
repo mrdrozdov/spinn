@@ -288,6 +288,10 @@ def run(only_forward=False):
          classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
          tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
          transition_weight=FLAGS.transition_weight,
+         use_encode=FLAGS.use_encode,
+         encode_reverse=FLAGS.encode_reverse,
+         encode_bidirectional=FLAGS.encode_bidirectional,
+         encode_num_layers=FLAGS.encode_num_layers,
          use_sentence_pair=use_sentence_pair,
          use_skips=FLAGS.use_skips,
          use_difference_feature=FLAGS.use_difference_feature,
@@ -559,6 +563,12 @@ if __name__ == '__main__':
         "Used for dropout on transformed embeddings.")
     gflags.DEFINE_boolean("use_difference_feature", True, "")
     gflags.DEFINE_boolean("use_product_feature", True, "")
+
+    # Encode settings.
+    gflags.DEFINE_boolean("use_encode", False, "Encode embeddings with sequential network.")
+    gflags.DEFINE_boolean("encode_reverse", False, "Encode in reverse order.")
+    gflags.DEFINE_boolean("encode_bidirectional", False, "Encode in both directions.")
+    gflags.DEFINE_integer("encode_num_layers", 1, "RNN layers in encoding net.")
 
     # RL settings.
     gflags.DEFINE_float("rl_mu", 0.1, "Use in exponential moving average baseline.")

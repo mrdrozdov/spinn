@@ -238,52 +238,15 @@ class BaseSentencePairTrainer(object):
 
 
 class Embed(nn.Module):
-    """Flexible word embedding module for SPINN.
-
-    It supports either word vectors trained from scratch or word vectors
-    defined by a trainable projection layer on top of fixed embeddings.
-
-    Args:
-        size: The size of the model state; word vectors are treated as LSTM
-            states with both ``c`` and ``h`` so their dimension is ``2*size``.
-        vocab_size: The size of the vocabulary.
-        dropout: The drop fraction for dropout on the word vectors.
-        vectors: None, or an ~numpy.ndarray containing the fixed embeddings.
-        normalization: A normalization link class (typically
-            ~chainer.links.BatchNormalization).
-    """
-
-    def __init__(self, size, vocab_size, vectors,
-                 make_buffers=True, activation=None, embedding_dropout_rate=None):
-        size = 2 * size if make_buffers else size
+    def __init__(self, size, vocab_size, vectors):
         super(Embed, self).__init__()
         if vectors is None:
             self.embed = nn.Embedding(vocab_size, size)
         else:
             self.projection = nn.Linear(vectors.shape[1], size)
         self.vectors = vectors
-        self.embedding_dropout_rate = embedding_dropout_rate
-        self.make_buffers = make_buffers
-        self.activation = (lambda x: x) if activation is None else activation
 
     def forward(self, tokens):
-        """Embed a tensor of tokens into a list of SPINN buffers.
-
-        Returns the embeddings as a list of lists of ~chainer.Variable objects
-        each augmented with ``tokens`` and ``transitions`` attributes, where
-        each buffer (list of variables) is reversed to provide queue-like
-        ``pop()`` behavior.
-
-        Args:
-            tokens (~chainer.Variable): Tensor of token ids with shape
-                ``(B,T)``
-
-        Returns:
-            buffers: List of ``B`` lists, each of which contains ``T``
-                variables in reverse timestep order, each of which contains
-                the embedding of the corresponding token along with ``tokens``
-                and ``transitions`` attributes.
-        """
         b, l = tokens.size()[:2]
 
         if self.vectors is None:
@@ -292,15 +255,8 @@ class Embed(nn.Module):
             embeds = self.vectors.take(tokens.data.cpu().numpy().ravel(), axis=0)
             embeds = to_gpu(Variable(torch.from_numpy(embeds), volatile=tokens.volatile))
             embeds = self.projection(embeds)
-        if not self.make_buffers:
-            return self.activation(embeds.view(b, l, -1))
 
-        embeds = F.dropout(embeds, self.embedding_dropout_rate, training=self.training)
-
-        embeds = torch.chunk(to_cpu(embeds), b, 0)
-        embeds = [torch.chunk(x, l, 0) for x in embeds]
-        buffers = [list(reversed(x)) for x in embeds]
-        return buffers
+        return embeds
 
 
 class Reduce(nn.Module):

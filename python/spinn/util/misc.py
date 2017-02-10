@@ -12,6 +12,9 @@ class GenericClass():
 class Args(GenericClass): pass
 
 
+class EncodeArgs(GenericClass): pass
+
+
 class Vocab(GenericClass): pass
 
 

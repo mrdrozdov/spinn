@@ -99,12 +99,6 @@ class SPINN(nn.Module):
         self.transition_weight = args.transition_weight
         self.use_skips = use_skips
 
-        # Create dynamic embedding layer.
-        self.embed = Embed(args.size, vocab.size,
-                        embedding_dropout_rate=args.input_dropout_rate,
-                        vectors=vocab.vectors,
-                        )
-
         # Reduce function for semantic composition.
         self.reduce = Reduce(args.size, args.tracker_size)
         if args.tracker_size is not None:
@@ -128,7 +122,7 @@ class SPINN(nn.Module):
             assert all(buf_n <= (seq_length + 1) // 2 for buf_n in self.buffers_n), \
                 "All sentences (including cropped) must be the appropriate length."
 
-        self.bufs = self.embed(example.tokens)
+        self.bufs = example.bufs
 
         # Notes on adding zeros to bufs/stacks.
         # - After the buffer is consumed, we need one zero on the buffer
@@ -396,6 +390,10 @@ class BaseModel(nn.Module):
                  classifier_keep_rate=None,
                  tracking_lstm_hidden_dim=4,
                  transition_weight=None,
+                 use_encode=None,
+                 encode_reverse=None,
+                 encode_bidirectional=None,
+                 encode_num_layers=None,
                  use_skips=False,
                  use_sentence_pair=False,
                  use_difference_feature=False,
@@ -430,11 +428,28 @@ class BaseModel(nn.Module):
         args.size = model_dim/2
         args.tracker_size = tracking_lstm_hidden_dim
         args.transition_weight = transition_weight
-        args.input_dropout_rate = 1. - embedding_keep_rate
 
         vocab = Vocab()
         vocab.size = initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size
         vocab.vectors = initial_embeddings
+
+        # The input embeddings represent the hidden and cell state, so multiply by 2.
+        self.embedding_dropout_rate = 1. - embedding_keep_rate
+        input_embedding_dim = args.size * 2
+
+        # Create dynamic embedding layer.
+        self.embed = Embed(input_embedding_dim, vocab.size, vectors=vocab.vectors)
+
+        self.use_encode = use_encode
+        if use_encode:
+            self.encode_reverse = encode_reverse
+            self.encode_bidirectional = encode_bidirectional
+            self.bi = 2 if self.encode_bidirectional else 1
+            self.encode_num_layers = encode_num_layers
+            self.encode = nn.LSTM(model_dim, model_dim / bi, num_layers=encode_num_layers,
+                batch_first=True,
+                bidirectional=self.encode_bidirectional,
+                )
 
         self.spinn = self.build_spinn(args, vocab, use_skips)
 
@@ -446,6 +461,9 @@ class BaseModel(nn.Module):
 
     def build_example(self, sentences, transitions):
         raise Exception('Not implemented.')
+
+    def run_encode(self, emb):
+        raise NotImplementedError
 
     def run_spinn(self, example, use_internal_parser, validate_transitions=True):
         self.spinn.reset_state()
@@ -460,6 +478,22 @@ class BaseModel(nn.Module):
     def forward(self, sentences, transitions, y_batch=None,
                  use_internal_parser=False, validate_transitions=True):
         example = self.build_example(sentences, transitions)
+
+        b, l = example.tokens.size()[:2]
+
+        embeds = self.embed(example.tokens)
+        embeds = F.dropout(embeds, self.embedding_dropout_rate, training=self.training)
+        embeds = torch.chunk(to_cpu(embeds), b, 0)
+
+        if self.use_encode:
+            self.run_encode(embeds)
+        else:
+            # Make Buffers
+            embeds = [torch.chunk(x, l, 0) for x in embeds]
+            buffers = [list(reversed(x)) for x in embeds]
+
+        example.bufs = buffers
+
         h, transition_acc, transition_loss = self.run_spinn(example, use_internal_parser, validate_transitions)
 
         self.transition_acc = transition_acc
