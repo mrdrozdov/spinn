@@ -1,5 +1,6 @@
 import numpy as np
 import random
+import math
 
 # PyTorch
 import torch
@@ -390,11 +391,11 @@ class MLP(nn.Module):
         if mlp_bn:
             self.bn_inp = nn.BatchNorm1d(features_dim)
         for i in range(num_mlp_layers):
-            setattr(self, 'l{}'.format(i), nn.Linear(features_dim, mlp_dim))
+            setattr(self, 'l{}'.format(i), Linear(initalizer=HeKaimingInitializer)(features_dim, mlp_dim))
             if mlp_bn:
                 setattr(self, 'bn{}'.format(i), nn.BatchNorm1d(mlp_dim))
             features_dim = mlp_dim
-        setattr(self, 'l{}'.format(num_mlp_layers), nn.Linear(features_dim, num_classes))
+        setattr(self, 'l{}'.format(num_mlp_layers), Linear(initalizer=HeKaimingInitializer)(features_dim, num_classes))
 
     def forward(self, h, train):
         if self.mlp_bn:
@@ -411,3 +412,92 @@ class MLP(nn.Module):
         layer = getattr(self, 'l{}'.format(self.num_mlp_layers))
         y = layer(h)
         return y
+
+
+class HeKaimingLinear(nn.Linear):
+    def reset_parameters(self):
+        HeKaimingInitializer(self.weight)
+        if self.bias is not None:
+            ZeroInitializer(self.bias)
+
+
+def DefaultUniformInitializer(param):
+    stdv = 1. / math.sqrt(param.size(1))
+    UniformInitializer(param, stdv)
+
+
+def HeKaimingInitializer(param):
+    fan = param.size()
+    init = np.random.normal(scale=np.sqrt(4.0/(fan[0] + fan[1])),
+                                size=fan).astype(np.float32)
+    param.data.set_(torch.from_numpy(init))
+
+
+def UniformInitializer(param, range):
+    shape = param.size()
+    init = np.random.uniform(-range, range, shape).astype(np.float32)
+    param.data.set_(torch.from_numpy(init))
+
+
+def NormalInitializer(param, std):
+    shape = param.size()
+    init = np.random.normal(0.0, std, shape).astype(np.float32)
+    param.data.set_(torch.from_numpy(init))
+
+
+def ZeroInitializer(param):
+    shape = param.size()
+    init = np.zeros(shape).astype(np.float32)
+    param.data.set_(torch.from_numpy(init))
+
+
+def OneInitializer(param):
+    shape = param.size()
+    init = np.ones(shape).astype(np.float32)
+    param.data.set_(torch.from_numpy(init))
+
+
+def ValueInitializer(param, value):
+    shape = param.size()
+    init = np.ones(shape).astype(np.float32) * value
+    param.data.set_(torch.from_numpy(init))
+
+
+def TreeLSTMBiasInitializer(param):
+    shape = param.size()
+
+    hidden_dim = shape[0] / 5
+    init = np.zeros(shape).astype(np.float32)
+    init[hidden_dim:3*hidden_dim] = 1
+
+    param.data.set_(torch.from_numpy(init))
+
+
+def LSTMBiasInitializer(param):
+    shape = param.size()
+
+    hidden_dim = shape[0] / 4
+    init = np.zeros(shape)
+    init[hidden_dim:2*hidden_dim] = 1
+
+    param.data.set_(torch.from_numpy(init))
+
+
+def DoubleIdentityInitializer(param, range):
+    shape = param.size()
+
+    half_d = shape[0] / 2
+    double_identity = np.concatenate((
+        np.identity(half_d), np.identity(half_d))).astype(np.float32)
+
+    param.data.set_(torch.from_numpy(double_identity)).add_(
+        UniformInitializer(param.clone(), range))
+
+
+def Linear(initalizer=DefaultUniformInitializer, bias_initializer=ZeroInitializer):
+    class CustomLinear(nn.Linear):
+        def reset_parameters(self):
+            initalizer(self.weight)
+            if self.bias is not None:
+                bias_initializer(self.bias)
+    return CustomLinear

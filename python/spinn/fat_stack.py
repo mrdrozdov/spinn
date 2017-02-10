@@ -11,7 +11,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 from spinn.util.blocks import BaseSentencePairTrainer, Reduce
-from spinn.util.blocks import LSTMState, Embed, MLP
+from spinn.util.blocks import LSTMState, Embed, MLP, Linear
 from spinn.util.blocks import bundle, unbundle, to_cpu, to_gpu, treelstm, lstm
 from spinn.util.blocks import get_h, get_c
 from spinn.util.misc import Args, Vocab, Example
@@ -34,10 +34,10 @@ class Tracker(nn.Module):
         super(Tracker, self).__init__()
 
         # Initialize layers.
-        self.lateral = nn.Linear(tracker_size, 4 * tracker_size)
-        self.buf = nn.Linear(size, 4 * tracker_size, bias=False)
-        self.stack1 = nn.Linear(size, 4 * tracker_size, bias=False)
-        self.stack2 = nn.Linear(size, 4 * tracker_size, bias=False)
+        self.lateral = Linear()(tracker_size, 4 * tracker_size)
+        self.buf = Linear()(size, 4 * tracker_size, bias=False)
+        self.stack1 = Linear()(size, 4 * tracker_size, bias=False)
+        self.stack2 = Linear()(size, 4 * tracker_size, bias=False)
 
         self.state_size = tracker_size
         self.tracker_dropout_rate = tracker_dropout_rate
