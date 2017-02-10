@@ -40,16 +40,60 @@ class RLSPINN(SPINN):
     # TODO: Right now this model doesn't vary much from supervised spinn, except
     # transitions are sampled instead of inferred.
     def predict_actions(self, transition_output, cant_skip):
-        transition_dist = F.softmax(transition_output)
-        transition_dist = transition_dist.data.cpu().numpy()
-        sampled_transitions = np.array([T_SKIP for _ in self.bufs], dtype=np.int32)
-        sampled_transitions[cant_skip] = [np.random.choice(self.choices, 1, p=t_dist)[0] for t_dist in transition_dist[cant_skip]]
-        transition_preds = sampled_transitions
+        if self.training:
+            transition_dist = F.softmax(transition_output)
+            transition_dist = transition_dist.data.cpu().numpy()
+            sampled_transitions = np.array([T_SKIP for _ in self.bufs], dtype=np.int32)
+            sampled_transitions[cant_skip] = [np.random.choice(self.choices, 1, p=t_dist)[0] for t_dist in transition_dist[cant_skip]]
+            transition_preds = sampled_transitions
+        else:
+            transition_dist = F.log_softmax(transition_output)
+            transition_dist = transition_dist.data.cpu().numpy()
+            transition_preds = transition_dist.argmax(axis=1)
         return transition_preds
 
+    def build_reward(self, logits, target):
+        # Zero One Loss.
+        rewards = torch.eq(logits.max(1)[1], target).float()
+
+        # TODO: Cross Entropy Reward
+
+        return rewards
+
+    def reinforce(self, rewards):
+        raise NotImplementedError
+
+        t_preds, t_logits, t_given, t_mask = self.get_statistics()
+
+        if self.use_sentence_pair:
+            # Handles the case of SNLI where each reward is used for two sentences.
+            rewards = torch.cat([rewards, rewards], 0)
+
+        # Expand rewards.
+        # if not self.spinn.use_skips:
+        #     repeat_mask = self.spinn.transition_mask.sum(axis=1)
+        #     rewards = rewards.view(-1).cpu().numpy().repeat(repeat_mask, axis=0)
+        #     # rewards = expand_along(rewards.view(-1).cpu().numpy(), self.spinn.transition_mask)
+        # else:
+        #     raise NotImplementedError
+
+        # rl_loss = -1. * torch.dot(log_p_preds, to_gpu(Variable(torch.from_numpy(rewards)), volatile=log_p_preds.volatile)) / log_p_preds.size(0)
+
+        # return rl_loss
+
     def output_hook(self, output, sentences, transitions, y_batch=None):
-        # TODO: Do REINFORCE stuff here.
-        pass
+        if not self.training:
+            return
+
+        logits = F.softmax(output)
+        target = torch.from_numpy(y_batch).long()
+
+        # Get Reward.
+        rewards = self.build_rewards(logits, target)
+
+        # Assign REINFORCE output.
+        self.rl_loss = self.reinforce(rewards)
+
 
 
 class SentencePairModel(RLBaseModel):

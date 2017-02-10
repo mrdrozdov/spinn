@@ -196,6 +196,18 @@ class SPINN(nn.Module):
         transition_preds = transition_dist.argmax(axis=1)
         return transition_preds
 
+    def get_statistics(self):
+        # TODO: These are not necessarily the most efficient flatten operations...
+
+        t_preds = np.array(reduce(lambda x, y: x + y.tolist(),
+            [m["t_preds"] for m in self.memories], []))
+        t_given = np.array(reduce(lambda x, y: x + y.tolist(),
+            [m["t_given"] for m in self.memories], []))
+        t_mask = np.array(reduce(lambda x, y: x + y.tolist(),
+            [m["t_mask"] for m in self.memories], []))
+        t_logits = torch.cat([m["t_logits"] for m in self.memories], 0)
+
+        return t_preds, t_logits, t_given, t_mask
 
     def run(self, inp_transitions, run_internal_parser=False, use_internal_parser=False, validate_transitions=True):
         transition_loss = None
@@ -208,6 +220,7 @@ class SPINN(nn.Module):
         for t_step in range(num_transitions):
             transitions = inp_transitions[:, t_step]
             transition_arr = list(transitions)
+            sub_batch_size = len(transition_arr)
 
             # A mask to select all non-SKIP transitions.
             cant_skip = np.array([t != T_SKIP for t in transitions])
@@ -267,12 +280,16 @@ class SPINN(nn.Module):
 
                     t_preds = transition_preds
 
+                    # Indices of examples that have a transition.
+                    t_mask = np.arange(sub_batch_size)
+
                     # Filter to non-SKIP values
                     # =========================
 
                     if not self.use_skips:
                         t_preds = t_preds[cant_skip]
                         t_given = t_given[cant_skip]
+                        t_mask = t_mask[cant_skip]
 
                         # Be careful when filtering distributions. These values are used to
                         # calculate loss and need to be used in backprop.
@@ -297,6 +314,9 @@ class SPINN(nn.Module):
 
                     # Given transitions.
                     memory["t_given"] = t_given
+
+                    # Record step index.
+                    memory["t_mask"] = t_mask
 
                     # TODO: Write tests to make sure these values look right in the various settings.
 
@@ -353,20 +373,10 @@ class SPINN(nn.Module):
         # ==========
 
         if self.transition_weight is not None:
-            # We compute statistics after the fact, since sub-batches can
-            # have different sizes when not using skips.
-            statistics = zip(*[
-                (m["t_preds"], m["t_logits"], m["t_given"])
-                for m in self.memories])
+            t_preds, t_logits, t_given, _ = self.get_statistics()
 
-            statistics = [
-                torch.squeeze(torch.cat([ss.unsqueeze(1) for ss in s], 0))
-                if isinstance(s[0], Variable) else
-                np.array(reduce(lambda x, y: x + y.tolist(), s, []))
-                for s in statistics]
-
-            t_preds, t_logits, t_given = statistics
-
+            # We compute accuracy and loss after all transitions have complete,
+            # since examples can have different lengths when not using skips.
             transition_acc = (t_preds == t_given).sum() / float(t_preds.shape[0])
             transition_loss = nn.NLLLoss()(t_logits, to_gpu(Variable(
                 torch.from_numpy(t_given), volatile=t_logits.volatile)))
