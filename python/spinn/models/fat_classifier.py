@@ -174,6 +174,17 @@ def reinforce(optimizer, lr, baseline, mu, reward, transition_loss):
     return new_lr, baseline
 
 
+def get_checkpoint_path(ckpt_path, experiment_name, suffix=".ckpt", best=False):
+    # Set checkpoint path.
+    if ckpt_path.endswith(suffix):
+        checkpoint_path = ckpt_path
+    else:
+        checkpoint_path = os.path.join(ckpt_path, experiment_name + suffix)
+    if best:
+        checkpoint_path += "_best"
+    return checkpoint_path
+
+
 def run(only_forward=False):
     logger = afs_safe_logger.Logger(os.path.join(FLAGS.log_path, FLAGS.experiment_name) + ".log")
 
@@ -314,17 +325,17 @@ def run(only_forward=False):
     # Build trainer.
     classifier_trainer = trainer_cls(model, optimizer)
 
-    # Set checkpoint path.
-    if ".ckpt" in FLAGS.ckpt_path:
-        checkpoint_path = FLAGS.ckpt_path
-    else:
-        checkpoint_path = os.path.join(FLAGS.ckpt_path, FLAGS.experiment_name + ".ckpt")
+    standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name)
+    best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name, best=True)
 
     # Load checkpoint if available.
-    if os.path.isfile(checkpoint_path):
-        # TODO: Check that resuming works fine with tf summaries.
+    if FLAGS.load_best and os.path.isfile(best_checkpoint_path):
+        logger.Log("Found best checkpoint, restoring.")
+        step, best_dev_error = classifier_trainer.load(best_checkpoint_path)
+        logger.Log("Resuming at step: {} with best dev accuracy: {}".format(step, 1. - best_dev_error))
+    elif os.path.isfile(standard_checkpoint_path):
         logger.Log("Found checkpoint, restoring.")
-        step, best_dev_error = classifier_trainer.load(checkpoint_path)
+        step, best_dev_error = classifier_trainer.load(standard_checkpoint_path)
         logger.Log("Resuming at step: {} with best dev accuracy: {}".format(step, 1. - best_dev_error))
     else:
         assert not only_forward, "Can't run an eval-only run without a checkpoint. Supply a checkpoint."
@@ -497,12 +508,12 @@ def run(only_forward=False):
                     if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                         best_dev_error = 1 - acc
                         logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
-                        classifier_trainer.save(checkpoint_path + "_best", step, best_dev_error)
+                        classifier_trainer.save(best_checkpoint_path, step, best_dev_error)
                 progress_bar.reset()
 
-            elif step % FLAGS.ckpt_interval_steps == 0 and step > FLAGS.ckpt_step:
+            if step % FLAGS.ckpt_interval_steps == 0 and step > FLAGS.ckpt_step:
                 logger.Log("Checkpointing.")
-                classifier_trainer.save(checkpoint_path, step, best_dev_error)
+                classifier_trainer.save(standard_checkpoint_path, step, best_dev_error)
 
             progress_bar.step(i=step % FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
 
@@ -526,6 +537,7 @@ if __name__ == '__main__':
         "base for the filename.")
     gflags.DEFINE_string("log_path", ".", "A directory in which to write logs.")
     gflags.DEFINE_integer("ckpt_step", 1000, "Steps to run before considering saving checkpoint.")
+    gflags.DEFINE_boolean("load_best", False, "If True, attempt to load 'best' checkpoint.")
 
     # Data settings.
     gflags.DEFINE_string("training_data_path", None, "")
