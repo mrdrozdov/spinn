@@ -48,8 +48,7 @@ class BaseModel(nn.Module):
         vocab.vectors = initial_embeddings
 
         self.embed = Embed(args.size, vocab.size,
-                        vectors=vocab.vectors, make_buffers=False,
-                        embedding_dropout_rate=args.input_dropout_rate,
+                        vectors=vocab.vectors,
                         )
 
         self.rnn = nn.LSTM(word_embedding_dim, model_dim, num_layers=1, batch_first=True)
@@ -76,6 +75,14 @@ class BaseModel(nn.Module):
         output, (hn, cn) = self.rnn(x, (h0, c0))
 
         return hn
+
+    def run_embed(self, x):
+        batch_size, seq_length = x.size()
+
+        emb = self.embed(x)
+        emb = torch.cat([b.unsqueeze(0) for b in torch.chunk(emb, batch_size, 0)], 0)
+
+        return emb
 
     def run_mlp(self, h):
         h = self.l0(h)
@@ -105,7 +112,7 @@ class SentencePairModel(BaseModel):
         # Build Tokens
         x = self.build_example(sentences, transitions)
 
-        emb = self.embed(x)
+        emb = self.run_embed(x)
 
         hh = torch.squeeze(self.run_rnn(emb))
         h = torch.cat([hh[:batch_size], hh[batch_size:]], 1)
@@ -123,7 +130,7 @@ class SentenceModel(BaseModel):
         # Build Tokens
         x = self.build_example(sentences, transitions)
 
-        emb = self.embed(x)
+        emb = self.run_embed(x)
 
         h = torch.squeeze(self.run_rnn(emb))
         output = self.run_mlp(h)

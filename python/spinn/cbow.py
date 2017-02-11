@@ -42,15 +42,13 @@ class BaseModel(nn.Module):
 
         args = Args()
         args.size = model_dim
-        args.input_dropout_rate = 1. - embedding_keep_rate
 
         vocab = Vocab()
         vocab.size = initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size
         vocab.vectors = initial_embeddings
 
         self.embed = Embed(args.size, vocab.size,
-                        embedding_dropout_rate=args.input_dropout_rate,
-                        vectors=vocab.vectors, make_buffers=False,
+                        vectors=vocab.vectors,
                         )
 
         mlp_input_dim = word_embedding_dim * 2 if use_sentence_pair else model_dim
@@ -58,6 +56,14 @@ class BaseModel(nn.Module):
         self.l0 = nn.Linear(mlp_input_dim, mlp_dim)
         self.l1 = nn.Linear(mlp_dim, mlp_dim)
         self.l2 = nn.Linear(mlp_dim, num_classes)
+
+    def run_embed(self, x):
+        batch_size, seq_length = x.size()
+
+        emb = self.embed(x)
+        emb = torch.cat([b.unsqueeze(0) for b in torch.chunk(emb, batch_size, 0)], 0)
+
+        return emb
 
     def run_mlp(self, h):
         h = self.l0(h)
@@ -87,7 +93,7 @@ class SentencePairModel(BaseModel):
         # Build Tokens
         x = self.build_example(sentences, transitions)
 
-        emb = self.embed(x)
+        emb = self.run_embed(x)
 
         hh = torch.squeeze(torch.sum(emb, 1))
         h = torch.cat([hh[:batch_size], hh[batch_size:]], 1)
@@ -105,7 +111,7 @@ class SentenceModel(BaseModel):
         # Build Tokens
         x = self.build_example(sentences, transitions)
 
-        emb = self.embed(x)
+        emb = self.run_embed(x)
 
         h = torch.squeeze(torch.sum(emb, 1))
         output = self.run_mlp(h)
