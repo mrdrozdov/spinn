@@ -5,12 +5,23 @@ import getpass
 import os
 import random
 import numpy as np
+import gflags
+import sys
 
 NYU_NON_PBS = True
 
 LIN = "LIN"
 EXP = "EXP"
 SS_BASE = "SS_BASE"
+
+FLAGS = gflags.FLAGS
+
+gflags.DEFINE_string("training_data_path", "~/snli_1.0/snli_1.0_train.jsonl", "")
+gflags.DEFINE_string("eval_data_path", "~/snli_1.0/snli_1.0_dev.jsonl", "")
+gflags.DEFINE_string("embedding_data_path", "~/glove/glove.840B.300d.txt", "")
+gflags.DEFINE_string("log_path", "~/logs", "")
+
+FLAGS(sys.argv)
 
 # Instructions: Configure the variables in this block, then run
 # the following on a machine with qsub access:
@@ -23,21 +34,21 @@ SS_BASE = "SS_BASE"
 
 FIXED_PARAMETERS = {
     "data_type":     "snli",
-    "model_type":      "SPINN",
-    "training_data_path":    "~/snli_1.0/snli_1.0_train.jsonl",
-    "eval_data_path":    "~/snli_1.0/snli_1.0_dev.jsonl",
-    "embedding_data_path": "~/glove/glove.840B.300d.txt",
-    "log_path": "~/logs",
+    "model_type":      "RLSPINN",
+    "training_data_path":    FLAGS.training_data_path,
+    "eval_data_path":    FLAGS.eval_data_path,
+    "embedding_data_path": FLAGS.embedding_data_path,
+    "log_path": FLAGS.log_path,
+    "metrics_path": FLAGS.log_path,
+    "ckpt_path":  FLAGS.log_path,
     "word_embedding_dim":   "300",
     "model_dim":   "600",
-    "seq_length":   "50",
-    "eval_seq_length":  "50",
+    "seq_length":   "150",
+    "eval_seq_length":  "150",
     "eval_interval_steps": "500",
     "statistics_interval_steps": "500",
-    "use_reinforce": "",
     "use_internal_parser": "",
     "batch_size":  "32",
-    "ckpt_path":  "~/logs"
 }
 
 # Tunable parameters.
