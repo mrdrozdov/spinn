@@ -82,9 +82,10 @@ class Tracker(nn.Module):
             # Run tracking lstm.
             self.c, self.h = lstm(self.c, tracker_inp)
 
-            return self.c, self.h
+            return self.h, self.c
         else:
-            return self.transform(tracker_inp)
+            outp = self.transform(tracker_inp)
+            return outp, None
 
     @property
     def states(self):
@@ -252,7 +253,7 @@ class SPINN(nn.Module):
                     # top_stack_2 = bundle(stack[-2] if len(stack) > 1 else zeros for stack in self.stacks)
 
                 # Get hidden output from the tracker. Used to predict transitions.
-                tracker_c, tracker_h = self.tracker(top_buf, top_stack_1, top_stack_2)
+                tracker_h, tracker_c = self.tracker(top_buf, top_stack_1, top_stack_2)
 
                 if hasattr(self, 'transition_net'):
                     transition_output = self.transition_net(tracker_h)
