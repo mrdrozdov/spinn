@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import json
+import codecs
 
 SENTENCE_PAIR_DATA = True
 
@@ -13,6 +14,7 @@ LABEL_MAP = {
 def convert_binary_bracketing(parse):
     transitions = []
     tokens = []
+
     for word in parse.split(' '):
         if word[0] != "(":
             if word == ")":
@@ -26,8 +28,13 @@ def convert_binary_bracketing(parse):
 def load_data(path):
     print "Loading", path
     examples = []
-    with open(path, 'r') as f:
+    with codecs.open(path, encoding='utf-8') as f:
         for line in f:
+            try:
+                line = line.encode('UTF-8')
+            except UnicodeError as e:
+                print "ENCODING ERROR:", line, e
+                line = "{}"
             loaded_example = json.loads(line)
             if loaded_example["gold_label"] not in LABEL_MAP:
                 continue

@@ -6,6 +6,8 @@ import os
 import random
 import numpy as np
 
+NYU_NON_PBS = True
+
 LIN = "LIN"
 EXP = "EXP"
 SS_BASE = "SS_BASE"
@@ -21,34 +23,38 @@ SS_BASE = "SS_BASE"
 
 FIXED_PARAMETERS = {
     "data_type":     "snli",
-    "model_type":     "Model0",
-    "training_data_path":    "/scr/nlp/data/snli_1.0/snli_1.0_train.jsonl",
-    "eval_data_path":    "/scr/nlp/data/snli_1.0/snli_1.0_dev.jsonl",
-    "embedding_data_path": "/scr/nlp/data/glove_vecs/glove.840B.300d.txt",
-    "word_embedding_dim":	"300",
+    "model_type":      "SPINN",
+    "training_data_path":    "~/snli_1.0/snli_1.0_train.jsonl",
+    "eval_data_path":    "~/snli_1.0/snli_1.0_dev.jsonl",
+    "embedding_data_path": "~/glove/glove.840B.300d.txt",
+    "log_path": "~/logs",
+    "word_embedding_dim":   "300",
     "model_dim":   "600",
-    "seq_length":	"50",
-    "eval_seq_length":	"50",
+    "seq_length":   "50",
+    "eval_seq_length":  "50",
+    "eval_interval_steps": "500",
+    "statistics_interval_steps": "500",
+    "use_reinforce": "",
+    "use_internal_parser": "",
     "batch_size":  "32",
-    "ckpt_path":    os.path.join("/scr/", getpass.getuser(), "/"),  # Launching user's home scr dir
-    "log_path":    os.path.join("/scr/", getpass.getuser(),  "/")  # Launching user's home scr dir
+    "ckpt_path":  "~/logs"
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "learning_rate":      (EXP, 0.0002, 0.01),  # RNN likes higher end of range, but below 009.
-    "l2_lambda":   		  (EXP, 8e-7, 2e-5),
-    "semantic_classifier_keep_rate": (LIN, 0.80, 0.95),  # NB: Keep rates may depend considerably on dims.
-    "embedding_keep_rate": (LIN, 0.8, 0.95),
-    "scheduled_sampling_exponent_base": (SS_BASE, 1e-5, 8e-5),
-    "transition_cost_scale": (LIN, 0.5, 4.0),
-    "tracking_lstm_hidden_dim": (EXP, 24, 128),
-    "num_sentence_pair_combination_layers": (LIN, 1, 3)
+    "learning_rate":      ("lr", EXP, 0.0002, 0.002),  # RNN likes higher, but below 009.
+    "l2_lambda":          ("l2", EXP, 8e-7, 2e-5),
+    "semantic_classifier_keep_rate": ("skr", LIN, 0.7, 0.95),  # NB: Keep rates may depend considerably on dims.
+    "embedding_keep_rate": ("ekr", LIN, 0.7, 0.95),
+    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.5, 1.0),
+    "tracking_lstm_hidden_dim": ("tdim", EXP, 24, 128),
+    "transition_weight":  ("trwt", EXP, 0.5, 4.0),
+    "num_mlp_layers": ("mlp", LIN, 1, 3)
 }
 
-sweep_name = "sweep_" + \
+sweep_name = "sweep_01_23_r_" + \
     FIXED_PARAMETERS["data_type"] + "_" + FIXED_PARAMETERS["model_type"]
-sweep_runs = 4
+sweep_runs = 6
 queue = "jag"
 
 # - #
@@ -60,12 +66,14 @@ print
 
 for run_id in range(sweep_runs):
     params = {}
+    name = sweep_name + "_" + str(run_id)
+
     params.update(FIXED_PARAMETERS)
     for param in SWEEP_PARAMETERS:
         config = SWEEP_PARAMETERS[param]
-        t = config[0]
-        mn = config[1]
-        mx = config[2]
+        t = config[1]
+        mn = config[2]
+        mx = config[3]
 
         r = random.uniform(0, 1)
         if t == EXP:
@@ -81,21 +89,22 @@ for run_id in range(sweep_runs):
 
         if isinstance(mn, int):
             sample = int(round(sample, 0))
+            val_disp = str(sample)
+        else: 
+            val_disp = "%.2g" % sample
 
         params[param] = sample
+        name += "-" + config[0] + val_disp
 
-    name = sweep_name + "_" + str(run_id)
     flags = ""
     for param in params:
         value = params[param]
         val_str = ""
         flags += " --" + param + " " + str(value)
-        if param not in FIXED_PARAMETERS:
-            if isinstance(value, int):
-                val_disp = str(value)
-            else:
-                val_disp = "%.2g" % value
-            name += "-" + param + val_disp
+
     flags += " --experiment_name " + name
-    print "export SPINN_FLAGS=\"" + flags + "\"; export DEVICE=gpuX; qsub -v SPINN_FLAGS,DEVICE ../scripts/train_spinn_classifier.sh -q " + queue + " -l host=jagupardX"
+    if NYU_NON_PBS:
+        print "cd spinn/python; python2.7 -m spinn.models.fat_classifier " + flags
+    else:
+        print "export SPINN_FLAGS=\"" + flags + "\"; export DEVICE=gpuX; qsub -v SPINN_FLAGS,DEVICE ../scripts/train_spinn_classifier.sh -q " + queue + " -l host=jagupardX"
     print
