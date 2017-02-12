@@ -158,7 +158,7 @@ def evaluate(classifier_trainer, eval_set, logger, metrics_logger, step, vocabul
     else:
         eval_trans_acc = 0.0
 
-    logger.Log("Step: %i\tEval acc: %f\t %f\t%s Time: %5f" %
+    logger.Log("Step: %i Eval acc: %f  %f %s Time: %5f" %
               (step, eval_class_acc, eval_trans_acc, filename, time_metric))
 
     metrics_logger.Log('eval_class_acc', eval_class_acc, step)
@@ -517,7 +517,7 @@ def run(only_forward=False):
                     "rl_cost": rl_cost_val,
                     "time": time_metric,
                 }
-                stats_str = "Step: {step}\tAcc: {class_acc:.5f}\t{transition_acc:.5f}\tCost: {total_cost:.5f} {xent_cost:.5f} {transition_cost:.5f} {l2_cost:.5f}"
+                stats_str = "Step: {step} Acc: {class_acc:.5f} {transition_acc:.5f} Cost: {total_cost:.5f} {xent_cost:.5f} {transition_cost:.5f} {l2_cost:.5f}"
                 if rl_loss is not None:
                     stats_str += " {rl_cost:.5f}"
                 stats_str += " Time: {time:.5f}"
