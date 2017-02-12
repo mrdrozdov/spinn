@@ -10,6 +10,20 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 
+def debug_gradient(model, losses):
+    model.zero_grad()
+
+    for name, loss in losses:
+        print(name)
+        loss.backward(retain_variables=True)
+        stats = [(p.grad.norm().data[0], p.grad.max().data[0], p.grad.min().data[0], p.size())
+                 for p in model.parameters()]
+        for s in stats:
+            print(s)
+        print
+
+        model.zero_grad()
+
 
 def reverse_tensor(var, dim):
     dim_size = var.size(dim)
@@ -283,11 +297,11 @@ class Reduce(nn.Module):
             tracker is present.
     """
 
-    def __init__(self, size, tracker_size=None):
+    def __init__(self, size, tracker_size=None, use_tracking_in_composition=None):
         super(Reduce, self).__init__()
         self.left = Linear(initializer=HeKaimingInitializer)(size, 5 * size)
         self.right = Linear(initializer=HeKaimingInitializer)(size, 5 * size, bias=False)
-        if tracker_size is not None:
+        if use_tracking_in_composition:
             self.track = Linear(initializer=HeKaimingInitializer)(tracker_size, 5 * size, bias=False)
 
     def forward(self, left_in, right_in, tracking=None):
@@ -335,6 +349,7 @@ class Reduce(nn.Module):
         out = unbundle(treelstm(left.c, right.c, lstm_in, training=self.training))
         for o, l, r in zip(out, left_in, right_in):
             if hasattr(l, 'buf'):
+                import ipdb; ipdb.set_trace()
                 o.left, o.right = l, r
                 o.buf = o.left.buf
                 o.transitions = o.left.transitions + o.right.transitions + [1]

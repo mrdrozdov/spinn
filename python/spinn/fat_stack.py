@@ -42,15 +42,20 @@ class SentenceTrainer(SentencePairTrainer): pass
 
 class Tracker(nn.Module):
 
-    def __init__(self, size, tracker_size):
+    def __init__(self, size, tracker_size, lateral_tracking=True):
         super(Tracker, self).__init__()
 
         # Initialize layers.
-        self.lateral = Linear(initializer=HeKaimingInitializer)(tracker_size, 4 * tracker_size)
         self.buf = Linear()(size, 4 * tracker_size, bias=False)
         self.stack1 = Linear()(size, 4 * tracker_size, bias=False)
         self.stack2 = Linear()(size, 4 * tracker_size, bias=False)
 
+        if lateral_tracking:
+            self.lateral = Linear(initializer=HeKaimingInitializer)(tracker_size, 4 * tracker_size)
+        else:
+            self.transform = Linear(initializer=HeKaimingInitializer)(4 * tracker_size, tracker_size)
+
+        self.lateral_tracking = lateral_tracking
         self.state_size = tracker_size
 
         self.reset_state()
@@ -59,24 +64,27 @@ class Tracker(nn.Module):
         self.c = self.h = None
 
     def forward(self, top_buf, top_stack_1, top_stack_2):
-        lstm_in = self.buf(top_buf.h)
-        lstm_in += self.stack1(top_stack_1.h)
-        lstm_in += self.stack2(top_stack_2.h)
+        tracker_inp = self.buf(top_buf.h)
+        tracker_inp += self.stack1(top_stack_1.h)
+        tracker_inp += self.stack2(top_stack_2.h)
 
-        batch_size = lstm_in.size(0)
+        batch_size = tracker_inp.size(0)
 
-        if self.h is not None:
-            lstm_in += self.lateral(self.h)
-        if self.c is None:
-            self.c = to_gpu(Variable(torch.from_numpy(
-                np.zeros((batch_size, self.state_size),
-                              dtype=np.float32)),
-                volatile=lstm_in.volatile))
+        if self.lateral_tracking:
+            if self.h is not None:
+                tracker_inp += self.lateral(self.h)
+            if self.c is None:
+                self.c = to_gpu(Variable(torch.from_numpy(
+                    np.zeros((batch_size, self.state_size),
+                                  dtype=np.float32)),
+                    volatile=tracker_inp.volatile))
 
-        # Run tracking lstm.
-        self.c, self.h = lstm(self.c, lstm_in)
+            # Run tracking lstm.
+            self.c, self.h = lstm(self.c, tracker_inp)
 
-        return self.c, self.h
+            return self.c, self.h
+        else:
+            return self.transform(tracker_inp)
 
     @property
     def states(self):
@@ -101,9 +109,9 @@ class SPINN(nn.Module):
         self.use_skips = use_skips
 
         # Reduce function for semantic composition.
-        self.reduce = Reduce(args.size, args.tracker_size)
+        self.reduce = Reduce(args.size, args.tracker_size, args.use_tracking_in_composition)
         if args.tracker_size is not None:
-            self.tracker = Tracker(args.size, args.tracker_size)
+            self.tracker = Tracker(args.size, args.tracker_size, args.lateral_tracking)
             if args.transition_weight is not None:
                 # TODO: Might be interesting to try a different network here.
                 self.transition_net = nn.Linear(args.tracker_size, 3 if use_skips else 2)
@@ -192,7 +200,9 @@ class SPINN(nn.Module):
             [m["t_given"] for m in self.memories], []))
         t_mask = np.array(reduce(lambda x, y: x + y.tolist(),
             [m["t_mask"] for m in self.memories], []))
-        t_logits = torch.cat([m["t_logits"] for m in self.memories], 0)
+        t_logits = [m["t_logits"] for m in self.memories]
+        if len(t_logits) > 0:
+            t_logits = torch.cat(t_logits, 0)
 
         return t_preds, t_logits, t_given, t_mask
 
@@ -396,6 +406,8 @@ class BaseModel(nn.Module):
                  encode_bidirectional=None,
                  encode_num_layers=None,
                  use_skips=False,
+                 lateral_tracking=None,
+                 use_tracking_in_composition=None,
                  use_sentence_pair=False,
                  use_difference_feature=False,
                  use_product_feature=False,
@@ -426,6 +438,8 @@ class BaseModel(nn.Module):
         classifier_dropout_rate = 1. - classifier_keep_rate
 
         args = Args()
+        args.lateral_tracking = lateral_tracking
+        args.use_tracking_in_composition = use_tracking_in_composition
         args.size = model_dim/2
         args.tracker_size = tracking_lstm_hidden_dim
         args.transition_weight = transition_weight

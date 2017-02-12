@@ -35,7 +35,7 @@ from spinn.data.boolean import load_boolean_data
 from spinn.data.sst import load_sst_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
-from spinn.util.blocks import the_gpu, to_gpu, l2_cost, flatten
+from spinn.util.blocks import the_gpu, to_gpu, l2_cost, flatten, debug_gradient
 from spinn.util.misc import Accumulator, time_per_token, MetricsLogger
 
 import spinn.rl_spinn
@@ -298,6 +298,8 @@ def run(only_forward=False):
          encode_num_layers=FLAGS.encode_num_layers,
          use_sentence_pair=use_sentence_pair,
          use_skips=FLAGS.use_skips,
+         lateral_tracking=FLAGS.lateral_tracking,
+         use_tracking_in_composition=FLAGS.use_tracking_in_composition,
          use_difference_feature=FLAGS.use_difference_feature,
          use_product_feature=FLAGS.use_product_feature,
          num_mlp_layers=FLAGS.num_mlp_layers,
@@ -423,12 +425,12 @@ def run(only_forward=False):
             M.add('transition_acc', transition_acc)
 
             # Extract L2 Cost
-            l2_loss = l2_cost(model, FLAGS.l2_lambda)
+            l2_loss = l2_cost(model, FLAGS.l2_lambda) if FLAGS.use_l2_cost else None
 
             # Boilerplate for calculating loss values.
             xent_cost_val = xent_loss.data[0]
             transition_cost_val = transition_loss.data[0] if transition_loss is not None else 0.0
-            l2_cost_val = l2_loss.data[0]
+            l2_cost_val = l2_loss.data[0] if l2_loss is not None else 0.0
             rl_cost_val = rl_loss.data[0] if rl_loss is not None else 0.0
 
             # Accumulate Total Loss Data
@@ -436,7 +438,8 @@ def run(only_forward=False):
             total_cost_val += xent_cost_val
             if transition_loss is not None and model.optimize_transition_loss:
                 total_cost_val += transition_cost_val
-            total_cost_val += l2_cost_val
+            if l2_loss is not None:
+                total_cost_val += l2_cost_val
             total_cost_val += rl_cost_val
 
             M.add('total_cost', total_cost_val)
@@ -447,11 +450,24 @@ def run(only_forward=False):
             # Accumulate Total Loss Variable
             total_loss = 0.0
             total_loss += xent_loss
-            total_loss += l2_loss
+            if l2_loss is not None:
+                total_loss += l2_loss
             if transition_loss is not None and model.optimize_transition_loss:
                 total_loss += transition_loss
             if rl_loss is not None:
                 total_loss += rl_loss
+
+            # Useful for debugging gradient flow.
+            if FLAGS.debug:
+                losses = [('total_loss', total_loss), ('xent_loss', xent_loss)]
+                if l2_loss is not None:
+                    losses.append(('l2_loss', l2_loss))
+                if transition_loss is not None and model.optimize_transition_loss:
+                    losses.append(('transition_loss', transition_loss))
+                if rl_loss is not None:
+                    losses.append(('rl_loss', rl_loss))
+                debug_gradient(model, losses)
+                import ipdb; ipdb.set_trace()
 
             # Backward pass.
             total_loss.backward()
@@ -574,15 +590,22 @@ if __name__ == '__main__':
     gflags.DEFINE_integer("gpu", -1, "")
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")
-    gflags.DEFINE_float("transition_weight", None, "")
-    gflags.DEFINE_integer("tracking_lstm_hidden_dim", None, "")
     gflags.DEFINE_boolean("use_internal_parser", False, "Use predicted parse.")
     gflags.DEFINE_boolean("validate_transitions", True,
         "Constrain predicted transitions to ones that give a valid parse tree.")
     gflags.DEFINE_float("embedding_keep_rate", 0.9,
         "Used for dropout on transformed embeddings.")
+    gflags.DEFINE_boolean("use_l2_cost", True, "")
     gflags.DEFINE_boolean("use_difference_feature", True, "")
     gflags.DEFINE_boolean("use_product_feature", True, "")
+
+    # Tracker settings.
+    gflags.DEFINE_integer("tracking_lstm_hidden_dim", None, "Set to none to avoid using tracker.")
+    gflags.DEFINE_float("transition_weight", None, "Set to none to avoid predicting transitions.")
+    gflags.DEFINE_boolean("lateral_tracking", True,
+        "Use previous tracker state as input for new state.")
+    gflags.DEFINE_boolean("use_tracking_in_composition", True,
+        "Use tracking lstm output as input for the reduce function.")
 
     # Encode settings.
     gflags.DEFINE_boolean("use_encode", False, "Encode embeddings with sequential network.")
