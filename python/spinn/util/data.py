@@ -300,9 +300,7 @@ def MakeStandardEvalIterator(sources, batch_size, limit=-1, shuffle=False, rseed
 
 
 def MakeBucketEvalIterator(sources, batch_size):
-    # On SNLI with truncating, this is about a 1.5x speed increase on CPU.
-
-    print "WARNING: May be discarding eval examples."
+    # Order in eval should not matter. Use batches sorted by length for speed improvement.
 
     def single_sentence_key(num_transitions):
         return num_transitions
@@ -326,14 +324,16 @@ def MakeBucketEvalIterator(sources, batch_size):
     # Roll examples into batches so they have similar length.
     for i in range(num_batches):
         batch_indices = order[i * batch_size:(i+1) * batch_size]
-        try:
-            batch = tuple(source[batch_indices] for source in sources)
-        except:
-            import ipdb; ipdb.set_trace()
+        batch = tuple(source[batch_indices] for source in sources)
         batches.append(batch)
 
-    examples_skipped = dataset_size - num_batches * batch_size
-    print "Skipping " + str(examples_skipped) + " examples."
+    examples_leftover = dataset_size - num_batches * batch_size
+
+    # Create a short batch:
+    if examples_leftover > 0:
+        batch_indices = order[num_batches * batch_size:num_batches * batch_size + examples_leftover]
+        batch = tuple(source[batch_indices] for source in sources)
+        batches.append(batch)
 
     return batches
 
