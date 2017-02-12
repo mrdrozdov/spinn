@@ -8,41 +8,53 @@ Example Log:
 """
 
 import gflags
-import matplotlib.pyplot as plt
 import sys
 
 FLAGS = gflags.FLAGS
 
-class TrainLine(object):
+
+class LogLine(object):
     def __init__(self, line):
         tokens = line.split()
-        parts = [
-        'date', 'time', '_',
-        '_','step', '_', 'acc', 'transition_acc',
-        '_', 'total_cost', 'xent_cost', 'transition_cost', 'l2_cost',
-        '_', 'time_per_example',
-        ]
-
+        parts = self.get_parts()
         assert len(tokens) == len(parts)
-
         for t, k in zip(tokens, parts):
             if k == '_': continue
             setattr(self, k, t)
 
-class EvalLine(object):
-    def __init__(self, line):
-        tokens = line.split()
-        parts = [
-        'date', 'time', '_',
-        '_','step', '_', '_', 'acc', 'transition_acc',
-        '_', '_', 'time_per_example',
+    def get_parts(self):
+        raise NotImplementedError
+
+    def __setattr__(self, key, val):
+        if key == 'step':
+            val = int(val)
+        elif key in ('acc', 'transition_acc'):
+            val = float(val)
+        elif key in ('total_cost', 'xent_cost', 'transition_cost', 'l2_cost'):
+            val = float(val)
+        elif key == 'time_per_example':
+            val = float(val)
+
+        return super(LogLine, self).__setattr__(key, val)
+
+
+class TrainLine(LogLine):
+    def get_parts(self):
+        return [
+            'date', 'time', '_',
+            '_','step', '_', 'acc', 'transition_acc',
+            '_', 'total_cost', 'xent_cost', 'transition_cost', 'l2_cost',
+            '_', 'time_per_example',
         ]
 
-        assert len(tokens) == len(parts)
 
-        for t, k in zip(tokens, parts):
-            if k == '_': continue
-            setattr(self, k, t)
+class EvalLine(LogLine):
+    def get_parts(self):
+        return [
+            'date', 'time', '_',
+            '_','step', '_', '_', 'acc', 'transition_acc',
+            '_', '_', 'time_per_example',
+        ]
 
 
 def is_train(line):
@@ -67,12 +79,25 @@ def read(log_path):
     return l_train, l_eval
 
 
+def Filter(log):
+    ret = []
+    for l in reversed(log):
+        if len(ret) == 0 or l.step < ret[-1].step:
+            ret.append(l)
+    return ret
+
+
 def Analyze():
     log_paths = FLAGS.path.split(',')
     for lp in log_paths:
         l_train, l_eval = read(lp)
-        max_eval = max([e.acc for e in l_eval]) if len(l_eval) > 0 else 0.0
-        print(lp, "max eval:", max_eval)
+        l_train, l_eval = Filter(l_train), Filter(l_eval)
+        if len(l_eval) > 0:
+            best_eval = max(l_eval, key=lambda x: x.acc)
+            last_eval = max(l_eval, key=lambda x: x.step)
+            print("{} Eval Max: {} {} Last: {}".format(lp, best_eval.acc, best_eval.step, last_eval.step))
+        else:
+            print("{} skipped".format(lp))
 
 
 if __name__ == '__main__':
