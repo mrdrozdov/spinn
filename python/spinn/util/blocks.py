@@ -316,12 +316,6 @@ class Reduce(nn.Module):
         tracker LSTM if one is present in the SPINN model. All are provided
         as iterables and batched internally into tensors.
 
-        Additionally augments each new node with pointers to its children as
-        well as concatenated attributes ``transitions`` and ``tokens`` and
-        the states of the buffer, stack, and tracker prior to the first SHIFT
-        of a token that is part of the node. This allows restarting the
-        encoding process with modifications to a particular node.
-
         Args:
             left_in: Iterable of ``B`` ~chainer.Variable objects containing
                 ``c`` and ``h`` concatenated for the left child of each node
@@ -335,10 +329,7 @@ class Reduce(nn.Module):
 
         Returns:
             out: Tuple of ``B`` ~chainer.Variable objects containing ``c`` and
-                ``h`` concatenated for the LSTM state of each new node. These
-                objects are also augmented with ``left``, ``right``,
-                ``tokens``, ``transitions``, ``buf``, ``stack``, and
-                ``tracking`` attributes.
+                ``h`` concatenated for the LSTM state of each new node.
         """
         left, right = bundle(left_in), bundle(right_in)
         tracking = bundle(tracking)
@@ -347,15 +338,6 @@ class Reduce(nn.Module):
         if hasattr(self, 'track'):
             lstm_in += self.track(tracking.h)
         out = unbundle(treelstm(left.c, right.c, lstm_in, training=self.training))
-        for o, l, r in zip(out, left_in, right_in):
-            if hasattr(l, 'buf'):
-                import ipdb; ipdb.set_trace()
-                o.left, o.right = l, r
-                o.buf = o.left.buf
-                o.transitions = o.left.transitions + o.right.transitions + [1]
-                o.tokens = o.left.tokens + o.right.tokens
-                o.stack = o.left.stack
-                o.tracking = o.left.tracking
         return out
 
 
