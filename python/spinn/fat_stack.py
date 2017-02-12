@@ -369,7 +369,7 @@ class SPINN(nn.Module):
         # Loss Phase
         # ==========
 
-        if self.transition_weight is not None:
+        if hasattr(self, 'tracker') and hasattr(self, 'transition_net'):
             t_preds, t_logits, t_given, _ = self.get_statistics()
 
             # We compute accuracy and loss after all transitions have complete,

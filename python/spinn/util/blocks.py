@@ -301,7 +301,7 @@ class Reduce(nn.Module):
         super(Reduce, self).__init__()
         self.left = Linear(initializer=HeKaimingInitializer)(size, 5 * size)
         self.right = Linear(initializer=HeKaimingInitializer)(size, 5 * size, bias=False)
-        if use_tracking_in_composition:
+        if tracker_size is not None and use_tracking_in_composition:
             self.track = Linear(initializer=HeKaimingInitializer)(tracker_size, 5 * size, bias=False)
 
     def forward(self, left_in, right_in, tracking=None):
