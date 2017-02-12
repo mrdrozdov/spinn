@@ -36,7 +36,7 @@ from spinn.data.sst import load_sst_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import the_gpu, to_gpu, l2_cost, flatten
-from spinn.util.misc import Accumulator, time_per_token
+from spinn.util.misc import Accumulator, time_per_token, MetricsLogger
 
 import spinn.rl_spinn
 import spinn.fat_stack
@@ -85,13 +85,12 @@ def truncate(X_batch, transitions_batch, num_transitions_batch):
     return X_batch, transitions_batch
 
 
-def evaluate(classifier_trainer, eval_set, logger, step, vocabulary=None):
+def evaluate(classifier_trainer, eval_set, logger, metrics_logger, step, vocabulary=None):
     filename, dataset = eval_set
 
     # Evaluate
-    acc_accum = 0.0
-    action_acc_accum = 0.0
-    eval_batches = 0.0
+    class_correct = 0
+    class_total = 0
     total_batches = len(dataset)
     progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
@@ -124,15 +123,13 @@ def evaluate(classifier_trainer, eval_set, logger, step, vocabulary=None):
         # Calculate class accuracy.
         target = torch.from_numpy(eval_y_batch).long()
         pred = logits.data.max(1)[1].cpu() # get the index of the max log-probability
-        class_acc = pred.eq(target).sum() / float(target.size(0))
+        class_correct += pred.eq(target).sum()
+        class_total += target.size(0)
 
         # Optionally calculate transition loss/acc.
-        transition_acc = model.transition_acc if hasattr(model, 'transition_acc') else 0.0
         transition_loss = model.transition_loss if hasattr(model, 'transition_loss') else None
 
         # Update Aggregate Accuracies
-        acc_accum += class_acc
-        eval_batches += 1.0
         total_tokens += eval_num_transitions_batch.ravel().sum()
 
         # Accumulate stats for transition accuracy.
@@ -150,20 +147,24 @@ def evaluate(classifier_trainer, eval_set, logger, step, vocabulary=None):
     # Get time per token.
     time_metric = time_per_token([total_tokens], [total_time])
 
-    # Get average class accuracy.
-    avg_class_acc = acc_accum / eval_batches
+    # Get class accuracy.
+    eval_class_acc = class_correct / float(class_total)
 
-    # Get average transition accuracy if applicable.
+    # Get transition accuracy if applicable.
     if len(transition_preds) > 0:
         all_preds = np.array(flatten(transition_preds))
         all_truth = np.array(flatten(transition_targets))
-        avg_trans_acc = (all_preds == all_truth).sum() / float(all_truth.shape[0])
+        eval_trans_acc = (all_preds == all_truth).sum() / float(all_truth.shape[0])
     else:
-        avg_trans_acc = 0.0
+        eval_trans_acc = 0.0
 
     logger.Log("Step: %i\tEval acc: %f\t %f\t%s Time: %5f" %
-              (step, avg_class_acc, avg_trans_acc, filename, time_metric))
-    return avg_class_acc
+              (step, eval_class_acc, eval_trans_acc, filename, time_metric))
+
+    metrics_logger.Log('eval_class_acc', eval_class_acc, step)
+    metrics_logger.Log('eval_trans_acc', eval_trans_acc, step)
+
+    return eval_class_acc
 
 
 def reinforce(optimizer, lr, baseline, mu, reward, transition_loss):
@@ -207,6 +208,13 @@ def run(only_forward=False):
 
     pp = pprint.PrettyPrinter(indent=4)
     logger.Log("Flag values:\n" + pp.pformat(FLAGS.FlagValuesDict()))
+
+    # Make Metrics Logger.
+    metrics_path = "{}/{}".format(FLAGS.metrics_path, FLAGS.experiment_name)
+    if not os.path.exists(metrics_path):
+        os.makedirs(metrics_path)
+    metrics_logger = MetricsLogger(metrics_path)
+    M = Accumulator(maxlen=FLAGS.deque_length)
 
     # Load the data.
     raw_training_data, vocabulary = data_manager.load_data(
@@ -369,7 +377,7 @@ def run(only_forward=False):
     # Do an evaluation-only run.
     if only_forward:
         for index, eval_set in enumerate(eval_iterators):
-            acc = evaluate(classifier_trainer, eval_set, logger, step, vocabulary)
+            acc = evaluate(classifier_trainer, eval_set, logger, metrics_logger, step, vocabulary)
     else:
          # Train
         logger.Log("Training.")
@@ -412,6 +420,7 @@ def run(only_forward=False):
             class_acc = pred.eq(target).sum() / float(target.size(0))
 
             A.add('class_acc', class_acc)
+            M.add('class_acc', class_acc)
 
             # Calculate class loss.
             xent_loss = nn.NLLLoss()(logits, to_gpu(Variable(target, volatile=False)))
@@ -428,6 +437,10 @@ def run(only_forward=False):
                 A.add('preds', preds)
                 A.add('truth', truth)
 
+            # Note: Keep track of transition_acc, although this is a naive average.
+            # Should be weighted by length of sequences in batch.
+            M.add('transition_acc', transition_acc)
+
             # Extract L2 Cost
             l2_loss = l2_cost(model, FLAGS.l2_lambda)
 
@@ -439,11 +452,16 @@ def run(only_forward=False):
 
             # Accumulate Total Loss Data
             total_cost_val = 0.0
-            total_cost_val += xent_loss.data[0]
+            total_cost_val += xent_cost_val
             if transition_loss is not None and model.optimize_transition_loss:
                 total_cost_val += transition_cost_val
-            total_cost_val += l2_loss.data[0]
+            total_cost_val += l2_cost_val
             total_cost_val += rl_cost_val
+
+            M.add('total_cost', total_cost_val)
+            M.add('xent_cost', xent_cost_val)
+            M.add('transition_cost', transition_cost_val)
+            M.add('l2_cost', l2_cost_val)
 
             # Accumulate Total Loss Variable
             total_loss = 0.0
@@ -507,17 +525,21 @@ def run(only_forward=False):
 
             if step > 0 and step % FLAGS.eval_interval_steps == 0:
                 for index, eval_set in enumerate(eval_iterators):
-                    acc = evaluate(classifier_trainer, eval_set, logger, step)
-                    # TODO: Should ckpt every X steps.
+                    acc = evaluate(classifier_trainer, eval_set, logger, metrics_logger, step)
                     if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                         best_dev_error = 1 - acc
                         logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
                         classifier_trainer.save(best_checkpoint_path, step, best_dev_error)
                 progress_bar.reset()
 
-            if step % FLAGS.ckpt_interval_steps == 0 and step > FLAGS.ckpt_step:
+            if step > FLAGS.ckpt_step and step % FLAGS.ckpt_interval_steps == 0:
                 logger.Log("Checkpointing.")
                 classifier_trainer.save(standard_checkpoint_path, step, best_dev_error)
+
+            if step % FLAGS.metrics_interval_steps == 0:
+                m_keys = M.cache.keys()
+                for k in m_keys:
+                    metrics_logger.Log(k, M.get_avg(k), step)
 
             progress_bar.step(i=step % FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
 
@@ -539,6 +561,7 @@ if __name__ == '__main__':
     gflags.DEFINE_string("ckpt_path", ".", "Where to save/load checkpoints. Can be either "
         "a filename or a directory. In the latter case, the experiment name serves as the "
         "base for the filename.")
+    gflags.DEFINE_string("metrics_path", ".", "A directory in which to write logs.")
     gflags.DEFINE_string("log_path", ".", "A directory in which to write logs.")
     gflags.DEFINE_integer("ckpt_step", 1000, "Steps to run before considering saving checkpoint.")
     gflags.DEFINE_boolean("load_best", False, "If True, attempt to load 'best' checkpoint.")
@@ -613,6 +636,7 @@ if __name__ == '__main__':
 
     # Display settings.
     gflags.DEFINE_integer("statistics_interval_steps", 100, "Print training set results at this interval.")
+    gflags.DEFINE_integer("metrics_interval_steps", 10, "Evaluate at this interval.")
     gflags.DEFINE_integer("eval_interval_steps", 100, "Evaluate at this interval.")
     gflags.DEFINE_integer("ckpt_interval_steps", 5000, "Update the checkpoint on disk at this interval.")
     gflags.DEFINE_boolean("ckpt_on_best_dev_error", True, "If error on the first eval set (the dev set) is "
