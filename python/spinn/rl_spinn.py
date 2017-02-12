@@ -20,6 +20,9 @@ from spinn.fat_stack import BaseModel, SentenceModel, SentencePairModel
 from spinn.fat_stack import SPINN
 
 
+import spinn.cbow
+
+
 T_SKIP   = 2
 T_SHIFT  = 0
 T_REDUCE = 1
@@ -59,6 +62,23 @@ class RLBaseModel(BaseModel):
 
         self.register_buffer('baseline', torch.FloatTensor([0.0]))
 
+        if self.rl_baseline == "policy":
+            if kwargs['use_sentence_pair']:
+                policy_model_cls = spinn.cbow.SentencePairModel
+            else:
+                policy_model_cls = spinn.cbow.SentenceModel
+            self.policy = policy_model_cls(
+                model_dim=kwargs['model_dim'],
+                word_embedding_dim=kwargs['word_embedding_dim'],
+                vocab_size=kwargs['vocab_size'],
+                initial_embeddings=kwargs['initial_embeddings'],
+                mlp_dim=kwargs['mlp_dim'],
+                embedding_keep_rate=kwargs['embedding_keep_rate'],
+                classifier_keep_rate=kwargs['classifier_keep_rate'],
+                use_sentence_pair=kwargs['use_sentence_pair'],
+                num_classes=1,
+                )
+
     def build_spinn(self, args, vocab, use_skips):
         return RLSPINN(args, vocab, use_skips=use_skips)
 
@@ -76,6 +96,17 @@ class RLBaseModel(BaseModel):
             mu = self.rl_mu
             self.baseline[0] = self.baseline[0] * (1 - mu) + rewards.mean() * mu
             baseline = self.baseline[0]
+        elif self.rl_baseline == "policy":
+            # Pass inputs to Policy Net
+            policy_outp = self.policy(sentences, transitions)
+
+            # Estimate Reward
+            policy_prob = F.sigmoid(policy_outp)
+
+            # Save MSE Loss using Reward as target
+            self.policy_loss = nn.MSELoss()(policy_prob, Variable(rewards, volatile=not self.training))
+
+            baseline = policy_prob.data
         else:
             raise NotImplementedError
 

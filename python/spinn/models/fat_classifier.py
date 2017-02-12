@@ -412,6 +412,7 @@ def run(only_forward=False):
             transition_acc = model.transition_acc if hasattr(model, 'transition_acc') else 0.0
             transition_loss = model.transition_loss if hasattr(model, 'transition_loss') else None
             rl_loss = model.rl_loss if hasattr(model, 'rl_loss') else None
+            policy_loss = model.policy_loss if hasattr(model, 'policy_loss') else None
 
             # Accumulate stats for transition accuracy.
             if transition_loss is not None:
@@ -432,15 +433,16 @@ def run(only_forward=False):
             transition_cost_val = transition_loss.data[0] if transition_loss is not None else 0.0
             l2_cost_val = l2_loss.data[0] if l2_loss is not None else 0.0
             rl_cost_val = rl_loss.data[0] if rl_loss is not None else 0.0
+            policy_cost_val = policy_loss.data[0] if policy_loss is not None else 0.0
 
             # Accumulate Total Loss Data
             total_cost_val = 0.0
             total_cost_val += xent_cost_val
             if transition_loss is not None and model.optimize_transition_loss:
                 total_cost_val += transition_cost_val
-            if l2_loss is not None:
-                total_cost_val += l2_cost_val
+            total_cost_val += l2_cost_val
             total_cost_val += rl_cost_val
+            total_cost_val += policy_cost_val
 
             M.add('total_cost', total_cost_val)
             M.add('xent_cost', xent_cost_val)
@@ -456,6 +458,8 @@ def run(only_forward=False):
                 total_loss += transition_loss
             if rl_loss is not None:
                 total_loss += rl_loss
+            if policy_loss is not None:
+                total_loss += policy_loss
 
             # Useful for debugging gradient flow.
             if FLAGS.debug:
@@ -466,6 +470,8 @@ def run(only_forward=False):
                     losses.append(('transition_loss', transition_loss))
                 if rl_loss is not None:
                     losses.append(('rl_loss', rl_loss))
+                if policy_loss is not None:
+                    losses.append(('policy_loss', policy_loss))
                 debug_gradient(model, losses)
                 import ipdb; ipdb.set_trace()
 
@@ -512,11 +518,14 @@ def run(only_forward=False):
                     "transition_cost": transition_cost_val,
                     "l2_cost": l2_cost_val,
                     "rl_cost": rl_cost_val,
+                    "policy_cost": policy_cost_val,
                     "time": time_metric,
                 }
                 stats_str = "Step: {step} Acc: {class_acc:.5f} {transition_acc:.5f} Cost: {total_cost:.5f} {xent_cost:.5f} {transition_cost:.5f} {l2_cost:.5f}"
                 if rl_loss is not None:
-                    stats_str += " {rl_cost:.5f}"
+                    stats_str += " r{rl_cost:.5f}"
+                if policy_loss is not None:
+                    stats_str += " p{policy_cost:.5f}"
                 stats_str += " Time: {time:.5f}"
                 logger.Log(stats_str.format(**stats_args))
 
