@@ -58,13 +58,6 @@ def sequential_only():
     return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW"
 
 
-def build_rewards(logits, y, xent_reward=False):
-    if xent_reward:
-        return np.mean(logits.data[np.arange(y.shape[0]), y])
-    else:
-        return metrics.accuracy_score(logits.data.argmax(axis=1), y)
-
-
 def truncate(X_batch, transitions_batch, num_transitions_batch):
     # Truncate each batch to max length within the batch.
     X_batch_is_left_padded = (not FLAGS.use_left_padding or sequential_only())
@@ -165,18 +158,6 @@ def evaluate(classifier_trainer, eval_set, logger, metrics_logger, step, vocabul
     metrics_logger.Log('eval_trans_acc', eval_trans_acc, step)
 
     return eval_class_acc
-
-
-def reinforce(optimizer, lr, baseline, mu, reward, transition_loss):
-    new_lr = (lr*(reward - baseline))
-    baseline = baseline*(1-mu)+mu*reward
-
-    transition_loss.backward()
-    transition_loss.unchain_backward()
-    optimizer.lr = new_lr
-    optimizer.step()
-
-    return new_lr, baseline
 
 
 def get_checkpoint_path(ckpt_path, experiment_name, suffix=".ckpt", best=False):
