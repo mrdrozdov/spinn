@@ -25,21 +25,21 @@ def default_args():
     args['model_dim'] = 10
     args['word_embedding_dim'] = 12
     args['vocab_size'] = 14
-    args['num_classes'] = 3
-    args['mlp_dim'] = 16
     args['embedding_keep_rate'] = 1.0
     args['classifier_keep_rate'] = 1.0
+    args['mlp_dim'] = 16
+    args['num_mlp_layers'] = 2
+    args['num_classes'] = 3
 
     initial_embeddings = np.arange(args['vocab_size']).repeat(
         args['word_embedding_dim']).reshape(
-        args['vocab_size'], -1)
+        args['vocab_size'], -1).astype(np.float32)
 
     args['initial_embeddings'] = initial_embeddings
 
     # Tracker Args
     args['tracking_lstm_hidden_dim'] = 4
     args['transition_weight'] = None
-    args['use_tracking_lstm'] = False
 
     # Data Args
     args['use_skips'] = False
@@ -58,17 +58,6 @@ class MockSentenceModel(SentenceModel):
         super(MockSentenceModel, self).__init__(**_kwargs)
 
 
-# def default_embeddings(vocab_size, embedding_dim):
-#     initial_embeddings = np.arange(vocab_size).reshape(
-#             (vocab_size, 1)).repeat(embedding_dim, axis=1).astype(np.float32)
-#     vocab = {
-#         'size': initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size,
-#         'vectors': initial_embeddings,
-#     }
-#     vocab = argparse.Namespace(**vocab)
-#     return vocab, initial_embeddings
-
-
 class SPINNTestCase(unittest.TestCase):
 
     def test_basic_stack(self):
@@ -77,8 +66,8 @@ class SPINNTestCase(unittest.TestCase):
         train = False
 
         X = np.array([
-            [3, 1,  2, 1],
-            [3, 2,  4, 5]
+            [3, 1, 2, 1],
+            [3, 2, 4, 5]
         ], dtype=np.int32)
 
         transitions = np.array([
@@ -91,18 +80,18 @@ class SPINNTestCase(unittest.TestCase):
 
         class Projection(nn.Module):
             def forward(self, x):
-                return x
+                return x[:, :default_args()['model_dim']]
 
         class Reduce(nn.Module):
             def forward(self, lefts, rights, tracking):
                 batch_size = len(lefts)
                 return torch.chunk(torch.cat(lefts, 0) - torch.cat(rights, 0), batch_size, 0)
 
-        model.spinn.embed.projection = Projection()
+        model.embed.projection = Projection()
         model.spinn.reduce = Reduce()
 
-        example = model.build_example(X, transitions, train)
-        outputs, _ = model.spinn(example)
+        model(X, transitions)
+        outputs = model.spinn_outp[0]
 
         assert outputs[0][0].data[0] == (3 - (1 - (2 - 1)))
         assert outputs[1][0].data[0] == ((3 - 2) - (4 - 5))

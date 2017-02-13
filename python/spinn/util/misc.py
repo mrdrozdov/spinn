@@ -29,7 +29,7 @@ def time_per_token(num_tokens, total_time):
 class Accumulator(object):
     """Accumulator. Makes it easy to keep a trailing list of statistics."""
 
-    def __init__(self, maxlen=100):
+    def __init__(self, maxlen=None):
         self.maxlen = maxlen
         self.cache = dict()
 

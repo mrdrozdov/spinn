@@ -272,8 +272,6 @@ class Embed(nn.Module):
         self.vectors = vectors
 
     def forward(self, tokens):
-        b, l = tokens.size()[:2]
-
         if self.vectors is None:
             embeds = self.embed(tokens.contiguous().view(-1).long())
         else:

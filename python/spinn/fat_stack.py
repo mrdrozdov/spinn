@@ -534,6 +534,8 @@ class BaseModel(nn.Module):
 
         h, transition_acc, transition_loss = self.run_spinn(example, use_internal_parser, validate_transitions)
 
+        self.spinn_outp = h
+
         self.transition_acc = transition_acc
         self.transition_loss = transition_loss
 
