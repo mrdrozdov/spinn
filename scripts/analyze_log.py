@@ -87,18 +87,35 @@ def Filter(log):
     return ret
 
 
+class Failed(object):
+    acc = 0.0
+    step = 0
+
+
 def Analyze():
     log_paths = FLAGS.path.split(',')
     for lp in log_paths:
         l_train, l_eval = read(lp)
         l_train, l_eval = Filter(l_train), Filter(l_eval)
+
+        # Analyze Train
+        if len(l_eval) > 0:
+            best_train = max(l_train, key=lambda x: x.acc)
+            last_train = max(l_train, key=lambda x: x.step)
+        else:
+            best_train, last_train = Failed(), Failed()
+
+        # Analyze Eval
         if len(l_eval) > 0:
             best_eval = max(l_eval, key=lambda x: x.acc)
             last_eval = max(l_eval, key=lambda x: x.step)
-            print("{} Eval Max: {} {} Last: {}".format(lp, best_eval.acc, best_eval.step, last_eval.step))
         else:
-            print("{} skipped".format(lp))
+            best_eval, last_eval = Failed(), Failed()
 
+        print("{} Train: {} {} {} Eval: {} {} {}".format(lp,
+            best_train.acc, best_train.step, last_train.step,
+            best_eval.acc, best_eval.step, last_eval.step,
+            ))
 
 if __name__ == '__main__':
   
