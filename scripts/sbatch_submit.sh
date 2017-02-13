@@ -3,7 +3,7 @@
 # Sets up a series of 10 jobs to run one after the other to get around time limits.
 
 
-bat=train_spinn.sbatch
+bat=../scripts/train_spinn.sbatch
 
 jobID=
 for((i=0; i<10; i++)); do
