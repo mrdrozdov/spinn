@@ -6,7 +6,7 @@
 bat=../scripts/train_spinn.sbatch
 
 jobID=
-for((i=0; i<10; i++)); do
+for((i=0; i<2; i++)); do
     if [ "$jobID" == "" ]; then
         jobID=$(sbatch $bat | awk '{print $NF}')
     else

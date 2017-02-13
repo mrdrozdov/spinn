@@ -8,7 +8,9 @@ import numpy as np
 import gflags
 import sys
 
-NYU_NON_PBS = True
+NYU_NON_PBS = False
+NAME = "ENC"
+SWEEP_RUNS = 2
 
 LIN = "LIN"
 EXP = "EXP"
@@ -16,10 +18,10 @@ SS_BASE = "SS_BASE"
 
 FLAGS = gflags.FLAGS
 
-gflags.DEFINE_string("training_data_path", "~/snli_1.0/snli_1.0_train.jsonl", "")
-gflags.DEFINE_string("eval_data_path", "~/snli_1.0/snli_1.0_dev.jsonl", "")
-gflags.DEFINE_string("embedding_data_path", "~/glove/glove.840B.300d.txt", "")
-gflags.DEFINE_string("log_path", "~/logs", "")
+gflags.DEFINE_string("training_data_path", "/home/sb6065/snli_1.0/snli_1.0_train.jsonl", "")
+gflags.DEFINE_string("eval_data_path", "/home/sb6065/snli_1.0/snli_1.0_dev.jsonl", "")
+gflags.DEFINE_string("embedding_data_path", "/home/sb6065/glove/glove.840B.300d.txt", "")
+gflags.DEFINE_string("log_path", "/home/sb6065/logs", "")
 
 FLAGS(sys.argv)
 
@@ -45,10 +47,14 @@ FIXED_PARAMETERS = {
     "model_dim":   "600",
     "seq_length":   "150",
     "eval_seq_length":  "150",
-    "eval_interval_steps": "500",
-    "statistics_interval_steps": "500",
+    "eval_interval_steps": "1000",
+    "statistics_interval_steps": "1000",
     "use_internal_parser": "",
-    "batch_size":  "32",
+    "batch_size":  "64",
+    "use_encode": "",
+    "encode_reverse": "",
+    "noencode_bidirectional": "",
+    "num_mlp_layers": "2",
 }
 
 # Tunable parameters.
@@ -60,22 +66,19 @@ SWEEP_PARAMETERS = {
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.5, 1.0),
     "tracking_lstm_hidden_dim": ("tdim", EXP, 24, 128),
     "transition_weight":  ("trwt", EXP, 0.5, 4.0),
-    "num_mlp_layers": ("mlp", LIN, 1, 3)
 }
 
-sweep_name = "sweep_01_23_r_" + \
+sweep_name = "sweep_" + NAME + "_" + \
     FIXED_PARAMETERS["data_type"] + "_" + FIXED_PARAMETERS["model_type"]
-sweep_runs = 6
-queue = "jag"
 
 # - #
 print "# NAME: " + sweep_name
-print "# NUM RUNS: " + str(sweep_runs)
+print "# NUM RUNS: " + str(SWEEP_RUNS)
 print "# SWEEP PARAMETERS: " + str(SWEEP_PARAMETERS)
 print "# FIXED_PARAMETERS: " + str(FIXED_PARAMETERS)
 print
 
-for run_id in range(sweep_runs):
+for run_id in range(SWEEP_RUNS):
     params = {}
     name = sweep_name + "_" + str(run_id)
 
@@ -117,5 +120,5 @@ for run_id in range(sweep_runs):
     if NYU_NON_PBS:
         print "cd spinn/python; python2.7 -m spinn.models.fat_classifier " + flags
     else:
-        print "export SPINN_FLAGS=\"" + flags + "\"; export DEVICE=gpuX; qsub -v SPINN_FLAGS,DEVICE ../scripts/train_spinn_classifier.sh -q " + queue + " -l host=jagupardX"
+        print "export SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh"
     print
