@@ -4,7 +4,7 @@
 
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
-#SBATCH --mem=4000
+#SBATCH --mem=12000
 #SBATCH -t24:00:00
 
 # Log what we're running and where.
