@@ -8,8 +8,8 @@ bat=../scripts/train_spinn.sbatch
 jobID=
 for((i=0; i<2; i++)); do
     if [ "$jobID" == "" ]; then
-        jobID=$(sbatch $bat | awk '{print $NF}')
+        jobID=$(sbatch -o ~/logs/slurm-%j.out -e ~/logs/slurm-%j.err $bat | awk '{print $NF}')
     else
-        jobID=$(sbatch --dependency=afterany:$jobID $bat | awk '{print $NF}')
+        jobID=$(sbatch -o ~/logs/slurm-%j.out -e ~/logs/slurm-%j.err --dependency=afterany:$jobID $bat | awk '{print $NF}')
     fi
 done
