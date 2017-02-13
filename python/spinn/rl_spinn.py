@@ -68,7 +68,7 @@ class RLBaseModel(BaseModel):
             else:
                 policy_model_cls = spinn.cbow.SentenceModel
             self.policy = policy_model_cls(
-                model_dim=kwargs['model_dim'],
+                model_dim=kwargs['word_embedding_dim'],
                 word_embedding_dim=kwargs['word_embedding_dim'],
                 vocab_size=kwargs['vocab_size'],
                 initial_embeddings=kwargs['initial_embeddings'],
@@ -104,9 +104,9 @@ class RLBaseModel(BaseModel):
             policy_prob = F.sigmoid(policy_outp)
 
             # Save MSE Loss using Reward as target
-            self.policy_loss = nn.MSELoss()(policy_prob, Variable(rewards, volatile=not self.training))
+            self.policy_loss = nn.MSELoss()(policy_prob, to_gpu(Variable(rewards, volatile=not self.training)))
 
-            baseline = policy_prob.data
+            baseline = policy_prob.data.cpu()
         else:
             raise NotImplementedError
 
@@ -115,6 +115,7 @@ class RLBaseModel(BaseModel):
     def reinforce(self, rewards):
         t_preds, t_logits, t_given, t_mask = self.spinn.get_statistics()
 
+        # TODO: Many of these ops are on the cpu. Might be worth shifting to GPU.
         if self.use_sentence_pair:
             # Handles the case of SNLI where each reward is used for two sentences.
             rewards = torch.cat([rewards, rewards], 0)
@@ -149,7 +150,7 @@ class RLBaseModel(BaseModel):
         advantage = rewards - baseline
 
         # Assign REINFORCE output.
-        self.rl_loss = self.reinforce(rewards)
+        self.rl_loss = self.reinforce(advantage)
 
 
 class SentencePairModel(RLBaseModel):
