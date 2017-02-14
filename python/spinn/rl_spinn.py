@@ -1,4 +1,5 @@
 import itertools
+import copy
 
 import numpy as np
 from spinn import util
@@ -56,6 +57,8 @@ class RLBaseModel(BaseModel):
     def __init__(self, rl_mu=None, rl_baseline=None, rl_reward=None, **kwargs):
         super(RLBaseModel, self).__init__(**kwargs)
 
+        self.kwargs = kwargs
+
         self.rl_mu = rl_mu
         self.rl_baseline = rl_baseline
         self.rl_reward = rl_reward
@@ -82,6 +85,25 @@ class RLBaseModel(BaseModel):
     def build_spinn(self, args, vocab, use_skips):
         return RLSPINN(args, vocab, use_skips=use_skips)
 
+    def run_greedy(self, sentences, transitions):
+        if self.use_sentence_pair:
+            inference_model_cls = SentencePairModel
+        else:
+            inference_model_cls = SentenceModel
+
+        # HACK: This is a pretty simple way to create the inference time version of SPINN.
+        # The reason a copy is necessary is because there is some retained state in the
+        # memories and loss variables that break deep copy.
+        inference_model = inference_model_cls(**self.kwargs)
+        inference_model.load_state_dict(copy.deepcopy(self.state_dict()))
+        inference_model.eval()
+
+        outputs = inference_model(sentences, transitions,
+            use_internal_parser=True,
+            validate_transitions=True)
+
+        return outputs
+
     def build_reward(self, logits, target):
         if self.rl_reward == "standard": # Zero One Loss.
             rewards = torch.eq(logits.max(1)[1], target).float()
@@ -107,6 +129,16 @@ class RLBaseModel(BaseModel):
             self.policy_loss = nn.MSELoss()(policy_prob, to_gpu(Variable(rewards, volatile=not self.training)))
 
             baseline = policy_prob.data.cpu()
+        elif self.rl_baseline == "greedy":
+            # Pass inputs to Policy Net
+            greedy_outp = self.run_greedy(sentences, transitions)
+
+            # Estimate Reward
+            logits = F.softmax(output).data.cpu()
+            target = torch.from_numpy(y_batch).long()
+            greedy_rewards = self.build_reward(logits, target)
+
+            baseline = greedy_rewards
         else:
             raise NotImplementedError
 
