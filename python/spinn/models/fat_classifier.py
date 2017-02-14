@@ -449,6 +449,14 @@ def run(only_forward=False):
             M.add('transition_cost', transition_cost_val)
             M.add('l2_cost', l2_cost_val)
 
+            # Logging for RL
+            rl_keys = ['rl_loss', 'policy_loss', 'norm_rewards', 'norm_baseline', 'norm_advantage']
+            for k in rl_keys:
+                if hasattr(model, k):
+                    val = getattr(model, k)
+                    val = val.data[0] if isinstance(val, Variable) else val
+                    M.add(k, val)
+
             # Accumulate Total Loss Variable
             total_loss = 0.0
             total_loss += xent_loss

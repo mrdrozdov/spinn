@@ -184,6 +184,11 @@ class RLBaseModel(BaseModel):
         # Assign REINFORCE output.
         self.rl_loss = self.reinforce(advantage)
 
+        # Cache values for logging.
+        self.norm_rewards = rewards.norm()
+        self.norm_baseline = baseline.norm()
+        self.norm_advantage = advantage.norm()
+
 
 class SentencePairModel(RLBaseModel):
 
