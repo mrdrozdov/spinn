@@ -35,7 +35,7 @@ Here's a sample command that runs a fast, low-dimensional CPU training run, trai
         --training_data_path spinn/snli_1.0/snli_1.0_dev.jsonl \
         --eval_data_path spinn/snli_1.0/snli_1.0_dev.jsonl \
         --embedding_data_path spinn/python/spinn/tests/test_embedding_matrix.5d.txt \
-        --word_embedding_dim 10 --model_dim 10 --model_type CBOW
+        --word_embedding_dim 5 --model_dim 10 --model_type CBOW
 
 For full runs, you'll also need a copy of the 840B word 300D [GloVe word vectors](http://nlp.stanford.edu/projects/glove/).
 
