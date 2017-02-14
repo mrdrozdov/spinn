@@ -133,7 +133,18 @@ def evaluate(classifier_trainer, eval_set, logger, metrics_logger, step, vocabul
             transition_targets.append([m["t_given"] for m in model.spinn.memories])
 
         if FLAGS.write_eval_report:
-            reporter.save_batch(pred, target, eval_ids)
+            reporter_args = [pred, target, eval_ids]
+            if hasattr(model, 'transition_loss'):
+                transition_preds_per_example = model.spinn.get_transition_preds_per_example()
+                if model.use_sentence_pair:
+                    batch_size = pred.size(0)
+                    sent1_preds = transition_preds_per_example[:batch_size]
+                    sent2_preds = transition_preds_per_example[batch_size:]
+                    reporter_args.append(sent1_preds)
+                    reporter_args.append(sent2_preds)
+                else:
+                    reporter_args.append(transition_preds_per_example)
+            reporter.save_batch(*reporter_args)
 
         # Print Progress
         progress_bar.step(i+1, total=total_batches)

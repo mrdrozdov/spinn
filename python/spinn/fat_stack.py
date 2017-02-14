@@ -207,6 +207,16 @@ class SPINN(nn.Module):
 
         return t_preds, t_logits, t_given, t_mask
 
+    def get_transition_preds_per_example(self):
+        t_preds, t_logits, t_given, t_mask = self.get_statistics()
+
+        batch_size = t_mask.max()
+        preds = []
+        for batch_idx in range(batch_size):
+            preds.append(t_preds[t_mask == batch_idx])
+
+        return np.array(preds)
+
     def run(self, inp_transitions, run_internal_parser=False, use_internal_parser=False, validate_transitions=True):
         transition_loss = None
         transition_acc = 0.0
@@ -384,6 +394,8 @@ class SPINN(nn.Module):
             assert all(len(stack) == 3 for stack in self.stacks), \
                 "Stacks should be fully reduced and have 3 elements: " \
                 "two zeros and the sentence encoding."
+            assert all(len(buf) == 1 for buf in self.bufs), \
+                "Stacks should be fully shifted and have 1 zero."
 
         return [stack[-1] for stack in self.stacks], transition_acc, transition_loss
 

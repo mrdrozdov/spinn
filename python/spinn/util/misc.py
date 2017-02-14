@@ -65,11 +65,29 @@ class EvalReporter(object):
     def __init__(self):
         self.batches = []
 
-    def save_batch(self, preds, target, example_ids):
-        self.batches.append((preds.view(-1), target.view(-1), example_ids))
+    def save_batch(self, preds, target, example_ids, sent1_preds=None, sent2_preds=None):
+        sent1_preds = sent1_preds if sent1_preds is not None else [None] * len(example_ids)
+        sent2_preds = sent2_preds if sent2_preds is not None else [None] * len(example_ids)
+        batch = [preds.view(-1), target.view(-1), example_ids, sent1_preds, sent2_preds]
+        self.batches.append(batch)
 
     def write_report(self, filename):
         with open(filename, 'w') as f:
             for b in self.batches:
-                for pred, truth, eid in zip(*b):
-                    f.write("{} {} {} {}\n".format(eid, truth == pred, truth, pred))
+                for bb in zip(*b):
+                    pred, truth, eid, sent1_preds, sent2_preds = bb
+                    report_str = "{eid} {correct} {truth} {pred}"
+                    if sent1_preds is not None:
+                        report_str += " {sent1_preds}"
+                    if sent2_preds is not None:
+                        report_str += " {sent2_preds}"
+                    report_str += "\n"
+                    report_dict = {
+                        "eid": eid,
+                        "correct": truth == pred,
+                        "truth": truth,
+                        "pred": pred,
+                        "sent1_preds": '{}'.format("".join(str(t) for t in sent1_preds)) if sent1_preds is not None else None,
+                        "sent2_preds": '{}'.format("".join(str(t) for t in sent2_preds)) if sent2_preds is not None else None,
+                    }
+                    f.write(report_str.format(**report_dict))
