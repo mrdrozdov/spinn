@@ -54,7 +54,7 @@ class RLBaseModel(BaseModel):
 
     optimize_transition_loss = False
 
-    def __init__(self, rl_mu=None, rl_baseline=None, rl_reward=None, **kwargs):
+    def __init__(self, rl_mu=None, rl_baseline=None, rl_reward=None, rl_weight=None, **kwargs):
         super(RLBaseModel, self).__init__(**kwargs)
 
         self.kwargs = kwargs
@@ -62,6 +62,7 @@ class RLBaseModel(BaseModel):
         self.rl_mu = rl_mu
         self.rl_baseline = rl_baseline
         self.rl_reward = rl_reward
+        self.rl_weight = rl_weight
 
         self.register_buffer('baseline', torch.FloatTensor([0.0]))
 
@@ -130,7 +131,7 @@ class RLBaseModel(BaseModel):
 
             baseline = policy_prob.data.cpu()
         elif self.rl_baseline == "greedy":
-            # Pass inputs to Policy Net
+            # Pass inputs to Greedy Max
             greedy_outp = self.run_greedy(sentences, transitions)
 
             # Estimate Reward
@@ -162,6 +163,7 @@ class RLBaseModel(BaseModel):
 
         rl_loss = -1. * torch.sum(log_p_action * to_gpu(Variable(rewards, volatile=log_p_action.volatile)))
         rl_loss /= log_p_action.size(0)
+        rl_loss *= self.rl_weight
 
         return rl_loss
 

@@ -307,6 +307,7 @@ def run(only_forward=False):
          rl_mu=FLAGS.rl_mu,
          rl_baseline=FLAGS.rl_baseline,
          rl_reward=FLAGS.rl_reward,
+         rl_weight=FLAGS.rl_weight,
         )
 
     # Build optimizer.
@@ -413,6 +414,10 @@ def run(only_forward=False):
             transition_loss = model.transition_loss if hasattr(model, 'transition_loss') else None
             rl_loss = model.rl_loss if hasattr(model, 'rl_loss') else None
             policy_loss = model.policy_loss if hasattr(model, 'policy_loss') else None
+
+            # Force Transition Loss Optimization
+            if FLAGS.force_transition_loss:
+                model.optimize_transition_loss = True
 
             # Accumulate stats for transition accuracy.
             if transition_loss is not None:
@@ -612,6 +617,7 @@ if __name__ == '__main__':
         "Constrain predicted transitions to ones that give a valid parse tree.")
     gflags.DEFINE_float("embedding_keep_rate", 0.9,
         "Used for dropout on transformed embeddings.")
+    gflags.DEFINE_boolean("force_transition_loss", False, "")
     gflags.DEFINE_boolean("use_l2_cost", True, "")
     gflags.DEFINE_boolean("use_difference_feature", True, "")
     gflags.DEFINE_boolean("use_product_feature", True, "")
@@ -636,6 +642,7 @@ if __name__ == '__main__':
         "Different configurations to approximate reward function.")
     gflags.DEFINE_enum("rl_reward", "standard", ["standard", "xent"],
         "Different reward functions to use.")
+    gflags.DEFINE_float("rl_weight", 1.0, "Hyperparam for REINFORCE loss.")
 
     # MLP settings.
     gflags.DEFINE_integer("mlp_dim", 1024, "Dimension of intermediate MLP layers.")
