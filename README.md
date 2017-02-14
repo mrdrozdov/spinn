@@ -39,6 +39,12 @@ Here's a sample command that runs a fast, low-dimensional CPU training run, trai
 
 For full runs, you'll also need a copy of the 840B word 300D [GloVe word vectors](http://nlp.stanford.edu/projects/glove/).
 
+## Contributing
+
+If you're interested in proposing a change or fix to SPINN, please submit a Pull Request. In addition, ensure that existing tests pass, and add new tests as you see appropriate. To run tests, simply run this command from the root directoy:
+
+    nosetests python/spinn/tests
+
 ## License
 
 Copyright 2016, Stanford University

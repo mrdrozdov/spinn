@@ -51,7 +51,7 @@ class BaseModel(nn.Module):
                         vectors=vocab.vectors,
                         )
 
-        mlp_input_dim = word_embedding_dim * 2 if use_sentence_pair else model_dim
+        mlp_input_dim = model_dim * 2 if use_sentence_pair else model_dim
 
         self.l0 = nn.Linear(mlp_input_dim, mlp_dim)
         self.l1 = nn.Linear(mlp_dim, mlp_dim)
@@ -105,7 +105,7 @@ class SentencePairModel(BaseModel):
 class SentenceModel(BaseModel):
 
     def build_example(self, sentences, transitions):
-        return to_gpu(Variable(torch.from_numpy(x), volatile=not self.training))
+        return to_gpu(Variable(torch.from_numpy(sentences), volatile=not self.training))
 
     def forward(self, sentences, transitions, y_batch=None, **kwargs):
         # Build Tokens
