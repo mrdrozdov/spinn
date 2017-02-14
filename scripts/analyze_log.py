@@ -92,7 +92,7 @@ class Failed(object):
     step = 0
 
 
-def Analyze():
+def Analyze(limit=10):
     log_paths = FLAGS.path.split(',')
     for lp in log_paths:
         l_train, l_eval = read(lp)
@@ -100,21 +100,29 @@ def Analyze():
 
         # Analyze Train
         if len(l_eval) > 0:
-            best_train = max(l_train, key=lambda x: x.acc)
+            top_train = sorted(l_train, key=lambda x: x.acc)[-limit:]
+            top_avg_train_acc = sum([x.acc for x in top_train]) / float(len(top_train))
+            top_avg_train_transition_acc = sum([x.transition_acc for x in top_train]) / float(len(top_train))
+            best_train = top_train[-1]
             last_train = max(l_train, key=lambda x: x.step)
         else:
-            best_train, last_train = Failed(), Failed()
+            top_avg_train_acc = 0.0
+            top_avg_train_transition_acc = 0.0
+            last_train = Failed()
 
         # Analyze Eval
         if len(l_eval) > 0:
-            best_eval = max(l_eval, key=lambda x: x.acc)
+            top_eval = sorted(l_eval, key=lambda x: x.acc)[-limit:]
+            top_avg_eval_acc = sum([x.acc for x in top_eval]) / float(len(top_eval))
+            top_avg_eval_transition_acc = sum([x.transition_acc for x in top_eval]) / float(len(top_eval))
+            best_eval = top_eval[-1]
             last_eval = max(l_eval, key=lambda x: x.step)
         else:
-            best_eval, last_eval = Failed(), Failed()
+            top_eval, last_eval = Failed(), Failed()
 
-        print("{} Train: {} {} {} Eval: {} {} {}".format(lp,
-            best_train.acc, best_train.step, last_train.step,
-            best_eval.acc, best_eval.step, last_eval.step,
+        print("{} Train: {} {} {} {} Eval: {} {} {} {}".format(lp,
+            top_avg_train_acc, top_avg_train_transition_acc, best_train.step, last_train.step,
+            top_avg_eval_acc, top_avg_eval_transition_acc, best_eval.step, last_eval.step,
             ))
 
 if __name__ == '__main__':
