@@ -45,6 +45,7 @@ def load_data(path):
             example["hypothesis"] = loaded_example["sentence2"]
             (example["premise_tokens"], example["premise_transitions"]) = convert_binary_bracketing(loaded_example["sentence1_binary_parse"])
             (example["hypothesis_tokens"], example["hypothesis_transitions"]) = convert_binary_bracketing(loaded_example["sentence2_binary_parse"])
+            example["example_id"] = loaded_example.get('pairID', 'NoID')
             examples.append(example)
     return examples, None
 

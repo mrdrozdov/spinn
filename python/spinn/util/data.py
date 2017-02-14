@@ -379,7 +379,10 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
         [data_manager.LABEL_MAP[example["label"]] for example in dataset],
         dtype=np.int32)
 
-    return X, transitions, y, num_transitions
+    # NP Array of Strings
+    example_ids = np.array([example["example_id"] for example in dataset])
+
+    return X, transitions, y, num_transitions, example_ids
 
 
 def BuildVocabulary(raw_training_data, raw_eval_sets, embedding_path, logger=None, sentence_pair_data=False):

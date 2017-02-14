@@ -97,7 +97,7 @@ def evaluate(classifier_trainer, eval_set, logger, metrics_logger, step, vocabul
     transition_preds = []
     transition_targets = []
 
-    for i, (eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch) in enumerate(dataset):
+    for i, (eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, eval_ids) in enumerate(dataset):
         if FLAGS.truncate_eval_batch:
             eval_X_batch, eval_transitions_batch = truncate(
                 eval_X_batch, eval_transitions_batch, eval_num_transitions_batch)
@@ -205,8 +205,8 @@ def run(only_forward=False):
     raw_eval_sets = []
     if FLAGS.eval_data_path:
         for eval_filename in FLAGS.eval_data_path.split(":"):
-            eval_data, _ = data_manager.load_data(eval_filename)
-            raw_eval_sets.append((eval_filename, eval_data))
+            raw_eval_data, _ = data_manager.load_data(eval_filename)
+            raw_eval_sets.append((eval_filename, raw_eval_data))
 
     # Prepare the vocabulary.
     if not vocabulary:
@@ -243,14 +243,14 @@ def run(only_forward=False):
     eval_iterators = []
     for filename, raw_eval_set in raw_eval_sets:
         logger.Log("Preprocessing eval data: " + filename)
-        e_X, e_transitions, e_y, e_num_transitions = util.PreprocessDataset(
+        eval_data = util.PreprocessDataset(
             raw_eval_set, vocabulary,
             FLAGS.eval_seq_length if FLAGS.eval_seq_length is not None else FLAGS.seq_length,
             data_manager, eval_mode=True, logger=logger,
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             for_rnn=sequential_only(),
             use_left_padding=FLAGS.use_left_padding)
-        eval_it = util.MakeEvalIterator((e_X, e_transitions, e_y, e_num_transitions),
+        eval_it = util.MakeEvalIterator(eval_data,
             FLAGS.batch_size, FLAGS.eval_data_limit, bucket_eval=FLAGS.bucket_eval,
             shuffle=FLAGS.shuffle_eval, rseed=FLAGS.shuffle_eval_seed)
         eval_iterators.append((filename, eval_it))
@@ -375,7 +375,7 @@ def run(only_forward=False):
 
             start = time.time()
 
-            X_batch, transitions_batch, y_batch, num_transitions_batch = training_data_iter.next()
+            X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = training_data_iter.next()
 
             if FLAGS.truncate_train_batch:
                 X_batch, transitions_batch = truncate(
