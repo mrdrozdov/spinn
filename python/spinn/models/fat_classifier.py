@@ -36,7 +36,7 @@ from spinn.data.sst import load_sst_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import the_gpu, to_gpu, l2_cost, flatten, debug_gradient
-from spinn.util.misc import Accumulator, time_per_token, MetricsLogger
+from spinn.util.misc import Accumulator, time_per_token, MetricsLogger, EvalReporter
 
 import spinn.rl_spinn
 import spinn.fat_stack
@@ -80,6 +80,8 @@ def truncate(X_batch, transitions_batch, num_transitions_batch):
 
 def evaluate(classifier_trainer, eval_set, logger, metrics_logger, step, vocabulary=None):
     filename, dataset = eval_set
+
+    reporter = EvalReporter()
 
     # Evaluate
     class_correct = 0
@@ -130,6 +132,9 @@ def evaluate(classifier_trainer, eval_set, logger, metrics_logger, step, vocabul
             transition_preds.append([m["t_preds"] for m in model.spinn.memories])
             transition_targets.append([m["t_given"] for m in model.spinn.memories])
 
+        if FLAGS.write_eval_report:
+            reporter.save_batch(pred, target, eval_ids)
+
         # Print Progress
         progress_bar.step(i+1, total=total_batches)
     progress_bar.finish()
@@ -156,6 +161,10 @@ def evaluate(classifier_trainer, eval_set, logger, metrics_logger, step, vocabul
 
     metrics_logger.Log('eval_class_acc', eval_class_acc, step)
     metrics_logger.Log('eval_trans_acc', eval_trans_acc, step)
+
+    if FLAGS.write_eval_report:
+        eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".report")
+        reporter.write_report(eval_report_path)
 
     return eval_class_acc
 
@@ -675,6 +684,7 @@ if __name__ == '__main__':
         "If set, a checkpoint is loaded and a forward pass is done to get the predicted "
         "transitions. The inferred parses are written to the supplied file(s) along with example-"
         "by-example accuracy information. Requirements: Must specify checkpoint path.")
+    gflags.DEFINE_boolean("write_eval_report", False, "")
 
     # Parse command line flags.
     FLAGS(sys.argv)

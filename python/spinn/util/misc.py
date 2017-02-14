@@ -59,3 +59,17 @@ class MetricsLogger(object):
         log_path = os.path.join(self.metrics_path, key) + ".metrics"
         with open(log_path, 'a') as f:
             f.write("{} {}\n".format(step, val))
+
+
+class EvalReporter(object):
+    def __init__(self):
+        self.batches = []
+
+    def save_batch(self, preds, target, example_ids):
+        self.batches.append((preds.view(-1), target.view(-1), example_ids))
+
+    def write_report(self, filename):
+        with open(filename, 'w') as f:
+            for b in self.batches:
+                for pred, truth, eid in zip(*b):
+                    f.write("{} {} {} {}\n".format(eid, truth == pred, truth, pred))
