@@ -78,7 +78,7 @@ def truncate(X_batch, transitions_batch, num_transitions_batch):
     return X_batch, transitions_batch
 
 
-def evaluate(classifier_trainer, eval_set, logger, metrics_logger, step, vocabulary=None):
+def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
     filename, dataset = eval_set
 
     reporter = EvalReporter()
@@ -92,8 +92,6 @@ def evaluate(classifier_trainer, eval_set, logger, metrics_logger, step, vocabul
     total_tokens = 0
     start = time.time()
 
-    model = classifier_trainer.model
-
     model.eval()
 
     transition_preds = []
@@ -105,10 +103,7 @@ def evaluate(classifier_trainer, eval_set, logger, metrics_logger, step, vocabul
                 eval_X_batch, eval_transitions_batch, eval_num_transitions_batch)
 
         # Run model.
-        output = classifier_trainer.forward({
-            "sentences": eval_X_batch,
-            "transitions": eval_transitions_batch,
-            }, eval_y_batch,
+        output = model(eval_X_batch, eval_transitions_batch, eval_y_batch,
             use_internal_parser=FLAGS.use_internal_parser,
             validate_transitions=FLAGS.validate_transitions)
 
@@ -381,7 +376,7 @@ def run(only_forward=False):
     # Do an evaluation-only run.
     if only_forward:
         for index, eval_set in enumerate(eval_iterators):
-            acc = evaluate(classifier_trainer, eval_set, logger, metrics_logger, step, vocabulary)
+            acc = evaluate(model, eval_set, logger, metrics_logger, step, vocabulary)
     else:
          # Train
         logger.Log("Training.")
@@ -407,10 +402,7 @@ def run(only_forward=False):
             optimizer.zero_grad()
 
             # Run model.
-            output = classifier_trainer.forward({
-                "sentences": X_batch,
-                "transitions": transitions_batch,
-                }, y_batch,
+            output = model(X_batch, transitions_batch, y_batch,
                 use_internal_parser=FLAGS.use_internal_parser,
                 validate_transitions=FLAGS.validate_transitions
                 )
@@ -564,7 +556,7 @@ def run(only_forward=False):
 
             if step > 0 and step % FLAGS.eval_interval_steps == 0:
                 for index, eval_set in enumerate(eval_iterators):
-                    acc = evaluate(classifier_trainer, eval_set, logger, metrics_logger, step)
+                    acc = evaluate(model, eval_set, logger, metrics_logger, step)
                     if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                         best_dev_error = 1 - acc
                         logger.Log("Checkpointing with new best dev accuracy of %f" % acc)

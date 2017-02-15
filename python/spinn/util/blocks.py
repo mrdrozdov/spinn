@@ -235,18 +235,6 @@ class BaseSentencePairTrainer(object):
         self.model = model
         self.optimizer = optimizer
 
-    def forward(self, x_batch, y_batch=None,
-                use_internal_parser=False, validate_transitions=True):
-        assert "sentences" in x_batch and "transitions" in x_batch, \
-            "Input must contain dictionary of sentences and transitions."
-
-        sentences = x_batch["sentences"]
-        transitions = x_batch["transitions"]
-
-        ret = self.model(sentences, transitions, y_batch,
-            use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
-        return ret
-
     def save(self, filename, step, best_dev_error):
         torch.save({
             'step': step,
