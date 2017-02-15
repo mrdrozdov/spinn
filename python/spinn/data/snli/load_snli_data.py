@@ -11,7 +11,7 @@ LABEL_MAP = {
     "contradiction": 2
 }
 
-def convert_binary_bracketing(parse):
+def convert_binary_bracketing(parse, lowercase=False):
     transitions = []
     tokens = []
 
@@ -21,11 +21,14 @@ def convert_binary_bracketing(parse):
                 transitions.append(1)
             else:
                 # Downcase all words to match GloVe.
-                tokens.append(word.lower())
+                if lowercase:
+                    tokens.append(word.lower())
+                else:
+                    tokens.append(word)
                 transitions.append(0)
     return tokens, transitions
 
-def load_data(path):
+def load_data(path, lowercase=False):
     print "Loading", path
     examples = []
     with codecs.open(path, encoding='utf-8') as f:
@@ -43,8 +46,8 @@ def load_data(path):
             example["label"] = loaded_example["gold_label"]
             example["premise"] = loaded_example["sentence1"]
             example["hypothesis"] = loaded_example["sentence2"]
-            (example["premise_tokens"], example["premise_transitions"]) = convert_binary_bracketing(loaded_example["sentence1_binary_parse"])
-            (example["hypothesis_tokens"], example["hypothesis_transitions"]) = convert_binary_bracketing(loaded_example["sentence2_binary_parse"])
+            (example["premise_tokens"], example["premise_transitions"]) = convert_binary_bracketing(loaded_example["sentence1_binary_parse"], lowercase=lowercase)
+            (example["hypothesis_tokens"], example["hypothesis_transitions"]) = convert_binary_bracketing(loaded_example["sentence2_binary_parse"], lowercase=lowercase)
             example["example_id"] = loaded_example.get('pairID', 'NoID')
             examples.append(example)
     return examples, None

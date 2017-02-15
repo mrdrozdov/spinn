@@ -91,16 +91,34 @@ def TokensToIDs(vocabulary, dataset, sentence_pair_data=False):
     else:
         keys = ["tokens"]
 
+    tokens = 0
+    unks = 0
+    lowers = 0
+    raises = 0
+
     for key in keys:
         if UNK_TOKEN in vocabulary:
             unk_id = vocabulary[UNK_TOKEN]
             for example in dataset:
-                example[key] = [vocabulary.get(token, unk_id)
-                                     for token in example[key]]
+                tmp = example[key]
+                for i, token in enumerate(example[key]):
+                    if token in vocabulary:
+                        example[key][i] = vocabulary[token]
+                    elif token.lower() in vocabulary:
+                        example[key][i] = vocabulary[token.lower()]
+                        lowers += 1                        
+                    elif token.upper() in vocabulary:
+                        example[key][i] = vocabulary[token.upper()]
+                        raises += 1  
+                    else:
+                        example[key][i] = unk_id
+                        unks += 1
+                    tokens += 1
         else:
             for example in dataset:
                 example[key] = [vocabulary[token]
                                 for token in example[key]]
+    print "Unk rate {:2.6f}%, downcase rate {:2.6f}%, upcase rate {:2.6f}%".format((unks * 100.0 / tokens), (lowers * 100.0 / tokens), (raises * 100.0 / tokens))
     return dataset
 
 
