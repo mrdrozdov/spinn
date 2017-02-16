@@ -60,6 +60,7 @@ FIXED_PARAMETERS = {
     "encode_bidirectional": "",
     "num_mlp_layers": "2",
     "training_steps": "250001",
+    "noshow_progress_bar": "",
 }
 
 # Tunable parameters.
