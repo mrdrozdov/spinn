@@ -128,7 +128,7 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
             transition_targets.append([m["t_given"] for m in model.spinn.memories])
 
         if FLAGS.write_eval_report:
-            reporter_args = [pred, target, eval_ids]
+            reporter_args = [pred, target, eval_ids, output.data.numpy()]
             if hasattr(model, 'transition_loss'):
                 transition_preds_per_example = model.spinn.get_transition_preds_per_example()
                 if model.use_sentence_pair:

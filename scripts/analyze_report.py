@@ -13,7 +13,7 @@ FLAGS = gflags.FLAGS
 
 
 def Read(fn):
-    return pd.read_csv(fn, delimiter=' ', names=['example_id', 'correct', 'truth', 'pred', 'sent1_parse', 'sent2_parse'])
+    return pd.read_csv(fn, delimiter=' ', names=['example_id', 'correct', 'truth', 'pred', 'out0', 'out1', 'out2', 'sent1_parse', 'sent2_parse'])
 
 
 def Compare(reports):
@@ -54,11 +54,13 @@ def Analyze():
     all_common_correct, all_upside = Compare(reports)
 
     # Print Report
+    print("{:>3} {:>6}: {}".format("mid", "total", "filename"))
     for i, (fn, report) in enumerate(zip(report_files, reports)):
         print("{:3} {:6}: {}".format(i, report.correct.sum(), fn))
     print
     total = reports[0].shape[0]
     best = max(reports, key=lambda x: x.correct.sum())
+    print("{:>3} {:>3}: {:>6} {:>6} {:>6} {:>7}".format("m1", "m2", "common", "upside", "c+u", "score"))
     for i1, i2, c, u in common:
         print("{:3} {:3}: {:6} {:6} {:6} {:6.5f}".format(i1, i2, c, u, c + u, (c+u)/float(total)))
     print
