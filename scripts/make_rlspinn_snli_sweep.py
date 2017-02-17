@@ -1,4 +1,22 @@
-# Create a script to run a random hyperparameter search.
+"""
+Create a script to run a random hyperparameter search.
+
+Example Usage:
+
+python scripts/make_rlspinn_snli_sweep.py  \
+--sweep_path ec2_02_16 \
+--sweep_id ec2 \
+--rl_baseline policy \
+--rl_reward xent \
+--sweep_runs 2 \
+--gpu -1 \
+--ec2 \
+--embedding_data_path /efs/ec2-user/glove.840B.300d.txt \
+--training_data_path /efs/ec2-user/snli_1.0/snli_1.0_train.jsonl \
+--eval_data_path /efs/ec2-user/snli_1.0/snli_1.0_dev.jsonl \
+--log_path /efs/ec2-user/logs
+
+"""
 
 import copy
 import getpass
@@ -20,7 +38,8 @@ gflags.DEFINE_string("eval_data_path", "/scratch/apd283/snli_1.0/snli_1.0_dev.js
 gflags.DEFINE_string("embedding_data_path", "/scratch/apd283/glove/glove.840B.300d.txt", "")
 gflags.DEFINE_string("log_path", "/scratch/apd283/shared-logs", "")
 
-gflags.DEFINE_enum("rl_baseline", "ema", ["ema", "policy"], "")
+gflags.DEFINE_enum("rl_baseline", "ema", ["ema", "policy", "greedy"], "")
+gflags.DEFINE_enum("rl_reward", "standard", ["standard", "xent"], "")
 
 # Sweep settings
 gflags.DEFINE_string("sweep_path", "./sweep", "")
@@ -28,6 +47,7 @@ gflags.DEFINE_string("sweep_id", "", "")
 gflags.DEFINE_integer("sweep_runs", 4, "")
 
 gflags.DEFINE_integer("gpu", -1, "")
+gflags.DEFINE_boolean("ec2", False, "")
 
 FLAGS(sys.argv)
 
@@ -41,6 +61,7 @@ FIXED_PARAMETERS = {
     "data_type":     "snli",
     "model_type":      "RLSPINN",
     "rl_baseline":      FLAGS.rl_baseline,
+    "rl_reward":      FLAGS.rl_reward,
     "training_data_path":    FLAGS.training_data_path,
     "eval_data_path":    FLAGS.eval_data_path,
     "embedding_data_path": FLAGS.embedding_data_path,
@@ -52,7 +73,7 @@ FIXED_PARAMETERS = {
     "seq_length":   "150",
     "eval_seq_length":  "150",
     "eval_interval_steps": "1000",
-    "statistics_interval_steps": "1000",
+    "statistics_interval_steps": "500",
     "use_internal_parser": "",
     "batch_size":  "64",
     "use_encode": "",
@@ -76,7 +97,7 @@ SWEEP_PARAMETERS = {
 
 sweep_name = "sweep_" + FLAGS.sweep_id + "_" + \
     FIXED_PARAMETERS["data_type"] + "_" + FIXED_PARAMETERS["model_type"] + \
-    "_" + FIXED_PARAMETERS["rl_baseline"]
+    "_" + FIXED_PARAMETERS["rl_baseline"] + "_" + FIXED_PARAMETERS["rl_reward"]
 
 GPU_template = """#!/bin/bash
 
@@ -118,7 +139,16 @@ cd /scratch/apd283/shared-dev/spinn/checkpoints
 {command}
 """
 
+CPU_ec2_template = """#!/bin/bash
+
+source /efs/ec2-user/spinn/activate.sh
+cd /efs/ec2-user/spinn/checkpoints
+
+{command}
+"""
+
 tpl = GPU_template if FLAGS.gpu >= 0 else CPU_template
+tpl = CPU_ec2_template if FLAGS.ec2 else tpl
 
 # - #
 
