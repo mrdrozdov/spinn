@@ -126,7 +126,7 @@ class RLBaseModel(BaseModel):
             policy_outp = self.policy(sentences, transitions)
 
             # Estimate Reward
-            policy_prob = F.sigmoid(policy_outp)
+            policy_prob = policy_outp
 
             # Save MSE Loss using Reward as target
             self.policy_loss = nn.MSELoss()(policy_prob, to_gpu(Variable(rewards, volatile=not self.training)))
