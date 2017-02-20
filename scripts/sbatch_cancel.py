@@ -12,7 +12,7 @@ lines = lines.split('\n')
 lines.sort()
 
 for current_job in sys.argv[1].split():
-	if len(target_job) < 5:
+	if len(current_job) < 5:
 		continue
 
 	to_kill = [current_job]
