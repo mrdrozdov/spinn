@@ -16,7 +16,7 @@ to_kill = [CURRENT_JOB]
 
 for line in lines:
 	s = line.split()
-	if to_kill[-1] in s[1]:
+	if (len(s) > 0) and (to_kill[-1] in s[1]):
 		to_kill.append(s[0])
 
 print subprocess.call(['scancel'] + to_kill)
