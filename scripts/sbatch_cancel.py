@@ -8,7 +8,7 @@ USER = sys.argv[1]
 CURRENT_JOB = sys.argv[2]
 
 	
-lines = subprocess.call(['squeue', '-u', '$USER', '-o', '"%.8A %.4C %.10m %.20E"'])
+lines = subprocess.call(['squeue', '-u', USER, '-o', '"%.8A %.4C %.10m %.20E"'])
 
 to_kill = [CURRENT_JOB]
 
