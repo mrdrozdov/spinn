@@ -629,7 +629,7 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("validate_transitions", True,
         "Constrain predicted transitions to ones that give a valid parse tree.")
     gflags.DEFINE_float("embedding_keep_rate", 0.9,
-        "Used for dropout on transformed embeddings.")
+        "Used for dropout on transformed embeddings and in the encoder RNN.")
     gflags.DEFINE_boolean("force_transition_loss", False, "")
     gflags.DEFINE_boolean("use_l2_cost", True, "")
     gflags.DEFINE_boolean("use_difference_feature", True, "")

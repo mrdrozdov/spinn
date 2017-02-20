@@ -477,7 +477,7 @@ class BaseModel(nn.Module):
             self.encode = nn.LSTM(model_dim, model_dim / self.bi, num_layers=encode_num_layers,
                 batch_first=True,
                 bidirectional=self.encode_bidirectional,
-                )
+                dropout=self.embedding_dropout_rate)
 
         self.spinn = self.build_spinn(args, vocab, use_skips)
 
