@@ -444,6 +444,28 @@ def DoubleIdentityInitializer(param, range):
         UniformInitializer(param.clone(), range))
 
 
+def PassthroughLSTMInitializer(lstm):
+    G_POSITION = 3
+    F_POSITION = 1
+
+    i_dim = lstm.weight_ih_l0.size()[1]
+    h_dim = lstm.weight_hh_l0.size()[1]
+    assert i_dim == h_dim, "PassthroughLSTM requires input dim == hidden dim."
+
+    hh_init = np.zeros(lstm.weight_hh_l0.size()).astype(np.float32)
+    ih_init = np.zeros(lstm.weight_ih_l0.size()).astype(np.float32)
+    ih_init[G_POSITION * h_dim:(G_POSITION + 1) * h_dim, :] = np.identity(h_dim)
+
+    bhh_init = np.zeros(lstm.bias_hh_l0.size()).astype(np.float32)
+    bih_init = np.ones(lstm.bias_ih_l0.size()).astype(np.float32) * 2
+    bih_init[G_POSITION * h_dim:(G_POSITION + 1) * h_dim] = 0
+    bih_init[F_POSITION * h_dim:(F_POSITION + 1) * h_dim] = -2
+
+    lstm.weight_hh_l0.data.set_(torch.from_numpy(hh_init))
+    lstm.weight_ih_l0.data.set_(torch.from_numpy(ih_init))
+    lstm.bias_hh_l0.data.set_(torch.from_numpy(bhh_init))
+    lstm.bias_ih_l0.data.set_(torch.from_numpy(bih_init))
+
 def Linear(initializer=DefaultUniformInitializer, bias_initializer=ZeroInitializer):
     class CustomLinear(nn.Linear):
         def reset_parameters(self):
