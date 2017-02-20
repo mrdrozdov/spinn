@@ -2,7 +2,7 @@
 
 # Generic job script for all experiments.
 
-#SBATCH -c8
+#SBATCH -c16
 #SBATCH --mem=12000
 #SBATCH -t24:00:00
 
