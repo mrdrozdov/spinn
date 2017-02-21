@@ -75,18 +75,19 @@ FIXED_PARAMETERS = {
     "eval_interval_steps": "1000",
     "statistics_interval_steps": "500",
     "use_internal_parser": "",
-    "batch_size":  "64",
+    "batch_size":  "32",
     "use_encode": "",
     "gpu": str(FLAGS.gpu),
     "encode_bidirectional": "",
     "num_mlp_layers": "2",
     "training_steps": "250001",
     "noshow_progress_bar": "",
+    "lowercase": ""
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "learning_rate":      ("lr", EXP, 0.0002, 0.002),
+    "learning_rate":      ("lr", EXP, 0.00001, 0.002),
     "l2_lambda":          ("l2", EXP, 8e-7, 2e-5),
     "semantic_classifier_keep_rate": ("skr", LIN, 0.7, 0.95),  # NB: Keep rates may depend considerably on dims.
     "embedding_keep_rate": ("ekr", LIN, 0.7, 0.95),
@@ -139,16 +140,16 @@ cd /scratch/apd283/shared-dev/spinn/checkpoints
 {command}
 """
 
-CPU_ec2_template = """#!/bin/bash
+ec2_template = """#!/bin/bash
 
-source /efs/ec2-user/spinn/activate.sh
+export PYTHONPATH=$PYTHONPATH:../python:./python
 cd /efs/ec2-user/spinn/checkpoints
 
 {command}
 """
 
 tpl = GPU_template if FLAGS.gpu >= 0 else CPU_template
-tpl = CPU_ec2_template if FLAGS.ec2 else tpl
+tpl = ec2_template if FLAGS.ec2 else tpl
 
 # - #
 
