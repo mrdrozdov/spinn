@@ -3,7 +3,11 @@ from collections import deque
 import os
 
 
-class GenericClass():
+class GenericClass(object):
+    def __init__(self, **kwargs):
+        super(GenericClass, self).__init__()
+        for k, v in kwargs.iteritems():
+            setattr(self, k, v)
 
     def __repr__(self):
         s = "{}"
