@@ -272,6 +272,45 @@ class Embed(nn.Module):
         return embeds
 
 
+class LSTM(nn.Module):
+    def __init__(self, inp_dim, model_dim, num_layers=1, reverse=False, bidirectional=False, dropout=None):
+        super(LSTM, self).__init__()
+        self.reverse = reverse
+        self.bidirectional = bidirectional
+        self.bi = 2 if self.bidirectional else 1
+        self.num_layers = num_layers
+        self.rnn = nn.LSTM(inp_dim, model_dim / self.bi, num_layers=num_layers,
+            batch_first=True,
+            bidirectional=self.bidirectional,
+            dropout=dropout)
+
+    def forward(self, x, h0=None, c0=None):
+        bi = self.bi
+        num_layers = self.num_layers
+
+        batch_size, seq_len, model_dim = x.size()
+
+        if self.reverse:
+            x = reverse_tensor(x, dim=1)
+
+        # Initialize state unless it is given.
+        if h0 is None:
+            h0 = to_gpu(Variable(torch.zeros(num_layers * bi, batch_size, model_dim / bi), volatile=not self.training))
+        if c0 is None:
+            c0 = to_gpu(Variable(torch.zeros(num_layers * bi, batch_size, model_dim / bi), volatile=not self.training))
+
+        # Expects (input, h_0, c_0):
+        #   input => seq_len x batch_size x model_dim
+        #   h_0   => (num_layers x bi[1,2]) x batch_size x model_dim
+        #   c_0   => (num_layers x bi[1,2]) x batch_size x model_dim
+        output, (hn, cn) = self.rnn(x, (h0, c0))
+
+        if self.reverse:
+            output = reverse_tensor(output, dim=1)
+
+        return output
+
+
 class Reduce(nn.Module):
     """TreeLSTM composition module for SPINN.
 
@@ -468,6 +507,7 @@ def PassthroughLSTMInitializer(lstm):
     lstm.bias_hh_l0.data.set_(torch.from_numpy(bhh_init))
     lstm.bias_ih_l0.data.set_(torch.from_numpy(bih_init))
 
+
 def Linear(initializer=DefaultUniformInitializer, bias_initializer=ZeroInitializer):
     class CustomLinear(nn.Linear):
         def reset_parameters(self):
@@ -475,11 +515,3 @@ def Linear(initializer=DefaultUniformInitializer, bias_initializer=ZeroInitializ
             if self.bias is not None:
                 bias_initializer(self.bias)
     return CustomLinear
-
-
-def LSTM(initializer=DefaultUniformInitializer):
-    class CustomLSTM(nn.LSTM):
-        def reset_parameters(self):
-            for weight in self.parameters():
-                initializer(weight)
-    return CustomLSTM

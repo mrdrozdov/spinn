@@ -11,7 +11,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 from spinn.util.blocks import BaseSentencePairTrainer, Reduce
-from spinn.util.blocks import LSTMState, Embed, MLP, Linear
+from spinn.util.blocks import LSTMState, Embed, MLP, Linear, LSTM
 from spinn.util.blocks import reverse_tensor
 from spinn.util.blocks import bundle, unbundle, to_cpu, to_gpu, treelstm, lstm
 from spinn.util.blocks import get_h, get_c
@@ -470,15 +470,10 @@ class BaseModel(nn.Module):
         use_projection = not use_encode # Projection will effectively be done by the encoding network.
         self.embed = Embed(input_embedding_dim, vocab.size, vectors=vocab.vectors, use_projection=use_projection)
 
-        self.use_encode = use_encode
         if use_encode:
-            self.encode_reverse = encode_reverse
-            self.encode_bidirectional = encode_bidirectional
-            self.bi = 2 if self.encode_bidirectional else 1
-            self.encode_num_layers = encode_num_layers
-            self.encode = nn.LSTM(word_embedding_dim, model_dim / self.bi, num_layers=encode_num_layers,
-                batch_first=True,
-                bidirectional=self.encode_bidirectional,
+            self.encode = LSTM(word_embedding_dim, model_dim, num_layers=encode_num_layers,
+                bidirectional=encode_bidirectional,
+                reverse=encode_reverse,
                 dropout=self.embedding_dropout_rate)
 
         self.spinn = self.build_spinn(args, vocab, use_skips)
@@ -491,29 +486,6 @@ class BaseModel(nn.Module):
 
     def build_example(self, sentences, transitions):
         raise Exception('Not implemented.')
-
-    def run_encode(self, x):
-        bi = self.bi
-
-        batch_size, seq_len, model_dim = x.size()
-
-        if self.encode_reverse:
-            x = reverse_tensor(x, dim=1)
-
-        num_layers = self.encode_num_layers
-        h0 = to_gpu(Variable(torch.zeros(num_layers * bi, batch_size, model_dim / bi), volatile=not self.training))
-        c0 = to_gpu(Variable(torch.zeros(num_layers * bi, batch_size, model_dim / bi), volatile=not self.training))
-
-        # Expects (input, h_0, c_0):
-        #   input => seq_len x batch_size x model_dim
-        #   h_0   => (num_layers x bi[1,2]) x batch_size x model_dim
-        #   c_0   => (num_layers x bi[1,2]) x batch_size x model_dim
-        output, (hn, cn) = self.encode(x, (h0, c0))
-
-        if self.encode_reverse:
-            output = reverse_tensor(output, dim=1)
-
-        return output
 
     def run_spinn(self, example, use_internal_parser, validate_transitions=True):
         self.spinn.reset_state()
@@ -535,9 +507,9 @@ class BaseModel(nn.Module):
         embeds = F.dropout(embeds, self.embedding_dropout_rate, training=self.training)
         embeds = torch.chunk(to_cpu(embeds), b, 0)
 
-        if self.use_encode:
+        if hasattr(self, 'encode'):
             to_encode = torch.cat([e.unsqueeze(0) for e in embeds], 0)
-            encoded = self.run_encode(to_encode)
+            encoded = self.encode(to_encode)
             embeds = [x.squeeze() for x in torch.chunk(encoded, b, 0)]
 
         # Make Buffers
