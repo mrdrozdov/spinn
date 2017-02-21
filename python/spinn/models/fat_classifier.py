@@ -328,7 +328,7 @@ def run(only_forward=False):
     # Build optimizer.
     if FLAGS.optimizer_type == "Adam":
         optimizer = optim.Adam(model.parameters(), lr=FLAGS.learning_rate, betas=(0.9, 0.999), eps=1e-08)
-    elif FLAGS.optimizer_type == "RMSProp":
+    elif FLAGS.optimizer_type == "RMSprop":
         optimizer = optim.RMSprop(model.parameters(), lr=FLAGS.learning_rate, eps=1e-08)
     else:
         raise NotImplementedError
