@@ -252,7 +252,8 @@ def run(only_forward=False):
         for_rnn=sequential_only(),
         use_left_padding=FLAGS.use_left_padding)
     training_data_iter = util.MakeTrainingIterator(
-        training_data, FLAGS.batch_size, FLAGS.smart_batching, FLAGS.use_peano)
+        training_data, FLAGS.batch_size, FLAGS.smart_batching, FLAGS.use_peano,
+        sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
 
     # Preprocess eval sets.
     eval_iterators = []

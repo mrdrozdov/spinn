@@ -195,11 +195,12 @@ def peano(x, y):
     return int(interim, base=2)
 
 
-def MakeTrainingIterator(sources, batch_size, smart_batches=True, use_peano=True):
+def MakeTrainingIterator(sources, batch_size, smart_batches=True, use_peano=True,
+                         sentence_pair_data=True):
     # Make an iterator that exposes a dataset as random minibatches.
 
     def get_key(num_transitions):
-        if use_peano:
+        if use_peano and sentence_pair_data:
             prem_len, hyp_len = num_transitions
             key = peano(prem_len, hyp_len)
             return key
