@@ -426,6 +426,7 @@ class BaseModel(nn.Module):
                  use_product_feature=False,
                  num_mlp_layers=None,
                  mlp_bn=None,
+                 use_projection=None,
                  **kwargs
                 ):
         super(BaseModel, self).__init__()
@@ -466,7 +467,8 @@ class BaseModel(nn.Module):
         input_embedding_dim = args.size * 2
 
         # Create dynamic embedding layer.
-        self.embed = Embed(input_embedding_dim, vocab.size, vectors=vocab.vectors)
+        use_projection = not use_encode # Projection will effectively be done by the encoding network.
+        self.embed = Embed(input_embedding_dim, vocab.size, vectors=vocab.vectors, use_projection=use_projection)
 
         self.use_encode = use_encode
         if use_encode:
@@ -474,7 +476,7 @@ class BaseModel(nn.Module):
             self.encode_bidirectional = encode_bidirectional
             self.bi = 2 if self.encode_bidirectional else 1
             self.encode_num_layers = encode_num_layers
-            self.encode = nn.LSTM(model_dim, model_dim / self.bi, num_layers=encode_num_layers,
+            self.encode = nn.LSTM(word_embedding_dim, model_dim / self.bi, num_layers=encode_num_layers,
                 batch_first=True,
                 bidirectional=self.encode_bidirectional,
                 dropout=self.embedding_dropout_rate)
