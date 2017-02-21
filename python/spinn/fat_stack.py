@@ -414,7 +414,7 @@ class BaseModel(nn.Module):
                  classifier_keep_rate=None,
                  tracking_lstm_hidden_dim=4,
                  transition_weight=None,
-                 use_encode=None,
+                 encode_style=None,
                  encode_reverse=None,
                  encode_bidirectional=None,
                  encode_num_layers=None,
@@ -466,20 +466,32 @@ class BaseModel(nn.Module):
         self.embedding_dropout_rate = 1. - embedding_keep_rate
         input_embedding_dim = args.size * 2
 
+        # Projection will effectively be done by the encoding network.
+        use_projection = True if encode_style is None else False
+
         # Create dynamic embedding layer.
-        use_projection = not use_encode # Projection will effectively be done by the encoding network.
         self.embed = Embed(input_embedding_dim, vocab.size, vectors=vocab.vectors, use_projection=use_projection)
 
-        if use_encode:
-            self.encode = LSTM(word_embedding_dim, model_dim, num_layers=encode_num_layers,
-                bidirectional=encode_bidirectional,
-                reverse=encode_reverse,
+        if encode_style is not None:
+            self.encode = self.build_input_encoder(encode_style=encode_style,
+                word_embedding_dim=word_embedding_dim, model_dim=model_dim,
+                num_layers=encode_num_layers, bidirectional=encode_bidirectional, reverse=encode_reverse,
                 dropout=self.embedding_dropout_rate)
 
         self.spinn = self.build_spinn(args, vocab, use_skips)
 
         self.mlp = MLP(mlp_input_dim, mlp_dim, num_classes,
             num_mlp_layers, mlp_bn, classifier_dropout_rate)
+
+    def build_input_encoder(self, encode_style="LSTM", word_embedding_dim=None, model_dim=None,
+                            num_layers=None, bidirectional=None, reverse=None, dropout=None):
+        if encode_style == "LSTM":
+            encoding_net = LSTM(word_embedding_dim, model_dim,
+                num_layers=num_layers, bidirectional=bidirectional, reverse=reverse,
+                dropout=dropout)
+        else:
+            raise NotImplementedError
+        return encoding_net
 
     def build_spinn(self, args, vocab, use_skips):
         return SPINN(args, vocab, use_skips=use_skips)

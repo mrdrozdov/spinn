@@ -275,6 +275,7 @@ class Embed(nn.Module):
 class LSTM(nn.Module):
     def __init__(self, inp_dim, model_dim, num_layers=1, reverse=False, bidirectional=False, dropout=None):
         super(LSTM, self).__init__()
+        self.model_dim = model_dim
         self.reverse = reverse
         self.bidirectional = bidirectional
         self.bi = 2 if self.bidirectional else 1
@@ -287,8 +288,8 @@ class LSTM(nn.Module):
     def forward(self, x, h0=None, c0=None):
         bi = self.bi
         num_layers = self.num_layers
-
-        batch_size, seq_len, model_dim = x.size()
+        batch_size, seq_len = x.size()[:2]
+        model_dim = self.model_dim
 
         if self.reverse:
             x = reverse_tensor(x, dim=1)

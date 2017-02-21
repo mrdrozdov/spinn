@@ -308,7 +308,7 @@ def run(only_forward=False):
          classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
          tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
          transition_weight=FLAGS.transition_weight,
-         use_encode=FLAGS.use_encode,
+         encode_style=FLAGS.encode_style,
          encode_reverse=FLAGS.encode_reverse,
          encode_bidirectional=FLAGS.encode_bidirectional,
          encode_num_layers=FLAGS.encode_num_layers,
@@ -646,6 +646,7 @@ if __name__ == '__main__':
 
     # Encode settings.
     gflags.DEFINE_boolean("use_encode", False, "Encode embeddings with sequential network.")
+    gflags.DEFINE_enum("encode_style", None, ["LSTM", "CNN", "QRNN"], "Encode embeddings with sequential context.")
     gflags.DEFINE_boolean("encode_reverse", False, "Encode in reverse order.")
     gflags.DEFINE_boolean("encode_bidirectional", False, "Encode in both directions.")
     gflags.DEFINE_integer("encode_num_layers", 1, "RNN layers in encoding net.")
@@ -707,5 +708,9 @@ if __name__ == '__main__':
 
     if not FLAGS.sha:
         FLAGS.sha = os.popen('git rev-parse HEAD').read().strip()
+
+    # HACK: The "use_encode" flag will be deprecated. Instead use something like encode_style=LSTM.
+    if FLAGS.use_encode:
+        FLAGS.encode_style = "LSTM"
 
     run(only_forward=FLAGS.expanded_eval_only_mode)
