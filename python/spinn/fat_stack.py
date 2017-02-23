@@ -228,6 +228,9 @@ class SPINN(nn.Module):
     def reduce_phase_hook(self, lefts, rights, trackings, reduce_stacks):
         pass
 
+    def loss_phase_hook(self):
+        pass
+
     def run(self, inp_transitions, run_internal_parser=False, use_internal_parser=False, validate_transitions=True):
         transition_loss = None
         transition_acc = 0.0
