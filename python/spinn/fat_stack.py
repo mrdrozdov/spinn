@@ -218,12 +218,15 @@ class SPINN(nn.Module):
         return np.array(preds)
 
     def reduce_phase(self, lefts, rights, trackings, reduce_stacks):
-        if len(rights) > 0:
+        if len(reduce_stacks) > 0:
             reduced = iter(self.reduce(
                 lefts, rights, trackings))
             for stack in reduce_stacks:
                 new_stack_item = next(reduced)
                 stack.append(new_stack_item)
+
+    def reduce_phase_hook(self, lefts, rights, trackings, reduce_stacks):
+        pass
 
     def run(self, inp_transitions, run_internal_parser=False, use_internal_parser=False, validate_transitions=True):
         transition_loss = None
@@ -379,6 +382,7 @@ class SPINN(nn.Module):
             # ============
 
             self.reduce_phase(lefts, rights, trackings, reduce_stacks)
+            self.reduce_phase_hook(lefts, rights, trackings, reduce_stacks)
 
         # Loss Phase
         # ==========
@@ -392,6 +396,8 @@ class SPINN(nn.Module):
             transition_loss = nn.NLLLoss()(t_logits, to_gpu(Variable(
                 torch.from_numpy(t_given), volatile=t_logits.volatile)))
             transition_loss *= self.transition_weight
+
+        self.loss_phase_hook()
 
         if self.debug:
             assert all(len(stack) == 3 for stack in self.stacks), \
@@ -502,11 +508,15 @@ class BaseModel(nn.Module):
     def build_example(self, sentences, transitions):
         raise Exception('Not implemented.')
 
+    def spinn_hook(self, state):
+        pass
+
     def run_spinn(self, example, use_internal_parser, validate_transitions=True):
         self.spinn.reset_state()
         state, transition_acc, transition_loss = self.spinn(example,
                                use_internal_parser=use_internal_parser,
                                validate_transitions=validate_transitions)
+        self.spinn_hook(state)
         return state, transition_acc, transition_loss
 
     def output_hook(self, output, sentences, transitions, y_batch=None):
