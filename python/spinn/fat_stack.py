@@ -247,7 +247,7 @@ class SPINN(nn.Module):
         """SKIP: Acts as padding and is a noop."""
         pass
 
-    def shift_phase(self, tops, trackings, stacks):
+    def shift_phase(self, tops, trackings, stacks, idxs):
         """SHIFT: Should dequeue buffer and item to stack."""
         if len(stacks) > 0:
             shift_candidates = iter(tops)
@@ -284,6 +284,9 @@ class SPINN(nn.Module):
 
             # A mask to select all non-SKIP transitions.
             cant_skip = np.array([t != T_SKIP for t in transitions])
+
+            # Remember important details from this time step.
+            self.memory = {}
 
             # Run if:
             # A. We have a tracking component and,
@@ -364,33 +367,29 @@ class SPINN(nn.Module):
                     # (optional) Filter to only non-skipped transitions. When filtering values
                     # that will be backpropagated over, be careful that gradient flow isn't broken.
 
-                    memory = {}
-
                     # Actual transition predictions. Used to measure transition accuracy.
-                    memory["t_preds"] = t_preds
+                    self.memory["t_preds"] = t_preds
 
                     # Distribution of transitions use to calculate transition loss.
-                    memory["t_logits"] = t_logits
+                    self.memory["t_logits"] = t_logits
 
                     # Given transitions.
-                    memory["t_given"] = t_given
+                    self.memory["t_given"] = t_given
 
                     # Record step index.
-                    memory["t_mask"] = t_mask
+                    self.memory["t_mask"] = t_mask
 
-                    # TODO: Write tests to make sure these values look right in the various settings.
+                    # TODO: Write tests to make sure memories look right in the various settings.
 
                     # If this FLAG is set, then use the predicted actions rather than the given.
                     if use_internal_parser:
                         transition_arr = transition_preds.tolist()
 
-                    self.memories.append(memory)
-
             # Pre-Action Phase
             # ================
 
             # For SHIFT
-            s_stacks, s_tops, s_trackings = [], [], []
+            s_stacks, s_tops, s_trackings, s_idxs = [], [], [], []
 
             # For REDUCE
             r_stacks, r_lefts, r_rights, r_trackings = [], [], [], []
@@ -402,6 +401,7 @@ class SPINN(nn.Module):
             for batch_idx, (transition, buf, stack, tracking) in enumerate(batch):
                 if transition == T_SHIFT: # shift
                     self.t_shift(buf, stack, tracking, s_tops, s_trackings)
+                    s_idxs.append(batch_idx)
                     s_stacks.append(stack)
                 elif transition == T_REDUCE: # reduce
                     self.t_reduce(buf, stack, tracking, r_lefts, r_rights, r_trackings)
@@ -412,9 +412,14 @@ class SPINN(nn.Module):
             # Action Phase
             # ============
 
-            self.shift_phase(s_tops, s_trackings, s_stacks)
+            self.shift_phase(s_tops, s_trackings, s_stacks, s_idxs)
             self.reduce_phase(r_lefts, r_rights, r_trackings, r_stacks)
             self.reduce_phase_hook(r_lefts, r_rights, r_trackings, r_stacks)
+
+            # Memory Phase
+            # ============
+
+            self.memories.append(self.memory)
 
         # Loss Phase
         # ==========

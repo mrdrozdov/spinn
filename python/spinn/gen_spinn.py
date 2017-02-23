@@ -66,6 +66,7 @@ class GenSPINN(SPINN):
         self.dec_h = list(torch.chunk(init, batch_size, 1))
         self.dec_c = list(torch.chunk(init, batch_size, 1))
 
+        # TODO: Right now the decoder runs over the entire sentence, which is a bit like cheating!
         self.run_decoder_rnn(range(batch_size), batch)
 
     def run_decoder_rnn(self, idxs, x):
@@ -89,10 +90,39 @@ class GenSPINN(SPINN):
 
         return hn, cn
 
+    def shift_phase(self, tops, trackings, stacks, idxs):
+        """SHIFT: Should dequeue buffer and item to stack."""
+
+        # Generative Component.
+        if self.training and len(stacks) > 0:
+            h_prev = torch.cat([self.dec_h[batch_idx] for batch_idx in idxs], 1)
+            c_prev = torch.cat([self.dec_h[batch_idx] for batch_idx in idxs], 1)
+
+            # First predict, then run one step of RNN in preparation for next decode.
+            w = self.decoder(h_prev.squeeze(0))
+            logits = F.log_softmax(w)
+            target = np.array([self.tokens[batch_idx].pop() for batch_idx in idxs])
+
+            self.memory['w_logits'] = logits
+            self.memory['w_target'] = target
+
+            # Run decoder one step in preparation for next shift phase.
+            self.run_decoder_rnn(idxs, torch.cat(tops, 0).unsqueeze(1))
+
+        # TODO: Experiment adding the predicted the word to the stack rather than
+        # the top of the buffer.
+
+        if len(stacks) > 0:
+            shift_candidates = iter(tops)
+            for stack in stacks:
+                new_stack_item = next(shift_candidates)
+                stack.append(new_stack_item)
+
     def loss_phase_hook(self):
-        dummy_inp = Variable(torch.ones(1,1))
-        dummy_loss = nn.Linear(1,2)(dummy_inp).sum()
-        self.gen_loss = dummy_loss
+        if self.training:
+            dummy_inp = Variable(torch.ones(1,1))
+            dummy_loss = nn.Linear(1,2)(dummy_inp).sum()
+            self.gen_loss = dummy_loss
 
     def forward(self, example, use_internal_parser=False, validate_transitions=True):
         # TODO: Only run in train mode for now.
