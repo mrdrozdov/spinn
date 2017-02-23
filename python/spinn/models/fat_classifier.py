@@ -447,6 +447,10 @@ def run(only_forward=False):
                 A.add('preds', preds)
                 A.add('truth', truth)
 
+            # Accumulate stats for word prediction accuracy.
+            if gen_loss is not None:
+                A.add('gen_acc', model.spinn.gen_acc)
+
             # Note: Keep track of transition_acc, although this is a naive average.
             # Should be weighted by length of sequences in batch.
             M.add('transition_acc', transition_acc)
@@ -550,6 +554,10 @@ def run(only_forward=False):
                     avg_trans_acc = (all_preds == all_truth).sum() / float(all_truth.shape[0])
                 else:
                     avg_trans_acc = 0.0
+                if gen_loss is not None:
+                    avg_gen_acc = A.get_avg('gen_acc')
+                else:
+                    avg_gen_acc = 0.0
                 time_metric = time_per_token(A.get('total_tokens'), A.get('total_time'))
                 stats_args = {
                     "step": step,
@@ -562,10 +570,19 @@ def run(only_forward=False):
                     "rl_cost": rl_cost_val,
                     "policy_cost": policy_cost_val,
                     "rae_cost": rae_cost_val,
+                    "gen_acc": avg_gen_acc,
                     "gen_cost": gen_cost_val,
                     "time": time_metric,
                 }
-                stats_str = "Step: {step} Acc: {class_acc:.5f} {transition_acc:.5f} Cost: {total_cost:.5f} {xent_cost:.5f} {transition_cost:.5f} {l2_cost:.5f}"
+                stats_str = "Step: {step}"
+
+                # Accuracy Component.
+                stats_str += " Acc: {class_acc:.5f} {transition_acc:.5f}"
+                if gen_loss is not None:
+                    stats_str += " gen{gen_acc:.5f}"
+
+                # Cost Component.
+                stats_str += " Cost: {total_cost:.5f} {xent_cost:.5f} {transition_cost:.5f} {l2_cost:.5f}"
                 if rl_loss is not None:
                     stats_str += " r{rl_cost:.5f}"
                 if policy_loss is not None:
@@ -574,6 +591,8 @@ def run(only_forward=False):
                     stats_str += " rae{rae_cost:.5f}"
                 if gen_loss is not None:
                     stats_str += " gen{gen_cost:.5f}"
+
+                # Time Component.
                 stats_str += " Time: {time:.5f}"
                 logger.Log(stats_str.format(**stats_args))
 

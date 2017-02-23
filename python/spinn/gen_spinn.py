@@ -103,8 +103,8 @@ class GenSPINN(SPINN):
             logits = F.log_softmax(w)
             target = np.array([self.tokens[batch_idx].pop() for batch_idx in idxs])
 
-            self.memory['w_logits'] = logits
-            self.memory['w_target'] = target
+            self.memory['gen_logits'] = logits
+            self.memory['gen_target'] = target
 
             # Run decoder one step in preparation for next shift phase.
             self.run_decoder_rnn(idxs, torch.cat(tops, 0).unsqueeze(1))
@@ -120,9 +120,18 @@ class GenSPINN(SPINN):
 
     def loss_phase_hook(self):
         if self.training:
-            dummy_inp = Variable(torch.ones(1,1))
-            dummy_loss = nn.Linear(1,2)(dummy_inp).sum()
-            self.gen_loss = dummy_loss
+            target = np.array(reduce(lambda x, y: x + y.tolist(),
+            [m["gen_target"] for m in self.memories if "gen_target" in m], []))
+            logits = torch.cat([m["gen_logits"] for m in self.memories if "gen_logits" in m], 0)
+
+            # TODO: Probably only the first or last words have any chance of being predicted.
+            # Calculate loss.
+            target = torch.from_numpy(target).long()
+            self.gen_loss = nn.NLLLoss()(logits, Variable(target, volatile=not self.training)) / target.size(0)
+
+            # Calculate accuracy.
+            pred = logits.data.max(1)[1].cpu() # get the index of the max log-probability
+            self.gen_acc = pred.eq(target).sum() / float(target.size(0))
 
     def forward(self, example, use_internal_parser=False, validate_transitions=True):
         # TODO: Only run in train mode for now.
