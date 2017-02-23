@@ -54,31 +54,37 @@ class RAESPINN(SPINN):
                 if not hasattr(right, 'isleaf'):
                     right.isleaf = True
 
-    def reconstruct(self, root):
-        LR = F.tanh(self.decompose(root))
+    def reconstruct(self, roots):
+        if len(roots) == 0:
+            return []
+
+        LR = F.tanh(self.decompose(torch.cat(roots, 0)))
         left, right = torch.chunk(LR, 2, 1)
-        reconstruction_loss = []
+        lefts = torch.chunk(left, len(roots), 0)
+        rights = torch.chunk(right, len(roots), 0)
 
-        if root.left.isleaf:
-            reconstruction_loss.append(nn.MSELoss()(left, Variable(root.left.data)))
-        else:
-            reconstruction_loss += self.reconstruct(root.left)
+        done = []
+        new_roots = []
 
-        if root.right.isleaf:
-            reconstruction_loss.append(nn.MSELoss()(right, Variable(root.right.data)))
-        else:
-            reconstruction_loss += self.reconstruct(root.right)
+        for L, R, root in zip(lefts, rights, roots):
+            if root.left.isleaf:
+                done.append((L, Variable(root.left.data)))
+            else:
+                new_roots.append(root.left)
+            if root.right.isleaf:
+                done.append((R, Variable(root.right.data)))
+            else:
+                new_roots.append(root.right)
 
-        return reconstruction_loss
+        return done + self.reconstruct(new_roots)
 
     def loss_phase_hook(self):
-        reconstruction_loss = 0.0
-        for stack in self.stacks:
-            root = stack[-1]
-            if not root.isleaf:
-                losses = self.reconstruct(root)
-                reconstruction_loss += sum(losses) / len(losses)
-        self.rae_loss = reconstruction_loss / len(self.stacks)
+        if self.training: # only RAE during train time.
+            done = self.reconstruct([stack[-1] for stack in self.stacks if not stack[-1].isleaf])
+            inp, target = zip(*done)
+            inp = torch.cat(inp, 0)
+            target = torch.cat(target, 0)
+            self.rae_loss = nn.MSELoss()(inp, target)
 
 
 class RAEBaseModel(BaseModel):
