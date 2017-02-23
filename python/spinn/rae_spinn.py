@@ -67,13 +67,11 @@ class RAESPINN(SPINN):
         new_roots = []
 
         for L, R, root in zip(lefts, rights, roots):
-            if root.left.isleaf:
-                done.append((L, Variable(root.left.data)))
-            else:
+            done.append((L, Variable(root.left.data, volatile=not self.training)))
+            done.append((R, Variable(root.right.data, volatile=not self.training)))
+            if not root.left.isleaf:
                 new_roots.append(root.left)
-            if root.right.isleaf:
-                done.append((R, Variable(root.right.data)))
-            else:
+            if not root.right.isleaf:
                 new_roots.append(root.right)
 
         return done + self.reconstruct(new_roots)
@@ -84,7 +82,8 @@ class RAESPINN(SPINN):
             inp, target = zip(*done)
             inp = torch.cat(inp, 0)
             target = torch.cat(target, 0)
-            self.rae_loss = nn.MSELoss()(inp, target)
+            similarity = Variable(torch.ones(inp.size(0)), volatile=not self.training)
+            self.rae_loss = nn.CosineEmbeddingLoss()(inp, target, similarity)
 
 
 class RAEBaseModel(BaseModel):
