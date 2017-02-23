@@ -38,6 +38,7 @@ from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import the_gpu, to_gpu, l2_cost, flatten, debug_gradient
 from spinn.util.misc import Accumulator, time_per_token, MetricsLogger, EvalReporter
 
+import spinn.gen_spinn
 import spinn.rae_spinn
 import spinn.rl_spinn
 import spinn.fat_stack
@@ -284,6 +285,8 @@ def run(only_forward=False):
         model_module = spinn.rl_spinn
     elif FLAGS.model_type == "RAESPINN":
         model_module = spinn.rae_spinn
+    elif FLAGS.model_type == "GENSPINN":
+        model_module = spinn.gen_spinn
     else:
         raise Exception("Requested unimplemented model type %s" % FLAGS.model_type)
 
@@ -431,6 +434,7 @@ def run(only_forward=False):
             rl_loss = model.rl_loss if hasattr(model, 'rl_loss') else None
             policy_loss = model.policy_loss if hasattr(model, 'policy_loss') else None
             rae_loss = model.spinn.rae_loss if hasattr(model.spinn, 'rae_loss') else None
+            gen_loss = model.spinn.gen_loss if hasattr(model.spinn, 'gen_loss') else None
 
             # Force Transition Loss Optimization
             if FLAGS.force_transition_loss:
@@ -457,6 +461,7 @@ def run(only_forward=False):
             rl_cost_val = rl_loss.data[0] if rl_loss is not None else 0.0
             policy_cost_val = policy_loss.data[0] if policy_loss is not None else 0.0
             rae_cost_val = rae_loss.data[0] if rae_loss is not None else 0.0
+            gen_cost_val = gen_loss.data[0] if gen_loss is not None else 0.0
 
             # Accumulate Total Loss Data
             total_cost_val = 0.0
@@ -467,6 +472,7 @@ def run(only_forward=False):
             total_cost_val += rl_cost_val
             total_cost_val += policy_cost_val
             total_cost_val += rae_cost_val
+            total_cost_val += gen_cost_val
 
             M.add('total_cost', total_cost_val)
             M.add('xent_cost', xent_cost_val)
@@ -494,6 +500,8 @@ def run(only_forward=False):
                 total_loss += policy_loss
             if rae_loss is not None:
                 total_loss += rae_loss
+            if gen_loss is not None:
+                total_loss += gen_loss
 
             # Useful for debugging gradient flow.
             if FLAGS.debug:
@@ -554,6 +562,7 @@ def run(only_forward=False):
                     "rl_cost": rl_cost_val,
                     "policy_cost": policy_cost_val,
                     "rae_cost": rae_cost_val,
+                    "gen_cost": gen_cost_val,
                     "time": time_metric,
                 }
                 stats_str = "Step: {step} Acc: {class_acc:.5f} {transition_acc:.5f} Cost: {total_cost:.5f} {xent_cost:.5f} {transition_cost:.5f} {l2_cost:.5f}"
@@ -563,6 +572,8 @@ def run(only_forward=False):
                     stats_str += " p{policy_cost:.5f}"
                 if rae_loss is not None:
                     stats_str += " rae{rae_cost:.5f}"
+                if gen_loss is not None:
+                    stats_str += " gen{gen_cost:.5f}"
                 stats_str += " Time: {time:.5f}"
                 logger.Log(stats_str.format(**stats_args))
 
@@ -632,7 +643,7 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("use_left_padding", True, "Pad transitions only on the LHS.")
 
     # Model architecture settings.
-    gflags.DEFINE_enum("model_type", "RNN", ["CBOW", "RNN", "SPINN", "RLSPINN", "RAESPINN"], "")
+    gflags.DEFINE_enum("model_type", "RNN", ["CBOW", "RNN", "SPINN", "RLSPINN", "RAESPINN", "GENSPINN"], "")
     gflags.DEFINE_integer("gpu", -1, "")
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")

@@ -125,6 +125,16 @@ class LSTMState:
         return self._both
 
 
+def get_seq_h(state, hidden_dim):
+    return state[:, :, hidden_dim:]
+
+def get_seq_c(state, hidden_dim):
+    return state[:, :, :hidden_dim]
+
+def get_seq_state(c, h):
+    return torch.cat([h, c], 2)
+
+
 def get_h(state, hidden_dim):
     return state[:, hidden_dim:]
 
