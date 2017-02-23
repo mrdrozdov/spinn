@@ -217,6 +217,14 @@ class SPINN(nn.Module):
 
         return np.array(preds)
 
+    def reduce_phase(self, lefts, rights, trackings, reduce_stacks):
+        if len(rights) > 0:
+            reduced = iter(self.reduce(
+                lefts, rights, trackings))
+            for stack in reduce_stacks:
+                new_stack_item = next(reduced)
+                stack.append(new_stack_item)
+
     def run(self, inp_transitions, run_internal_parser=False, use_internal_parser=False, validate_transitions=True):
         transition_loss = None
         transition_acc = 0.0
@@ -338,6 +346,7 @@ class SPINN(nn.Module):
             # ============
 
             lefts, rights, trackings = [], [], []
+            reduce_stacks = []
             batch = zip(transition_arr, self.bufs, self.stacks,
                         self.tracker.states if hasattr(self, 'tracker') and self.tracker.h is not None
                         else itertools.repeat(None))
@@ -361,6 +370,7 @@ class SPINN(nn.Module):
                                 torch.from_numpy(np.zeros(buf[0].size(), dtype=np.float32)),
                                 volatile=buf[0].volatile))
                             reduce_inp.append(zeros)
+                    reduce_stacks.append(stack)
 
                     # The tracking output is used in the Reduce function.
                     trackings.append(tracking)
@@ -368,14 +378,7 @@ class SPINN(nn.Module):
             # Reduce Phase
             # ============
 
-            if len(rights) > 0:
-                reduced = iter(self.reduce(
-                    lefts, rights, trackings))
-                for transition, stack, in zip(
-                        transition_arr, self.stacks):
-                    if transition == T_REDUCE: # reduce
-                        new_stack_item = next(reduced)
-                        stack.append(new_stack_item)
+            self.reduce_phase(lefts, rights, trackings, reduce_stacks)
 
         # Loss Phase
         # ==========
