@@ -217,11 +217,49 @@ class SPINN(nn.Module):
 
         return np.array(preds)
 
-    def reduce_phase(self, lefts, rights, trackings, reduce_stacks):
-        if len(reduce_stacks) > 0:
+    def t_shift(self, buf, stack, tracking, buf_tops, trackings):
+        """SHIFT: Should dequeue buffer and item to stack."""
+        buf_tops.append(buf.pop())
+        trackings.append(tracking)
+
+    def t_reduce(self, buf, stack, tracking, lefts, rights, trackings):
+        """REDUCE: Should compose top two items of the stack into new item."""
+
+        # The right-most input will be popped first.
+        for reduce_inp in [rights, lefts]:
+            if len(stack) > 0:
+                reduce_inp.append(stack.pop())
+            else:
+                if self.debug:
+                    raise IndexError
+                # If we try to Reduce, but there are less than 2 items on the stack,
+                # then treat any available item as the right input, and use zeros
+                # for any other inputs.
+                # NOTE: Only happens on cropped data.
+                zeros = to_gpu(Variable(
+                    torch.from_numpy(np.zeros(buf[0].size(), dtype=np.float32)),
+                    volatile=buf[0].volatile))
+                reduce_inp.append(zeros)
+
+        trackings.append(tracking)
+
+    def t_skip(self):
+        """SKIP: Acts as padding and is a noop."""
+        pass
+
+    def shift_phase(self, tops, trackings, stacks):
+        """SHIFT: Should dequeue buffer and item to stack."""
+        if len(stacks) > 0:
+            shift_candidates = iter(tops)
+            for stack in stacks:
+                new_stack_item = next(shift_candidates)
+                stack.append(new_stack_item)
+
+    def reduce_phase(self, lefts, rights, trackings, stacks):
+        if len(stacks) > 0:
             reduced = iter(self.reduce(
                 lefts, rights, trackings))
-            for stack in reduce_stacks:
+            for stack in stacks:
                 new_stack_item = next(reduced)
                 stack.append(new_stack_item)
 
@@ -348,44 +386,35 @@ class SPINN(nn.Module):
 
                     self.memories.append(memory)
 
-            # Action Phase
-            # ============
+            # Pre-Action Phase
+            # ================
 
-            lefts, rights, trackings = [], [], []
-            reduce_stacks = []
+            # For SHIFT
+            s_stacks, s_tops, s_trackings = [], [], []
+
+            # For REDUCE
+            r_stacks, r_lefts, r_rights, r_trackings = [], [], [], []
+
             batch = zip(transition_arr, self.bufs, self.stacks,
                         self.tracker.states if hasattr(self, 'tracker') and self.tracker.h is not None
                         else itertools.repeat(None))
 
             for batch_idx, (transition, buf, stack, tracking) in enumerate(batch):
                 if transition == T_SHIFT: # shift
-                    stack.append(buf.pop())
+                    self.t_shift(buf, stack, tracking, s_tops, s_trackings)
+                    s_stacks.append(stack)
                 elif transition == T_REDUCE: # reduce
-                    # The right-most input will be popped first.
-                    for reduce_inp in [rights, lefts]:
-                        if len(stack) > 0:
-                            reduce_inp.append(stack.pop())
-                        else:
-                            if self.debug:
-                                raise IndexError
-                            # If we try to Reduce, but there are less than 2 items on the stack,
-                            # then treat any available item as the right input, and use zeros
-                            # for any other inputs.
-                            # NOTE: Only happens on cropped data.
-                            zeros = to_gpu(Variable(
-                                torch.from_numpy(np.zeros(buf[0].size(), dtype=np.float32)),
-                                volatile=buf[0].volatile))
-                            reduce_inp.append(zeros)
-                    reduce_stacks.append(stack)
+                    self.t_reduce(buf, stack, tracking, r_lefts, r_rights, r_trackings)
+                    r_stacks.append(stack)
+                elif transition == T_SKIP: # skip
+                    self.t_skip()
 
-                    # The tracking output is used in the Reduce function.
-                    trackings.append(tracking)
-
-            # Reduce Phase
+            # Action Phase
             # ============
 
-            self.reduce_phase(lefts, rights, trackings, reduce_stacks)
-            self.reduce_phase_hook(lefts, rights, trackings, reduce_stacks)
+            self.shift_phase(s_tops, s_trackings, s_stacks)
+            self.reduce_phase(r_lefts, r_rights, r_trackings, r_stacks)
+            self.reduce_phase_hook(r_lefts, r_rights, r_trackings, r_stacks)
 
         # Loss Phase
         # ==========
