@@ -330,6 +330,7 @@ def run(only_forward=False):
          rl_baseline=FLAGS.rl_baseline,
          rl_reward=FLAGS.rl_reward,
          rl_weight=FLAGS.rl_weight,
+         predict_leaf=FLAGS.predict_leaf,
          gen_h=FLAGS.gen_h,
         )
 
@@ -435,6 +436,7 @@ def run(only_forward=False):
             rl_loss = model.rl_loss if hasattr(model, 'rl_loss') else None
             policy_loss = model.policy_loss if hasattr(model, 'policy_loss') else None
             rae_loss = model.spinn.rae_loss if hasattr(model.spinn, 'rae_loss') else None
+            leaf_loss = model.spinn.leaf_loss if hasattr(model.spinn, 'leaf_loss') else None
             gen_loss = model.spinn.gen_loss if hasattr(model.spinn, 'gen_loss') else None
 
             # Force Transition Loss Optimization
@@ -447,6 +449,10 @@ def run(only_forward=False):
                 truth = [m["t_given"] for m in model.spinn.memories]
                 A.add('preds', preds)
                 A.add('truth', truth)
+
+            # Accumulate stats for leaf prediction accuracy.
+            if leaf_loss is not None:
+                A.add('leaf_acc', model.spinn.leaf_acc)
 
             # Accumulate stats for word prediction accuracy.
             if gen_loss is not None:
@@ -466,6 +472,7 @@ def run(only_forward=False):
             rl_cost_val = rl_loss.data[0] if rl_loss is not None else 0.0
             policy_cost_val = policy_loss.data[0] if policy_loss is not None else 0.0
             rae_cost_val = rae_loss.data[0] if rae_loss is not None else 0.0
+            leaf_cost_val = leaf_loss.data[0] if leaf_loss is not None else 0.0
             gen_cost_val = gen_loss.data[0] if gen_loss is not None else 0.0
 
             # Accumulate Total Loss Data
@@ -477,6 +484,7 @@ def run(only_forward=False):
             total_cost_val += rl_cost_val
             total_cost_val += policy_cost_val
             total_cost_val += rae_cost_val
+            total_cost_val += leaf_cost_val
             total_cost_val += gen_cost_val
 
             M.add('total_cost', total_cost_val)
@@ -505,6 +513,8 @@ def run(only_forward=False):
                 total_loss += policy_loss
             if rae_loss is not None:
                 total_loss += rae_loss
+            if leaf_loss is not None:
+                total_loss += leaf_loss
             if gen_loss is not None:
                 total_loss += gen_loss
 
@@ -555,6 +565,10 @@ def run(only_forward=False):
                     avg_trans_acc = (all_preds == all_truth).sum() / float(all_truth.shape[0])
                 else:
                     avg_trans_acc = 0.0
+                if leaf_loss is not None:
+                    avg_leaf_acc = A.get_avg('leaf_acc')
+                else:
+                    avg_leaf_acc = 0.0
                 if gen_loss is not None:
                     avg_gen_acc = A.get_avg('gen_acc')
                 else:
@@ -571,6 +585,8 @@ def run(only_forward=False):
                     "rl_cost": rl_cost_val,
                     "policy_cost": policy_cost_val,
                     "rae_cost": rae_cost_val,
+                    "leaf_acc": avg_leaf_acc,
+                    "leaf_cost": leaf_cost_val,
                     "gen_acc": avg_gen_acc,
                     "gen_cost": gen_cost_val,
                     "time": time_metric,
@@ -579,6 +595,8 @@ def run(only_forward=False):
 
                 # Accuracy Component.
                 stats_str += " Acc: {class_acc:.5f} {transition_acc:.5f}"
+                if leaf_loss is not None:
+                    stats_str += " leaf{leaf_acc:.5f}"
                 if gen_loss is not None:
                     stats_str += " gen{gen_acc:.5f}"
 
@@ -590,6 +608,8 @@ def run(only_forward=False):
                     stats_str += " p{policy_cost:.5f}"
                 if rae_loss is not None:
                     stats_str += " rae{rae_cost:.5f}"
+                if leaf_loss is not None:
+                    stats_str += " leaf{leaf_cost:.5f}"
                 if gen_loss is not None:
                     stats_str += " gen{gen_cost:.5f}"
 
@@ -700,6 +720,9 @@ if __name__ == '__main__':
     gflags.DEFINE_enum("rl_reward", "standard", ["standard", "xent"],
         "Different reward functions to use.")
     gflags.DEFINE_float("rl_weight", 1.0, "Hyperparam for REINFORCE loss.")
+
+    # RAE settings.
+    gflags.DEFINE_boolean("predict_leaf", True, "Predict whether a node is a leaf or not.")
 
     # GEN settings.
     gflags.DEFINE_boolean("gen_h", True, "Use generator output as feature.")

@@ -37,10 +37,15 @@ class SentenceTrainer(SentencePairTrainer): pass
 
 class RAESPINN(SPINN):
 
-    def __init__(self, args, vocab, use_skips=False):
+    def __init__(self, args, vocab, use_skips=False, predict_leaf=None):
         super(RAESPINN, self).__init__(args, vocab, use_skips=use_skips)
         model_dim = args.size * 2
         self.decompose = nn.Linear(model_dim, model_dim * 2)
+
+        # Predict whether a node is a leaf or not.
+        self.predict_leaf = predict_leaf
+        if self.predict_leaf:
+            self.leaf = nn.Linear(model_dim, 2)
 
     def reduce_phase_hook(self, lefts, rights, trackings, reduce_stacks):
         if len(reduce_stacks) > 0:
@@ -55,8 +60,10 @@ class RAESPINN(SPINN):
                     right.isleaf = True
 
     def reconstruct(self, roots):
+        """ Recursively build variables for Reconstruction Loss.
+        """
         if len(roots) == 0:
-            return []
+            return [], []
 
         LR = F.tanh(self.decompose(torch.cat(roots, 0)))
         left, right = torch.chunk(LR, 2, 1)
@@ -65,31 +72,55 @@ class RAESPINN(SPINN):
 
         done = []
         new_roots = []
+        extra = []
 
         for L, R, root in zip(lefts, rights, roots):
-            done.append((L, Variable(root.left.data, volatile=not self.training)))
-            done.append((R, Variable(root.right.data, volatile=not self.training)))
+            done.append((L, root.left.data))
+            done.append((R, root.right.data))
             if not root.left.isleaf:
                 new_roots.append(root.left)
             if not root.right.isleaf:
                 new_roots.append(root.right)
+            if self.predict_leaf:
+                extra.append((L, root.left.isleaf))
+                extra.append((R, root.right.isleaf))
 
-        return done + self.reconstruct(new_roots)
+        child_done, child_extra = self.reconstruct(new_roots)
+
+        return done + child_done, extra + child_extra
+
+    def leaf_phase(self, inp, target):
+        inp = torch.cat(inp, 0)
+        target = Variable(torch.LongTensor(target), volatile=not self.training)
+        outp = self.leaf(inp)
+        logits = F.log_softmax(outp)
+        self.leaf_loss = nn.NLLLoss()(logits, target)
+
+        preds = logits.data.max(1)[1]
+        self.leaf_acc = preds.eq(target.data).sum() / float(preds.size(0))
 
     def loss_phase_hook(self):
-        if self.training: # only RAE during train time.
-            done = self.reconstruct([stack[-1] for stack in self.stacks if not stack[-1].isleaf])
+        if self.training: # only calculate reconstruction loss during train time.
+            done, extra = self.reconstruct([stack[-1] for stack in self.stacks if not stack[-1].isleaf])
             inp, target = zip(*done)
             inp = torch.cat(inp, 0)
-            target = torch.cat(target, 0)
+            target = Variable(torch.cat(target, 0), volatile=not self.training)
             similarity = Variable(torch.ones(inp.size(0)), volatile=not self.training)
             self.rae_loss = nn.CosineEmbeddingLoss()(inp, target, similarity)
+
+            if self.predict_leaf:
+                leaf_inp, leaf_target = zip(*extra)
+                self.leaf_phase(leaf_inp, leaf_target)
 
 
 class RAEBaseModel(BaseModel):
 
+    def __init__(self, predict_leaf=None, **kwargs):
+        self.predict_leaf = predict_leaf
+        super(RAEBaseModel, self).__init__(**kwargs)
+
     def build_spinn(self, args, vocab, use_skips):
-        return RAESPINN(args, vocab, use_skips=use_skips)
+        return RAESPINN(args, vocab, use_skips=use_skips, predict_leaf=self.predict_leaf)
 
 
 class SentencePairModel(RAEBaseModel):
