@@ -114,11 +114,11 @@ def TokensToIDs(vocabulary, dataset, sentence_pair_data=False):
                         example[key][i] = unk_id
                         unks += 1
                     tokens += 1
+            print "Unk rate {:2.6f}%, downcase rate {:2.6f}%, upcase rate {:2.6f}%".format((unks * 100.0 / tokens), (lowers * 100.0 / tokens), (raises * 100.0 / tokens))
         else:
             for example in dataset:
                 example[key] = [vocabulary[token]
                                 for token in example[key]]
-    print "Unk rate {:2.6f}%, downcase rate {:2.6f}%, upcase rate {:2.6f}%".format((unks * 100.0 / tokens), (lowers * 100.0 / tokens), (raises * 100.0 / tokens))
     return dataset
 
 
