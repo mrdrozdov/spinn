@@ -1,8 +1,13 @@
 import unittest
 import numpy as np
+import tempfile
 
 from spinn import util
 from spinn.fat_stack import SPINN, SentenceModel, SentencePairModel
+
+import spinn.fat_stack
+import spinn.rl_spinn
+from spinn.util.blocks import BaseSentencePairTrainer
 
 # PyTorch
 import torch
@@ -11,10 +16,50 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 
-from spinn.util.test import MockModel, default_args, get_batch
+from spinn.util.test import MockModel, default_args, get_batch, compare_models
 
 
 class SPINNTestCase(unittest.TestCase):
+
+    def test_save_load_model(self):
+        scalar = 11
+        other_scalar = 0
+        model_to_save = MockModel(SentenceModel, default_args())
+        model_to_load = MockModel(SentenceModel, default_args())
+
+        # Save to and load from temporary file.
+        temp = tempfile.NamedTemporaryFile()
+        torch.save(model_to_save.state_dict(), temp.name)
+        model_to_load.load_state_dict(torch.load(temp.name))
+
+        compare_models(model_to_save, model_to_load)
+
+        # Cleanup temporary file.
+        temp.close()
+
+
+    def test_save_sup_load_rl(self):
+        scalar = 11
+        other_scalar = 0
+
+        model_to_save = MockModel(spinn.fat_stack.SentenceModel, default_args())
+        opt_to_save = optim.SGD(model_to_save.parameters(), lr=0.1)
+        trainer_to_save = BaseSentencePairTrainer(model_to_save, opt_to_save)
+
+        model_to_load = MockModel(spinn.rl_spinn.SentenceModel, default_args())
+        opt_to_load = optim.SGD(model_to_load.parameters(), lr=0.1)
+        trainer_to_load = BaseSentencePairTrainer(model_to_load, opt_to_load)
+
+        # Save to and load from temporary file.
+        temp = tempfile.NamedTemporaryFile()
+        trainer_to_save.save(temp.name, 0, 0)
+        trainer_to_load.load(temp.name)
+
+        compare_models(model_to_save, model_to_load)
+
+        # Cleanup temporary file.
+        temp.close()
+
 
     def test_basic_stack(self):
         model = MockModel(SentenceModel, default_args())

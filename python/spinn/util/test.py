@@ -77,3 +77,13 @@ def MockModel(model_cls, default_args, **kwargs):
     for k, v in kwargs.iteritems():
         _kwargs[k] = v
     return model_cls(**_kwargs)
+
+
+def compare_models(model1, model2):
+    # Check length of parameters.
+    assert len(list(model1.parameters())) == len(list(model2.parameters()))
+
+    # Check value of parameters.
+    for w, _w in zip(model1.parameters(), model2.parameters()):
+        assert w.size() == _w.size()
+        assert all((w.data == _w.data).numpy().astype(bool).tolist())

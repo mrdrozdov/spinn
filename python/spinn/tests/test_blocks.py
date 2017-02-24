@@ -24,22 +24,14 @@ from spinn.util.blocks import ZeroInitializer as SimpleBiasInitializer
 from spinn.util.blocks import HeKaimingLinear as CustomLinear
 from spinn.util.blocks import Linear
 
+from spinn.util.test import compare_models
+
 
 class MockModel(nn.Module):
     def __init__(self, scalar=11):
         super(MockModel, self).__init__()
         self.layer = nn.Linear(2, 2)
         self.register_buffer('scalar', torch.Tensor([scalar]))
-
-
-def compare_models(model1, model2):
-    # Check length of parameters.
-    assert len(list(model1.parameters())) == len(list(model2.parameters()))
-
-    # Check value of parameters.
-    for w, _w in zip(model1.parameters(), model2.parameters()):
-        assert w.size() == _w.size()
-        assert all((w.data == _w.data).numpy().astype(bool).tolist())
 
 
 class PytorchTestCase(unittest.TestCase):
