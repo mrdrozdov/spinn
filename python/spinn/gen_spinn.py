@@ -94,17 +94,18 @@ class GenSPINN(SPINN):
         """SHIFT: Should dequeue buffer and item to stack."""
 
         # Generative Component.
-        if self.training and len(stacks) > 0:
+        if len(stacks) > 0:
             h_prev = torch.cat([self.dec_h[batch_idx] for batch_idx in idxs], 1)
             c_prev = torch.cat([self.dec_h[batch_idx] for batch_idx in idxs], 1)
 
-            # First predict, then run one step of RNN in preparation for next decode.
-            w = self.decoder(h_prev.squeeze(0))
-            logits = F.log_softmax(w)
-            target = np.array([self.tokens[batch_idx].pop() for batch_idx in idxs])
+            if self.training:
+                # First predict, then run one step of RNN in preparation for next decode.
+                w = self.decoder(h_prev.squeeze(0))
+                logits = F.log_softmax(w)
+                target = np.array([self.tokens[batch_idx].pop() for batch_idx in idxs])
 
-            self.memory['gen_logits'] = logits
-            self.memory['gen_target'] = target
+                self.memory['gen_logits'] = logits
+                self.memory['gen_target'] = target
 
             # Run decoder one step in preparation for next shift phase.
             self.run_decoder_rnn(idxs, torch.cat(tops, 0).unsqueeze(1))
@@ -134,24 +135,40 @@ class GenSPINN(SPINN):
             self.gen_acc = pred.eq(target).sum() / float(target.size(0))
 
     def forward(self, example, use_internal_parser=False, validate_transitions=True):
-        # TODO: Only run in train mode for now.
-        if self.training:
-            tokens = example.tokens.data.numpy().tolist()
-            tokens = [list(reversed(t)) for t in tokens]
-            self.tokens = tokens
+        tokens = example.tokens.data.numpy().tolist()
+        tokens = [list(reversed(t)) for t in tokens]
+        self.tokens = tokens
 
-            self.reset_decoder(example)
+        self.reset_decoder(example)
 
         return super(GenSPINN, self).forward(
             example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
 
+
 class GenBaseModel(BaseModel):
+
+    def __init__(self, gen_h=None, **kwargs):
+        self.gen_h = gen_h
+        super(GenBaseModel, self).__init__(**kwargs)
 
     def build_spinn(self, args, vocab, use_skips):
         return GenSPINN(args, vocab, use_skips=use_skips)
 
     def output_hook(self, output, sentences, transitions, y_batch=None):
         pass
+
+    def get_features_dim(self):
+        features_dim = super(GenBaseModel, self).get_features_dim()
+        if self.gen_h:
+            features_dim += self.spinn.decoder_dim
+        return features_dim
+
+    def build_features(self, h):
+        features = super(GenBaseModel, self).build_features(h)
+        if self.gen_h:
+            decoder_h = torch.cat(self.spinn.dec_h, 0).squeeze()
+            features = torch.cat([features, decoder_h], 1)
+        return features
 
 
 class SentencePairModel(GenBaseModel):

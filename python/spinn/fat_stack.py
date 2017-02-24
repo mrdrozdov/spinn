@@ -480,22 +480,7 @@ class BaseModel(nn.Module):
         self.use_sentence_pair = use_sentence_pair
         self.use_difference_feature = use_difference_feature
         self.use_product_feature = use_product_feature
-
         self.hidden_dim = hidden_dim = model_dim / 2
-        features_dim = hidden_dim * 2 if use_sentence_pair else hidden_dim
-
-        if self.use_sentence_pair:
-            if self.use_difference_feature:
-                features_dim += self.hidden_dim
-            if self.use_product_feature:
-                features_dim += self.hidden_dim
-
-        mlp_input_dim = features_dim
-
-        self.initial_embeddings = initial_embeddings
-        self.word_embedding_dim = word_embedding_dim
-        self.model_dim = model_dim
-        classifier_dropout_rate = 1. - classifier_keep_rate
 
         args = Args()
         args.lateral_tracking = lateral_tracking
@@ -504,9 +489,22 @@ class BaseModel(nn.Module):
         args.tracker_size = tracking_lstm_hidden_dim
         args.transition_weight = transition_weight
 
+        self.initial_embeddings = initial_embeddings
+        self.word_embedding_dim = word_embedding_dim
+        self.model_dim = model_dim
+        classifier_dropout_rate = 1. - classifier_keep_rate
+
         vocab = Vocab()
         vocab.size = initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size
         vocab.vectors = initial_embeddings
+
+        # Build parsing component.
+        self.spinn = self.build_spinn(args, vocab, use_skips)
+
+        # Build classiifer.
+        features_dim = self.get_features_dim()
+        self.mlp = MLP(features_dim, mlp_dim, num_classes,
+            num_mlp_layers, mlp_bn, classifier_dropout_rate)
 
         # The input embeddings represent the hidden and cell state, so multiply by 2.
         self.embedding_dropout_rate = 1. - embedding_keep_rate
@@ -518,16 +516,34 @@ class BaseModel(nn.Module):
         # Create dynamic embedding layer.
         self.embed = Embed(input_embedding_dim, vocab.size, vectors=vocab.vectors, use_projection=use_projection)
 
+        # Optionally build input encoder.
         if encode_style is not None:
             self.encode = self.build_input_encoder(encode_style=encode_style,
                 word_embedding_dim=word_embedding_dim, model_dim=model_dim,
                 num_layers=encode_num_layers, bidirectional=encode_bidirectional, reverse=encode_reverse,
                 dropout=self.embedding_dropout_rate)
 
-        self.spinn = self.build_spinn(args, vocab, use_skips)
+    def get_features_dim(self):
+        features_dim = self.hidden_dim * 2 if self.use_sentence_pair else self.hidden_dim
+        if self.use_sentence_pair:
+            if self.use_difference_feature:
+                features_dim += self.hidden_dim
+            if self.use_product_feature:
+                features_dim += self.hidden_dim
+        return features_dim
 
-        self.mlp = MLP(mlp_input_dim, mlp_dim, num_classes,
-            num_mlp_layers, mlp_bn, classifier_dropout_rate)
+    def build_features(self, h):
+        if self.use_sentence_pair:
+            h_prem, h_hyp = h
+            features = [h_prem, h_hyp]
+            if self.use_difference_feature:
+                features.append(h_prem - h_hyp)
+            if self.use_product_feature:
+                features.append(h_prem * h_hyp)
+            features = torch.cat(features, 1)
+        else:
+            features = h[0]
+        return features
 
     def build_input_encoder(self, encode_style="LSTM", word_embedding_dim=None, model_dim=None,
                             num_layers=None, bidirectional=None, reverse=None, dropout=None):
@@ -588,16 +604,7 @@ class BaseModel(nn.Module):
         self.transition_loss = transition_loss
 
         # Build features
-        if self.use_sentence_pair:
-            h_prem, h_hyp = h
-            features = [h_prem, h_hyp]
-            if self.use_difference_feature:
-                features.append(h_prem - h_hyp)
-            if self.use_product_feature:
-                features.append(h_prem * h_hyp)
-            features = torch.cat(features, 1)
-        else:
-            features = h[0]
+        features = self.build_features(h)
 
         output = self.mlp(features)
 

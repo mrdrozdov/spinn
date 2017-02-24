@@ -330,6 +330,7 @@ def run(only_forward=False):
          rl_baseline=FLAGS.rl_baseline,
          rl_reward=FLAGS.rl_reward,
          rl_weight=FLAGS.rl_weight,
+         gen_h=FLAGS.gen_h,
         )
 
     # Build optimizer.
@@ -699,6 +700,9 @@ if __name__ == '__main__':
     gflags.DEFINE_enum("rl_reward", "standard", ["standard", "xent"],
         "Different reward functions to use.")
     gflags.DEFINE_float("rl_weight", 1.0, "Hyperparam for REINFORCE loss.")
+
+    # GEN settings.
+    gflags.DEFINE_boolean("gen_h", True, "Use generator output as feature.")
 
     # MLP settings.
     gflags.DEFINE_integer("mlp_dim", 1024, "Dimension of intermediate MLP layers.")
