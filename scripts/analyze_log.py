@@ -15,6 +15,8 @@ RL-Policy:
 
 import gflags
 import sys
+import ast
+
 
 FLAGS = gflags.FLAGS
 
@@ -129,6 +131,22 @@ def read(log_path):
     return l_train, l_eval
 
 
+def GetFLAGS(log_path):
+    FLAGS_str = ""
+    with open(log_path) as f:
+        start_reading = False
+        for line in f:
+            if "Flag values" in line:
+                start_reading = True
+                continue
+            if start_reading:
+                FLAGS_str += line.strip()
+                if line.strip().endswith("}"):
+                    break
+    parsed_FLAGS = ast.literal_eval(FLAGS_str)
+    return parsed_FLAGS
+
+
 def Filter(log):
     ret = []
     for l in reversed(log):
@@ -144,7 +162,28 @@ class Failed(object):
 
 def Analyze(limit=10):
     log_paths = FLAGS.path.split(',')
-    for lp in log_paths:
+    for i, lp in enumerate(log_paths):
+        print("{:03}: {}".format(i, lp))
+    print
+
+    summary_keys = [
+    'best_train_acc',
+    'best_train_transition_acc',
+    'best_train_step',
+    'last_train_step',
+    'last_avg_train_acc',
+    'last_avg_train_transition_acc',
+    'best_eval_acc',
+    'best_eval_transition_acc',
+    'best_eval_step',
+    'last_eval_step',
+    'last_avg_eval_acc',
+    'last_avg_eval_transition_acc'
+    ]
+
+    summary_dict = {k: list() for k in summary_keys}
+
+    for i, lp in enumerate(log_paths):
         l_train, l_eval = read(lp)
         l_train, l_eval = Filter(l_train), Filter(l_eval)
 
@@ -169,26 +208,42 @@ def Analyze(limit=10):
         else:
             top_eval, last_eval = Failed(), Failed()
 
-        print("{}\t\tTrain: {:.5f} {:.5f} {:6} {:6} {:.5f} {:.5f} Eval: {:.5f} {:.5f} {:6} {:6} {:.5f} {:.5f}".format(lp,
+        print("{:03}: Train: {:.5f} {:.5f} {:6} {:6} {:.5f} {:.5f} Eval: {:.5f} {:.5f} {:6} {:6} {:.5f} {:.5f}".format(i,
             best_train.acc, best_train.transition_acc, best_train.step, last_train[-1].step, last_avg_train_acc, last_avg_train_transition_acc,
             best_eval.acc, best_eval.transition_acc, best_eval.step, last_eval[-1].step, last_avg_eval_acc, last_avg_eval_transition_acc,
             ))
+        summary_dict['best_train_acc'].append(best_train.acc)
+        summary_dict['best_train_transition_acc'].append(best_train.transition_acc)
+        summary_dict['best_train_step'].append(best_train.step)
+        summary_dict['last_train_step'].append(last_train[-1].step)
+        summary_dict['last_avg_train_acc'].append(last_avg_train_acc)
+        summary_dict['last_avg_train_transition_acc'].append(last_avg_train_transition_acc)
+        summary_dict['best_eval_acc'].append(best_eval.acc)
+        summary_dict['best_eval_transition_acc'].append(best_eval.transition_acc)
+        summary_dict['best_eval_step'].append(best_eval.step)
+        summary_dict['last_eval_step'].append(last_eval[-1].step)
+        summary_dict['last_avg_eval_acc'].append(last_avg_eval_acc)
+        summary_dict['last_avg_eval_transition_acc'].append(last_avg_eval_transition_acc)
+    print
+
+    flag_vals_0 = FLAGS.flag_vals_0.split(',')
+    flag_vals_1 = FLAGS.flag_vals_1.split(',')
+    print("job_id,{flags_0},{stats},{flags_1}".format(flags_0=",".join(flag_vals_0), flags_1=",".join(flag_vals_1), stats=",".join(summary_keys)))
+    for i, lp in enumerate(log_paths):
+        job_flags = GetFLAGS(lp)
+        flags_str_0 = ",".join([str(job_flags[v]) for v in flag_vals_0])
+        flags_str_1 = ",".join([str(job_flags[v]) for v in flag_vals_1])
+        stats_str = ",".join([str(summary_dict[k][i]) for k in summary_keys])
+        print("{:03},{flags_0},{stats},{flags_1}".format(i, stats=stats_str, flags_0=flags_str_0, flags_1=flags_str_1))
+
 
 if __name__ == '__main__':
 
     gflags.DEFINE_string("path", None, "Path to log file")
-    gflags.DEFINE_string("index", "1", "csv list of corpus indices. 0 for train, 1 for eval set 1 etc.")
-    gflags.DEFINE_boolean("pred_acc", True, "Prediction accuracy")
-    gflags.DEFINE_boolean("parse_acc", False, "Parsing accuracy")
-    gflags.DEFINE_boolean("total_cost", False, "Total cost, valid only if index == 0")
-    gflags.DEFINE_boolean("xent_cost", False, "Cross entropy cost, valid only if index == 0")
-    gflags.DEFINE_boolean("l2_cost", False, "L2 regularization cost, valid only if index == 0")
-    gflags.DEFINE_boolean("action_cost", False, "Action cost, valid only if index == 0")
-    gflags.DEFINE_boolean("legend", False, "Show legend in plot")
-    gflags.DEFINE_boolean("subplot", False, "Separate plots for each log")
-    gflags.DEFINE_string("ylabel", "", "Label for y-axis of plot")
-    gflags.DEFINE_integer("iters", 10000, "Iters to limit plot to")
     gflags.DEFINE_integer("limit", 10, "How many of the top items to consider.")
+    gflags.DEFINE_boolean("csv", True, "List FLAGS as CSV for each log file")
+    gflags.DEFINE_string("flag_vals_0", "sha,experiment_name,model_type", "FLAG values to print to csv")
+    gflags.DEFINE_string("flag_vals_1", "model_dim,tracking_lstm_hidden_dim,learning_rate,l2_lambda,embedding_keep_rate,semantic_classifier_keep_rate,transition_weight", "FLAG values to print to csv")
 
     FLAGS(sys.argv)
     assert FLAGS.path is not None, "Must provide a log path"
