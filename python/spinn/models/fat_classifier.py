@@ -179,7 +179,7 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
 
 def get_checkpoint_path(ckpt_path, experiment_name, suffix=".ckpt", best=False):
     # Set checkpoint path.
-    if ckpt_path.endswith(suffix):
+    if ckpt_path.endswith(".ckpt") or ckpt_path.endswith(".ckpt_best"):
         checkpoint_path = ckpt_path
     else:
         checkpoint_path = os.path.join(ckpt_path, experiment_name + suffix)
