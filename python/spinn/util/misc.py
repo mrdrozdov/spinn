@@ -69,22 +69,22 @@ class EvalReporter(object):
     def __init__(self):
         self.batches = []
 
-    def save_batch(self, preds, target, example_ids, output, sent1_preds=None, sent2_preds=None):
-        sent1_preds = sent1_preds if sent1_preds is not None else [None] * len(example_ids)
-        sent2_preds = sent2_preds if sent2_preds is not None else [None] * len(example_ids)
-        batch = [preds.view(-1), target.view(-1), example_ids, output, sent1_preds, sent2_preds]
+    def save_batch(self, preds, target, example_ids, output, sent1_transitions=None, sent2_transitions=None):
+        sent1_transitions = sent1_transitions if sent1_transitions is not None else [None] * len(example_ids)
+        sent2_transitions = sent2_transitions if sent2_transitions is not None else [None] * len(example_ids)
+        batch = [preds.view(-1), target.view(-1), example_ids, output, sent1_transitions, sent2_transitions]
         self.batches.append(batch)
 
     def write_report(self, filename):
         with open(filename, 'w') as f:
             for b in self.batches:
                 for bb in zip(*b):
-                    pred, truth, eid, output, sent1_preds, sent2_preds = bb
+                    pred, truth, eid, output, sent1_transitions, sent2_transitions = bb
                     report_str = "{eid} {correct} {truth} {pred} {output}"
-                    if sent1_preds is not None:
-                        report_str += " {sent1_preds}"
-                    if sent2_preds is not None:
-                        report_str += " {sent2_preds}"
+                    if sent1_transitions is not None:
+                        report_str += " {sent1_transitions}"
+                    if sent2_transitions is not None:
+                        report_str += " {sent2_transitions}"
                     report_str += "\n"
                     report_dict = {
                         "eid": eid,
@@ -92,7 +92,7 @@ class EvalReporter(object):
                         "truth": truth,
                         "pred": pred,
                         "output": " ".join([str(o) for o in output]),
-                        "sent1_preds": '{}'.format("".join(str(t) for t in sent1_preds)) if sent1_preds is not None else None,
-                        "sent2_preds": '{}'.format("".join(str(t) for t in sent2_preds)) if sent2_preds is not None else None,
+                        "sent1_transitions": '{}'.format("".join(str(t) for t in sent1_transitions)) if sent1_transitions is not None else None,
+                        "sent2_transitions": '{}'.format("".join(str(t) for t in sent2_transitions)) if sent2_transitions is not None else None,
                     }
                     f.write(report_str.format(**report_dict))

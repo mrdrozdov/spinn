@@ -207,13 +207,15 @@ class SPINN(nn.Module):
 
         return t_preds, t_logits, t_given, t_mask
 
-    def get_transition_preds_per_example(self):
+    def get_transitions_per_example(self, use_preds=True):
         t_preds, t_logits, t_given, t_mask = self.get_statistics()
+
+        source = t_preds if use_preds else t_given
 
         batch_size = t_mask.max()
         preds = []
         for batch_idx in range(batch_size):
-            preds.append(t_preds[t_mask == batch_idx])
+            preds.append(source[t_mask == batch_idx])
 
         return np.array(preds)
 

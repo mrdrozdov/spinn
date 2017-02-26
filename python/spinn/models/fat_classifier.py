@@ -132,15 +132,15 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
         if FLAGS.write_eval_report:
             reporter_args = [pred, target, eval_ids, output.data.cpu().numpy()]
             if hasattr(model, 'transition_loss'):
-                transition_preds_per_example = model.spinn.get_transition_preds_per_example()
+                transitions_per_example = model.spinn.get_transitions_per_example(use_preds=FLAGS.eval_report_use_preds)
                 if model.use_sentence_pair:
                     batch_size = pred.size(0)
-                    sent1_preds = transition_preds_per_example[:batch_size]
-                    sent2_preds = transition_preds_per_example[batch_size:]
-                    reporter_args.append(sent1_preds)
-                    reporter_args.append(sent2_preds)
+                    sent1_transitions = transitions_per_example[:batch_size]
+                    sent2_transitions = transitions_per_example[batch_size:]
+                    reporter_args.append(sent1_transitions)
+                    reporter_args.append(sent2_transitions)
                 else:
-                    reporter_args.append(transition_preds_per_example)
+                    reporter_args.append(transitions_per_example)
             reporter.save_batch(*reporter_args)
 
         # Print Progress
@@ -759,6 +759,9 @@ if __name__ == '__main__':
         "transitions. The inferred parses are written to the supplied file(s) along with example-"
         "by-example accuracy information. Requirements: Must specify checkpoint path.")
     gflags.DEFINE_boolean("write_eval_report", False, "")
+    gflags.DEFINE_boolean("eval_report_use_preds", True, "If False, use the given transitions in the report, "
+        "otherwise use predicted transitions. Note that when predicting transitions but not using them, the "
+        "reported predictions will look very odd / not valid.")
 
     # Parse command line flags.
     FLAGS(sys.argv)
