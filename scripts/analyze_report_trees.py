@@ -4,9 +4,11 @@ The old version of this script is here:
 https://github.com/mrdrozdov/spinn/blob/2a06fc489faf44796dcb88a57afd699ba9937cfa/scripts/analyze_trees.py
 
 Usage:
+$ mkdir example_trees
 $ python scripts/analyze_report_trees.py \
-    --data_path /path/to/snli.dev.jsonl \
-    --report_path /path/to/eval.report
+    --data_path ./snli_1.0/snli_1.0_dev.jsonl \
+    --report_path ./checkpoints/example-snli.report \
+    --out_path ./example_trees
 
 """
 
