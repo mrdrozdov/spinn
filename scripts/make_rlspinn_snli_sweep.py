@@ -82,7 +82,8 @@ FIXED_PARAMETERS = {
     "num_mlp_layers": "2",
     "training_steps": "250001",
     "noshow_progress_bar": "",
-    "lowercase": ""
+    "lowercase": "",
+    "transition_weight": "1.0",
 }
 
 # Tunable parameters.
@@ -93,7 +94,7 @@ SWEEP_PARAMETERS = {
     "embedding_keep_rate": ("ekr", LIN, 0.7, 0.95),
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.5, 1.0),
     "tracking_lstm_hidden_dim": ("tdim", EXP, 24, 128),
-    "transition_weight":  ("trwt", EXP, 0.5, 4.0),
+    "rl_weight":  ("rlwt", EXP, 0.5, 4.0),
 }
 
 sweep_name = "sweep_" + FLAGS.sweep_id + "_" + \
