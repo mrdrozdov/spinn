@@ -9,6 +9,8 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 
+from spinn.util.misc import recursively_set_device
+
 
 def debug_gradient(model, losses):
     model.zero_grad()
@@ -246,11 +248,12 @@ class BaseSentencePairTrainer(object):
         self.optimizer = optimizer
 
     def save(self, filename, step, best_dev_error):
+        # Always sends Tensors to CPU.
         torch.save({
             'step': step,
             'best_dev_error': best_dev_error,
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
+            'model_state_dict': recursively_set_device(self.model.state_dict(), gpu=-1),
+            'optimizer_state_dict': recursively_set_device(self.optimizer.state_dict(), gpu=-1),
         }, filename)
 
     def load(self, filename):

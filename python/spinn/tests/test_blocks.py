@@ -36,6 +36,16 @@ class MockModel(nn.Module):
 
 class PytorchTestCase(unittest.TestCase):
 
+    def test_cuda_precision(self):
+        if not torch.cuda.is_available():
+            return
+        cpu1 = torch.rand(1000)
+        gpu1 = cpu1.cuda()
+        cpu2 = gpu1.cpu()
+        gpu2 = cpu2.cuda()
+        assert all(c1 == c2 for c1, c2 in zip(cpu1, cpu2))
+        assert all(g1 == g2 for g1, g2 in zip(gpu1, gpu2))
+
     def test_save_load_model(self):
         scalar = 11
         other_scalar = 0
