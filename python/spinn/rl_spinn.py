@@ -66,21 +66,23 @@ class RLBaseModel(BaseModel):
 
         self.register_buffer('baseline', torch.FloatTensor([0.0]))
 
-        if self.rl_baseline == "policy":
+        if self.rl_baseline == "value":
             if kwargs['use_sentence_pair']:
-                policy_model_cls = spinn.cbow.SentencePairModel
+                value_net_cls = spinn.cbow.SentencePairModel
             else:
-                policy_model_cls = spinn.cbow.SentenceModel
-            self.policy = policy_model_cls(
-                model_dim=kwargs['word_embedding_dim'],
+                value_net_cls = spinn.cbow.SentenceModel
+            self.value_net = value_net_cls(
+                model_dim=kwargs['model_dim'],
                 word_embedding_dim=kwargs['word_embedding_dim'],
                 vocab_size=kwargs['vocab_size'],
                 initial_embeddings=kwargs['initial_embeddings'],
                 mlp_dim=kwargs['mlp_dim'],
+                num_mlp_layers=0,
                 embedding_keep_rate=kwargs['embedding_keep_rate'],
                 classifier_keep_rate=kwargs['classifier_keep_rate'],
                 use_sentence_pair=kwargs['use_sentence_pair'],
                 num_classes=1,
+                use_embed=False,
                 )
 
     def build_spinn(self, args, vocab, use_skips):
@@ -116,22 +118,26 @@ class RLBaseModel(BaseModel):
 
         return rewards
 
-    def build_baseline(self, output, rewards, sentences, transitions, y_batch=None):
+    def build_baseline(self, output, rewards, sentences, transitions, y_batch=None, embeds=None):
         if self.rl_baseline == "ema":
             mu = self.rl_mu
             self.baseline[0] = self.baseline[0] * (1 - mu) + rewards.mean() * mu
             baseline = self.baseline[0]
-        elif self.rl_baseline == "policy":
-            # Pass inputs to Policy Net
-            policy_outp = self.policy(sentences, transitions)
+        elif self.rl_baseline == "value":
+            # Pass inputs to Value Net
+            if embeds is not None:
+                value_inp = torch.cat([torch.cat(e, 0).view(1,len(e),-1) for e in embeds], 0)
+                value_outp = self.value_net(value_inp, transitions)
+            else:
+                value_outp = self.value_net(sentences, transitions)
 
             # Estimate Reward
-            policy_prob = policy_outp
+            value_prob = value_outp
 
             # Save MSE Loss using Reward as target
-            self.policy_loss = nn.MSELoss()(policy_prob, to_gpu(Variable(rewards, volatile=not self.training)))
+            self.value_loss = nn.MSELoss()(value_prob, to_gpu(Variable(rewards, volatile=not self.training)))
 
-            baseline = policy_prob.data.cpu()
+            baseline = value_prob.data.cpu()
         elif self.rl_baseline == "greedy":
             # Pass inputs to Greedy Max
             greedy_outp = self.run_greedy(sentences, transitions)
@@ -169,7 +175,7 @@ class RLBaseModel(BaseModel):
 
         return rl_loss
 
-    def output_hook(self, output, sentences, transitions, y_batch=None):
+    def output_hook(self, output, sentences, transitions, y_batch=None, embeds=None):
         if not self.training:
             return
 
@@ -180,10 +186,13 @@ class RLBaseModel(BaseModel):
         rewards = self.build_reward(logits, target)
 
         # Get Baseline.
-        baseline = self.build_baseline(output, rewards, sentences, transitions, y_batch)
+        baseline = self.build_baseline(output, rewards, sentences, transitions, y_batch, embeds)
 
         # Calculate advantage.
         advantage = rewards - baseline
+
+        # Whiten advantage.
+        advantages = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
 
         # Assign REINFORCE output.
         self.rl_loss = self.reinforce(advantage)

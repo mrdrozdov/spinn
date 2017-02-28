@@ -450,9 +450,9 @@ def run(only_forward=False):
             transition_loss = model.transition_loss if hasattr(model, 'transition_loss') else None
             rl_loss = model.rl_loss if hasattr(model, 'rl_loss') else None
             policy_loss = model.policy_loss if hasattr(model, 'policy_loss') else None
-            rae_loss = model.spinn.rae_loss if hasattr(model.spinn, 'rae_loss') else None
-            leaf_loss = model.spinn.leaf_loss if hasattr(model.spinn, 'leaf_loss') else None
-            gen_loss = model.spinn.gen_loss if hasattr(model.spinn, 'gen_loss') else None
+            rae_loss = model.spinn.rae_loss if hasattr(model, 'spinn') and hasattr(model.spinn, 'rae_loss') else None
+            leaf_loss = model.spinn.leaf_loss if hasattr(model, 'spinn') and hasattr(model.spinn, 'leaf_loss') else None
+            gen_loss = model.spinn.gen_loss if hasattr(model, 'spinn') and hasattr(model.spinn, 'gen_loss') else None
 
             # Force Transition Loss Optimization
             if FLAGS.force_transition_loss:
@@ -739,7 +739,7 @@ if __name__ == '__main__':
 
     # RL settings.
     gflags.DEFINE_float("rl_mu", 0.1, "Use in exponential moving average baseline.")
-    gflags.DEFINE_enum("rl_baseline", "ema", ["ema", "greedy", "policy"],
+    gflags.DEFINE_enum("rl_baseline", "ema", ["ema", "value", "policy"],
         "Different configurations to approximate reward function.")
     gflags.DEFINE_enum("rl_reward", "standard", ["standard", "xent"],
         "Different reward functions to use.")
@@ -808,5 +808,8 @@ if __name__ == '__main__':
     # HACK: The "use_encode" flag will be deprecated. Instead use something like encode_style=LSTM.
     if FLAGS.use_encode:
         FLAGS.encode_style = "LSTM"
+
+    if FLAGS.model_type == "CBOW" or FLAGS.model_type == "RNN":
+        FLAGS.num_samples = 0
 
     run(only_forward=FLAGS.expanded_eval_only_mode)

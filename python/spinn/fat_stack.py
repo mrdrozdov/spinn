@@ -582,7 +582,7 @@ class BaseModel(nn.Module):
         self.spinn_hook(state)
         return state, transition_acc, transition_loss
 
-    def output_hook(self, output, sentences, transitions, y_batch=None):
+    def output_hook(self, output, sentences, transitions, y_batch=None, embeds=None):
         pass
 
     def forward(self, sentences, transitions, y_batch=None,
@@ -618,7 +618,7 @@ class BaseModel(nn.Module):
 
         output = self.mlp(features)
 
-        self.output_hook(output, sentences, transitions, y_batch)
+        self.output_hook(output, sentences, transitions, y_batch, embeds)
 
         return output
 

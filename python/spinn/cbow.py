@@ -12,7 +12,7 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 
-from spinn.util.blocks import BaseSentencePairTrainer, Embed, to_gpu
+from spinn.util.blocks import BaseSentencePairTrainer, Embed, to_gpu, MLP
 from spinn.util.misc import Args, Vocab
 
 
@@ -31,9 +31,12 @@ class BaseModel(nn.Module):
                  initial_embeddings=None,
                  num_classes=None,
                  mlp_dim=None,
+                 num_mlp_layers=2,
+                 mlp_bn=False,
                  embedding_keep_rate=None,
                  classifier_keep_rate=None,
                  use_sentence_pair=False,
+                 use_embed=True,
                  **kwargs
                 ):
         super(BaseModel, self).__init__()
@@ -47,15 +50,12 @@ class BaseModel(nn.Module):
         vocab.size = initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size
         vocab.vectors = initial_embeddings
 
-        self.embed = Embed(args.size, vocab.size,
-                        vectors=vocab.vectors,
-                        )
+        if use_embed:
+            self.embed = Embed(args.size, vocab.size, vectors=vocab.vectors)
 
         mlp_input_dim = model_dim * 2 if use_sentence_pair else model_dim
 
-        self.l0 = nn.Linear(mlp_input_dim, mlp_dim)
-        self.l1 = nn.Linear(mlp_dim, mlp_dim)
-        self.l2 = nn.Linear(mlp_dim, num_classes)
+        self.mlp = MLP(mlp_input_dim, mlp_dim, num_classes, num_mlp_layers, mlp_bn)
 
     def run_embed(self, x):
         batch_size, seq_length = x.size()
@@ -64,15 +64,6 @@ class BaseModel(nn.Module):
         emb = torch.cat([b.unsqueeze(0) for b in torch.chunk(emb, batch_size, 0)], 0)
 
         return emb
-
-    def run_mlp(self, h):
-        h = self.l0(h)
-        h = F.relu(h)
-        h = self.l1(h)
-        h = F.relu(h)
-        h = self.l2(h)
-        y = h
-        return y
 
 
 class SentencePairModel(BaseModel):
@@ -88,16 +79,17 @@ class SentencePairModel(BaseModel):
         return to_gpu(Variable(torch.from_numpy(x), volatile=not self.training))
 
     def forward(self, sentences, transitions, y_batch=None, **kwargs):
-        batch_size = sentences.shape[0]
-
-        # Build Tokens
-        x = self.build_example(sentences, transitions)
-
-        emb = self.run_embed(x)
+        if hasattr(self, 'embed'):
+            # Build Tokens
+            x = self.build_example(sentences, transitions)
+            emb = self.run_embed(x)
+        else:
+            emb = sentences
+        batch_size = emb.size(0) / 2
 
         hh = torch.squeeze(torch.sum(emb, 1))
         h = torch.cat([hh[:batch_size], hh[batch_size:]], 1)
-        output = self.run_mlp(h)
+        output = self.mlp(h)
 
         return output
 
@@ -108,12 +100,14 @@ class SentenceModel(BaseModel):
         return to_gpu(Variable(torch.from_numpy(sentences), volatile=not self.training))
 
     def forward(self, sentences, transitions, y_batch=None, **kwargs):
-        # Build Tokens
-        x = self.build_example(sentences, transitions)
-
-        emb = self.run_embed(x)
+        if hasattr(self, 'embed'):
+            # Build Tokens
+            x = self.build_example(sentences, transitions)
+            emb = self.run_embed(x)
+        else:
+            emb = sentences
 
         h = torch.squeeze(torch.sum(emb, 1))
-        output = self.run_mlp(h)
+        output = self.mlp(h)
 
         return output
