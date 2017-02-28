@@ -340,6 +340,7 @@ def run(only_forward=False):
          use_product_feature=FLAGS.use_product_feature,
          num_mlp_layers=FLAGS.num_mlp_layers,
          mlp_bn=FLAGS.mlp_bn,
+         bias_t_net=FLAGS.bias_t_net,
          rl_mu=FLAGS.rl_mu,
          rl_baseline=FLAGS.rl_baseline,
          rl_reward=FLAGS.rl_reward,
@@ -727,6 +728,7 @@ if __name__ == '__main__':
         "Use previous tracker state as input for new state.")
     gflags.DEFINE_boolean("use_tracking_in_composition", True,
         "Use tracking lstm output as input for the reduce function.")
+    gflags.DEFINE_boolean("bias_t_net", True, "The transition net will be biased.")
 
     # Encode settings.
     gflags.DEFINE_boolean("use_encode", False, "Encode embeddings with sequential network.")

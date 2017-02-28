@@ -115,7 +115,7 @@ class SPINN(nn.Module):
             self.tracker = Tracker(args.size, args.tracker_size, args.lateral_tracking)
             if args.transition_weight is not None:
                 # TODO: Might be interesting to try a different network here.
-                self.transition_net = nn.Linear(args.tracker_size, 3 if use_skips else 2)
+                self.transition_net = nn.Linear(args.tracker_size, 3 if use_skips else 2, bias=args.bias_t_net)
 
         # Predict 2 or 3 actions depending on whether SKIPs will be predicted.
         choices = [T_SHIFT, T_REDUCE, T_SKIP] if use_skips else [T_SHIFT, T_REDUCE]
@@ -481,6 +481,7 @@ class BaseModel(nn.Module):
                  num_mlp_layers=None,
                  mlp_bn=None,
                  use_projection=None,
+                 bias_t_net=None,
                  **kwargs
                 ):
         super(BaseModel, self).__init__()
@@ -496,6 +497,7 @@ class BaseModel(nn.Module):
         args.size = model_dim/2
         args.tracker_size = tracking_lstm_hidden_dim
         args.transition_weight = transition_weight
+        args.bias_t_net = bias_t_net
 
         self.initial_embeddings = initial_embeddings
         self.word_embedding_dim = word_embedding_dim
