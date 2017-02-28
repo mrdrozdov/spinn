@@ -54,7 +54,13 @@ class RLBaseModel(BaseModel):
 
     optimize_transition_loss = False
 
-    def __init__(self, rl_mu=None, rl_baseline=None, rl_reward=None, rl_weight=None, **kwargs):
+    def __init__(self,
+                 rl_mu=None,
+                 rl_baseline=None,
+                 rl_reward=None,
+                 rl_weight=None,
+                 rl_whiten=None,
+                 **kwargs):
         super(RLBaseModel, self).__init__(**kwargs)
 
         self.kwargs = kwargs
@@ -63,6 +69,7 @@ class RLBaseModel(BaseModel):
         self.rl_baseline = rl_baseline
         self.rl_reward = rl_reward
         self.rl_weight = rl_weight
+        self.rl_whiten = rl_whiten
 
         self.register_buffer('baseline', torch.FloatTensor([0.0]))
 
@@ -192,7 +199,8 @@ class RLBaseModel(BaseModel):
         advantage = rewards - baseline
 
         # Whiten advantage.
-        advantages = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+        if self.rl_whiten:
+            advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
 
         # Assign REINFORCE output.
         self.rl_loss = self.reinforce(advantage)
