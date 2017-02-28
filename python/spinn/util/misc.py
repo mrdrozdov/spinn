@@ -96,3 +96,15 @@ class EvalReporter(object):
                         "sent2_transitions": '{}'.format("".join(str(t) for t in sent2_transitions)) if sent2_transitions is not None else None,
                     }
                     f.write(report_str.format(**report_dict))
+
+
+def recursively_set_device(inp, gpu=-1):
+    if hasattr(inp, 'keys'):
+        for k in inp.keys():
+            inp[k] = recursively_set_device(inp[k], gpu)
+    elif hasattr(inp, 'cpu'):
+        if gpu < 0:
+            inp = inp.cpu()
+        else:
+            inp = inp.cuda()
+    return inp
