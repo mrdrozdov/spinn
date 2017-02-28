@@ -207,10 +207,15 @@ class SPINN(nn.Module):
 
         return t_preds, t_logits, t_given, t_mask
 
-    def get_transitions_per_example(self, use_preds=True):
+    def get_transitions_per_example(self, style="preds"):
         t_preds, t_logits, t_given, t_mask = self.get_statistics()
 
-        source = t_preds if use_preds else t_given
+        if style == "preds":
+            source = t_preds
+        elif style == "given":
+            source = t_given
+        else:
+            raise NotImplementedError
 
         batch_size = t_mask.max()
         preds = []
@@ -323,7 +328,8 @@ class SPINN(nn.Module):
                 tracker_h, tracker_c = self.tracker(top_buf, top_stack_1, top_stack_2)
 
                 if hasattr(self, 'transition_net'):
-                    transition_output = self.transition_net(tracker_h)
+                    transition_inp = tracker_h
+                    transition_output = self.transition_net(transition_inp)
 
                 if hasattr(self, 'transition_net') and run_internal_parser:
 

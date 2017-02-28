@@ -20,6 +20,7 @@ Note: If you get an error starting with "TypeError: ('Wrong number of dimensions
 """
 
 import os
+import random
 import pprint
 import sys
 import time
@@ -98,6 +99,7 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
 
     transition_preds = []
     transition_targets = []
+    transition_examples = []
 
     for i, (eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, eval_ids) in enumerate(dataset):
         if FLAGS.truncate_eval_batch:
@@ -129,10 +131,16 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
             transition_preds.append([m["t_preds"] for m in model.spinn.memories])
             transition_targets.append([m["t_given"] for m in model.spinn.memories])
 
+        if FLAGS.num_samples > 0 and len(transition_examples) < FLAGS.num_samples and i % (step % 11 + 1) == 0:
+            transitions_per_example = model.spinn.get_transitions_per_example()
+            r = random.randint(0, len(transitions_per_example) - 1)
+            transition_examples.append(transitions_per_example[r])
+
         if FLAGS.write_eval_report:
             reporter_args = [pred, target, eval_ids, output.data.cpu().numpy()]
             if hasattr(model, 'transition_loss'):
-                transitions_per_example = model.spinn.get_transitions_per_example(use_preds=FLAGS.eval_report_use_preds)
+                transitions_per_example = model.spinn.get_transitions_per_example(
+                    style="preds" if FLAGS.eval_report_use_preds else "given")
                 if model.use_sentence_pair:
                     batch_size = pred.size(0)
                     sent1_transitions = transitions_per_example[:batch_size]
@@ -164,8 +172,14 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
     else:
         eval_trans_acc = 0.0
 
-    logger.Log("Step: %i Eval acc: %f  %f %s Time: %5f" %
-              (step, eval_class_acc, eval_trans_acc, filename, time_metric))
+    stats_str = "Step: %i Eval acc: %f  %f %s Time: %5f" % (step, eval_class_acc, eval_trans_acc, filename, time_metric)
+
+    if len(transition_examples) > 0:
+        stats_str += "\nEval Transitions:"
+        for t_idx in range(len(transition_examples)):
+            stats_str += "\n{}. {}".format(t_idx, "".join(str(t) for t in transition_examples[t_idx]))
+
+    logger.Log(stats_str)
 
     metrics_logger.Log('eval_class_acc', eval_class_acc, step)
     metrics_logger.Log('eval_trans_acc', eval_trans_acc, step)
@@ -615,6 +629,14 @@ def run(only_forward=False):
 
                 # Time Component.
                 stats_str += " Time: {time:.5f}"
+
+                # Extra Component.
+                if FLAGS.num_samples > 0:
+                    transitions_per_example = model.spinn.get_transitions_per_example()
+                    stats_str += "\nTrain Transitions:"
+                    for t_idx in range(FLAGS.num_samples):
+                        stats_str += "\n{}. {}".format(t_idx, "".join(str(t) for t in transitions_per_example[t_idx]))
+
                 logger.Log(stats_str.format(**stats_args))
 
             if step > 0 and step % FLAGS.eval_interval_steps == 0:
@@ -752,6 +774,7 @@ if __name__ == '__main__':
     gflags.DEFINE_integer("ckpt_interval_steps", 5000, "Update the checkpoint on disk at this interval.")
     gflags.DEFINE_boolean("ckpt_on_best_dev_error", True, "If error on the first eval set (the dev set) is "
         "at most 0.99 of error at the previous checkpoint, save a special 'best' checkpoint.")
+    gflags.DEFINE_integer("num_samples", 3, "Print sampled transitions.")
 
     # Evaluation settings
     gflags.DEFINE_boolean("expanded_eval_only_mode", False,
