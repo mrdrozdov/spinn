@@ -261,8 +261,8 @@ class BaseSentencePairTrainer(object):
         }, filename)
 
         if the_gpu() >= 0:
-            recursively_set_device(self.model.state_dict(), gpu=0)
-            recursively_set_device(self.optimizer.state_dict(), gpu=0)
+            recursively_set_device(self.model.state_dict(), gpu=the_gpu())
+            recursively_set_device(self.optimizer.state_dict(), gpu=the_gpu())
 
     def load(self, filename):
         checkpoint = torch.load(filename)
