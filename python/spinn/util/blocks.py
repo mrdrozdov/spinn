@@ -248,13 +248,21 @@ class BaseSentencePairTrainer(object):
         self.optimizer = optimizer
 
     def save(self, filename, step, best_dev_error):
+        if the_gpu() >= 0:
+            recursively_set_device(self.model.state_dict(), gpu=-1)
+            recursively_set_device(self.optimizer.state_dict(), gpu=-1)
+
         # Always sends Tensors to CPU.
         torch.save({
             'step': step,
             'best_dev_error': best_dev_error,
-            'model_state_dict': recursively_set_device(self.model.state_dict(), gpu=-1),
-            'optimizer_state_dict': recursively_set_device(self.optimizer.state_dict(), gpu=-1),
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
         }, filename)
+
+        if the_gpu() >= 0:
+            recursively_set_device(self.model.state_dict(), gpu=0)
+            recursively_set_device(self.optimizer.state_dict(), gpu=0)
 
     def load(self, filename):
         checkpoint = torch.load(filename)
