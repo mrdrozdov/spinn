@@ -463,7 +463,7 @@ def LoadEmbeddingsFromText(vocabulary, embedding_dim, path):
     with open(path, 'r') as f:
         for line in f:
             spl = line.split(" ")
-            if len(spl) < embedding_dim + 1:
+            if len(spl) != embedding_dim + 1:
                 # Header row or final row
                 continue
             word = spl[0]
