@@ -103,8 +103,8 @@ def recursively_set_device(inp, gpu=-1):
         for k in inp.keys():
             inp[k] = recursively_set_device(inp[k], gpu)
     elif hasattr(inp, 'cpu'):
-        if gpu < 0:
-            inp = inp.cpu()
-        else:
+        if gpu >= 0:
             inp = inp.cuda()
+        else:
+            inp = inp.cpu()
     return inp

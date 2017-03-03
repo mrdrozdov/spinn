@@ -38,6 +38,7 @@ from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import the_gpu, to_gpu, l2_cost, flatten, debug_gradient
 from spinn.util.misc import Accumulator, time_per_token, MetricsLogger, EvalReporter
+from spinn.util.misc import recursively_set_device
 
 import spinn.gen_spinn
 import spinn.rae_spinn
@@ -389,6 +390,7 @@ def run(only_forward=False):
         model.cuda()
     else:
         model.cpu()
+    recursively_set_device(optimizer.state_dict(), the_gpu.gpu)
 
     # Debug
     def set_debug(self):
