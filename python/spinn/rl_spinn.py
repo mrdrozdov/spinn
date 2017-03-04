@@ -185,7 +185,9 @@ class RLBaseModel(BaseModel):
 
         # source: https://github.com/miyosuda/async_deep_reinforce/issues/1
         if self.rl_entropy:
+            # TODO: Taking exp of a log is not the best way to get the initial probability...
             entropy = -1. * (t_logits * torch.exp(t_logits)).sum(1)
+            self.avg_entropy = entropy.sum().data[0] / float(entropy.size(0))
         else:
             entropy = 0.0
 

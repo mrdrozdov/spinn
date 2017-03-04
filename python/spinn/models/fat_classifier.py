@@ -478,6 +478,9 @@ def run(only_forward=False):
             if gen_loss is not None:
                 A.add('gen_acc', model.spinn.gen_acc)
 
+            if hasattr(model, 'avg_entropy'):
+                A.add('entropy', model.avg_entropy)
+
             # Note: Keep track of transition_acc, although this is a naive average.
             # Should be weighted by length of sequences in batch.
             M.add('transition_acc', transition_acc)
@@ -593,6 +596,10 @@ def run(only_forward=False):
                     avg_gen_acc = A.get_avg('gen_acc')
                 else:
                     avg_gen_acc = 0.0
+                if hasattr(model, 'avg_entropy'):
+                    avg_entropy = A.get_avg('entropy')
+                else:
+                    avg_entropy = 0.0
                 time_metric = time_per_token(A.get('total_tokens'), A.get('total_time'))
                 stats_args = {
                     "step": step,
@@ -604,6 +611,7 @@ def run(only_forward=False):
                     "l2_cost": l2_cost_val,
                     "policy_cost": policy_cost_val,
                     "value_cost": value_cost_val,
+                    "avg_entropy": avg_entropy,
                     "rae_cost": rae_cost_val,
                     "leaf_acc": avg_leaf_acc,
                     "leaf_cost": leaf_cost_val,
@@ -626,6 +634,8 @@ def run(only_forward=False):
                     stats_str += " p{policy_cost:.5f}"
                 if value_loss is not None:
                     stats_str += " v{value_cost:.5f}"
+                if hasattr(model, 'avg_entropy'):
+                    stats_str += " e{avg_entropy:.5f}"
                 if rae_loss is not None:
                     stats_str += " rae{rae_cost:.5f}"
                 if leaf_loss is not None:
