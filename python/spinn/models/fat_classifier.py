@@ -617,9 +617,11 @@ def run(only_forward=False):
                     "leaf_cost": leaf_cost_val,
                     "gen_acc": avg_gen_acc,
                     "gen_cost": gen_cost_val,
+                    "learning_rate": optimizer.lr,
                     "time": time_metric,
                 }
                 stats_str = "Step: {step}"
+                stats_str += " lr{learning_rate:.5f}"
 
                 # Accuracy Component.
                 stats_str += " Acc: {class_acc:.5f} {transition_acc:.5f}"
