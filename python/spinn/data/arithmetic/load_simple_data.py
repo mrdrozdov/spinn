@@ -55,7 +55,7 @@ def convert_binary_bracketed_data(filename):
     return examples
 
 
-def load_data(path):
+def load_data(path, lowercase=None):
     dataset = convert_binary_bracketed_data(path)
     return dataset, FIXED_VOCABULARY
 
