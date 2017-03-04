@@ -347,6 +347,8 @@ def run(only_forward=False):
          rl_reward=FLAGS.rl_reward,
          rl_weight=FLAGS.rl_weight,
          rl_whiten=FLAGS.rl_whiten,
+         rl_entropy=FLAGS.rl_entropy,
+         rl_entropy_beta=FLAGS.rl_entropy_beta,
          predict_leaf=FLAGS.predict_leaf,
          gen_h=FLAGS.gen_h,
         )
@@ -748,6 +750,8 @@ if __name__ == '__main__':
         "Different reward functions to use.")
     gflags.DEFINE_float("rl_weight", 1.0, "Hyperparam for REINFORCE loss.")
     gflags.DEFINE_boolean("rl_whiten", False, "Reduce variance in advantage.")
+    gflags.DEFINE_boolean("rl_entropy", False, "Entropy regularization on transition policy.")
+    gflags.DEFINE_float("rl_entropy_beta", 0.001, "Entropy regularization on transition policy.")
 
     # RAE settings.
     gflags.DEFINE_boolean("predict_leaf", True, "Predict whether a node is a leaf or not.")

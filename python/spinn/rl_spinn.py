@@ -60,6 +60,8 @@ class RLBaseModel(BaseModel):
                  rl_reward=None,
                  rl_weight=None,
                  rl_whiten=None,
+                 rl_entropy=None,
+                 rl_entropy_beta=None,
                  **kwargs):
         super(RLBaseModel, self).__init__(**kwargs)
 
@@ -70,6 +72,8 @@ class RLBaseModel(BaseModel):
         self.rl_reward = rl_reward
         self.rl_weight = rl_weight
         self.rl_whiten = rl_whiten
+        self.rl_entropy = rl_entropy
+        self.rl_entropy_beta = rl_entropy_beta
 
         self.register_buffer('baseline', torch.FloatTensor([0.0]))
 
@@ -160,27 +164,33 @@ class RLBaseModel(BaseModel):
 
         return baseline
 
-    def reinforce(self, rewards):
+    def reinforce(self, advantage):
         t_preds, t_logits, t_given, t_mask = self.spinn.get_statistics()
 
         # TODO: Many of these ops are on the cpu. Might be worth shifting to GPU.
         if self.use_sentence_pair:
             # Handles the case of SNLI where each reward is used for two sentences.
-            rewards = torch.cat([rewards, rewards], 0)
+            advantage = torch.cat([advantage, advantage], 0)
 
-        # Expand rewards.
+        # Expand advantage.
         if not self.spinn.use_skips:
-            rewards = rewards.index_select(0, torch.from_numpy(t_mask).long())
+            advantage = advantage.index_select(0, torch.from_numpy(t_mask).long())
         else:
             raise NotImplementedError
 
         log_p_action = torch.cat([t_logits[i, p] for i, p in enumerate(t_preds)], 0)
 
-        rl_loss = -1. * torch.sum(log_p_action * to_gpu(Variable(rewards, volatile=log_p_action.volatile)))
-        rl_loss /= log_p_action.size(0)
-        rl_loss *= self.rl_weight
+        # source: https://github.com/miyosuda/async_deep_reinforce/issues/1
+        if self.rl_entropy:
+            entropy = -1. * (t_logits * torch.exp(t_logits)).sum(1)
+        else:
+            entropy = 0.0
 
-        return rl_loss
+        policy_loss = -1. * torch.sum(log_p_action * to_gpu(Variable(advantage, volatile=log_p_action.volatile)) + entropy * self.rl_entropy_beta)
+        policy_loss /= log_p_action.size(0)
+        policy_loss *= self.rl_weight
+
+        return policy_loss
 
     def output_hook(self, output, sentences, transitions, y_batch=None, embeds=None):
         if not self.training:
@@ -198,7 +208,8 @@ class RLBaseModel(BaseModel):
         # Calculate advantage.
         advantage = rewards - baseline
 
-        # Whiten advantage.
+        # Whiten advantage. Note: Might only make sense when using value net.
+        # source: https://rllab.readthedocs.io/en/latest/user/implement_algo_basic.html#normalizing-the-returns
         if self.rl_whiten:
             advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
 
