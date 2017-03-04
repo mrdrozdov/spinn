@@ -178,7 +178,10 @@ class RLBaseModel(BaseModel):
         else:
             raise NotImplementedError
 
-        log_p_action = torch.cat([t_logits[i, p] for i, p in enumerate(t_preds)], 0)
+        actions = torch.from_numpy(t_preds).long().view(-1, 1)
+        action_mask = torch.zeros(t_logits.size()).scatter_(1, actions, 1.0)
+        action_mask = to_gpu(Variable(action_mask, volatile=not self.training))
+        log_p_action = torch.sum(t_logits * action_mask, 1)
 
         # source: https://github.com/miyosuda/async_deep_reinforce/issues/1
         if self.rl_entropy:
