@@ -217,7 +217,7 @@ class RLBaseModel(BaseModel):
             advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
 
         # Assign REINFORCE output.
-        self.rl_loss = self.reinforce(advantage)
+        self.policy_loss = self.reinforce(advantage)
 
         # Cache values for logging.
         self.norm_rewards = rewards.norm()
