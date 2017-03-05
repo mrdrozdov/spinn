@@ -10,7 +10,7 @@
 echo $SLURM_JOBID - `hostname` - $SPINN_FLAGS >> ~/spinn_machine_assignments.txt
 
 # Make sure we have access to HPC-managed libraries.
-module load python/intel/2.7.12 pytorch/intel/20170125 protobuf/intel/3.1.0
+module load python/intel/2.7.12 pytorch/intel/20170226 protobuf/intel/3.1.0
 
 # Run.
 python -m spinn.models.fat_classifier  --noshow_progress_bar $SPINN_FLAGS
