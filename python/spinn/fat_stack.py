@@ -516,15 +516,14 @@ class BaseModel(nn.Module):
         self.mlp = MLP(features_dim, mlp_dim, num_classes,
             num_mlp_layers, mlp_bn, classifier_dropout_rate)
 
-        # The input embeddings represent the hidden and cell state, so multiply by 2.
         self.embedding_dropout_rate = 1. - embedding_keep_rate
-        input_embedding_dim = args.size * 2
 
         # Projection will effectively be done by the encoding network.
         use_projection = True if encode_style is None else False
+        input_dim = model_dim if use_projection else word_embedding_dim
 
         # Create dynamic embedding layer.
-        self.embed = Embed(input_embedding_dim, vocab.size, vectors=vocab.vectors, use_projection=use_projection)
+        self.embed = Embed(input_dim, vocab.size, vectors=vocab.vectors, use_projection=use_projection)
 
         # Optionally build input encoder.
         if encode_style is not None:
