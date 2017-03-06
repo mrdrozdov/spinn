@@ -13,7 +13,7 @@ import torch.optim as optim
 
 from spinn.util.blocks import BaseSentencePairTrainer, Reduce
 from spinn.util.blocks import LSTMState, Embed, MLP
-from spinn.util.blocks import bundle, unbundle, to_cpu, to_gpu, treelstm, lstm
+from spinn.util.blocks import bundle, unbundle, to_cpu, to_gpu, the_gpu, treelstm, lstm
 from spinn.util.blocks import get_h, get_c
 from spinn.util.misc import Args, Vocab, Example
 
@@ -111,6 +111,11 @@ class RLBaseModel(BaseModel):
         inference_model = inference_model_cls(**self.kwargs)
         inference_model.load_state_dict(copy.deepcopy(self.state_dict()))
         inference_model.eval()
+
+        if the_gpu.gpu >= 0:
+            inference_model.cuda()
+        else:
+            inference_model.cpu()
 
         outputs = inference_model(sentences, transitions,
             use_internal_parser=True,
