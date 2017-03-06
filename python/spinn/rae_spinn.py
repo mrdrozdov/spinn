@@ -37,8 +37,8 @@ class SentenceTrainer(SentencePairTrainer): pass
 
 class RAESPINN(SPINN):
 
-    def __init__(self, args, vocab, use_skips=False, predict_leaf=None):
-        super(RAESPINN, self).__init__(args, vocab, use_skips=use_skips)
+    def __init__(self, args, vocab, use_skips, predict_use_cell, predict_leaf):
+        super(RAESPINN, self).__init__(args, vocab, use_skips, predict_use_cell)
         model_dim = args.size * 2
         self.decompose = nn.Linear(model_dim, model_dim * 2)
 
@@ -119,9 +119,9 @@ class RAEBaseModel(BaseModel):
         self.predict_leaf = predict_leaf
         super(RAEBaseModel, self).__init__(**kwargs)
 
-    def build_spinn(self, *args, **kwargs):
-        kwargs['predict_leaf'] = self.predict_leaf
-        return RAESPINN(*args, **kwargs)
+    def build_spinn(self, args, vocab, use_skips, predict_use_cell):
+        import ipdb; ipdb.set_trace()
+        return RAESPINN(args, vocab, use_skips, predict_use_cell, self.predict_leaf)
 
 
 class SentencePairModel(RAEBaseModel):

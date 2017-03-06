@@ -34,8 +34,8 @@ class SentenceTrainer(SentencePairTrainer): pass
 
 class GenSPINN(SPINN):
 
-    def __init__(self, args, vocab, use_skips=False):
-        super(GenSPINN, self).__init__(args, vocab, use_skips)
+    def __init__(self, args, vocab, use_skips, predict_use_cell):
+        super(GenSPINN, self).__init__(args, vocab, use_skips, predict_use_cell)
 
         vocab_size = vocab.vectors.shape[0]
         self.inp_dim = args.size
@@ -151,8 +151,8 @@ class GenBaseModel(BaseModel):
         self.gen_h = gen_h
         super(GenBaseModel, self).__init__(**kwargs)
 
-    def build_spinn(self, *args, **kwargs):
-        return GenSPINN(*args, **kwargs)
+    def build_spinn(self, args, vocab, use_skips, predict_use_cell):
+        return GenSPINN(args, vocab, use_skips, predict_use_cell)
 
     def output_hook(self, output, sentences, transitions, y_batch=None):
         pass

@@ -100,7 +100,7 @@ class Tracker(nn.Module):
 
 class SPINN(nn.Module):
 
-    def __init__(self, args, vocab, use_skips=False, predict_use_cell=True):
+    def __init__(self, args, vocab, use_skips, predict_use_cell):
         super(SPINN, self).__init__()
 
         # Optional debug mode.
@@ -570,8 +570,8 @@ class BaseModel(nn.Module):
             raise NotImplementedError
         return encoding_net
 
-    def build_spinn(self, *args, **kwargs):
-        return SPINN(*args, **kwargs)
+    def build_spinn(self, args, vocab, use_skips, predict_use_cell):
+        return SPINN(args, vocab, use_skips, predict_use_cell)
 
     def build_example(self, sentences, transitions):
         raise Exception('Not implemented.')
