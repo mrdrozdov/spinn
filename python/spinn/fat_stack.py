@@ -100,7 +100,7 @@ class Tracker(nn.Module):
 
 class SPINN(nn.Module):
 
-    def __init__(self, args, vocab, use_skips=False):
+    def __init__(self, args, vocab, use_skips=False, predict_use_cell=True):
         super(SPINN, self).__init__()
 
         # Optional debug mode.
@@ -115,7 +115,9 @@ class SPINN(nn.Module):
             self.tracker = Tracker(args.size, args.tracker_size, args.lateral_tracking)
             if args.transition_weight is not None:
                 # TODO: Might be interesting to try a different network here.
-                self.transition_net = nn.Linear(args.tracker_size, 3 if use_skips else 2, bias=args.bias_t_net)
+                self.predict_use_cell = True
+                tinp_size = args.tracker_size * 2 if predict_use_cell else args.tracker_size
+                self.transition_net = nn.Linear(tinp_size, 3 if use_skips else 2, bias=args.bias_t_net)
 
         # Predict 2 or 3 actions depending on whether SKIPs will be predicted.
         choices = [T_SHIFT, T_REDUCE, T_SKIP] if use_skips else [T_SHIFT, T_REDUCE]
@@ -328,7 +330,10 @@ class SPINN(nn.Module):
                 tracker_h, tracker_c = self.tracker(top_buf, top_stack_1, top_stack_2)
 
                 if hasattr(self, 'transition_net'):
-                    transition_inp = tracker_h
+                    if self.predict_use_cell:
+                        transition_inp = torch.cat([tracker_h, tracker_c], 1)
+                    else:
+                        transition_inp = tracker_h
                     transition_output = self.transition_net(transition_inp)
 
                 if hasattr(self, 'transition_net') and run_internal_parser:
@@ -475,6 +480,7 @@ class BaseModel(nn.Module):
                  use_skips=False,
                  lateral_tracking=None,
                  use_tracking_in_composition=None,
+                 predict_use_cell=None,
                  use_sentence_pair=False,
                  use_difference_feature=False,
                  use_product_feature=False,
@@ -509,7 +515,7 @@ class BaseModel(nn.Module):
         vocab.vectors = initial_embeddings
 
         # Build parsing component.
-        self.spinn = self.build_spinn(args, vocab, use_skips)
+        self.spinn = self.build_spinn(args, vocab, use_skips, predict_use_cell)
 
         # Build classiifer.
         features_dim = self.get_features_dim()
@@ -564,8 +570,8 @@ class BaseModel(nn.Module):
             raise NotImplementedError
         return encoding_net
 
-    def build_spinn(self, args, vocab, use_skips):
-        return SPINN(args, vocab, use_skips=use_skips)
+    def build_spinn(self, *args, **kwargs):
+        return SPINN(*args, **kwargs)
 
     def build_example(self, sentences, transitions):
         raise Exception('Not implemented.')

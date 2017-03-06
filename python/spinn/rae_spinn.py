@@ -119,8 +119,9 @@ class RAEBaseModel(BaseModel):
         self.predict_leaf = predict_leaf
         super(RAEBaseModel, self).__init__(**kwargs)
 
-    def build_spinn(self, args, vocab, use_skips):
-        return RAESPINN(args, vocab, use_skips=use_skips, predict_leaf=self.predict_leaf)
+    def build_spinn(self, *args, **kwargs):
+        kwargs['predict_leaf'] = self.predict_leaf
+        return RAESPINN(*args, **kwargs)
 
 
 class SentencePairModel(RAEBaseModel):

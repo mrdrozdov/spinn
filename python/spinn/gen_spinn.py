@@ -151,8 +151,8 @@ class GenBaseModel(BaseModel):
         self.gen_h = gen_h
         super(GenBaseModel, self).__init__(**kwargs)
 
-    def build_spinn(self, args, vocab, use_skips):
-        return GenSPINN(args, vocab, use_skips=use_skips)
+    def build_spinn(self, *args, **kwargs):
+        return GenSPINN(*args, **kwargs)
 
     def output_hook(self, output, sentences, transitions, y_batch=None):
         pass

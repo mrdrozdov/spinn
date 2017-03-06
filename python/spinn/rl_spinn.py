@@ -96,8 +96,8 @@ class RLBaseModel(BaseModel):
                 use_embed=False,
                 )
 
-    def build_spinn(self, args, vocab, use_skips):
-        return RLSPINN(args, vocab, use_skips=use_skips)
+    def build_spinn(self, *args, **kwargs):
+        return RLSPINN(*args, **kwargs)
 
     def run_greedy(self, sentences, transitions):
         if self.use_sentence_pair:
