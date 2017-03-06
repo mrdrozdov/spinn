@@ -7,6 +7,8 @@ from spinn.fat_stack import SPINN, SentenceModel, SentencePairModel
 
 import spinn.fat_stack
 import spinn.rl_spinn
+import spinn.rae_spinn
+import spinn.gen_spinn
 from spinn.util.blocks import BaseSentencePairTrainer
 
 # PyTorch
@@ -59,6 +61,18 @@ class SPINNTestCase(unittest.TestCase):
 
         # Cleanup temporary file.
         temp.close()
+
+
+    def test_init_models(self):
+        MockModel(spinn.fat_stack.SentenceModel, default_args())
+        MockModel(spinn.rl_spinn.SentenceModel, default_args())
+        MockModel(spinn.rae_spinn.SentenceModel, default_args())
+        MockModel(spinn.gen_spinn.SentenceModel, default_args())
+
+        MockModel(spinn.fat_stack.SentencePairModel, default_args())
+        MockModel(spinn.rl_spinn.SentencePairModel, default_args())
+        MockModel(spinn.rae_spinn.SentencePairModel, default_args())
+        MockModel(spinn.gen_spinn.SentencePairModel, default_args())
 
 
     def test_basic_stack(self):

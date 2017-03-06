@@ -337,6 +337,7 @@ def run(only_forward=False):
          use_skips=FLAGS.use_skips,
          lateral_tracking=FLAGS.lateral_tracking,
          use_tracking_in_composition=FLAGS.use_tracking_in_composition,
+         predict_use_cell=FLAGS.predict_use_cell,
          use_difference_feature=FLAGS.use_difference_feature,
          use_product_feature=FLAGS.use_product_feature,
          num_mlp_layers=FLAGS.num_mlp_layers,
@@ -745,6 +746,8 @@ if __name__ == '__main__':
         "Use previous tracker state as input for new state.")
     gflags.DEFINE_boolean("use_tracking_in_composition", True,
         "Use tracking lstm output as input for the reduce function.")
+    gflags.DEFINE_boolean("predict_use_cell", True,
+        "Use cell output as feature for transition net.")
     gflags.DEFINE_boolean("bias_t_net", True, "The transition net will be biased.")
 
     # Encode settings.

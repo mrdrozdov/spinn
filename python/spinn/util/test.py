@@ -34,6 +34,9 @@ def default_args():
     # Data Args
     args['use_skips'] = False
 
+    # Other
+    args['predict_leaf'] = True
+
     return args
 
 
