@@ -20,7 +20,7 @@ export IFS=';'
 for SUB_FLAGS in $SPINN_FLAGS
 do
 	unset IFS
-	python -m spinn.models.fat_classifier  --noshow_progress_bar --gpu 0 $SUB_FLAGS
+	python -m spinn.models.fat_classifier  --noshow_progress_bar --gpu 0 $SUB_FLAGS &
 done
 
 wait 
