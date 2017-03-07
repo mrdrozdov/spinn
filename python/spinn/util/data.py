@@ -521,3 +521,13 @@ class SimpleProgressBar(object):
         if not self.enabled: return
         self.reset()
         sys.stdout.write('\n')
+
+
+def convert_binary_bracketed_seq(seq):
+    tokens, transitions = [], []
+    for item in seq:
+        if item != "(":
+            if item != ")":
+                tokens.append(item)
+            transitions.append(REDUCE_SYMBOL if item == ")" else SHIFT_SYMBOL)
+    return tokens, transitions

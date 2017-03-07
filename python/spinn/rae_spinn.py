@@ -120,7 +120,6 @@ class RAEBaseModel(BaseModel):
         super(RAEBaseModel, self).__init__(**kwargs)
 
     def build_spinn(self, args, vocab, use_skips, predict_use_cell):
-        import ipdb; ipdb.set_trace()
         return RAESPINN(args, vocab, use_skips, predict_use_cell, self.predict_leaf)
 
 

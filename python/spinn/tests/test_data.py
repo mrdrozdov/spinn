@@ -7,6 +7,8 @@ from spinn import util
 from spinn.data.snli import load_snli_data
 from spinn.data.sst import load_sst_data
 from spinn.data.arithmetic import load_simple_data
+from spinn.data.dual_arithmetic import load_eq_data
+from spinn.data.dual_arithmetic import load_relational_data
 from spinn.data.boolean import load_boolean_data
 from collections import Counter
 
@@ -36,6 +38,8 @@ sst_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_
 arithmetic_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_simple.tsv")
 boolean_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_boolean.tsv")
 embedding_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_embedding_matrix.5d.txt")
+eq_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "dual_arithmetic", "eq5_1k.tsv")
+relational_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "dual_arithmetic", "relational5_1k.tsv")
 word_embedding_dim = 5
 
 
@@ -135,6 +139,14 @@ class DataTestCase(unittest.TestCase):
         initial_embeddings = util.LoadEmbeddingsFromText(
             vocabulary, word_embedding_dim, embedding_data_path)
         assert initial_embeddings.shape == (10, 5)
+
+    def test_convert_binary_bracketing(self):
+        given = "( 0 ( ( 1 2 ) 3 ) ) )"
+        expected_tokens = [str(x) for x in range(4)]
+        expected_transitions = [0, 0, 0, 1, 0, 1, 1]
+        tokens, transitions = util.convert_binary_bracketed_seq(given.split(' '))
+        assert all(t == e for t, e in zip(tokens, expected_tokens))
+        assert all(t == e for t, e in zip(transitions, expected_transitions))
 
 
 class SNLITestCase(unittest.TestCase):
@@ -375,6 +387,79 @@ class ArithmeticTestCase(unittest.TestCase):
 
             # The transitions should be padded on the left.
             assert t_is_left_padded(ts)
+
+
+class DualArithmeticTestCase(unittest.TestCase):
+
+    def test_preprocess_eq(self):
+        seq_length = 10
+        for_rnn = False
+        use_left_padding = True
+
+        data_manager = load_eq_data
+        raw_data, vocabulary = data_manager.load_data(eq_data_path)
+
+        OPERATOR_TOKENS = [vocabulary["+"], vocabulary["-"]]
+
+        data = util.PreprocessDataset(
+            raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
+            sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
+            for_rnn=for_rnn, use_left_padding=use_left_padding)
+
+        seqs, transitions, labels, num_transitions, _ = data
+
+        for _s, _ts, _num_t in zip(seqs, transitions, num_transitions):
+
+            for s, ts, num_t in zip(_s.T, _ts.T, _num_t.T):
+                # The sentence should begin with an operator.
+                assert any(s[0] == tkn for tkn in OPERATOR_TOKENS)
+
+                # The sentences should be padded on the right.
+                assert not s_is_left_padded(s)
+
+                # The num_transitions should count non-skip transitions
+                assert len([x for x in ts if x != util.SKIP_SYMBOL]) == num_t
+
+                # The transitions should start with SKIP and end with REDUCE (ignoring SKIPs).
+                assert t_is_left_to_right(ts)
+
+                # The transitions should be padded on the left.
+                assert t_is_left_padded(ts)
+
+    def test_preprocess_relational(self):
+        seq_length = 10
+        for_rnn = False
+        use_left_padding = True
+
+        data_manager = load_relational_data
+        raw_data, vocabulary = data_manager.load_data(relational_data_path)
+
+        OPERATOR_TOKENS = [vocabulary["+"], vocabulary["-"]]
+
+        data = util.PreprocessDataset(
+            raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
+            sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
+            for_rnn=for_rnn, use_left_padding=use_left_padding)
+
+        seqs, transitions, labels, num_transitions, _ = data
+
+        for _s, _ts, _num_t in zip(seqs, transitions, num_transitions):
+
+            for s, ts, num_t in zip(_s.T, _ts.T, _num_t.T):
+                # The sentence should begin with an operator.
+                assert any(s[0] == tkn for tkn in OPERATOR_TOKENS)
+
+                # The sentences should be padded on the right.
+                assert not s_is_left_padded(s)
+
+                # The num_transitions should count non-skip transitions
+                assert len([x for x in ts if x != util.SKIP_SYMBOL]) == num_t
+
+                # The transitions should start with SKIP and end with REDUCE (ignoring SKIPs).
+                assert t_is_left_to_right(ts)
+
+                # The transitions should be padded on the left.
+                assert t_is_left_padded(ts)
 
 
 class BooleanTestCase(unittest.TestCase):
