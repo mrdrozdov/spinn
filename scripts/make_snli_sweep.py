@@ -56,6 +56,7 @@ FIXED_PARAMETERS = {
     "noencode_bidirectional": "",
     "num_mlp_layers": "2",
     "transition_weight": "1.0",
+    "rl_entropy", "",
 }
 
 # Tunable parameters.
@@ -67,6 +68,7 @@ SWEEP_PARAMETERS = {
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.5, 1.0),
     "tracking_lstm_hidden_dim": ("tdim", EXP, 24, 128),
     "rl_weight":  ("rlwt", EXP, 0.00001, 0.1),
+    "rl_entropy_beta": ("rle", EXP, 0.00001, 0.1)
 }
 
 sweep_name = "sweep_" + NAME + "_" + \

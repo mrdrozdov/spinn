@@ -55,12 +55,12 @@ FIXED_PARAMETERS = {
 SWEEP_PARAMETERS = {
     "learning_rate":      ("lr", EXP, 0.00003, 0.0005),  # RNN likes higher, but below 009.
     "l2_lambda":          ("l2", EXP, 8e-7, 1e-4),
-    "semantic_classifier_keep_rate": ("skr", LIN, 0.7, 0.95),  # NB: Keep rates may depend considerably on dims.
+    "semantic_classifier_keep_rate": ("skr", LIN, 0.5, 0.95),  # NB: Keep rates may depend considerably on dims.
     "embedding_keep_rate": ("ekr", LIN, 0.7, 0.95),
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.25, 1.0),
     "tracking_lstm_hidden_dim": ("tdim", EXP, 12, 64),
-    "rl_weight":  ("rlwt", EXP, 0.00001, 0.1),
-    "transition_weight":  ("rlwt", EXP, 0.1, 1.0),
+    "rl_weight":  ("rlwt", EXP, 0.000001, 0.001),
+    "transition_weight":  ("trwt", EXP, 1.0, 1.0),
 }
 
 sweep_name = "sweep_" + NAME + "_" + \
