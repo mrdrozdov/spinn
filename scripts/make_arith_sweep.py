@@ -115,5 +115,5 @@ for run_id in range(SWEEP_RUNS):
     if NYU_NON_PBS:
         print "cd spinn/python; python2.7 -m spinn.models.fat_classifier " + flags
     else:
-        print "SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh ../scripts/train_spinn_shared_gpu.sbatch 2"
+        print "SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh"
     print
