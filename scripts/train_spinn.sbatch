@@ -19,7 +19,8 @@ module load python/intel/2.7.12 pytorch/intel/20170226 protobuf/intel/3.1.0
 export IFS=';'
 for SUB_FLAGS in $SPINN_FLAGS
 do
-	python -m spinn.models.fat_classifier  --noshow_progress_bar --gpu 0  $SUB_FLAGS
+	unset IFS
+	python -m spinn.models.fat_classifier  --noshow_progress_bar --gpu 0 $SUB_FLAGS
 done
 
 wait 
