@@ -134,10 +134,15 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
             transition_preds.append([m["t_preds"] for m in model.spinn.memories])
             transition_targets.append([m["t_given"] for m in model.spinn.memories])
 
+
+
         if FLAGS.num_samples > 0 and len(transition_examples) < FLAGS.num_samples and i % (step % 11 + 1) == 0:
             transitions_per_example = model.spinn.get_transitions_per_example()
             r = random.randint(0, len(transitions_per_example) - 1)
-            transition_examples.append(transitions_per_example[r])
+            if model.use_sentence_pair:
+                eval_transitions_batch = np.concatenate([
+                    eval_transitions_batch[:,:,0], eval_transitions_batch[:,:,1]], axis=0)
+            transition_examples.append((transitions_per_example[r], eval_transitions_batch[r]))
 
         if FLAGS.write_eval_report:
             reporter_args = [pred, target, eval_ids, output.data.cpu().numpy()]
@@ -180,7 +185,10 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
     if len(transition_examples) > 0:
         stats_str += "\nEval Transitions:"
         for t_idx in range(len(transition_examples)):
-            stats_str += "\n{}. {}".format(t_idx, "".join(str(t) for t in transition_examples[t_idx]))
+            stats_str += "\n{}. g{}\n   p{}".format(t_idx,
+                "".join(map(str, filter(lambda x: x != 2, transition_examples[t_idx][1]))),
+                "".join(map(str, transition_examples[t_idx][0])),
+                )
 
     logger.Log(stats_str)
 
@@ -658,9 +666,15 @@ def run(only_forward=False):
                 # Extra Component.
                 if FLAGS.num_samples > 0:
                     transitions_per_example = model.spinn.get_transitions_per_example()
+                    if model.use_sentence_pair:
+                        transitions_batch = np.concatenate([
+                            transitions_batch[:,:,0], transitions_batch[:,:,1]], axis=0)
                     stats_str += "\nTrain Transitions:"
                     for t_idx in range(FLAGS.num_samples):
-                        stats_str += "\n{}. {}".format(t_idx, "".join(str(t) for t in transitions_per_example[t_idx]))
+                        stats_str += "\n{}. g{}\n   p{}".format(t_idx,
+                            "".join(map(str, filter(lambda x: x != 2, transitions_batch[t_idx]))),
+                            "".join(map(str, transitions_per_example[t_idx])),
+                            )
 
                 logger.Log(stats_str.format(**stats_args))
 
