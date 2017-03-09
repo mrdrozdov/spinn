@@ -93,6 +93,7 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
     # Evaluate
     class_correct = 0
     class_total = 0
+    crossing = 0
     total_batches = len(dataset)
     progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
@@ -135,14 +136,18 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
             transition_preds.append([m["t_preds"] for m in model.spinn.memories])
             transition_targets.append([m["t_given"] for m in model.spinn.memories])
 
-
-
-        if FLAGS.num_samples > 0 and len(transition_examples) < FLAGS.num_samples and i % (step % 11 + 1) == 0:
+        if FLAGS.evalb or FLAGS.num_samples > 0:
             transitions_per_example = model.spinn.get_transitions_per_example()
-            r = random.randint(0, len(transitions_per_example) - 1)
             if model.use_sentence_pair:
                 eval_transitions_batch = np.concatenate([
                     eval_transitions_batch[:,:,0], eval_transitions_batch[:,:,1]], axis=0)
+
+        if FLAGS.evalb:
+            for gold, pred in zip(eval_transitions_batch, transitions_per_example):
+                crossing += len(evalb.crossing(gold, pred))
+
+        if FLAGS.num_samples > 0 and len(transition_examples) < FLAGS.num_samples and i % (step % 11 + 1) == 0:
+            r = random.randint(0, len(transitions_per_example) - 1)
             transition_examples.append((transitions_per_example[r], eval_transitions_batch[r]))
 
         if FLAGS.write_eval_report:
@@ -173,6 +178,9 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
     # Get class accuracy.
     eval_class_acc = class_correct / float(class_total)
 
+    # Evalb stats.
+    avg_crossing = crossing / float(class_total)
+
     # Get transition accuracy if applicable.
     if len(transition_preds) > 0:
         all_preds = np.array(flatten(transition_preds))
@@ -183,8 +191,12 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
 
     stats_str = "Step: %i Eval acc: %f  %f %s Time: %5f" % (step, eval_class_acc, eval_trans_acc, filename, time_metric)
 
+    # Extra Component.
+    stats_str += "\nEval Extra:"
+    if FLAGS.evalb:
+        stats_str += " crossing=%2f" % (avg_crossing,)
+
     if len(transition_examples) > 0:
-        stats_str += "\nEval Transitions:"
         for t_idx in range(len(transition_examples)):
             gold = transition_examples[t_idx][1]
             pred = transition_examples[t_idx][0]
@@ -477,9 +489,16 @@ def run(only_forward=False):
             leaf_loss = model.spinn.leaf_loss if hasattr(model, 'spinn') and hasattr(model.spinn, 'leaf_loss') else None
             gen_loss = model.spinn.gen_loss if hasattr(model, 'spinn') and hasattr(model.spinn, 'gen_loss') else None
 
-            # Force Transition Loss Optimization
-            if FLAGS.force_transition_loss:
-                model.optimize_transition_loss = True
+            crossing = 0
+            if FLAGS.evalb:
+                transitions_per_example = model.spinn.get_transitions_per_example()
+                if model.use_sentence_pair:
+                    transitions_batch = np.concatenate([
+                        transitions_batch[:,:,0], transitions_batch[:,:,1]], axis=0)
+                for gold, pred in zip(transitions_batch, transitions_per_example):
+                    crossing += len(evalb.crossing(gold, pred))
+                crossing = crossing / float(len(transitions_batch))
+            A.add('crossing', crossing)
 
             # Accumulate stats for transition accuracy.
             if transition_loss is not None:
@@ -600,6 +619,7 @@ def run(only_forward=False):
                 progress_bar.step(i=FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
                 progress_bar.finish()
                 avg_class_acc = A.get_avg('class_acc')
+                avg_crossing = A.get_avg('crossing')
                 if transition_loss is not None:
                     all_preds = np.array(flatten(A.get('preds')))
                     all_truth = np.array(flatten(A.get('truth')))
@@ -623,6 +643,7 @@ def run(only_forward=False):
                     "step": step,
                     "class_acc": avg_class_acc,
                     "transition_acc": avg_trans_acc,
+                    "crossing": avg_crossing,
                     "total_cost": total_cost_val,
                     "xent_cost": xent_cost_val,
                     "transition_cost": transition_cost_val,
@@ -639,7 +660,6 @@ def run(only_forward=False):
                     "time": time_metric,
                 }
                 stats_str = "Step: {step}"
-                stats_str += " lr{learning_rate:.5f}"
 
                 # Accuracy Component.
                 stats_str += " Acc: {class_acc:.5f} {transition_acc:.5f}"
@@ -667,12 +687,16 @@ def run(only_forward=False):
                 stats_str += " Time: {time:.5f}"
 
                 # Extra Component.
+                stats_str += "\nTrain Extra:"
+                stats_str += " lr={learning_rate:.7f}"
+                if FLAGS.evalb:
+                    stats_str += " crossing={crossing:.2f}"
+
                 if FLAGS.num_samples > 0:
                     transitions_per_example = model.spinn.get_transitions_per_example()
-                    if model.use_sentence_pair:
+                    if model.use_sentence_pair and len(transitions_batch.shape) == 3:
                         transitions_batch = np.concatenate([
                             transitions_batch[:,:,0], transitions_batch[:,:,1]], axis=0)
-                    stats_str += "\nTrain Transitions:"
                     for t_idx in range(FLAGS.num_samples):
                         gold = transitions_batch[t_idx]
                         pred = transitions_per_example[t_idx]
@@ -759,7 +783,6 @@ if __name__ == '__main__':
         "Constrain predicted transitions to ones that give a valid parse tree.")
     gflags.DEFINE_float("embedding_keep_rate", 0.9,
         "Used for dropout on transformed embeddings and in the encoder RNN.")
-    gflags.DEFINE_boolean("force_transition_loss", False, "")
     gflags.DEFINE_boolean("use_l2_cost", True, "")
     gflags.DEFINE_boolean("use_difference_feature", True, "")
     gflags.DEFINE_boolean("use_product_feature", True, "")
@@ -824,6 +847,7 @@ if __name__ == '__main__':
     gflags.DEFINE_integer("ckpt_interval_steps", 5000, "Update the checkpoint on disk at this interval.")
     gflags.DEFINE_boolean("ckpt_on_best_dev_error", True, "If error on the first eval set (the dev set) is "
         "at most 0.99 of error at the previous checkpoint, save a special 'best' checkpoint.")
+    gflags.DEFINE_boolean("evalb", False, "Print transition statistics.")
     gflags.DEFINE_integer("num_samples", 3, "Print sampled transitions.")
 
     # Evaluation settings
