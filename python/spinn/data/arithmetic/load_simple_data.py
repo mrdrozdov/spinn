@@ -1,6 +1,6 @@
 from spinn import util
 
-from spinn.data.arithmetic.make_data import NUMBERS, FIXED_VOCABULARY
+from spinn.data.arithmetic.base import NUMBERS, FIXED_VOCABULARY
 
 SENTENCE_PAIR_DATA = False
 OUTPUTS = range(-10, 11)

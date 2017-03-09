@@ -5,18 +5,10 @@ import itertools
 from spinn import util
 from spinn.data.util.arithmetic import ArithmeticData
 
+from spinn.data.arithmetic.base import NUMBERS, FIXED_VOCABULARY
+from spinn.data.arithmetic import load_sign_data, load_simple_data
+
 import sys
-
-
-NUMBERS = range(-10, 11)
-
-FIXED_VOCABULARY = {str(x): i + 1 for i, x in enumerate(NUMBERS)}
-FIXED_VOCABULARY.update({
-    util.PADDING_TOKEN: 0,
-    "+": len(FIXED_VOCABULARY) + 1,
-    "-": len(FIXED_VOCABULARY) + 2
-})
-assert len(set(FIXED_VOCABULARY.values())) == len(FIXED_VOCABULARY.values())
 
 
 class ArithmeticDataType(object):
@@ -57,7 +49,7 @@ if __name__ == '__main__':
     FLAGS = gflags.FLAGS
     gflags.DEFINE_integer("length", 5, "")
     gflags.DEFINE_integer("limit", 100, "")
-    # gflags.DEFINE_string("exclude", None, "If not None, exclude any example that appears in this file.")
+    gflags.DEFINE_string("exclude", None, "If not None, exclude any example that appears in this file.")
     gflags.DEFINE_enum("data_type", "simple", ["simple", "sign"], "")
     FLAGS(sys.argv)
 
@@ -68,6 +60,19 @@ if __name__ == '__main__':
         data_type = SimpleData()
     elif FLAGS.data_type == "sign":
         data_type = SignData()
+
+    if FLAGS.exclude is not None:
+        if FLAGS.data_type == "simple":
+            data_manager = load_simple_data
+        elif FLAGS.data_type == "sign":
+            data_manager = load_sign_data
+
+        raw_exclude_data, vocabulary = data_manager.load_data(FLAGS.exclude)
+
+        exclude_dict = {str(L): set() for L in data_type.LABELS}
+
+        for ex in raw_exclude_data:
+            exclude_dict[ex['label']].add(' '.join(ex['tokens']))
 
     label_size = limit // len(data_type.LABELS)
 
@@ -82,6 +87,12 @@ if __name__ == '__main__':
             result, seq = next(generator)
 
             if data_type.is_label(result) == label:
+                if FLAGS.exclude is not None:
+                    check = " ".join(seq)
+                    check_label = str(data_type.LABELS[label])
+                    if check in exclude_dict.get(check_label):
+                        continue
+
                 print "{}\t{}".format(data_type.LABELS[label],
                     " ".join(dataset.convert_to_sexpr(seq)),
                     )

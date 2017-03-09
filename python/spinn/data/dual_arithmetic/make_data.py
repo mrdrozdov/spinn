@@ -7,16 +7,8 @@ from spinn.data.util.arithmetic import ArithmeticData
 
 import sys
 
-
-NUMBERS = range(-10, 11)
-
-FIXED_VOCABULARY = {str(x): i + 1 for i, x in enumerate(NUMBERS)}
-FIXED_VOCABULARY.update({
-    util.PADDING_TOKEN: 0,
-    "+": len(FIXED_VOCABULARY) + 1,
-    "-": len(FIXED_VOCABULARY) + 2
-})
-assert len(set(FIXED_VOCABULARY.values())) == len(FIXED_VOCABULARY.values())
+from spinn.data.dual_arithmetic.base import NUMBERS, FIXED_VOCABULARY
+from spinn.data.dual_arithmetic import load_eq_data, load_relational_data
 
 
 class ArithmeticDataType(object):
@@ -59,7 +51,13 @@ if __name__ == '__main__':
     gflags.DEFINE_integer("length", 5, "")
     gflags.DEFINE_integer("limit", 10, "")
     gflags.DEFINE_enum("data_type", "eq", ["eq", "relational"], "")
+
+    # This isn't really a problem for sentence pair data.
+    gflags.DEFINE_string("exclude", None, "If not None, exclude any example that appears in this file.")
+
     FLAGS(sys.argv)
+
+    assert FLAGS.exclude is None, "When generating 10k examples, found 46 duplicates. This isn't necessary."
 
     limit = FLAGS.limit
     length = FLAGS.length
@@ -69,11 +67,31 @@ if __name__ == '__main__':
     elif FLAGS.data_type == "relational":
         data_type = RelationalData()
 
+    if FLAGS.exclude is not None:
+        def hash(ex):
+            return "p {} h {}".format(
+                " ".join(ex["premise_tokens"]),
+                " ".join(ex["hypothesis_tokens"]),
+                )
+
+        if FLAGS.data_type == "eq":
+            data_manager = load_eq_data
+        elif FLAGS.data_type == "relational":
+            data_manager = load_relational_data
+
+        raw_exclude_data, vocabulary = data_manager.load_data(FLAGS.exclude)
+
+        exclude_dict = {str(L): set() for L in data_type.LABELS}
+
+        for ex in raw_exclude_data:
+            exclude_dict[ex['label']].add(hash(ex))
+
     label_size = limit // len(data_type.LABELS)
 
     dataset = ArithmeticData(NUMBERS)
     generator = dataset.generate_prefix_seqs(length)
 
+    skip_counter = 0
     for idx in range(limit):
 
         label = min(idx // label_size, len(data_type.LABELS) - 1)
@@ -84,8 +102,16 @@ if __name__ == '__main__':
             result2, seq2 = next(generator)
 
             if data_type.is_label((result1, result2)) == label:
+                if FLAGS.exclude is not None:
+                    check = hash(dict(premise_tokens=seq1, hypothesis_tokens=seq2))
+                    check_label = str(data_type.LABELS[label])
+                    if check in exclude_dict.get(check_label):
+                        skip_counter += 1
+                        continue
+
                 print "{}\t{}\t{}".format(data_type.LABELS[label],
                     " ".join(dataset.convert_to_sexpr(seq1)),
                     " ".join(dataset.convert_to_sexpr(seq2)),
                     )
                 break
+    print skip_counter

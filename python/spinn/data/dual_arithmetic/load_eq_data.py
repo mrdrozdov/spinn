@@ -1,6 +1,6 @@
 from spinn import util
 
-from spinn.data.dual_arithmetic.make_data import NUMBERS, FIXED_VOCABULARY
+from spinn.data.dual_arithmetic.base import NUMBERS, FIXED_VOCABULARY
 
 SENTENCE_PAIR_DATA = True
 OUTPUTS = [True, False]
