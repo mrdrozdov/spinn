@@ -29,45 +29,45 @@ class ArithmeticDataType(object):
         raise NotImplementedError
 
 
-class EqData(ArithmeticDataType):
+class SignData(ArithmeticDataType):
 
-    LABELS = [True, False]
-
-    def is_label(self, x):
-        r1, r2 = x
-        for i, b in enumerate(self.LABELS):
-            if (r1 == r2) == b:
-                return i
-
-
-class RelationalData(ArithmeticDataType):
-
-    LABELS = ["<", ">", "="]
+    LABELS = ["-", "+", "0"]
 
     def is_label(self, x):
-        r1, r2 = x
-        if r1 < r2:
+        if x < 0:
             return 0
-        if r1 > r2:
+        if x > 0:
             return 1
-        if r1 == r2:
+        if x == 0:
             return 2
+
+
+class SimpleData(ArithmeticDataType):
+
+    LABELS = NUMBERS
+
+    def is_label(self, x):
+        try:
+            return self.LABELS.index(x)
+        except:
+            return -1
 
 
 if __name__ == '__main__':
     FLAGS = gflags.FLAGS
     gflags.DEFINE_integer("length", 5, "")
-    gflags.DEFINE_integer("limit", 10, "")
-    gflags.DEFINE_enum("data_type", "eq", ["eq", "relational"], "")
+    gflags.DEFINE_integer("limit", 100, "")
+    # gflags.DEFINE_string("exclude", None, "If not None, exclude any example that appears in this file.")
+    gflags.DEFINE_enum("data_type", "simple", ["simple", "sign"], "")
     FLAGS(sys.argv)
 
     limit = FLAGS.limit
     length = FLAGS.length
 
-    if FLAGS.data_type == "eq":
-        data_type = EqData()
-    elif FLAGS.data_type == "relational":
-        data_type = RelationalData()
+    if FLAGS.data_type == "simple":
+        data_type = SimpleData()
+    elif FLAGS.data_type == "sign":
+        data_type = SignData()
 
     label_size = limit // len(data_type.LABELS)
 
@@ -79,13 +79,10 @@ if __name__ == '__main__':
         label = min(idx // label_size, len(data_type.LABELS) - 1)
 
         for ii, _ in enumerate(itertools.repeat(None)):
-            if ii % 100 == 0:
-                result1, seq1 = next(generator)
-            result2, seq2 = next(generator)
+            result, seq = next(generator)
 
-            if data_type.is_label((result1, result2)) == label:
-                print "{}\t{}\t{}".format(data_type.LABELS[label],
-                    " ".join(dataset.convert_to_sexpr(seq1)),
-                    " ".join(dataset.convert_to_sexpr(seq2)),
+            if data_type.is_label(result) == label:
+                print "{}\t{}".format(data_type.LABELS[label],
+                    " ".join(dataset.convert_to_sexpr(seq)),
                     )
                 break

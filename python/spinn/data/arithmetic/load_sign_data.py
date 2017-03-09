@@ -3,7 +3,7 @@ from spinn import util
 from spinn.data.arithmetic.make_data import NUMBERS, FIXED_VOCABULARY
 
 SENTENCE_PAIR_DATA = False
-OUTPUTS = range(-10, 11)
+OUTPUTS = ["-", "+", "0"]
 LABEL_MAP = {str(x): i for i, x in enumerate(OUTPUTS)}
 
 def load_data(path, lowercase=None):
