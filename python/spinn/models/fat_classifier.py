@@ -31,6 +31,7 @@ import numpy as np
 
 from spinn import afs_safe_logger
 from spinn import util
+from spinn.data.arithmetic import load_sign_data
 from spinn.data.arithmetic import load_simple_data
 from spinn.data.dual_arithmetic import load_eq_data
 from spinn.data.dual_arithmetic import load_relational_data
@@ -240,6 +241,8 @@ def run(only_forward=False):
         data_manager = load_snli_data
     elif FLAGS.data_type == "arithmetic":
         data_manager = load_simple_data
+    elif FLAGS.data_type == "sign":
+        data_manager = load_sign_data
     elif FLAGS.data_type == "eq":
         data_manager = load_eq_data
     elif FLAGS.data_type == "relational":
@@ -738,7 +741,7 @@ if __name__ == '__main__':
     gflags.DEFINE_string("experiment_name", "", "")
 
     # Data types.
-    gflags.DEFINE_enum("data_type", "bl", ["bl", "sst", "snli", "arithmetic", "eq", "relational"],
+    gflags.DEFINE_enum("data_type", "bl", ["bl", "sst", "snli", "arithmetic", "sign", "eq", "relational"],
         "Which data handler and classifier to use.")
 
     # Where to store checkpoints
