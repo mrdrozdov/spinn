@@ -190,7 +190,7 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
     else:
         eval_trans_acc = 0.0
 
-    stats_str = "Step: %i Eval acc: %f  %f %s Time: %5f" % (step, eval_class_acc, eval_trans_acc, filename, time_metric)
+    stats_str = "Step: %i Eval acc: %f %f %s Time: %5f" % (step, eval_class_acc, eval_trans_acc, filename, time_metric)
 
     # Extra Component.
     stats_str += "\nEval Extra:"
