@@ -41,6 +41,7 @@ from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import the_gpu, to_gpu, l2_cost, flatten, debug_gradient
 from spinn.util.misc import Accumulator, time_per_token, MetricsLogger, EvalReporter
 from spinn.util.misc import recursively_set_device
+import spinn.util.evalb as evalb
 
 import spinn.gen_spinn
 import spinn.rae_spinn
@@ -185,10 +186,12 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
     if len(transition_examples) > 0:
         stats_str += "\nEval Transitions:"
         for t_idx in range(len(transition_examples)):
-            stats_str += "\n{}. g{}\n   p{}".format(t_idx,
-                "".join(map(str, filter(lambda x: x != 2, transition_examples[t_idx][1]))),
-                "".join(map(str, transition_examples[t_idx][0])),
-                )
+            gold = transition_examples[t_idx][1]
+            pred = transition_examples[t_idx][0]
+            crossing = evalb.crossing(gold, pred)
+            stats_str += "\n{}. crossing={}".format(t_idx, len(crossing))
+            stats_str += "\n     g{}".format("".join(map(str, filter(lambda x: x != 2, gold))))
+            stats_str += "\n     p{}".format("".join(map(str, pred)))
 
     logger.Log(stats_str)
 
@@ -671,10 +674,12 @@ def run(only_forward=False):
                             transitions_batch[:,:,0], transitions_batch[:,:,1]], axis=0)
                     stats_str += "\nTrain Transitions:"
                     for t_idx in range(FLAGS.num_samples):
-                        stats_str += "\n{}. g{}\n   p{}".format(t_idx,
-                            "".join(map(str, filter(lambda x: x != 2, transitions_batch[t_idx]))),
-                            "".join(map(str, transitions_per_example[t_idx])),
-                            )
+                        gold = transitions_batch[t_idx]
+                        pred = transitions_per_example[t_idx]
+                        crossing = evalb.crossing(gold, pred)
+                        stats_str += "\n{}. crossing={}".format(t_idx, len(crossing))
+                        stats_str += "\n     g{}".format("".join(map(str, filter(lambda x: x != 2, gold))))
+                        stats_str += "\n     p{}".format("".join(map(str, pred)))
 
                 logger.Log(stats_str.format(**stats_args))
 
