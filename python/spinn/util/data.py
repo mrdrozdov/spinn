@@ -389,11 +389,17 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
     else:
         X = np.array([example["tokens"] for example in dataset],
                      dtype=np.int32)
-        transitions = np.array([example["transitions"] for example in dataset],
-                               dtype=np.int32)
-        num_transitions = np.array(
-            [example["num_transitions"] for example in dataset],
-            dtype=np.int32)
+        if for_rnn:
+            transitions = np.zeros((len(dataset), 0))
+            num_transitions = np.array(
+                [len(np.array(example["tokens"]).nonzero()[0]) for example in dataset],
+                dtype=np.int32)
+        else:
+            transitions = np.array([example["transitions"] for example in dataset],
+                                   dtype=np.int32)
+            num_transitions = np.array(
+                [example["num_transitions"] for example in dataset],
+                dtype=np.int32)
     y = np.array(
         [data_manager.LABEL_MAP[example["label"]] for example in dataset],
         dtype=np.int32)
