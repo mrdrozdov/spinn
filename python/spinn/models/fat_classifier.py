@@ -37,7 +37,7 @@ from spinn.data.dual_arithmetic import load_eq_data
 from spinn.data.dual_arithmetic import load_relational_data
 from spinn.data.boolean import load_boolean_data
 from spinn.data.listops import load_listops_data
-from spinn.data.sst import load_sst_data
+from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import the_gpu, to_gpu, l2_cost, flatten, debug_gradient
@@ -238,6 +238,8 @@ def run(only_forward=False):
         data_manager = load_boolean_data
     elif FLAGS.data_type == "sst":
         data_manager = load_sst_data
+    elif FLAGS.data_type == "sst-binary":
+        data_manager = load_sst_binary_data
     elif FLAGS.data_type == "snli":
         data_manager = load_snli_data
     elif FLAGS.data_type == "arithmetic":
@@ -744,7 +746,7 @@ if __name__ == '__main__':
     gflags.DEFINE_string("experiment_name", "", "")
 
     # Data types.
-    gflags.DEFINE_enum("data_type", "bl", ["bl", "sst", "snli", "arithmetic", "listops", "sign", "eq", "relational"],
+    gflags.DEFINE_enum("data_type", "bl", ["bl", "sst", "sst-binary", "snli", "arithmetic", "listops", "sign", "eq", "relational"],
         "Which data handler and classifier to use.")
 
     # Where to store checkpoints

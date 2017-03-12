@@ -291,10 +291,10 @@ class SSTTestCase(unittest.TestCase):
     def test_load(self):
         data_manager = load_sst_data
         raw_data, _ = data_manager.load_data(sst_data_path)
-        assert len(raw_data) == 20
+        assert len(raw_data) == 30
 
         seq_lengths = Counter([len(x['transitions']) for x in raw_data])
-        assert seq_lengths == {57: 3, 37: 2, 47: 2, 45: 2, 15: 2, 53: 2, 59: 2, 65: 1, 67: 1, 23: 1, 35: 1, 25: 1}
+        assert seq_lengths == {15: 3, 53: 3, 57: 3, 59: 2, 37: 2, 47: 2, 23: 2, 45: 2, 25: 2, 65: 1, 35: 1, 49: 1, 41: 1, 11: 1, 17: 1, 67: 1, 27: 1, 63: 1}
 
     def test_preprocess(self):
         seq_length = 30
@@ -320,8 +320,8 @@ class SSTTestCase(unittest.TestCase):
         tokens, transitions, labels, num_transitions, _ = data
 
         # Filter examples that don't have lengths <= seq_length
-        assert tokens.shape == (4, seq_length)
-        assert transitions.shape == (4, seq_length)
+        assert tokens.shape == (10, seq_length)
+        assert transitions.shape == (10, seq_length)
 
         for s, ts, num_t in zip(tokens, transitions, num_transitions):
 
