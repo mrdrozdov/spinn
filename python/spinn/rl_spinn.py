@@ -121,10 +121,10 @@ class RLBaseModel(BaseModel):
 
         return outputs
 
-    def build_reward(self, probs, target):
-        if self.rl_reward == "standard": # Zero One Loss.
+    def build_reward(self, probs, target, rl_reward="standard"):
+        if rl_reward == "standard": # Zero One Loss.
             rewards = torch.eq(probs.max(1)[1], target).float()
-        elif self.rl_reward == "xent": # Cross Entropy Loss.
+        elif rl_reward == "xent": # Cross Entropy Loss.
             _target = target.long().view(-1, 1)
             mask = torch.zeros(probs.size()).scatter_(1, _target, 1.0) # one hots
             log_inv_prob = torch.log(1 - probs) # get the log of the inverse probabilities
@@ -161,7 +161,10 @@ class RLBaseModel(BaseModel):
             # Estimate Reward
             probs = F.softmax(output).data.cpu()
             target = torch.from_numpy(y_batch).long()
-            greedy_rewards = self.build_reward(probs, target)
+            greedy_rewards = self.build_reward(probs, target, rl_reward="xent")
+
+            if self.rl_reward == "standard":
+                greedy_rewards = F.sigmoid(greedy_rewards)
 
             baseline = greedy_rewards
         else:
@@ -210,7 +213,7 @@ class RLBaseModel(BaseModel):
         target = torch.from_numpy(y_batch).long()
 
         # Get Reward.
-        rewards = self.build_reward(probs, target)
+        rewards = self.build_reward(probs, target, rl_reward=self.rl_reward)
 
         # Get Baseline.
         baseline = self.build_baseline(output, rewards, sentences, transitions, y_batch, embeds)
