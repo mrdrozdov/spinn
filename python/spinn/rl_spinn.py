@@ -37,16 +37,14 @@ class SentenceTrainer(SentencePairTrainer): pass
 
 class RLSPINN(SPINN):
     def predict_actions(self, transition_output, cant_skip):
+        transition_dist = F.softmax(transition_output).data
+        transition_greedy = transition_dist.cpu().numpy().argmax(axis=1)
         if self.training:
-            transition_dist = F.softmax(transition_output)
-            transition_dist = transition_dist.data.cpu().numpy()
-            sampled_transitions = np.array([T_SKIP for _ in self.bufs], dtype=np.int32)
-            sampled_transitions[cant_skip] = [np.random.choice(self.choices, 1, p=t_dist)[0] for t_dist in transition_dist[cant_skip]]
-            transition_preds = sampled_transitions
+            transitions_sampled = torch.multinomial(transition_dist, 1).view(-1).cpu().numpy()
+            r = np.random.binomial(1, self.epsilon, len(transitions_sampled))
+            transition_preds = np.where(r, transitions_sampled, transition_greedy)
         else:
-            transition_dist = F.log_softmax(transition_output)
-            transition_dist = transition_dist.data.cpu().numpy()
-            transition_preds = transition_dist.argmax(axis=1)
+            transition_preds = transition_greedy
         return transition_preds
 
 

@@ -20,6 +20,7 @@ Note: If you get an error starting with "TypeError: ('Wrong number of dimensions
 """
 
 import os
+import math
 import random
 import pprint
 import sys
@@ -468,6 +469,9 @@ def run(only_forward=False):
             # Reset cached gradients.
             optimizer.zero_grad()
 
+            if hasattr(model, 'spinn'):
+                model.spinn.epsilon = FLAGS.rl_epsilon * math.exp(-step/FLAGS.rl_epsilon_decay)
+
             # Run model.
             output = model(X_batch, transitions_batch, y_batch,
                 use_internal_parser=FLAGS.use_internal_parser,
@@ -646,6 +650,10 @@ def run(only_forward=False):
                     avg_entropy = A.get_avg('entropy')
                 else:
                     avg_entropy = 0.0
+                if hasattr(model, "spinn") and hasattr(model.spinn, "epsilon"):
+                    epsilon = model.spinn.epsilon
+                else:
+                    epsilon = 0.0
                 time_metric = time_per_token(A.get('total_tokens'), A.get('total_time'))
                 stats_args = {
                     "step": step,
@@ -658,6 +666,7 @@ def run(only_forward=False):
                     "l2_cost": l2_cost_val,
                     "policy_cost": policy_cost_val,
                     "value_cost": value_cost_val,
+                    "epsilon": epsilon,
                     "avg_entropy": avg_entropy,
                     "rae_cost": rae_cost_val,
                     "leaf_acc": avg_leaf_acc,
@@ -697,6 +706,8 @@ def run(only_forward=False):
                 # Extra Component.
                 stats_str += "\nTrain Extra:"
                 stats_str += " lr={learning_rate:.7f}"
+                if hasattr(model, "spinn") and hasattr(model.spinn, "epsilon"):
+                    stats_str += " eps={epsilon:.7f}"
                 if FLAGS.evalb:
                     stats_str += " crossing={crossing:.2f}"
 
@@ -823,6 +834,8 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("rl_whiten", False, "Reduce variance in advantage.")
     gflags.DEFINE_boolean("rl_entropy", False, "Entropy regularization on transition policy.")
     gflags.DEFINE_float("rl_entropy_beta", 0.001, "Entropy regularization on transition policy.")
+    gflags.DEFINE_float("rl_epsilon", 1.0, "Percent of sampled actions during train time.")
+    gflags.DEFINE_float("rl_epsilon_decay", 50000, "Percent of sampled actions during train time.")
 
     # RAE settings.
     gflags.DEFINE_boolean("predict_leaf", True, "Predict whether a node is a leaf or not.")
