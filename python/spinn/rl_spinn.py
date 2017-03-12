@@ -121,12 +121,14 @@ class RLBaseModel(BaseModel):
 
         return outputs
 
-    def build_reward(self, logits, target):
+    def build_reward(self, probs, target):
         if self.rl_reward == "standard": # Zero One Loss.
-            rewards = torch.eq(logits.max(1)[1], target).float()
+            rewards = torch.eq(probs.max(1)[1], target).float()
         elif self.rl_reward == "xent": # Cross Entropy Loss.
-            rewards = torch.cat([F.nll_loss(Variable(ll), Variable(t))
-                for ll, t in zip(logits, target.chunk(target.size(0)))], 0).unsqueeze(1).data
+            _target = target.long().view(-1, 1)
+            mask = torch.zeros(probs.size()).scatter_(1, _target, 1.0) # one hots
+            log_inv_prob = torch.log(1 - probs) # get the log of the inverse probabilities
+            rewards = -1 * (log_inv_prob * mask).sum(1)
         else:
             raise NotImplementedError
 
@@ -157,9 +159,9 @@ class RLBaseModel(BaseModel):
             greedy_outp = self.run_greedy(sentences, transitions)
 
             # Estimate Reward
-            logits = F.softmax(output).data.cpu()
+            probs = F.softmax(output).data.cpu()
             target = torch.from_numpy(y_batch).long()
-            greedy_rewards = self.build_reward(logits, target)
+            greedy_rewards = self.build_reward(probs, target)
 
             baseline = greedy_rewards
         else:
@@ -204,11 +206,11 @@ class RLBaseModel(BaseModel):
         if not self.training:
             return
 
-        logits = F.softmax(output).data.cpu()
+        probs = F.softmax(output).data.cpu()
         target = torch.from_numpy(y_batch).long()
 
         # Get Reward.
-        rewards = self.build_reward(logits, target)
+        rewards = self.build_reward(probs, target)
 
         # Get Baseline.
         baseline = self.build_baseline(output, rewards, sentences, transitions, y_batch, embeds)
