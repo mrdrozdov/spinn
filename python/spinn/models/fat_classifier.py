@@ -844,7 +844,7 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("ckpt_on_best_dev_error", True, "If error on the first eval set (the dev set) is "
         "at most 0.99 of error at the previous checkpoint, save a special 'best' checkpoint.")
     gflags.DEFINE_boolean("evalb", False, "Print transition statistics.")
-    gflags.DEFINE_integer("num_samples", 3, "Print sampled transitions.")
+    gflags.DEFINE_integer("num_samples", 0, "Print sampled transitions.")
 
     # Evaluation settings
     gflags.DEFINE_boolean("expanded_eval_only_mode", False,
