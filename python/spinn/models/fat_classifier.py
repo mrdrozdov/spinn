@@ -459,7 +459,7 @@ def run(only_forward=False):
             # Reset cached gradients.
             optimizer.zero_grad()
 
-            if hasattr(model, 'spinn'):
+            if FLAGS.model_type == "RLSPINN":
                 model.spinn.epsilon = FLAGS.rl_epsilon * math.exp(-step/FLAGS.rl_epsilon_decay)
 
             # Run model.
