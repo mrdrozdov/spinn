@@ -94,8 +94,8 @@ class RLBaseModel(BaseModel):
                 use_embed=False,
                 )
 
-    def build_spinn(self, args, vocab, use_skips, predict_use_cell):
-        return RLSPINN(args, vocab, use_skips, predict_use_cell)
+    def build_spinn(self, args, vocab, use_skips, predict_use_cell, use_lengths):
+        return RLSPINN(args, vocab, use_skips, predict_use_cell, use_lengths)
 
     def run_greedy(self, sentences, transitions):
         if self.use_sentence_pair:
@@ -131,6 +131,11 @@ class RLBaseModel(BaseModel):
             rewards = -1 * (log_inv_prob * mask).sum(1)
         else:
             raise NotImplementedError
+
+        if self.spinn.use_lengths:
+            for i, (buf, stack) in enumerate(zip(self.spinn.bufs, self.spinn.stacks)):
+                if len(buf) == 1 and len(stack) == 2:
+                    rewards[i] += 1
 
         return rewards
 

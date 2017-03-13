@@ -22,13 +22,18 @@ def bracketing(ts):
 
 
 def crossing(gold, pred):
-    gsplits = bracketing(gold)
-    psplits = bracketing(pred)
-    ret = []
-    for p in psplits:
-        for g in gsplits:
-            if (g[0] < p[0] and g[1] > p[0] and g[1] < p[1]) or \
-               (g[0] > p[0] and g[0] < p[1] and g[1] > p[1]):
-               ret.append((g, p))
-               break
-    return ret
+    try:
+        gsplits = bracketing(gold)
+        psplits = bracketing(pred)
+        crosses = []
+        for p in psplits:
+            for g in gsplits:
+                if (g[0] < p[0] and g[1] > p[0] and g[1] < p[1]) or \
+                   (g[0] > p[0] and g[0] < p[1] and g[1] > p[1]):
+                   crosses.append((g, p))
+                   break
+        count = len(crosses)
+    except:
+        crosses = []
+        count = -1
+    return crosses, count

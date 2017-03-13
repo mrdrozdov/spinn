@@ -96,7 +96,6 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
     # Evaluate
     class_correct = 0
     class_total = 0
-    crossing = 0
     total_batches = len(dataset)
     progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
@@ -145,10 +144,6 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
                 eval_transitions_batch = np.concatenate([
                     eval_transitions_batch[:,:,0], eval_transitions_batch[:,:,1]], axis=0)
 
-        if FLAGS.evalb:
-            for gold, pred in zip(eval_transitions_batch, transitions_per_example):
-                crossing += len(evalb.crossing(gold, pred))
-
         if FLAGS.num_samples > 0 and len(transition_examples) < FLAGS.num_samples and i % (step % 11 + 1) == 0:
             r = random.randint(0, len(transitions_per_example) - 1)
             transition_examples.append((transitions_per_example[r], eval_transitions_batch[r]))
@@ -181,9 +176,6 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
     # Get class accuracy.
     eval_class_acc = class_correct / float(class_total)
 
-    # Evalb stats.
-    avg_crossing = crossing / float(class_total)
-
     # Get transition accuracy if applicable.
     if len(transition_preds) > 0:
         all_preds = np.array(flatten(transition_preds))
@@ -196,15 +188,13 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
 
     # Extra Component.
     stats_str += "\nEval Extra:"
-    if FLAGS.evalb:
-        stats_str += " crossing=%2f" % (avg_crossing,)
 
     if len(transition_examples) > 0:
         for t_idx in range(len(transition_examples)):
             gold = transition_examples[t_idx][1]
             pred = transition_examples[t_idx][0]
-            crossing = evalb.crossing(gold, pred)
-            stats_str += "\n{}. crossing={}".format(t_idx, len(crossing))
+            _, crossing = evalb.crossing(gold, pred)
+            stats_str += "\n{}. crossing={}".format(t_idx, crossing)
             stats_str += "\n     g{}".format("".join(map(str, filter(lambda x: x != 2, gold))))
             stats_str += "\n     p{}".format("".join(map(str, pred)))
 
@@ -376,11 +366,11 @@ def run(only_forward=False):
          lateral_tracking=FLAGS.lateral_tracking,
          use_tracking_in_composition=FLAGS.use_tracking_in_composition,
          predict_use_cell=FLAGS.predict_use_cell,
+         use_lengths=FLAGS.use_lengths,
          use_difference_feature=FLAGS.use_difference_feature,
          use_product_feature=FLAGS.use_product_feature,
          num_mlp_layers=FLAGS.num_mlp_layers,
          mlp_bn=FLAGS.mlp_bn,
-         bias_t_net=FLAGS.bias_t_net,
          rl_mu=FLAGS.rl_mu,
          rl_baseline=FLAGS.rl_baseline,
          rl_reward=FLAGS.rl_reward,
@@ -501,17 +491,6 @@ def run(only_forward=False):
             leaf_loss = model.spinn.leaf_loss if hasattr(model, 'spinn') and hasattr(model.spinn, 'leaf_loss') else None
             gen_loss = model.spinn.gen_loss if hasattr(model, 'spinn') and hasattr(model.spinn, 'gen_loss') else None
 
-            crossing = 0
-            if FLAGS.evalb:
-                transitions_per_example = model.spinn.get_transitions_per_example()
-                if model.use_sentence_pair:
-                    transitions_batch = np.concatenate([
-                        transitions_batch[:,:,0], transitions_batch[:,:,1]], axis=0)
-                for gold, pred in zip(transitions_batch, transitions_per_example):
-                    crossing += len(evalb.crossing(gold, pred))
-                crossing = crossing / float(len(transitions_batch))
-            A.add('crossing', crossing)
-
             # Accumulate stats for transition accuracy.
             if transition_loss is not None:
                 preds = [m["t_preds"] for m in model.spinn.memories]
@@ -631,7 +610,6 @@ def run(only_forward=False):
                 progress_bar.step(i=FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
                 progress_bar.finish()
                 avg_class_acc = A.get_avg('class_acc')
-                avg_crossing = A.get_avg('crossing')
                 if transition_loss is not None:
                     all_preds = np.array(flatten(A.get('preds')))
                     all_truth = np.array(flatten(A.get('truth')))
@@ -659,7 +637,6 @@ def run(only_forward=False):
                     "step": step,
                     "class_acc": avg_class_acc,
                     "transition_acc": avg_trans_acc,
-                    "crossing": avg_crossing,
                     "total_cost": total_cost_val,
                     "xent_cost": xent_cost_val,
                     "transition_cost": transition_cost_val,
@@ -708,8 +685,6 @@ def run(only_forward=False):
                 stats_str += " lr={learning_rate:.7f}"
                 if hasattr(model, "spinn") and hasattr(model.spinn, "epsilon"):
                     stats_str += " eps={epsilon:.7f}"
-                if FLAGS.evalb:
-                    stats_str += " crossing={crossing:.2f}"
 
                 if FLAGS.num_samples > 0:
                     transitions_per_example = model.spinn.get_transitions_per_example()
@@ -719,8 +694,8 @@ def run(only_forward=False):
                     for t_idx in range(FLAGS.num_samples):
                         gold = transitions_batch[t_idx]
                         pred = transitions_per_example[t_idx]
-                        crossing = evalb.crossing(gold, pred)
-                        stats_str += "\n{}. crossing={}".format(t_idx, len(crossing))
+                        _, crossing = evalb.crossing(gold, pred)
+                        stats_str += "\n{}. crossing={}".format(t_idx, crossing)
                         stats_str += "\n     g{}".format("".join(map(str, filter(lambda x: x != 2, gold))))
                         stats_str += "\n     p{}".format("".join(map(str, pred)))
 
@@ -815,7 +790,7 @@ if __name__ == '__main__':
         "Use tracking lstm output as input for the reduce function.")
     gflags.DEFINE_boolean("predict_use_cell", True,
         "Use cell output as feature for transition net.")
-    gflags.DEFINE_boolean("bias_t_net", True, "The transition net will be biased.")
+    gflags.DEFINE_boolean("use_lengths", False, "The transition net will be biased.")
 
     # Encode settings.
     gflags.DEFINE_boolean("use_encode", False, "Encode embeddings with sequential network.")

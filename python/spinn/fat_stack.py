@@ -100,13 +100,14 @@ class Tracker(nn.Module):
 
 class SPINN(nn.Module):
 
-    def __init__(self, args, vocab, use_skips, predict_use_cell):
+    def __init__(self, args, vocab, use_skips, predict_use_cell, use_lengths):
         super(SPINN, self).__init__()
 
         # Optional debug mode.
         self.debug = False
 
         self.transition_weight = args.transition_weight
+        self.use_lengths = use_lengths
         self.use_skips = use_skips
 
         # Reduce function for semantic composition.
@@ -117,7 +118,9 @@ class SPINN(nn.Module):
                 # TODO: Might be interesting to try a different network here.
                 self.predict_use_cell = True
                 tinp_size = args.tracker_size * 2 if predict_use_cell else args.tracker_size
-                self.transition_net = nn.Linear(tinp_size, 3 if use_skips else 2, bias=args.bias_t_net)
+                if self.use_lengths:
+                    tinp_size += 2
+                self.transition_net = nn.Linear(tinp_size, 3 if use_skips else 2)
 
         # Predict 2 or 3 actions depending on whether SKIPs will be predicted.
         choices = [T_SHIFT, T_REDUCE, T_SKIP] if use_skips else [T_SHIFT, T_REDUCE]
@@ -141,7 +144,7 @@ class SPINN(nn.Module):
         #   used as input to the tracker.
         # - For the first two steps, the stack would be empty, but we add
         #   zeros so that the tracker still gets input.
-        zeros = to_gpu(Variable(torch.from_numpy(
+        zeros = self.zeros = to_gpu(Variable(torch.from_numpy(
             np.zeros(self.bufs[0][0].size(), dtype=np.float32)),
             volatile=self.bufs[0][0].volatile))
 
@@ -228,7 +231,7 @@ class SPINN(nn.Module):
 
     def t_shift(self, buf, stack, tracking, buf_tops, trackings):
         """SHIFT: Should dequeue buffer and item to stack."""
-        buf_tops.append(buf.pop())
+        buf_tops.append(buf.pop() if len(buf) > 0 else self.zeros)
         trackings.append(tracking)
 
     def t_reduce(self, buf, stack, tracking, lefts, rights, trackings):
@@ -303,37 +306,32 @@ class SPINN(nn.Module):
             if hasattr(self, 'tracker') and (self.use_skips or sum(cant_skip) > 0):
 
                 # Prepare tracker input.
-                try:
-                    top_buf = bundle(buf[-1] for buf in self.bufs)
-                    top_stack_1 = bundle(stack[-1] for stack in self.stacks)
-                    top_stack_2 = bundle(stack[-2] for stack in self.stacks)
-                except:
+                if self.debug and any(len(buf) < 1 or len(stack) for buf, stack in zip(self.bufs, self.stacks)):
                     # To elaborate on this exception, when cropping examples it is possible
                     # that your first 1 or 2 actions is a reduce action. It is unclear if this
                     # is a bug in cropping or a bug in how we think about cropping. In the meantime,
                     # turn on the truncate batch flag, and set the eval_seq_length very high.
-                    raise NotImplementedError("Warning: You are probably trying to encode examples"
+                    raise IndexError("Warning: You are probably trying to encode examples"
                           "with cropped transitions. Although, this is a reasonable"
                           "feature, when predicting/validating transitions, you"
                           "probably will not get the behavior that you expect. Disable"
                           "this exception if you dare.")
-                    # Uncomment to handle weirdly placed actions like discussed in the above exception.
-                    # =========
-                    # zeros = to_gpu(Variable(torch.from_numpy(
-                    #     np.zeros(self.bufs[0][0].size(), dtype=np.float32)),
-                    #     volatile=self.bufs[0][0].volatile))
-                    # top_buf = bundle(buf[-1] for buf in self.bufs)
-                    # top_stack_1 = bundle(stack[-1] if len(stack) > 0 else zeros for stack in self.stacks)
-                    # top_stack_2 = bundle(stack[-2] if len(stack) > 1 else zeros for stack in self.stacks)
+                top_buf = bundle(buf[-1] if len(buf) > 0 else self.zeros for buf in self.bufs)
+                top_stack_1 = bundle(stack[-1] if len(stack) > 0 else self.zeros for stack in self.stacks)
+                top_stack_2 = bundle(stack[-2] if len(stack) > 1 else self.zeros for stack in self.stacks)
 
                 # Get hidden output from the tracker. Used to predict transitions.
                 tracker_h, tracker_c = self.tracker(top_buf, top_stack_1, top_stack_2)
 
                 if hasattr(self, 'transition_net'):
+                    transition_inp = [tracker_h]
+                    if self.use_lengths:
+                        buf_lens = Variable(torch.FloatTensor([len(buf) for buf in self.bufs]), volatile=not self.training).view(-1, 1)
+                        stack_lens = Variable(torch.FloatTensor([len(stack) for stack in self.stacks]), volatile=not self.training).view(-1, 1)
+                        transition_inp += [buf_lens, stack_lens]
                     if self.predict_use_cell:
-                        transition_inp = torch.cat([tracker_h, tracker_c], 1)
-                    else:
-                        transition_inp = tracker_h
+                        transition_inp += [tracker_c]
+                    transition_inp = torch.cat(transition_inp, 1)
                     transition_output = self.transition_net(transition_inp)
 
                 if hasattr(self, 'transition_net') and run_internal_parser:
@@ -481,13 +479,13 @@ class BaseModel(nn.Module):
                  lateral_tracking=None,
                  use_tracking_in_composition=None,
                  predict_use_cell=None,
+                 use_lengths=None,
                  use_sentence_pair=False,
                  use_difference_feature=False,
                  use_product_feature=False,
                  num_mlp_layers=None,
                  mlp_bn=None,
                  use_projection=None,
-                 bias_t_net=None,
                  **kwargs
                 ):
         super(BaseModel, self).__init__()
@@ -503,7 +501,6 @@ class BaseModel(nn.Module):
         args.size = model_dim/2
         args.tracker_size = tracking_lstm_hidden_dim
         args.transition_weight = transition_weight
-        args.bias_t_net = bias_t_net
 
         self.initial_embeddings = initial_embeddings
         self.word_embedding_dim = word_embedding_dim
@@ -515,7 +512,7 @@ class BaseModel(nn.Module):
         vocab.vectors = initial_embeddings
 
         # Build parsing component.
-        self.spinn = self.build_spinn(args, vocab, use_skips, predict_use_cell)
+        self.spinn = self.build_spinn(args, vocab, use_skips, predict_use_cell, use_lengths)
 
         # Build classiifer.
         features_dim = self.get_features_dim()
@@ -570,8 +567,8 @@ class BaseModel(nn.Module):
             raise NotImplementedError
         return encoding_net
 
-    def build_spinn(self, args, vocab, use_skips, predict_use_cell):
-        return SPINN(args, vocab, use_skips, predict_use_cell)
+    def build_spinn(self, args, vocab, use_skips, predict_use_cell, use_lengths):
+        return SPINN(args, vocab, use_skips, predict_use_cell, use_lengths)
 
     def build_example(self, sentences, transitions):
         raise Exception('Not implemented.')
