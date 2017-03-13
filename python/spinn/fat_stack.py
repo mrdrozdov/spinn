@@ -326,8 +326,8 @@ class SPINN(nn.Module):
                 if hasattr(self, 'transition_net'):
                     transition_inp = [tracker_h]
                     if self.use_lengths:
-                        buf_lens = Variable(torch.FloatTensor([len(buf) for buf in self.bufs]), volatile=not self.training).view(-1, 1)
-                        stack_lens = Variable(torch.FloatTensor([len(stack) for stack in self.stacks]), volatile=not self.training).view(-1, 1)
+                        buf_lens = to_gpu(Variable(torch.FloatTensor([len(buf) for buf in self.bufs]), volatile=not self.training).view(-1, 1))
+                        stack_lens = to_gpu(Variable(torch.FloatTensor([len(stack) for stack in self.stacks]), volatile=not self.training).view(-1, 1))
                         transition_inp += [buf_lens, stack_lens]
                     if self.predict_use_cell:
                         transition_inp += [tracker_c]
