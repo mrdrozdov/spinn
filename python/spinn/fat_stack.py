@@ -248,10 +248,7 @@ class SPINN(nn.Module):
                 # then treat any available item as the right input, and use zeros
                 # for any other inputs.
                 # NOTE: Only happens on cropped data.
-                zeros = to_gpu(Variable(
-                    torch.from_numpy(np.zeros(buf[0].size(), dtype=np.float32)),
-                    volatile=buf[0].volatile))
-                reduce_inp.append(zeros)
+                reduce_inp.append(self.zeros)
 
         trackings.append(tracking)
 
