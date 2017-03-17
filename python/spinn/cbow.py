@@ -16,7 +16,7 @@ from spinn.util.blocks import Embed, to_gpu, MLP
 from spinn.util.misc import Args, Vocab
 
 
-def build_model(data_manager, vocab_size, num_classes, FLAGS):
+def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS):
     if data_manager.SENTENCE_PAIR_DATA:
         model_cls = SentencePairModel
         use_sentence_pair = True

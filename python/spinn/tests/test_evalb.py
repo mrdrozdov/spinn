@@ -27,8 +27,8 @@ class EvalbTestCase(unittest.TestCase):
             (map(int, "0010011"), map(int, "0010101"), 1),
         ]
         for i, (gold, pred, exp) in enumerate(cases):
-            ret = crossing(gold, pred)
-            assert len(ret) == exp, "{}. {} != {}. {}".format(i, len(ret), exp, ret)
+            crosses, count = crossing(gold, pred)
+            assert count == exp, "{}. {} != {}. {}".format(i, count, exp, crosses)
 
 
 if __name__ == '__main__':
