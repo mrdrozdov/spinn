@@ -241,7 +241,7 @@ def treelstm(c_left, c_right, gates, use_dropout=False, training=None):
     return (c_t, h_t)
 
 
-class BaseSentencePairTrainer(object):
+class ModelTrainer(object):
 
     def __init__(self, model, optimizer):
         self.model = model

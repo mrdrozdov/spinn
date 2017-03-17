@@ -20,7 +20,7 @@ from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
-from spinn.util.blocks import the_gpu, to_gpu, l2_cost, flatten, debug_gradient
+from spinn.util.blocks import ModelTrainer, the_gpu, to_gpu, l2_cost, flatten, debug_gradient
 from spinn.util.misc import Accumulator, MetricsLogger, EvalReporter, time_per_token
 from spinn.util.misc import recursively_set_device
 from spinn.util.logging import train_format, train_extra_format, train_stats, train_accumulate
@@ -373,64 +373,21 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
     # Choose model.
     logger.Log("Building model.")
     if FLAGS.model_type == "CBOW":
-        model_module = spinn.cbow
+        build_model = spinn.cbow.build_model
     elif FLAGS.model_type == "RNN":
-        model_module = spinn.plain_rnn
+        build_model = spinn.plain_rnn.build_model
     elif FLAGS.model_type == "SPINN":
-        model_module = spinn.fat_stack
+        build_model = spinn.fat_stack.build_model
     elif FLAGS.model_type == "RLSPINN":
-        model_module = spinn.rl_spinn
+        build_model = spinn.rl_spinn.build_model
     elif FLAGS.model_type == "RAESPINN":
-        model_module = spinn.rae_spinn
+        build_model = spinn.rae_spinn.build_model
     elif FLAGS.model_type == "GENSPINN":
-        model_module = spinn.gen_spinn
+        build_model = spinn.gen_spinn.build_model
     else:
         raise Exception("Requested unimplemented model type %s" % FLAGS.model_type)
 
-    if data_manager.SENTENCE_PAIR_DATA:
-        trainer_cls = model_module.SentencePairTrainer
-        model_cls = model_module.SentencePairModel
-        use_sentence_pair = True
-    else:
-        trainer_cls = model_module.SentenceTrainer
-        model_cls = model_module.SentenceModel
-        num_classes = len(data_manager.LABEL_MAP)
-        use_sentence_pair = False
-
-    model = model_cls(model_dim=FLAGS.model_dim,
-         word_embedding_dim=FLAGS.word_embedding_dim,
-         vocab_size=vocab_size,
-         initial_embeddings=initial_embeddings,
-         num_classes=num_classes,
-         mlp_dim=FLAGS.mlp_dim,
-         embedding_keep_rate=FLAGS.embedding_keep_rate,
-         classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
-         tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
-         transition_weight=FLAGS.transition_weight,
-         encode_style=FLAGS.encode_style,
-         encode_reverse=FLAGS.encode_reverse,
-         encode_bidirectional=FLAGS.encode_bidirectional,
-         encode_num_layers=FLAGS.encode_num_layers,
-         use_sentence_pair=use_sentence_pair,
-         use_skips=FLAGS.use_skips,
-         lateral_tracking=FLAGS.lateral_tracking,
-         use_tracking_in_composition=FLAGS.use_tracking_in_composition,
-         predict_use_cell=FLAGS.predict_use_cell,
-         use_lengths=FLAGS.use_lengths,
-         use_difference_feature=FLAGS.use_difference_feature,
-         use_product_feature=FLAGS.use_product_feature,
-         num_mlp_layers=FLAGS.num_mlp_layers,
-         mlp_bn=FLAGS.mlp_bn,
-         rl_mu=FLAGS.rl_mu,
-         rl_baseline=FLAGS.rl_baseline,
-         rl_reward=FLAGS.rl_reward,
-         rl_weight=FLAGS.rl_weight,
-         rl_whiten=FLAGS.rl_whiten,
-         rl_entropy=FLAGS.rl_entropy,
-         rl_entropy_beta=FLAGS.rl_entropy_beta,
-         predict_leaf=FLAGS.predict_leaf,
-         gen_h=FLAGS.gen_h,
-        )
+    model = build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS)
 
     # Build optimizer.
     if FLAGS.optimizer_type == "Adam":
@@ -441,7 +398,7 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
         raise NotImplementedError
 
     # Build trainer.
-    trainer = trainer_cls(model, optimizer)
+    trainer = ModelTrainer(model, optimizer)
 
     # Print model size.
     logger.Log("Architecture: {}".format(model))

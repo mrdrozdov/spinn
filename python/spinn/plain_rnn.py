@@ -12,14 +12,8 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 
-from spinn.util.blocks import BaseSentencePairTrainer, Embed, to_gpu
+from spinn.util.blocks import Embed, to_gpu
 from spinn.util.misc import Args, Vocab
-
-
-class SentencePairTrainer(BaseSentencePairTrainer): pass
-
-
-class SentenceTrainer(SentencePairTrainer): pass
 
 
 class BaseModel(nn.Module):

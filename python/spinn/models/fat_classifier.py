@@ -41,7 +41,7 @@ from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
-from spinn.util.blocks import the_gpu, to_gpu, l2_cost, flatten, debug_gradient
+from spinn.util.blocks import ModelTrainer, the_gpu, to_gpu, l2_cost, flatten, debug_gradient
 from spinn.util.misc import Accumulator, MetricsLogger, EvalReporter, time_per_token
 from spinn.util.misc import recursively_set_device
 from spinn.util.logging import train_format, train_extra_format, train_stats, train_accumulate
@@ -338,11 +338,9 @@ def run(only_forward=False):
     num_classes = len(data_manager.LABEL_MAP)
 
     if data_manager.SENTENCE_PAIR_DATA:
-        trainer_cls = model_module.SentencePairTrainer
         model_cls = model_module.SentencePairModel
         use_sentence_pair = True
     else:
-        trainer_cls = model_module.SentenceTrainer
         model_cls = model_module.SentenceModel
         num_classes = len(data_manager.LABEL_MAP)
         use_sentence_pair = False
@@ -391,7 +389,7 @@ def run(only_forward=False):
         raise NotImplementedError
 
     # Build trainer.
-    classifier_trainer = trainer_cls(model, optimizer)
+    classifier_trainer = ModelTrainer(model, optimizer)
 
     standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name)
     best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name, best=True)

@@ -9,7 +9,7 @@ import spinn.fat_stack
 import spinn.rl_spinn
 import spinn.rae_spinn
 import spinn.gen_spinn
-from spinn.util.blocks import BaseSentencePairTrainer
+from spinn.util.blocks import ModelTrainer
 
 # PyTorch
 import torch
@@ -46,11 +46,11 @@ class SPINNTestCase(unittest.TestCase):
 
         model_to_save = MockModel(spinn.fat_stack.SentenceModel, default_args())
         opt_to_save = optim.SGD(model_to_save.parameters(), lr=0.1)
-        trainer_to_save = BaseSentencePairTrainer(model_to_save, opt_to_save)
+        trainer_to_save = ModelTrainer(model_to_save, opt_to_save)
 
         model_to_load = MockModel(spinn.rl_spinn.SentenceModel, default_args())
         opt_to_load = optim.SGD(model_to_load.parameters(), lr=0.1)
-        trainer_to_load = BaseSentencePairTrainer(model_to_load, opt_to_load)
+        trainer_to_load = ModelTrainer(model_to_load, opt_to_load)
 
         # Save to and load from temporary file.
         temp = tempfile.NamedTemporaryFile()

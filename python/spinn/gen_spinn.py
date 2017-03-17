@@ -11,7 +11,7 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 
-from spinn.util.blocks import BaseSentencePairTrainer, Reduce
+from spinn.util.blocks import Reduce
 from spinn.util.blocks import LSTMState, Embed, MLP
 from spinn.util.blocks import bundle, unbundle, to_cpu, to_gpu, treelstm, lstm
 from spinn.util.blocks import get_h, get_c, get_seq_h
@@ -24,12 +24,6 @@ from spinn.fat_stack import SPINN
 T_SKIP   = 2
 T_SHIFT  = 0
 T_REDUCE = 1
-
-
-class SentencePairTrainer(BaseSentencePairTrainer): pass
-
-
-class SentenceTrainer(SentencePairTrainer): pass
 
 
 class GenSPINN(SPINN):

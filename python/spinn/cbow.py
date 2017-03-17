@@ -12,14 +12,52 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 
-from spinn.util.blocks import BaseSentencePairTrainer, Embed, to_gpu, MLP
+from spinn.util.blocks import Embed, to_gpu, MLP
 from spinn.util.misc import Args, Vocab
 
 
-class SentencePairTrainer(BaseSentencePairTrainer): pass
+def build_model(data_manager, vocab_size, num_classes, FLAGS):
+    if data_manager.SENTENCE_PAIR_DATA:
+        model_cls = SentencePairModel
+        use_sentence_pair = True
+    else:
+        model_cls = SentenceModel
+        use_sentence_pair = False
 
-
-class SentenceTrainer(SentencePairTrainer): pass
+    return model_cls(model_dim=FLAGS.model_dim,
+         word_embedding_dim=FLAGS.word_embedding_dim,
+         vocab_size=vocab_size,
+         initial_embeddings=initial_embeddings,
+         num_classes=num_classes,
+         mlp_dim=FLAGS.mlp_dim,
+         embedding_keep_rate=FLAGS.embedding_keep_rate,
+         classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
+         tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
+         transition_weight=FLAGS.transition_weight,
+         encode_style=FLAGS.encode_style,
+         encode_reverse=FLAGS.encode_reverse,
+         encode_bidirectional=FLAGS.encode_bidirectional,
+         encode_num_layers=FLAGS.encode_num_layers,
+         use_sentence_pair=use_sentence_pair,
+         use_skips=FLAGS.use_skips,
+         lateral_tracking=FLAGS.lateral_tracking,
+         use_tracking_in_composition=FLAGS.use_tracking_in_composition,
+         predict_use_cell=FLAGS.predict_use_cell,
+         use_lengths=FLAGS.use_lengths,
+         use_difference_feature=FLAGS.use_difference_feature,
+         use_product_feature=FLAGS.use_product_feature,
+         num_mlp_layers=FLAGS.num_mlp_layers,
+         mlp_bn=FLAGS.mlp_bn,
+         rl_mu=FLAGS.rl_mu,
+         rl_baseline=FLAGS.rl_baseline,
+         rl_reward=FLAGS.rl_reward,
+         rl_weight=FLAGS.rl_weight,
+         rl_whiten=FLAGS.rl_whiten,
+         rl_entropy=FLAGS.rl_entropy,
+         rl_entropy_beta=FLAGS.rl_entropy_beta,
+         predict_leaf=FLAGS.predict_leaf,
+         gen_h=FLAGS.gen_h,
+        )
 
 
 class BaseModel(nn.Module):
