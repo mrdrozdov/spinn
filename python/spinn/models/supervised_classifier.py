@@ -11,14 +11,6 @@ import numpy as np
 
 from spinn import afs_safe_logger
 from spinn import util
-from spinn.data.arithmetic import load_sign_data
-from spinn.data.arithmetic import load_simple_data
-from spinn.data.dual_arithmetic import load_eq_data
-from spinn.data.dual_arithmetic import load_relational_data
-from spinn.data.boolean import load_boolean_data
-from spinn.data.listops import load_listops_data
-from spinn.data.sst import load_sst_data, load_sst_binary_data
-from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import the_gpu, to_gpu, l2_cost, flatten, debug_gradient
 from spinn.util.misc import Accumulator, MetricsLogger, EvalReporter, time_per_token
@@ -26,13 +18,6 @@ from spinn.util.misc import recursively_set_device
 from spinn.util.logging import train_format, train_extra_format, train_stats, train_accumulate
 from spinn.util.loss import auxiliary_loss
 import spinn.util.evalb as evalb
-
-import spinn.gen_spinn
-import spinn.rae_spinn
-import spinn.rl_spinn
-import spinn.fat_stack
-import spinn.plain_rnn
-import spinn.cbow
 
 # PyTorch
 import torch
@@ -42,6 +27,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 
+from spinn.models.base import get_data_manager
 from spinn.models.base import main_loop, get_flags, flag_defaults, init_model
 from spinn.models.base import sequential_only, get_checkpoint_path, evaluate
 
@@ -52,28 +38,7 @@ FLAGS = gflags.FLAGS
 def run(only_forward=False):
     logger = afs_safe_logger.Logger(os.path.join(FLAGS.log_path, FLAGS.experiment_name) + ".log")
 
-    # Select data format.
-    if FLAGS.data_type == "bl":
-        data_manager = load_boolean_data
-    elif FLAGS.data_type == "sst":
-        data_manager = load_sst_data
-    elif FLAGS.data_type == "sst-binary":
-        data_manager = load_sst_binary_data
-    elif FLAGS.data_type == "snli":
-        data_manager = load_snli_data
-    elif FLAGS.data_type == "arithmetic":
-        data_manager = load_simple_data
-    elif FLAGS.data_type == "listops":
-        data_manager = load_listops_data
-    elif FLAGS.data_type == "sign":
-        data_manager = load_sign_data
-    elif FLAGS.data_type == "eq":
-        data_manager = load_eq_data
-    elif FLAGS.data_type == "relational":
-        data_manager = load_relational_data
-    else:
-        logger.Log("Bad data type.")
-        return
+    data_manager = get_data_manager(FLAGS.data_type)
 
     pp = pprint.PrettyPrinter(indent=4)
     logger.Log("Flag values:\n" + pp.pformat(FLAGS.FlagValuesDict()))

@@ -196,6 +196,32 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
     return eval_class_acc
 
 
+def get_data_manager(data_type):
+    # Select data format.
+    if data_type == "bl":
+        data_manager = load_boolean_data
+    elif data_type == "sst":
+        data_manager = load_sst_data
+    elif data_type == "sst-binary":
+        data_manager = load_sst_binary_data
+    elif data_type == "snli":
+        data_manager = load_snli_data
+    elif data_type == "arithmetic":
+        data_manager = load_simple_data
+    elif data_type == "listops":
+        data_manager = load_listops_data
+    elif data_type == "sign":
+        data_manager = load_sign_data
+    elif data_type == "eq":
+        data_manager = load_eq_data
+    elif data_type == "relational":
+        data_manager = load_relational_data
+    else:
+        raise NotImplementedError
+
+    return data_manager
+
+
 def get_checkpoint_path(ckpt_path, experiment_name, suffix=".ckpt", best=False):
     # Set checkpoint path.
     if ckpt_path.endswith(".ckpt") or ckpt_path.endswith(".ckpt_best"):
