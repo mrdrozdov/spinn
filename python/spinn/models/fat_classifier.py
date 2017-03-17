@@ -42,7 +42,7 @@ from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import the_gpu, to_gpu, l2_cost, flatten, debug_gradient
-from spinn.util.misc import Accumulator, MetricsLogger, EvalReporter
+from spinn.util.misc import Accumulator, MetricsLogger, EvalReporter, time_per_token
 from spinn.util.misc import recursively_set_device
 from spinn.util.logging import train_format, train_extra_format, train_stats, train_accumulate
 from spinn.util.loss import auxiliary_loss
@@ -100,7 +100,7 @@ def truncate(X_batch, transitions_batch, num_transitions_batch):
     return X_batch, transitions_batch
 
 
-def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
+def evaluate(model, eval_set, logger, step, vocabulary=None):
     filename, dataset = eval_set
 
     reporter = EvalReporter()
@@ -210,9 +210,6 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
 
     logger.Log(stats_str)
 
-    metrics_logger.Log('eval_class_acc', eval_class_acc, step)
-    metrics_logger.Log('eval_trans_acc', eval_trans_acc, step)
-
     if FLAGS.write_eval_report:
         eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".report")
         reporter.write_report(eval_report_path)
@@ -259,13 +256,6 @@ def run(only_forward=False):
 
     pp = pprint.PrettyPrinter(indent=4)
     logger.Log("Flag values:\n" + pp.pformat(FLAGS.FlagValuesDict()))
-
-    # Make Metrics Logger.
-    metrics_path = "{}/{}".format(FLAGS.metrics_path, FLAGS.experiment_name)
-    if not os.path.exists(metrics_path):
-        os.makedirs(metrics_path)
-    metrics_logger = MetricsLogger(metrics_path)
-    M = Accumulator(maxlen=FLAGS.deque_length)
 
     # Load the data.
     raw_training_data, vocabulary = data_manager.load_data(
@@ -444,7 +434,7 @@ def run(only_forward=False):
     # Do an evaluation-only run.
     if only_forward:
         for index, eval_set in enumerate(eval_iterators):
-            acc = evaluate(model, eval_set, logger, metrics_logger, step, vocabulary)
+            acc = evaluate(model, eval_set, logger, step, vocabulary)
     else:
         # Build log format strings.
         model.train()
@@ -496,7 +486,6 @@ def run(only_forward=False):
             class_acc = pred.eq(target).sum() / float(target.size(0))
 
             A.add('class_acc', class_acc)
-            M.add('class_acc', class_acc)
 
             # Calculate class loss.
             xent_loss = nn.NLLLoss()(logits, to_gpu(Variable(target, volatile=False)))
@@ -600,7 +589,7 @@ def run(only_forward=False):
 
             if step > 0 and step % FLAGS.eval_interval_steps == 0:
                 for index, eval_set in enumerate(eval_iterators):
-                    acc = evaluate(model, eval_set, logger, metrics_logger, step)
+                    acc = evaluate(model, eval_set, logger, step)
                     if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                         best_dev_error = 1 - acc
                         logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
@@ -610,11 +599,6 @@ def run(only_forward=False):
             if step > FLAGS.ckpt_step and step % FLAGS.ckpt_interval_steps == 0:
                 logger.Log("Checkpointing.")
                 classifier_trainer.save(standard_checkpoint_path, step, best_dev_error)
-
-            if step % FLAGS.metrics_interval_steps == 0:
-                m_keys = M.cache.keys()
-                for k in m_keys:
-                    metrics_logger.Log(k, M.get_avg(k), step)
 
             progress_bar.step(i=step % FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
 
