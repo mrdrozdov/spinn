@@ -11,13 +11,39 @@ from spinn.util.misc import time_per_token
 
 
 def train_accumulate(model, A):
-    pass
+
+    has_spinn = hasattr(model, 'spinn')
+    has_transition_loss = hasattr(model, 'transition_loss')
+    has_policy = has_spinn and hasattr(model, 'policy_loss')
+    has_value = has_spinn and hasattr(model, 'value_loss')
+    has_rae = has_spinn and hasattr(model.spinn, 'rae_loss')
+    has_leaf = has_spinn and hasattr(model.spinn, 'leaf_loss')
+    has_gen = has_spinn and hasattr(model.spinn, 'gen_loss')
+    has_entropy = hasattr(model, 'avg_entropy')
+
+    # Accumulate stats for transition accuracy.
+    if has_transition_loss:
+        preds = [m["t_preds"] for m in model.spinn.memories]
+        truth = [m["t_given"] for m in model.spinn.memories]
+        A.add('preds', preds)
+        A.add('truth', truth)
+
+    # Accumulate stats for leaf prediction accuracy.
+    if has_leaf:
+        A.add('leaf_acc', model.spinn.leaf_acc)
+
+    # Accumulate stats for word prediction accuracy.
+    if has_gen:
+        A.add('gen_acc', model.spinn.gen_acc)
+
+    if has_entropy:
+        A.add('entropy', model.avg_entropy)
 
 
 def train_stats(model, optimizer, A, step):
 
     has_spinn = hasattr(model, 'spinn')
-    has_transition_loss = has_spinn and hasattr(model, 'transition_loss')
+    has_transition_loss = hasattr(model, 'transition_loss')
     has_policy = has_spinn and hasattr(model, 'policy_loss')
     has_value = has_spinn and hasattr(model, 'value_loss')
     has_rae = has_spinn and hasattr(model.spinn, 'rae_loss')

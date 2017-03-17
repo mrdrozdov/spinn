@@ -485,46 +485,11 @@ def run(only_forward=False):
             pred = logits.data.max(1)[1].cpu() # get the index of the max log-probability
             class_acc = pred.eq(target).sum() / float(target.size(0))
 
-            A.add('class_acc', class_acc)
-
             # Calculate class loss.
             xent_loss = nn.NLLLoss()(logits, to_gpu(Variable(target, volatile=False)))
 
-            has_spinn = hasattr(model, 'spinn')
-            has_transition_acc = has_spinn and hasattr(model, 'transition_acc')
-            has_transition_loss = has_spinn and hasattr(model, 'transition_loss')
-            has_policy = has_spinn and hasattr(model, 'policy_loss')
-            has_value = has_spinn and hasattr(model, 'value_loss')
-            has_rae = has_spinn and hasattr(model.spinn, 'rae_loss')
-            has_leaf = has_spinn and hasattr(model.spinn, 'leaf_loss')
-            has_gen = has_spinn and hasattr(model.spinn, 'gen_loss')
-
-            # Optionally calculate transition loss/accuracy.
-            transition_acc = model.transition_acc if has_transition_acc else 0.0
-            transition_loss = model.transition_loss if has_transition_loss else None
-            policy_loss = model.policy_loss if has_policy else None
-            value_loss = model.value_loss if has_value else None
-            rae_loss = model.spinn.rae_loss if has_rae else None
-            leaf_loss = model.spinn.leaf_loss if has_leaf else None
-            gen_loss = model.spinn.gen_loss if has_gen else None
-
-            # Accumulate stats for transition accuracy.
-            if has_transition_loss:
-                preds = [m["t_preds"] for m in model.spinn.memories]
-                truth = [m["t_given"] for m in model.spinn.memories]
-                A.add('preds', preds)
-                A.add('truth', truth)
-
-            # Accumulate stats for leaf prediction accuracy.
-            if has_leaf:
-                A.add('leaf_acc', model.spinn.leaf_acc)
-
-            # Accumulate stats for word prediction accuracy.
-            if has_gen:
-                A.add('gen_acc', model.spinn.gen_acc)
-
-            if hasattr(model, 'avg_entropy'):
-                A.add('entropy', model.avg_entropy)
+            # Optionally calculate transition loss.
+            transition_loss = model.transition_loss if hasattr(model, 'transition_loss') else None
 
             # Extract L2 Cost
             l2_loss = l2_cost(model, FLAGS.l2_lambda) if FLAGS.use_l2_cost else None
@@ -534,7 +499,7 @@ def run(only_forward=False):
             total_loss += xent_loss
             if l2_loss is not None:
                 total_loss += l2_loss
-            if has_transition_loss and model.optimize_transition_loss:
+            if transition_loss is not None and model.optimize_transition_loss:
                 total_loss += transition_loss
             total_loss += auxiliary_loss(model)
 
@@ -558,6 +523,8 @@ def run(only_forward=False):
 
             total_time = end - start
 
+            train_accumulate(model, A)
+            A.add('class_acc', class_acc)
             A.add('total_tokens', total_tokens)
             A.add('total_time', total_time)
 
