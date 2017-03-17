@@ -68,8 +68,6 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          rl_whiten=FLAGS.rl_whiten,
          rl_entropy=FLAGS.rl_entropy,
          rl_entropy_beta=FLAGS.rl_entropy_beta,
-         predict_leaf=FLAGS.predict_leaf,
-         gen_h=FLAGS.gen_h,
         )
 
 

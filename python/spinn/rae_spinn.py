@@ -61,15 +61,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          use_product_feature=FLAGS.use_product_feature,
          num_mlp_layers=FLAGS.num_mlp_layers,
          mlp_bn=FLAGS.mlp_bn,
-         rl_mu=FLAGS.rl_mu,
-         rl_baseline=FLAGS.rl_baseline,
-         rl_reward=FLAGS.rl_reward,
-         rl_weight=FLAGS.rl_weight,
-         rl_whiten=FLAGS.rl_whiten,
-         rl_entropy=FLAGS.rl_entropy,
-         rl_entropy_beta=FLAGS.rl_entropy_beta,
          predict_leaf=FLAGS.predict_leaf,
-         gen_h=FLAGS.gen_h,
         )
 
 
