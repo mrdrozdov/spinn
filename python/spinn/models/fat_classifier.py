@@ -44,6 +44,7 @@ from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import the_gpu, to_gpu, l2_cost, flatten, debug_gradient
 from spinn.util.misc import Accumulator, time_per_token, MetricsLogger, EvalReporter
 from spinn.util.misc import recursively_set_device
+from spinn.util.logging import train_format, train_extra_format
 import spinn.util.evalb as evalb
 
 import spinn.gen_spinn
@@ -66,6 +67,16 @@ FLAGS = gflags.FLAGS
 
 def sequential_only():
     return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW"
+
+
+def get_batch(batch):
+    X_batch, transitions_batch, y_batch, num_transitions_batch, example_ids = batch
+
+    # Truncate batch.
+    X_batch, transitions_batch = truncate(
+        X_batch, transitions_batch, num_transitions_batch)
+
+    return X_batch, transitions_batch, y_batch, num_transitions_batch, example_ids
 
 
 def truncate(X_batch, transitions_batch, num_transitions_batch):
@@ -108,10 +119,8 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
     transition_targets = []
     transition_examples = []
 
-    for i, (eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, eval_ids) in enumerate(dataset):
-        if FLAGS.truncate_eval_batch:
-            eval_X_batch, eval_transitions_batch = truncate(
-                eval_X_batch, eval_transitions_batch, eval_num_transitions_batch)
+    for i, batch in enumerate(dataset):
+        eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, eval_ids = get_batch(batch)
 
         # Run model.
         output = model(eval_X_batch, eval_transitions_batch, eval_y_batch,
@@ -436,6 +445,19 @@ def run(only_forward=False):
         for index, eval_set in enumerate(eval_iterators):
             acc = evaluate(model, eval_set, logger, metrics_logger, step, vocabulary)
     else:
+        # Build log format strings.
+        model.train()
+        X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = get_batch(training_data_iter.next())
+        model(X_batch, transitions_batch, y_batch,
+                use_internal_parser=FLAGS.use_internal_parser,
+                validate_transitions=FLAGS.validate_transitions
+                )
+
+        train_str = train_format(model)
+        logger.Log("Train-Format: {}".format(train_str))
+        train_extra_str = train_extra_format(model)
+        logger.Log("Train-Extra-Format: {}".format(train_extra_str))
+
          # Train
         logger.Log("Training.")
 
@@ -448,11 +470,7 @@ def run(only_forward=False):
 
             start = time.time()
 
-            X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = training_data_iter.next()
-
-            if FLAGS.truncate_train_batch:
-                X_batch, transitions_batch = truncate(
-                    X_batch, transitions_batch, num_transitions_batch)
+            X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = get_batch(training_data_iter.next())
 
             total_tokens = num_transitions_batch.ravel().sum()
 
@@ -482,14 +500,23 @@ def run(only_forward=False):
             # Calculate class loss.
             xent_loss = nn.NLLLoss()(logits, to_gpu(Variable(target, volatile=False)))
 
+            has_spinn = hasattr(model, 'spinn')
+            has_transition_acc = has_spinn and hasattr(model, 'transition_acc')
+            has_transition_loss = has_spinn and hasattr(model, 'transition_loss')
+            has_policy = has_spinn and hasattr(model, 'policy_loss')
+            has_value = has_spinn and hasattr(model, 'value_loss')
+            has_rae = has_spinn and hasattr(model.spinn, 'rae_loss')
+            has_leaf = has_spinn and hasattr(model.spinn, 'leaf_loss')
+            has_gen = has_spinn and hasattr(model.spinn, 'gen_loss')
+
             # Optionally calculate transition loss/accuracy.
-            transition_acc = model.transition_acc if hasattr(model, 'transition_acc') else 0.0
-            transition_loss = model.transition_loss if hasattr(model, 'transition_loss') else None
-            policy_loss = model.policy_loss if hasattr(model, 'policy_loss') else None
-            value_loss = model.value_loss if hasattr(model, 'value_loss') else None
-            rae_loss = model.spinn.rae_loss if hasattr(model, 'spinn') and hasattr(model.spinn, 'rae_loss') else None
-            leaf_loss = model.spinn.leaf_loss if hasattr(model, 'spinn') and hasattr(model.spinn, 'leaf_loss') else None
-            gen_loss = model.spinn.gen_loss if hasattr(model, 'spinn') and hasattr(model.spinn, 'gen_loss') else None
+            transition_acc = model.transition_acc if has_transition_acc else 0.0
+            transition_loss = model.transition_loss if has_transition_loss else None
+            policy_loss = model.policy_loss if has_policy else None
+            value_loss = model.value_loss if has_value else None
+            rae_loss = model.spinn.rae_loss if has_rae else None
+            leaf_loss = model.spinn.leaf_loss if has_leaf else None
+            gen_loss = model.spinn.gen_loss if has_gen else None
 
             # Accumulate stats for transition accuracy.
             if transition_loss is not None:
@@ -653,40 +680,12 @@ def run(only_forward=False):
                     "learning_rate": optimizer.lr,
                     "time": time_metric,
                 }
-                stats_str = "Step: {step}"
 
-                # Accuracy Component.
-                stats_str += " Acc: {class_acc:.5f} {transition_acc:.5f}"
-                if leaf_loss is not None:
-                    stats_str += " leaf{leaf_acc:.5f}"
-                if gen_loss is not None:
-                    stats_str += " gen{gen_acc:.5f}"
-
-                # Cost Component.
-                stats_str += " Cost: {total_cost:.5f} {xent_cost:.5f} {transition_cost:.5f} {l2_cost:.5f}"
-                if policy_loss is not None:
-                    stats_str += " p{policy_cost:.5f}"
-                if value_loss is not None:
-                    stats_str += " v{value_cost:.5f}"
-                if hasattr(model, 'avg_entropy'):
-                    stats_str += " e{avg_entropy:.5f}"
-                if rae_loss is not None:
-                    stats_str += " rae{rae_cost:.5f}"
-                if leaf_loss is not None:
-                    stats_str += " leaf{leaf_cost:.5f}"
-                if gen_loss is not None:
-                    stats_str += " gen{gen_cost:.5f}"
-
-                # Time Component.
-                stats_str += " Time: {time:.5f}"
-
-                # Extra Component.
-                stats_str += "\nTrain Extra:"
-                stats_str += " lr={learning_rate:.7f}"
-                if hasattr(model, "spinn") and hasattr(model.spinn, "epsilon"):
-                    stats_str += " eps={epsilon:.7f}"
+                logger.Log(train_str.format(**stats_args))
+                logger.Log(train_extra_str.format(**stats_args))
 
                 if FLAGS.num_samples > 0:
+                    transition_str = ""
                     transitions_per_example = model.spinn.get_transitions_per_example()
                     if model.use_sentence_pair and len(transitions_batch.shape) == 3:
                         transitions_batch = np.concatenate([
@@ -695,11 +694,10 @@ def run(only_forward=False):
                         gold = transitions_batch[t_idx]
                         pred = transitions_per_example[t_idx]
                         _, crossing = evalb.crossing(gold, pred)
-                        stats_str += "\n{}. crossing={}".format(t_idx, crossing)
-                        stats_str += "\n     g{}".format("".join(map(str, filter(lambda x: x != 2, gold))))
-                        stats_str += "\n     p{}".format("".join(map(str, pred)))
-
-                logger.Log(stats_str.format(**stats_args))
+                        transition_str += "\n{}. crossing={}".format(t_idx, crossing)
+                        transition_str += "\n     g{}".format("".join(map(str, filter(lambda x: x != 2, gold))))
+                        transition_str += "\n     p{}".format("".join(map(str, pred)))
+                    logger.Log(transition_str)
 
             if step > 0 and step % FLAGS.eval_interval_steps == 0:
                 for index, eval_set in enumerate(eval_iterators):
@@ -751,8 +749,6 @@ if __name__ == '__main__':
         "when to save the early stopping 'best' checkpoints.")
     gflags.DEFINE_integer("seq_length", 30, "")
     gflags.DEFINE_integer("eval_seq_length", None, "")
-    gflags.DEFINE_boolean("truncate_eval_batch", True, "Shorten batches to max transition length.")
-    gflags.DEFINE_boolean("truncate_train_batch", True, "Shorten batches to max transition length.")
     gflags.DEFINE_boolean("smart_batching", True, "Organize batches using sequence length.")
     gflags.DEFINE_boolean("use_peano", True, "A mind-blowing sorting key.")
     gflags.DEFINE_integer("eval_data_limit", -1, "Truncate evaluation set. -1 indicates no truncation.")
