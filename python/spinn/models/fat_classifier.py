@@ -736,11 +736,11 @@ if __name__ == '__main__':
         "Which data handler and classifier to use.")
 
     # Where to store checkpoints
-    gflags.DEFINE_string("ckpt_path", ".", "Where to save/load checkpoints. Can be either "
+    gflags.DEFINE_string("log_path", "./logs", "A directory in which to write logs.")
+    gflags.DEFINE_string("ckpt_path", None, "Where to save/load checkpoints. Can be either "
         "a filename or a directory. In the latter case, the experiment name serves as the "
         "base for the filename.")
-    gflags.DEFINE_string("metrics_path", ".", "A directory in which to write logs.")
-    gflags.DEFINE_string("log_path", ".", "A directory in which to write logs.")
+    gflags.DEFINE_string("metrics_path", None, "A directory in which to write metrics.")
     gflags.DEFINE_integer("ckpt_step", 1000, "Steps to run before considering saving checkpoint.")
     gflags.DEFINE_boolean("load_best", False, "If True, attempt to load 'best' checkpoint.")
 
@@ -872,6 +872,12 @@ if __name__ == '__main__':
 
     if not FLAGS.sha:
         FLAGS.sha = os.popen('git rev-parse HEAD').read().strip()
+
+    if not FLAGS.ckpt_path:
+        FLAGS.ckpt_path = FLAGS.log_path
+
+    if not FLAGS.metrics_path:
+        FLAGS.metrics_path = FLAGS.log_path
 
     # HACK: The "use_encode" flag will be deprecated. Instead use something like encode_style=LSTM.
     if FLAGS.use_encode:
