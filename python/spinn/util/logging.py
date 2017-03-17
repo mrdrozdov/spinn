@@ -81,7 +81,7 @@ def train_stats(model, optimizer, A, step):
 
     total_cost = 0.0
     for key in ret.keys():
-        if key == 'transition_cost' and model.optimize_transition_loss:
+        if key == 'transition_cost' and has_transition_loss and model.optimize_transition_loss:
             total_cost += ret[key]
         elif 'cost' in key:
             total_cost += ret[key]

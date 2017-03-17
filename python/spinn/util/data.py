@@ -371,21 +371,35 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
         X = np.transpose(np.array([[example["premise_tokens"] for example in dataset],
                       [example["hypothesis_tokens"] for example in dataset]],
                      dtype=np.int32), (1, 2, 0))
-        transitions = np.transpose(np.array([[example["premise_transitions"] for example in dataset],
-                                [example["hypothesis_transitions"] for example in dataset]],
-                               dtype=np.int32), (1, 2, 0))
-        num_transitions = np.transpose(np.array(
-            [[example["num_premise_transitions"] for example in dataset],
-             [example["num_hypothesis_transitions"] for example in dataset]],
-            dtype=np.int32), (1, 0))
+        if for_rnn:
+            # TODO(SB): Extend this clause to the non-pair case.
+            transitions = np.zeros((len(dataset), 2, 0))
+            num_transitions = np.transpose(np.array(
+                [[len(np.array(example["premise_tokens"]).nonzero()[0]) for example in dataset],
+                 [len(np.array(example["hypothesis_tokens"]).nonzero()[0]) for example in dataset]],
+                dtype=np.int32), (1, 0))
+        else:
+            transitions = np.transpose(np.array([[example["premise_transitions"] for example in dataset],
+                                    [example["hypothesis_transitions"] for example in dataset]],
+                                   dtype=np.int32), (1, 2, 0))
+            num_transitions = np.transpose(np.array(
+                [[example["num_premise_transitions"] for example in dataset],
+                 [example["num_hypothesis_transitions"] for example in dataset]],
+                dtype=np.int32), (1, 0))
     else:
         X = np.array([example["tokens"] for example in dataset],
                      dtype=np.int32)
-        transitions = np.array([example["transitions"] for example in dataset],
-                               dtype=np.int32)
-        num_transitions = np.array(
-            [example["num_transitions"] for example in dataset],
-            dtype=np.int32)
+        if for_rnn:
+            transitions = np.zeros((len(dataset), 0))
+            num_transitions = np.array(
+                [len(np.array(example["tokens"]).nonzero()[0]) for example in dataset],
+                dtype=np.int32)
+        else:
+            transitions = np.array([example["transitions"] for example in dataset],
+                                   dtype=np.int32)
+            num_transitions = np.array(
+                [example["num_transitions"] for example in dataset],
+                dtype=np.int32)
     y = np.array(
         [data_manager.LABEL_MAP[example["label"]] for example in dataset],
         dtype=np.int32)
