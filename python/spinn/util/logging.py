@@ -5,6 +5,64 @@ Log format convenience methods for training spinn.
 
 """
 
+import numpy as np
+from spinn.util.blocks import flatten
+from spinn.util.misc import time_per_token
+
+
+def train_accumulate(model, A):
+    pass
+
+
+def train_stats(model, optimizer, A, step):
+
+    has_spinn = hasattr(model, 'spinn')
+    has_transition_loss = has_spinn and hasattr(model, 'transition_loss')
+    has_policy = has_spinn and hasattr(model, 'policy_loss')
+    has_value = has_spinn and hasattr(model, 'value_loss')
+    has_rae = has_spinn and hasattr(model.spinn, 'rae_loss')
+    has_leaf = has_spinn and hasattr(model.spinn, 'leaf_loss')
+    has_gen = has_spinn and hasattr(model.spinn, 'gen_loss')
+    has_epsilon = has_spinn and hasattr(model.spinn, "epsilon")
+    has_entropy = hasattr(model, 'avg_entropy')
+
+    if has_transition_loss:
+        all_preds = np.array(flatten(A.get('preds')))
+        all_truth = np.array(flatten(A.get('truth')))
+        avg_trans_acc = (all_preds == all_truth).sum() / float(all_truth.shape[0])
+
+    time_metric = time_per_token(A.get('total_tokens'), A.get('total_time'))
+
+    ret = dict(
+        step=step,
+        class_acc=A.get_avg('class_acc'),
+        transition_acc=avg_trans_acc if has_transition_loss else 0.0,
+        xent_cost=A.get_avg('xent_cost'), # not actual mean
+        transition_cost=model.transition_loss.data[0] if has_transition_loss else 0.0,
+        l2_cost=A.get_avg('l2_cost'), # not actual mean
+        policy_cost=model.spinn.policy_loss.data[0] if has_policy else 0.0,
+        value_cost=model.spinn.value_loss.data[0] if has_value else 0.0,
+        epsilon=model.spinn.epsilon if has_epsilon else 0.0,
+        avg_entropy=A.get('avg_entropy') if has_entropy else 0.0,
+        rae_cost=model.spinn.rae_loss.data[0] if has_rae else 0.0,
+        leaf_acc=A.get_avg('leaf_acc') if has_leaf else 0.0,
+        leaf_cost=model.spinn.leaf_loss.data[0] if has_leaf else 0.0,
+        gen_acc=A.get_avg('gen_acc') if has_gen else 0.0,
+        gen_cost=model.spinn.gen_loss.data[0] if has_gen else 0.0,
+        learning_rate=optimizer.lr,
+        time=time_metric,
+    )
+
+    total_cost = 0.0
+    for key in ret.keys():
+        if key == 'transition_cost' and model.optimize_transition_loss:
+            total_cost += ret[key]
+        elif 'cost' in key:
+            total_cost += ret[key]
+    ret['total_cost'] = total_cost
+
+    return ret
+
 
 def train_format(model):
 

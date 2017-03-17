@@ -42,9 +42,10 @@ from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import the_gpu, to_gpu, l2_cost, flatten, debug_gradient
-from spinn.util.misc import Accumulator, time_per_token, MetricsLogger, EvalReporter
+from spinn.util.misc import Accumulator, MetricsLogger, EvalReporter
 from spinn.util.misc import recursively_set_device
-from spinn.util.logging import train_format, train_extra_format
+from spinn.util.logging import train_format, train_extra_format, train_stats, train_accumulate
+from spinn.util.loss import auxiliary_loss
 import spinn.util.evalb as evalb
 
 import spinn.gen_spinn
@@ -140,7 +141,7 @@ def evaluate(model, eval_set, logger, metrics_logger, step, vocabulary=None):
         transition_loss = model.transition_loss if hasattr(model, 'transition_loss') else None
 
         # Update Aggregate Accuracies
-        total_tokens += eval_num_transitions_batch.ravel().sum()
+        total_tokens += sum([(nt+1)/2 for nt in eval_num_transitions_batch.reshape(-1)])
 
         # Accumulate stats for transition accuracy.
         if transition_loss is not None:
@@ -472,7 +473,7 @@ def run(only_forward=False):
 
             X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = get_batch(training_data_iter.next())
 
-            total_tokens = num_transitions_batch.ravel().sum()
+            total_tokens = sum([(nt+1)/2 for nt in num_transitions_batch.reshape(-1)])
 
             # Reset cached gradients.
             optimizer.zero_grad()
@@ -519,96 +520,34 @@ def run(only_forward=False):
             gen_loss = model.spinn.gen_loss if has_gen else None
 
             # Accumulate stats for transition accuracy.
-            if transition_loss is not None:
+            if has_transition_loss:
                 preds = [m["t_preds"] for m in model.spinn.memories]
                 truth = [m["t_given"] for m in model.spinn.memories]
                 A.add('preds', preds)
                 A.add('truth', truth)
 
             # Accumulate stats for leaf prediction accuracy.
-            if leaf_loss is not None:
+            if has_leaf:
                 A.add('leaf_acc', model.spinn.leaf_acc)
 
             # Accumulate stats for word prediction accuracy.
-            if gen_loss is not None:
+            if has_gen:
                 A.add('gen_acc', model.spinn.gen_acc)
 
             if hasattr(model, 'avg_entropy'):
                 A.add('entropy', model.avg_entropy)
 
-            # Note: Keep track of transition_acc, although this is a naive average.
-            # Should be weighted by length of sequences in batch.
-            M.add('transition_acc', transition_acc)
-
             # Extract L2 Cost
             l2_loss = l2_cost(model, FLAGS.l2_lambda) if FLAGS.use_l2_cost else None
-
-            # Boilerplate for calculating loss values.
-            xent_cost_val = xent_loss.data[0]
-            transition_cost_val = transition_loss.data[0] if transition_loss is not None else 0.0
-            l2_cost_val = l2_loss.data[0] if l2_loss is not None else 0.0
-            policy_cost_val = policy_loss.data[0] if policy_loss is not None else 0.0
-            value_cost_val = value_loss.data[0] if value_loss is not None else 0.0
-            rae_cost_val = rae_loss.data[0] if rae_loss is not None else 0.0
-            leaf_cost_val = leaf_loss.data[0] if leaf_loss is not None else 0.0
-            gen_cost_val = gen_loss.data[0] if gen_loss is not None else 0.0
-
-            # Accumulate Total Loss Data
-            total_cost_val = 0.0
-            total_cost_val += xent_cost_val
-            if transition_loss is not None and model.optimize_transition_loss:
-                total_cost_val += transition_cost_val
-            total_cost_val += l2_cost_val
-            total_cost_val += policy_cost_val
-            total_cost_val += value_cost_val
-            total_cost_val += rae_cost_val
-            total_cost_val += leaf_cost_val
-            total_cost_val += gen_cost_val
-
-            M.add('total_cost', total_cost_val)
-            M.add('xent_cost', xent_cost_val)
-            M.add('transition_cost', transition_cost_val)
-            M.add('l2_cost', l2_cost_val)
-
-            # Logging for RL
-            rl_keys = ['policy_loss', 'value_loss', 'norm_rewards', 'norm_baseline', 'norm_advantage']
-            for k in rl_keys:
-                if hasattr(model, k):
-                    val = getattr(model, k)
-                    val = val.data[0] if isinstance(val, Variable) else val
-                    M.add(k, val)
 
             # Accumulate Total Loss Variable
             total_loss = 0.0
             total_loss += xent_loss
             if l2_loss is not None:
                 total_loss += l2_loss
-            if transition_loss is not None and model.optimize_transition_loss:
+            if has_transition_loss and model.optimize_transition_loss:
                 total_loss += transition_loss
-            if policy_loss is not None:
-                total_loss += policy_loss
-            if value_loss is not None:
-                total_loss += value_loss
-            if rae_loss is not None:
-                total_loss += rae_loss
-            if leaf_loss is not None:
-                total_loss += leaf_loss
-            if gen_loss is not None:
-                total_loss += gen_loss
-
-            # Useful for debugging gradient flow.
-            if FLAGS.debug:
-                losses = [('total_loss', total_loss), ('xent_loss', xent_loss)]
-                if l2_loss is not None:
-                    losses.append(('l2_loss', l2_loss))
-                if transition_loss is not None and model.optimize_transition_loss:
-                    losses.append(('transition_loss', transition_loss))
-                if policy_loss is not None:
-                    losses.append(('policy_loss', policy_loss))
-                if value_loss is not None:
-                    losses.append(('value_loss', value_loss))
-                debug_gradient(model, losses)
-                import ipdb; ipdb.set_trace()
+            total_loss += auxiliary_loss(model)
 
             # Backward pass.
             total_loss.backward()
@@ -636,50 +575,10 @@ def run(only_forward=False):
             if step % FLAGS.statistics_interval_steps == 0:
                 progress_bar.step(i=FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
                 progress_bar.finish()
-                avg_class_acc = A.get_avg('class_acc')
-                if transition_loss is not None:
-                    all_preds = np.array(flatten(A.get('preds')))
-                    all_truth = np.array(flatten(A.get('truth')))
-                    avg_trans_acc = (all_preds == all_truth).sum() / float(all_truth.shape[0])
-                else:
-                    avg_trans_acc = 0.0
-                if leaf_loss is not None:
-                    avg_leaf_acc = A.get_avg('leaf_acc')
-                else:
-                    avg_leaf_acc = 0.0
-                if gen_loss is not None:
-                    avg_gen_acc = A.get_avg('gen_acc')
-                else:
-                    avg_gen_acc = 0.0
-                if hasattr(model, 'avg_entropy'):
-                    avg_entropy = A.get_avg('entropy')
-                else:
-                    avg_entropy = 0.0
-                if hasattr(model, "spinn") and hasattr(model.spinn, "epsilon"):
-                    epsilon = model.spinn.epsilon
-                else:
-                    epsilon = 0.0
-                time_metric = time_per_token(A.get('total_tokens'), A.get('total_time'))
-                stats_args = {
-                    "step": step,
-                    "class_acc": avg_class_acc,
-                    "transition_acc": avg_trans_acc,
-                    "total_cost": total_cost_val,
-                    "xent_cost": xent_cost_val,
-                    "transition_cost": transition_cost_val,
-                    "l2_cost": l2_cost_val,
-                    "policy_cost": policy_cost_val,
-                    "value_cost": value_cost_val,
-                    "epsilon": epsilon,
-                    "avg_entropy": avg_entropy,
-                    "rae_cost": rae_cost_val,
-                    "leaf_acc": avg_leaf_acc,
-                    "leaf_cost": leaf_cost_val,
-                    "gen_acc": avg_gen_acc,
-                    "gen_cost": gen_cost_val,
-                    "learning_rate": optimizer.lr,
-                    "time": time_metric,
-                }
+                
+                A.add('xent_cost', xent_loss.data[0])
+                A.add('l2_cost', l2_loss.data[0])
+                stats_args = train_stats(model, optimizer, A, step)
 
                 logger.Log(train_str.format(**stats_args))
                 logger.Log(train_extra_str.format(**stats_args))
