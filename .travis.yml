@@ -23,5 +23,6 @@ before_install:
 install:
     - nvcc --version
     - pip install -r python/requirements.txt
+    - pip install https://download.pytorch.org/whl/cu75/torch-0.1.10.post2-cp27-none-linux_x86_64.whl 
 
 script: "nosetests -a \\!slow python/spinn/tests"
