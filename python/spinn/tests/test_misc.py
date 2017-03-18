@@ -5,8 +5,6 @@ import math
 from nose.plugins.attrib import attr
 import numpy as np
 
-import pytest
-
 from spinn import util
 from spinn.fat_stack import SPINN
 
