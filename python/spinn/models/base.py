@@ -23,6 +23,7 @@ from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import ModelTrainer, the_gpu, to_gpu, l2_cost, flatten, debug_gradient
 from spinn.util.misc import Accumulator, MetricsLogger, EvalReporter, time_per_token
 from spinn.util.misc import recursively_set_device
+from spinn.util.metrics import MetricsWriter
 from spinn.util.logging import train_format, train_extra_format, train_stats, train_accumulate
 from spinn.util.loss import auxiliary_loss
 import spinn.util.evalb as evalb
@@ -450,6 +451,7 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
 def main_loop(FLAGS, model, optimizer, training_data_iter, eval_iterators, logger, step, best_dev_error):
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
+    M = MetricsWriter(os.path.join(FLAGS.metrics_path, FLAGS.experiment_name))
 
     # Build log format strings.
     model.train()
@@ -543,6 +545,9 @@ def main_loop(FLAGS, model, optimizer, training_data_iter, eval_iterators, logge
         A.add('total_tokens', total_tokens)
         A.add('total_time', total_time)
 
+        M.write('class_acc', class_acc, step)
+        M.write('total_loss', total_loss.data[0], step)
+
         if step % FLAGS.statistics_interval_steps == 0:
             progress_bar.step(i=FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
             progress_bar.finish()
@@ -576,6 +581,8 @@ def main_loop(FLAGS, model, optimizer, training_data_iter, eval_iterators, logge
                     best_dev_error = 1 - acc
                     logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
                     classifier_trainer.save(best_checkpoint_path, step, best_dev_error)
+                if index == 0:
+                    M.write('eval_class_acc', acc, step)
             progress_bar.reset()
 
         if step > FLAGS.ckpt_step and step % FLAGS.ckpt_interval_steps == 0:
