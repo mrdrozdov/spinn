@@ -94,6 +94,7 @@ class RLBaseModel(BaseModel):
                  rl_reward=None,
                  rl_weight=None,
                  rl_whiten=None,
+                 rl_epsilon=None,
                  rl_entropy=None,
                  rl_entropy_beta=None,
                  **kwargs):
@@ -108,6 +109,7 @@ class RLBaseModel(BaseModel):
         self.rl_whiten = rl_whiten
         self.rl_entropy = rl_entropy
         self.rl_entropy_beta = rl_entropy_beta
+        self.spinn.epsilon = rl_epsilon
 
         self.register_buffer('baseline', torch.FloatTensor([0.0]))
 

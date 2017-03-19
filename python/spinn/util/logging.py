@@ -66,7 +66,7 @@ def train_stats(model, optimizer, A, step):
         xent_cost=A.get_avg('xent_cost'), # not actual mean
         transition_cost=model.transition_loss.data[0] if has_transition_loss else 0.0,
         l2_cost=A.get_avg('l2_cost'), # not actual mean
-        policy_cost=model.spinn.policy_loss.data[0] if has_policy else 0.0,
+        policy_cost=model.policy_loss.data[0] if has_policy else 0.0,
         value_cost=model.spinn.value_loss.data[0] if has_value else 0.0,
         epsilon=model.spinn.epsilon if has_epsilon else 0.0,
         avg_entropy=A.get('avg_entropy') if has_entropy else 0.0,

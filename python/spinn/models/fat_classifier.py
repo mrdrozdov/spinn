@@ -374,6 +374,7 @@ def run(only_forward=False):
          rl_reward=FLAGS.rl_reward,
          rl_weight=FLAGS.rl_weight,
          rl_whiten=FLAGS.rl_whiten,
+         rl_epsilon=FLAGS.rl_epsilon,
          rl_entropy=FLAGS.rl_entropy,
          rl_entropy_beta=FLAGS.rl_entropy_beta,
          predict_leaf=FLAGS.predict_leaf,
@@ -529,7 +530,7 @@ def run(only_forward=False):
             if step % FLAGS.statistics_interval_steps == 0:
                 progress_bar.step(i=FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
                 progress_bar.finish()
-                
+
                 A.add('xent_cost', xent_loss.data[0])
                 A.add('l2_cost', l2_loss.data[0])
                 stats_args = train_stats(model, optimizer, A, step)
