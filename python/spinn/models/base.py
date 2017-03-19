@@ -189,7 +189,7 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
         eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".report")
         reporter.write_report(eval_report_path)
 
-    return eval_class_acc
+    return eval_class_acc, eval_trans_acc
 
 
 def get_data_manager(data_type):
@@ -544,9 +544,6 @@ def main_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterato
         A.add('total_tokens', total_tokens)
         A.add('total_time', total_time)
 
-        M.write('class_acc', class_acc, step)
-        M.write('total_loss', total_loss.data[0], step)
-
         if step % FLAGS.statistics_interval_steps == 0:
             progress_bar.step(i=FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
             progress_bar.finish()
@@ -554,6 +551,10 @@ def main_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterato
             A.add('xent_cost', xent_loss.data[0])
             A.add('l2_cost', l2_loss.data[0])
             stats_args = train_stats(model, optimizer, A, step)
+
+            metric_stats = ['class_acc', 'total_cost', 'transition_acc', 'transition_cost']
+            for key in metric_stats:
+                M.write(key, stats_args[key], step)
 
             logger.Log(train_str.format(**stats_args))
             logger.Log(train_extra_str.format(**stats_args))
@@ -575,13 +576,14 @@ def main_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterato
 
         if step > 0 and step % FLAGS.eval_interval_steps == 0:
             for index, eval_set in enumerate(eval_iterators):
-                acc = evaluate(model, eval_set, logger, step)
+                acc, tacc = evaluate(model, eval_set, logger, step)
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
                     logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
                     trainer.save(best_checkpoint_path, step, best_dev_error)
                 if index == 0:
                     M.write('eval_class_acc', acc, step)
+                    M.write('eval_transition_acc', tacc, step)
             progress_bar.reset()
 
         if step > FLAGS.ckpt_step and step % FLAGS.ckpt_interval_steps == 0:
