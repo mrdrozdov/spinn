@@ -1,16 +1,11 @@
 import os
 import math
 import random
-import pprint
-import sys
 import time
-from collections import deque
 
 import gflags
 import numpy as np
 
-from spinn import afs_safe_logger
-from spinn import util
 from spinn.data.arithmetic import load_sign_data
 from spinn.data.arithmetic import load_simple_data
 from spinn.data.dual_arithmetic import load_eq_data
@@ -20,8 +15,8 @@ from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
-from spinn.util.blocks import ModelTrainer, the_gpu, to_gpu, l2_cost, flatten, debug_gradient
-from spinn.util.misc import Accumulator, MetricsLogger, EvalReporter, time_per_token
+from spinn.util.blocks import ModelTrainer, the_gpu, to_gpu, l2_cost, flatten
+from spinn.util.misc import Accumulator, EvalReporter, time_per_token
 from spinn.util.misc import recursively_set_device
 from spinn.util.metrics import MetricsWriter
 from spinn.util.logging import train_format, train_extra_format, train_stats, train_accumulate
@@ -448,10 +443,14 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
     return model, optimizer, trainer
 
 
-def main_loop(FLAGS, model, optimizer, training_data_iter, eval_iterators, logger, step, best_dev_error):
+def main_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterators, logger, step, best_dev_error):
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
     M = MetricsWriter(os.path.join(FLAGS.metrics_path, FLAGS.experiment_name))
+
+    # Checkpoint paths.
+    standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name)
+    best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name, best=True)
 
     # Build log format strings.
     model.train()
@@ -551,7 +550,7 @@ def main_loop(FLAGS, model, optimizer, training_data_iter, eval_iterators, logge
         if step % FLAGS.statistics_interval_steps == 0:
             progress_bar.step(i=FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
             progress_bar.finish()
-            
+
             A.add('xent_cost', xent_loss.data[0])
             A.add('l2_cost', l2_loss.data[0])
             stats_args = train_stats(model, optimizer, A, step)
@@ -580,13 +579,13 @@ def main_loop(FLAGS, model, optimizer, training_data_iter, eval_iterators, logge
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
                     logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
-                    classifier_trainer.save(best_checkpoint_path, step, best_dev_error)
+                    trainer.save(best_checkpoint_path, step, best_dev_error)
                 if index == 0:
                     M.write('eval_class_acc', acc, step)
             progress_bar.reset()
 
         if step > FLAGS.ckpt_step and step % FLAGS.ckpt_interval_steps == 0:
             logger.Log("Checkpointing.")
-            classifier_trainer.save(standard_checkpoint_path, step, best_dev_error)
+            trainer.save(standard_checkpoint_path, step, best_dev_error)
 
         progress_bar.step(i=step % FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)

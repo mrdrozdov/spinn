@@ -62,6 +62,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          num_mlp_layers=FLAGS.num_mlp_layers,
          mlp_bn=FLAGS.mlp_bn,
          rl_mu=FLAGS.rl_mu,
+         rl_epsilon=FLAGS.rl_epsilon,
          rl_baseline=FLAGS.rl_baseline,
          rl_reward=FLAGS.rl_reward,
          rl_weight=FLAGS.rl_weight,

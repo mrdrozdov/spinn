@@ -130,7 +130,7 @@ def run(only_forward=False):
         for index, eval_set in enumerate(eval_iterators):
             acc = evaluate(model, eval_set, logger, step, vocabulary)
     else:
-        main_loop(FLAGS, model, optimizer, training_data_iter, eval_iterators, logger, step, best_dev_error)
+        main_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterators, logger, step, best_dev_error)
 
 
 if __name__ == '__main__':
