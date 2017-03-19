@@ -169,10 +169,10 @@ class VisdomUpdater(object):
 
 class VisdomEventHandler(FileSystemEventHandler):
     """Logs metrics to visdom."""
-    def __init__(self, root, suffix, *args, **kwargs):
+    def __init__(self, root, suffix, env, *args, **kwargs):
         super(VisdomEventHandler, self).__init__(*args, **kwargs)
         self.suffix = suffix
-        self.updater = VisdomUpdater(root, suffix)
+        self.updater = VisdomUpdater(root, suffix, env)
 
     def handle_all_events(self, event):
         if not event.is_directory:
@@ -208,6 +208,7 @@ if __name__ == "__main__":
     gflags.DEFINE_string("state", ".", "Path to state. Used to update metrics.")
     gflags.DEFINE_string("root", "./runs", "Path to log directory. Will "
         "track changes to any file in this directory.")
+    gflags.DEFINE_string("env", "main", "The env group for visdom.")
     gflags.DEFINE_string("suffix", ".metric", "Suffix indicating metric file.")
     gflags.DEFINE_boolean("verbose", False, "")
     FLAGS(sys.argv)
@@ -218,7 +219,7 @@ if __name__ == "__main__":
             format='%(asctime)s [DEBUG] - %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S')
 
-    event_handler = VisdomEventHandler(FLAGS.root, FLAGS.suffix)
+    event_handler = VisdomEventHandler(FLAGS.root, FLAGS.suffix, FLAGS.env)
     observer = Observer()
     observer.schedule(event_handler, FLAGS.root, recursive=True)
     observer.start()
