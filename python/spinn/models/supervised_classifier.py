@@ -9,8 +9,8 @@ from collections import deque
 import gflags
 import numpy as np
 
-from spinn import afs_safe_logger
 from spinn import util
+from spinn.util import afs_safe_logger
 from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import the_gpu, to_gpu, l2_cost, flatten, debug_gradient
 from spinn.util.misc import Accumulator, MetricsLogger, EvalReporter, time_per_token

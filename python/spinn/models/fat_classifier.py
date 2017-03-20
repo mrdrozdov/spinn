@@ -30,8 +30,8 @@ from collections import deque
 import gflags
 import numpy as np
 
-from spinn import afs_safe_logger
 from spinn import util
+from spinn.util import afs_safe_logger
 from spinn.data.arithmetic import load_sign_data
 from spinn.data.arithmetic import load_simple_data
 from spinn.data.dual_arithmetic import load_eq_data
