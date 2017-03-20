@@ -198,6 +198,11 @@ class SPINN(nn.Module):
         stack_adjust = 2 if zero_padded else 0
 
         _transitions = np.array(transitions)
+        _preds = preds.copy()
+        _invalid = np.zeros(preds.shape, dtype=np.bool)
+
+        incorrect = 0
+        mask_skip = _transitions != T_SKIP
 
         # Fixup predicted skips.
         if len(self.choices) > 2:
@@ -208,16 +213,20 @@ class SPINN(nn.Module):
 
         # Cannot reduce on too small a stack
         must_shift = np.array([length < 2 for length in stack_lens])
-        preds[must_shift] = T_SHIFT
+        check_mask = np.logical_and(mask_skip, must_shift)
+        _invalid += np.logical_and(_preds != T_SHIFT, check_mask)
+        _preds[must_shift] = T_SHIFT
 
         # Cannot shift on too small buf
         must_reduce = np.array([length < 1 for length in buf_lens])
-        preds[must_reduce] = T_REDUCE
+        check_mask = np.logical_and(mask_skip, must_reduce)
+        _invalid += np.logical_and(_preds != T_REDUCE, check_mask)
+        _preds[must_reduce] = T_REDUCE
 
         # If the given action is skip, then must skip.
-        preds[_transitions == T_SKIP] = T_SKIP
+        _preds[np.logical_not(mask_skip)] = T_SKIP
 
-        return preds
+        return _preds, _invalid
 
     def predict_actions(self, transition_output, cant_skip):
         transition_dist = F.log_softmax(transition_output)
@@ -374,8 +383,9 @@ class SPINN(nn.Module):
                     # Constrain to valid actions
                     # ==========================
 
+                    validated_preds, invalid_mask = self.validate(transition_arr, transition_preds, self.stacks, self.bufs)
                     if validate_transitions:
-                        transition_preds = self.validate(transition_arr, transition_preds, self.stacks, self.bufs)
+                        transition_preds = validated_preds
 
                     t_preds = transition_preds
 
@@ -454,6 +464,8 @@ class SPINN(nn.Module):
 
             # Memory Phase
             # ============
+
+            # APPEND ALL MEMORIES. MASK LATER.
 
             self.memories.append(self.memory)
 
