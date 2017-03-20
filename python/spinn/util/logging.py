@@ -14,6 +14,7 @@ def train_accumulate(model, A):
 
     has_spinn = hasattr(model, 'spinn')
     has_transition_loss = hasattr(model, 'transition_loss')
+    has_invalid = has_spinn and hasattr(model.spinn, 'invalid')
     has_policy = has_spinn and hasattr(model, 'policy_loss')
     has_value = has_spinn and hasattr(model, 'value_loss')
     has_rae = has_spinn and hasattr(model.spinn, 'rae_loss')
@@ -23,8 +24,8 @@ def train_accumulate(model, A):
 
     # Accumulate stats for transition accuracy.
     if has_transition_loss:
-        preds = [m["t_preds"] for m in model.spinn.memories]
-        truth = [m["t_given"] for m in model.spinn.memories]
+        preds = [m["t_preds"] for m in model.spinn.memories if m.get('t_preds', None) is not None]
+        truth = [m["t_given"] for m in model.spinn.memories if m.get('t_given', None) is not None]
         A.add('preds', preds)
         A.add('truth', truth)
 
@@ -39,11 +40,17 @@ def train_accumulate(model, A):
     if has_entropy:
         A.add('entropy', model.avg_entropy)
 
+    if has_invalid:
+        A.add('invalid', model.spinn.invalid)
+        A.add('ninvalid', model.spinn. n_invalid)
+        A.add('ntotal', model.spinn. n_total)
+
 
 def train_stats(model, optimizer, A, step):
 
     has_spinn = hasattr(model, 'spinn')
     has_transition_loss = hasattr(model, 'transition_loss')
+    has_invalid = has_spinn and hasattr(model.spinn, 'invalid')
     has_policy = has_spinn and hasattr(model, 'policy_loss')
     has_value = has_spinn and hasattr(model, 'value_loss')
     has_rae = has_spinn and hasattr(model.spinn, 'rae_loss')
@@ -68,6 +75,8 @@ def train_stats(model, optimizer, A, step):
         l2_cost=A.get_avg('l2_cost'), # not actual mean
         policy_cost=model.policy_loss.data[0] if has_policy else 0.0,
         value_cost=model.spinn.value_loss.data[0] if has_value else 0.0,
+        invalid=A.get_avg('invalid') if has_invalid else 0.0,
+        ninvalid=sum(A.get('ninvalid')) / float(sum(A.get('ntotal'))) if has_invalid else 0.0,
         epsilon=model.spinn.epsilon if has_epsilon else 0.0,
         avg_entropy=A.get('avg_entropy') if has_entropy else 0.0,
         rae_cost=model.spinn.rae_loss.data[0] if has_rae else 0.0,
@@ -129,6 +138,9 @@ def train_extra_format(model):
     # Extra Component.
     extra_str = "Train Extra:"
     extra_str += " lr={learning_rate:.7f}"
+    if hasattr(model, "spinn") and hasattr(model.spinn, "invalid"):
+        extra_str += " inv={invalid:.7f}"
+        extra_str += " ninv={ninvalid:.7f}"
     if hasattr(model, "spinn") and hasattr(model.spinn, "epsilon"):
         extra_str += " eps={epsilon:.7f}"
 

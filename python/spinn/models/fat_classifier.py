@@ -205,7 +205,7 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
             pred = transition_examples[t_idx][0]
             _, crossing = evalb.crossing(gold, pred)
             stats_str += "\n{}. crossing={}".format(t_idx, crossing)
-            stats_str += "\n     g{}".format("".join(map(str, filter(lambda x: x != 2, gold))))
+            stats_str += "\n     g{}".format("".join(map(str, gold)))
             stats_str += "\n     p{}".format("".join(map(str, pred)))
 
     logger.Log(stats_str)
@@ -549,7 +549,7 @@ def run(only_forward=False):
                         pred = transitions_per_example[t_idx]
                         _, crossing = evalb.crossing(gold, pred)
                         transition_str += "\n{}. crossing={}".format(t_idx, crossing)
-                        transition_str += "\n     g{}".format("".join(map(str, filter(lambda x: x != 2, gold))))
+                        transition_str += "\n     g{}".format("".join(map(str, gold)))
                         transition_str += "\n     p{}".format("".join(map(str, pred)))
                     logger.Log(transition_str)
 

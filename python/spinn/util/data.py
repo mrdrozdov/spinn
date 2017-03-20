@@ -127,6 +127,8 @@ def CropAndPadExample(example, left_padding, target_length, key, symbol=0, logge
     Crop/pad a sequence value of the given dict `example`.
     """
     if left_padding < 0:
+        raise NotImplementedError("Behavior for cropped examples is not well-defined."
+            "Please set sequence length to some sufficiently large value and turn on truncating.")
         # Crop, then pad normally.
         # TODO: Track how many sentences are cropped, but don't log a message
         # for every single one.

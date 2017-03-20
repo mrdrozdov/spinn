@@ -87,6 +87,9 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
     progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
     total_tokens = 0
+    invalid = 0
+    ninvalid = 0
+    ntotal = 0
     start = time.time()
 
     model.eval()
@@ -118,10 +121,17 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
         # Update Aggregate Accuracies
         total_tokens += sum([(nt+1)/2 for nt in eval_num_transitions_batch.reshape(-1)])
 
+        # Track number of examples with completely valid transitions.
+        if hasattr(model, 'spinn') and hasattr(model.spinn, 'invalid'):
+            num_sentences = 2 if model.use_sentence_pair else 1
+            invalid += model.spinn.invalid * eval_X_batch.shape[0] * num_sentences
+            ninvalid += model.spinn.n_invalid
+            ntotal += model.spinn.n_total
+
         # Accumulate stats for transition accuracy.
         if transition_loss is not None:
-            transition_preds.append([m["t_preds"] for m in model.spinn.memories])
-            transition_targets.append([m["t_given"] for m in model.spinn.memories])
+            transition_preds.append([m["t_preds"] for m in model.spinn.memories if m.get('t_preds', None) is not None])
+            transition_targets.append([m["t_given"] for m in model.spinn.memories if m.get('t_given', None) is not None])
 
         if FLAGS.evalb or FLAGS.num_samples > 0:
             transitions_per_example = model.spinn.get_transitions_per_example()
@@ -174,13 +184,17 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
     # Extra Component.
     stats_str += "\nEval Extra:"
 
+    if hasattr(model, 'spinn') and hasattr(model.spinn, 'invalid'):
+        stats_str += " inv={:.7f}".format(invalid/float(total_batches)/100.0)
+        stats_str += " ninv={:.7f}".format(ninvalid/float(ntotal))
+
     if len(transition_examples) > 0:
         for t_idx in range(len(transition_examples)):
             gold = transition_examples[t_idx][1]
             pred = transition_examples[t_idx][0]
             _, crossing = evalb.crossing(gold, pred)
             stats_str += "\n{}. crossing={}".format(t_idx, crossing)
-            stats_str += "\n     g{}".format("".join(map(str, filter(lambda x: x != 2, gold))))
+            stats_str += "\n     g{}".format("".join(map(str, gold)))
             stats_str += "\n     p{}".format("".join(map(str, pred)))
 
     logger.Log(stats_str)
@@ -570,7 +584,7 @@ def main_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterato
                     pred = transitions_per_example[t_idx]
                     _, crossing = evalb.crossing(gold, pred)
                     transition_str += "\n{}. crossing={}".format(t_idx, crossing)
-                    transition_str += "\n     g{}".format("".join(map(str, filter(lambda x: x != 2, gold))))
+                    transition_str += "\n     g{}".format("".join(map(str, gold)))
                     transition_str += "\n     p{}".format("".join(map(str, pred)))
                 logger.Log(transition_str)
 
