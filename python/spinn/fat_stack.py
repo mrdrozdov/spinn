@@ -202,7 +202,8 @@ class SPINN(nn.Module):
         _invalid = np.zeros(preds.shape, dtype=np.bool)
 
         incorrect = 0
-        mask_skip = _transitions != T_SKIP
+        cant_skip = _transitions != T_SKIP
+        must_skip = _transitions == T_SKIP
 
         # Fixup predicted skips.
         if len(self.choices) > 2:
@@ -213,18 +214,18 @@ class SPINN(nn.Module):
 
         # Cannot reduce on too small a stack
         must_shift = np.array([length < 2 for length in stack_lens])
-        check_mask = np.logical_and(mask_skip, must_shift)
+        check_mask = np.logical_and(cant_skip, must_shift)
         _invalid += np.logical_and(_preds != T_SHIFT, check_mask)
         _preds[must_shift] = T_SHIFT
 
         # Cannot shift on too small buf
         must_reduce = np.array([length < 1 for length in buf_lens])
-        check_mask = np.logical_and(mask_skip, must_reduce)
+        check_mask = np.logical_and(cant_skip, must_reduce)
         _invalid += np.logical_and(_preds != T_REDUCE, check_mask)
         _preds[must_reduce] = T_REDUCE
 
         # If the given action is skip, then must skip.
-        _preds[np.logical_not(mask_skip)] = T_SKIP
+        _preds[must_skip] = T_SKIP
 
         return _preds, _invalid
 
@@ -253,17 +254,16 @@ class SPINN(nn.Module):
 
     def get_transitions_per_example(self, style="preds"):
         if style == "preds":
-            source = t_preds
+            source = "t_preds"
         elif style == "given":
-            source = t_given
+            source = "t_given"
         else:
             raise NotImplementedError
 
-        transitions = np.concatenate([m[source] for m in self.memories if m.get(source, None) is not None])
+        _transitions = [m[source].reshape(1, -1) for m in self.memories if m.get(source, None) is not None]
+        transitions = np.concatenate(_transitions).T
 
-        import ipdb; ipdb.set_trace()
-
-        return np.array(preds)
+        return transitions
 
     def t_shift(self, buf, stack, tracking, buf_tops, trackings):
         """SHIFT: Should dequeue buffer and item to stack."""
@@ -327,8 +327,9 @@ class SPINN(nn.Module):
             transition_arr = list(transitions)
             sub_batch_size = len(transition_arr)
 
-            # A mask to select all non-SKIP transitions.
+            # A mask based on SKIP transitions.
             cant_skip = np.array(transitions) != T_SKIP
+            must_skip = np.array(transitions) == T_SKIP
 
             # Memories
             # ========
@@ -391,6 +392,9 @@ class SPINN(nn.Module):
                     validated_preds, invalid_mask = self.validate(transition_arr, transition_preds, self.stacks, self.bufs)
                     if validate_transitions:
                         transition_preds = validated_preds
+
+                    # If the given action is skip, then must skip.
+                    transition_preds[must_skip] = T_SKIP
 
                     # Actual transition predictions. Used to measure transition accuracy.
                     self.memory["t_preds"] = transition_preds

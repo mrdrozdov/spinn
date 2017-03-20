@@ -23,8 +23,8 @@ def train_accumulate(model, A):
 
     # Accumulate stats for transition accuracy.
     if has_transition_loss:
-        preds = [m["t_preds"] for m in model.spinn.memories]
-        truth = [m["t_given"] for m in model.spinn.memories]
+        preds = [m["t_preds"] for m in model.spinn.memories if m.get('t_preds', None) is not None]
+        truth = [m["t_given"] for m in model.spinn.memories if m.get('t_given', None) is not None]
         A.add('preds', preds)
         A.add('truth', truth)
 

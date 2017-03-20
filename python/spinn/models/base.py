@@ -120,8 +120,8 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
 
         # Accumulate stats for transition accuracy.
         if transition_loss is not None:
-            transition_preds.append([m["t_preds"] for m in model.spinn.memories])
-            transition_targets.append([m["t_given"] for m in model.spinn.memories])
+            transition_preds.append([m["t_preds"] for m in model.spinn.memories if m.get('t_preds', None) is not None])
+            transition_targets.append([m["t_given"] for m in model.spinn.memories if m.get('t_given', None) is not None])
 
         if FLAGS.evalb or FLAGS.num_samples > 0:
             transitions_per_example = model.spinn.get_transitions_per_example()
@@ -180,7 +180,7 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
             pred = transition_examples[t_idx][0]
             _, crossing = evalb.crossing(gold, pred)
             stats_str += "\n{}. crossing={}".format(t_idx, crossing)
-            stats_str += "\n     g{}".format("".join(map(str, filter(lambda x: x != 2, gold))))
+            stats_str += "\n     g{}".format("".join(map(str, gold)))
             stats_str += "\n     p{}".format("".join(map(str, pred)))
 
     logger.Log(stats_str)
@@ -570,7 +570,7 @@ def main_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterato
                     pred = transitions_per_example[t_idx]
                     _, crossing = evalb.crossing(gold, pred)
                     transition_str += "\n{}. crossing={}".format(t_idx, crossing)
-                    transition_str += "\n     g{}".format("".join(map(str, filter(lambda x: x != 2, gold))))
+                    transition_str += "\n     g{}".format("".join(map(str, gold)))
                     transition_str += "\n     p{}".format("".join(map(str, pred)))
                 logger.Log(transition_str)
 
