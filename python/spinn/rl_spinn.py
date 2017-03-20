@@ -217,20 +217,32 @@ class RLBaseModel(BaseModel):
         return baseline
 
     def reinforce(self, advantage):
-        t_preds, t_logits, t_given, t_mask = self.spinn.get_statistics()
-
         # TODO: Many of these ops are on the cpu. Might be worth shifting to GPU.
+
+        t_preds = np.concatenate([m['t_preds'] for m in self.spinn.memories if m.get('t_preds', None) is not None])
+        t_mask = np.concatenate([m['t_mask'] for m in self.spinn.memories if m.get('t_mask', None) is not None])
+        t_logits = torch.cat([m['t_logits'] for m in self.spinn.memories if m.get('t_logits', None) is not None], 0)
+
+        batch_size = advantage.size(0)
+        seq_length = t_preds.shape[0] / batch_size
+
+        a_index = np.arange(batch_size)
+        a_index = a_index.reshape(1,-1).repeat(seq_length, axis=0).flatten()
+        a_index = torch.from_numpy(a_index[t_mask]).long()
+
+        t_index = to_gpu(Variable(torch.from_numpy(np.arange(t_mask.shape[0])[t_mask])).long())
+
         if self.use_sentence_pair:
             # Handles the case of SNLI where each reward is used for two sentences.
             advantage = torch.cat([advantage, advantage], 0)
 
         # Expand advantage.
-        if not self.spinn.use_skips:
-            advantage = advantage.index_select(0, torch.from_numpy(t_mask).long())
-        else:
-            raise NotImplementedError
+        advantage = torch.index_select(advantage, 0, a_index)
 
-        actions = torch.from_numpy(t_preds).long().view(-1, 1)
+        # Filter logits.
+        t_logits = torch.index_select(t_logits, 0, t_index)
+
+        actions = torch.from_numpy(t_preds[t_mask]).long().view(-1, 1)
         action_mask = torch.zeros(t_logits.size()).scatter_(1, actions, 1.0)
         action_mask = to_gpu(Variable(action_mask, volatile=not self.training))
         log_p_action = torch.sum(t_logits * action_mask, 1)
