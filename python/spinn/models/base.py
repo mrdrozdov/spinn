@@ -87,6 +87,7 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
     progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
     total_tokens = 0
+    invalid = 0
     start = time.time()
 
     model.eval()
@@ -117,6 +118,11 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
 
         # Update Aggregate Accuracies
         total_tokens += sum([(nt+1)/2 for nt in eval_num_transitions_batch.reshape(-1)])
+
+        if hasattr(model, 'spinn') and hasattr(model.spinn, 'invalid'):
+            num_sentences = 2 if model.use_sentence_pair else 1
+            invalid += model.spinn.invalid * eval_X_batch.shape[0] * num_sentences
+
 
         # Accumulate stats for transition accuracy.
         if transition_loss is not None:
@@ -173,6 +179,9 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
 
     # Extra Component.
     stats_str += "\nEval Extra:"
+
+    if hasattr(model, 'spinn') and hasattr(model.spinn, 'invalid'):
+        stats_str += " inv={:.3f}".format(invalid/float(total_batches)/100.0)
 
     if len(transition_examples) > 0:
         for t_idx in range(len(transition_examples)):

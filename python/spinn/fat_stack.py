@@ -235,23 +235,6 @@ class SPINN(nn.Module):
         transition_preds = transition_dist.argmax(axis=1)
         return transition_preds
 
-    def get_statistics(self):
-        # TODO: These are not necessarily the most efficient flatten operations...
-
-        import ipdb; ipdb.set_trace()
-
-        t_preds = np.array(reduce(lambda x, y: x + y.tolist(),
-            [m["t_preds"] for m in self.memories], []))
-        t_given = np.array(reduce(lambda x, y: x + y.tolist(),
-            [m["t_given"] for m in self.memories], []))
-        t_mask = np.array(reduce(lambda x, y: x + y.tolist(),
-            [m["t_mask"] for m in self.memories], []))
-        t_logits = [m["t_logits"] for m in self.memories]
-        if len(t_logits) > 0:
-            t_logits = torch.cat(t_logits, 0)
-
-        return t_preds, t_logits, t_given, t_mask
-
     def get_transitions_per_example(self, style="preds"):
         if style == "preds":
             source = "t_preds"
@@ -318,6 +301,8 @@ class SPINN(nn.Module):
         transition_loss = None
         transition_acc = 0.0
         num_transitions = inp_transitions.shape[1]
+        batch_size = inp_transitions.shape[0]
+        invalid_count = np.zeros(batch_size)
 
         # Transition Loop
         # ===============
@@ -393,6 +378,9 @@ class SPINN(nn.Module):
                     if validate_transitions:
                         transition_preds = validated_preds
 
+                    # Keep track of which predictions have been valid.
+                    invalid_count += invalid_mask
+
                     # If the given action is skip, then must skip.
                     transition_preds[must_skip] = T_SKIP
 
@@ -467,6 +455,8 @@ class SPINN(nn.Module):
             select_t_given = to_gpu(Variable(torch.from_numpy(t_given[t_mask]), volatile=not self.training).long())
             select_t_logits = torch.index_select(t_logits, 0, index)
             transition_loss = nn.NLLLoss()(select_t_logits, select_t_given) * self.transition_weight
+
+            self.invalid = (invalid_count > 0).sum() / float(batch_size)
 
         self.loss_phase_hook()
 
