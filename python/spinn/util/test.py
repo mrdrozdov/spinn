@@ -8,7 +8,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 
-def default_args():
+def default_args(**kwargs):
     args = {}
 
     # Required Args
@@ -20,6 +20,7 @@ def default_args():
     args['mlp_dim'] = 16
     args['num_mlp_layers'] = 2
     args['num_classes'] = 3
+    args['use_sentence_pair'] = False
 
     initial_embeddings = np.arange(args['vocab_size']).repeat(
         args['word_embedding_dim']).reshape(
@@ -36,6 +37,9 @@ def default_args():
 
     # Other
     args['predict_leaf'] = True
+
+    for k in kwargs.keys():
+        args[k] = kwargs[k]
 
     return args
 
