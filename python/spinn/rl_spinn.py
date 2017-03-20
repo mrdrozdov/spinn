@@ -73,7 +73,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
 
 
 class RLSPINN(SPINN):
-    def predict_actions(self, transition_output, cant_skip):
+    def predict_actions(self, transition_output):
         transition_dist = F.softmax(transition_output).data
         transition_greedy = transition_dist.cpu().numpy().argmax(axis=1)
         if self.training:
