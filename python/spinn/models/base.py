@@ -88,6 +88,8 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
     progress_bar.step(0, total=total_batches)
     total_tokens = 0
     invalid = 0
+    ninvalid = 0
+    ntotal = 0
     start = time.time()
 
     model.eval()
@@ -119,10 +121,12 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
         # Update Aggregate Accuracies
         total_tokens += sum([(nt+1)/2 for nt in eval_num_transitions_batch.reshape(-1)])
 
+        # Track number of examples with completely valid transitions.
         if hasattr(model, 'spinn') and hasattr(model.spinn, 'invalid'):
             num_sentences = 2 if model.use_sentence_pair else 1
             invalid += model.spinn.invalid * eval_X_batch.shape[0] * num_sentences
-
+            ninvalid += model.spinn.n_invalid
+            ntotal += model.spinn.n_total
 
         # Accumulate stats for transition accuracy.
         if transition_loss is not None:
@@ -181,7 +185,8 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
     stats_str += "\nEval Extra:"
 
     if hasattr(model, 'spinn') and hasattr(model.spinn, 'invalid'):
-        stats_str += " inv={:.3f}".format(invalid/float(total_batches)/100.0)
+        stats_str += " inv={:.7f}".format(invalid/float(total_batches)/100.0)
+        stats_str += " ninv={:.7f}".format(ninvalid/float(ntotal))
 
     if len(transition_examples) > 0:
         for t_idx in range(len(transition_examples)):

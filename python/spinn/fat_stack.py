@@ -447,8 +447,9 @@ class SPINN(nn.Module):
             # Transition Accuracy.
             n = t_mask.shape[0]
             n_skips = n - t_mask.sum()
+            n_total = n - n_skips
             n_correct = (t_preds == t_given).sum() - n_skips
-            transition_acc = n_correct / float(n - n_skips)
+            transition_acc = n_correct / float(n_total)
 
             # Transition Loss.
             index = to_gpu(Variable(torch.from_numpy(np.arange(t_mask.shape[0])[t_mask])).long())
@@ -456,7 +457,10 @@ class SPINN(nn.Module):
             select_t_logits = torch.index_select(t_logits, 0, index)
             transition_loss = nn.NLLLoss()(select_t_logits, select_t_given) * self.transition_weight
 
-            self.invalid = (invalid_count > 0).sum() / float(batch_size)
+            n_invalid = (invalid_count > 0).sum()
+            self.invalid = n_invalid / float(batch_size)
+            self.n_invalid = n_invalid
+            self.n_total = n_total
 
         self.loss_phase_hook()
 
