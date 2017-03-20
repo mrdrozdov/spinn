@@ -3,7 +3,7 @@ import numpy as np
 import tempfile
 
 from spinn import util
-from spinn.fat_stack import SPINN, SentenceModel, SentencePairModel
+from spinn.fat_stack import SPINN, BaseModel
 
 import spinn.fat_stack
 import spinn.rl_spinn
@@ -26,8 +26,8 @@ class SPINNTestCase(unittest.TestCase):
     def test_save_load_model(self):
         scalar = 11
         other_scalar = 0
-        model_to_save = MockModel(SentenceModel, default_args())
-        model_to_load = MockModel(SentenceModel, default_args())
+        model_to_save = MockModel(BaseModel, default_args())
+        model_to_load = MockModel(BaseModel, default_args())
 
         # Save to and load from temporary file.
         temp = tempfile.NamedTemporaryFile()
@@ -44,11 +44,11 @@ class SPINNTestCase(unittest.TestCase):
         scalar = 11
         other_scalar = 0
 
-        model_to_save = MockModel(spinn.fat_stack.SentenceModel, default_args())
+        model_to_save = MockModel(spinn.fat_stack.BaseModel, default_args())
         opt_to_save = optim.SGD(model_to_save.parameters(), lr=0.1)
         trainer_to_save = ModelTrainer(model_to_save, opt_to_save)
 
-        model_to_load = MockModel(spinn.rl_spinn.SentenceModel, default_args())
+        model_to_load = MockModel(spinn.rl_spinn.BaseModel, default_args())
         opt_to_load = optim.SGD(model_to_load.parameters(), lr=0.1)
         trainer_to_load = ModelTrainer(model_to_load, opt_to_load)
 
@@ -64,19 +64,19 @@ class SPINNTestCase(unittest.TestCase):
 
 
     def test_init_models(self):
-        MockModel(spinn.fat_stack.SentenceModel, default_args())
-        MockModel(spinn.rl_spinn.SentenceModel, default_args())
-        MockModel(spinn.rae_spinn.SentenceModel, default_args())
-        MockModel(spinn.gen_spinn.SentenceModel, default_args())
+        MockModel(spinn.fat_stack.BaseModel, default_args())
+        MockModel(spinn.rl_spinn.BaseModel, default_args())
+        MockModel(spinn.rae_spinn.BaseModel, default_args())
+        MockModel(spinn.gen_spinn.BaseModel, default_args())
 
-        MockModel(spinn.fat_stack.SentencePairModel, default_args())
-        MockModel(spinn.rl_spinn.SentencePairModel, default_args())
-        MockModel(spinn.rae_spinn.SentencePairModel, default_args())
-        MockModel(spinn.gen_spinn.SentencePairModel, default_args())
+        MockModel(spinn.fat_stack.BaseModel, default_args(use_sentence_pair=True))
+        MockModel(spinn.rl_spinn.BaseModel, default_args(use_sentence_pair=True))
+        MockModel(spinn.rae_spinn.BaseModel, default_args(use_sentence_pair=True))
+        MockModel(spinn.gen_spinn.BaseModel, default_args(use_sentence_pair=True))
 
 
     def test_basic_stack(self):
-        model = MockModel(SentenceModel, default_args())
+        model = MockModel(BaseModel, default_args())
 
         train = False
 
@@ -102,7 +102,7 @@ class SPINNTestCase(unittest.TestCase):
 
 
     def test_validate_transitions_cantskip(self):
-        model = MockModel(SentenceModel, default_args())
+        model = MockModel(BaseModel, default_args())
 
         train = False
 
@@ -139,12 +139,13 @@ class SPINNTestCase(unittest.TestCase):
             ]).astype(np.int32)
 
 
-        ret = model.spinn.validate(transitions, preds, stacks, bufs, zero_padded=False)
+        ret, _ = model.spinn.validate(transitions, preds, stacks, bufs, zero_padded=False)
         expected = np.array([
             2, 1, 0, 0, 0, 1
         ], dtype=np.int32)
 
-        assert all(p == e for p, e in zip(preds.ravel().tolist(), expected.ravel().tolist()))
+        assert all(p == e for p, e in zip(ret.ravel().tolist(), expected.ravel().tolist())), \
+            "gold: {}\npreds: {}".format(expected, ret)
 
 
 if __name__ == '__main__':

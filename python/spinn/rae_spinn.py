@@ -17,7 +17,7 @@ from spinn.util.blocks import bundle, unbundle, to_cpu, to_gpu, treelstm, lstm
 from spinn.util.blocks import get_h, get_c
 from spinn.util.misc import Args, Vocab, Example
 
-from spinn.fat_stack import BaseModel, SentenceModel, SentencePairModel
+from spinn.fat_stack import BaseModel as _BaseModel
 from spinn.fat_stack import SPINN
 
 
@@ -30,12 +30,8 @@ T_REDUCE = 1
 
 
 def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS):
-    if data_manager.SENTENCE_PAIR_DATA:
-        model_cls = SentencePairModel
-        use_sentence_pair = True
-    else:
-        model_cls = SentenceModel
-        use_sentence_pair = False
+    model_cls = BaseModel
+    use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
     return model_cls(model_dim=FLAGS.model_dim,
          word_embedding_dim=FLAGS.word_embedding_dim,
@@ -143,65 +139,11 @@ class RAESPINN(SPINN):
                 self.leaf_phase(leaf_inp, leaf_target)
 
 
-class RAEBaseModel(BaseModel):
+class BaseModel(_BaseModel):
 
     def __init__(self, predict_leaf=None, **kwargs):
         self.predict_leaf = predict_leaf
-        super(RAEBaseModel, self).__init__(**kwargs)
+        super(BaseModel, self).__init__(**kwargs)
 
     def build_spinn(self, args, vocab, use_skips, predict_use_cell, use_lengths):
         return RAESPINN(args, vocab, use_skips, predict_use_cell, use_lengths, self.predict_leaf)
-
-
-class SentencePairModel(RAEBaseModel):
-
-    def build_example(self, sentences, transitions):
-        batch_size = sentences.shape[0]
-
-        # Build Tokens
-        x_prem = sentences[:,:,0]
-        x_hyp = sentences[:,:,1]
-        x = np.concatenate([x_prem, x_hyp], axis=0)
-
-        # Build Transitions
-        t_prem = transitions[:,:,0]
-        t_hyp = transitions[:,:,1]
-        t = np.concatenate([t_prem, t_hyp], axis=0)
-
-        example = Example()
-        example.tokens = to_gpu(Variable(torch.from_numpy(x), volatile=not self.training))
-        example.transitions = t
-
-        return example
-
-    def run_spinn(self, example, use_internal_parser=False, validate_transitions=True):
-        state_both, transition_acc, transition_loss = super(SentencePairModel, self).run_spinn(
-            example, use_internal_parser, validate_transitions)
-        batch_size = len(state_both) / 2
-        h_premise = get_h(torch.cat(state_both[:batch_size], 0), self.hidden_dim)
-        h_hypothesis = get_h(torch.cat(state_both[batch_size:], 0), self.hidden_dim)
-        return [h_premise, h_hypothesis], transition_acc, transition_loss
-
-
-class SentenceModel(RAEBaseModel):
-
-    def build_example(self, sentences, transitions):
-        batch_size = sentences.shape[0]
-
-        # Build Tokens
-        x = sentences
-
-        # Build Transitions
-        t = transitions
-
-        example = Example()
-        example.tokens = to_gpu(Variable(torch.from_numpy(x), volatile=not self.training))
-        example.transitions = t
-
-        return example
-
-    def run_spinn(self, example, use_internal_parser=False, validate_transitions=True):
-        state, transition_acc, transition_loss = super(SentenceModel, self).run_spinn(
-            example, use_internal_parser, validate_transitions)
-        h = get_h(torch.cat(state, 0), self.hidden_dim)
-        return [h], transition_acc, transition_loss

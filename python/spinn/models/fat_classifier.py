@@ -337,13 +337,8 @@ def run(only_forward=False):
     vocab_size = len(vocabulary)
     num_classes = len(data_manager.LABEL_MAP)
 
-    if data_manager.SENTENCE_PAIR_DATA:
-        model_cls = model_module.SentencePairModel
-        use_sentence_pair = True
-    else:
-        model_cls = model_module.SentenceModel
-        num_classes = len(data_manager.LABEL_MAP)
-        use_sentence_pair = False
+    model_cls = model_module.BaseModel
+    use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
     model = model_cls(model_dim=FLAGS.model_dim,
          word_embedding_dim=FLAGS.word_embedding_dim,

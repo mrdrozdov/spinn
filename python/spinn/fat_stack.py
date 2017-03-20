@@ -25,12 +25,8 @@ T_REDUCE = 1
 
 
 def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS):
-    if data_manager.SENTENCE_PAIR_DATA:
-        model_cls = SentencePairModel
-        use_sentence_pair = True
-    else:
-        model_cls = SentenceModel
-        use_sentence_pair = False
+    model_cls = BaseModel
+    use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
     return model_cls(model_dim=FLAGS.model_dim,
          word_embedding_dim=FLAGS.word_embedding_dim,
@@ -587,26 +583,20 @@ class BaseModel(nn.Module):
     def build_spinn(self, args, vocab, use_skips, predict_use_cell, use_lengths):
         return SPINN(args, vocab, use_skips, predict_use_cell, use_lengths)
 
-    def build_example(self, sentences, transitions):
-        raise Exception('Not implemented.')
-
-    def spinn_hook(self, state):
-        pass
-
     def run_spinn(self, example, use_internal_parser, validate_transitions=True):
         self.spinn.reset_state()
-        state, transition_acc, transition_loss = self.spinn(example,
+        h_list, transition_acc, transition_loss = self.spinn(example,
                                use_internal_parser=use_internal_parser,
                                validate_transitions=validate_transitions)
-        self.spinn_hook(state)
-        return state, transition_acc, transition_loss
+        h = self.wrap(h_list)
+        return h, transition_acc, transition_loss
 
     def output_hook(self, output, sentences, transitions, y_batch=None, embeds=None):
         pass
 
     def forward(self, sentences, transitions, y_batch=None,
                  use_internal_parser=False, validate_transitions=True):
-        example = self.build_example(sentences, transitions)
+        example = self.unwrap(sentences, transitions)
 
         b, l = example.tokens.size()[:2]
 
@@ -641,10 +631,43 @@ class BaseModel(nn.Module):
 
         return output
 
+    # --- Sentence Style Switches ---
 
-class SentencePairModel(BaseModel):
+    def unwrap(self, sentences, transitions):
+        if self.use_sentence_pair:
+            return self.unwrap_sentence_pair(sentences, transitions)
+        return self.unwrap_sentence(sentences, transitions)
 
-    def build_example(self, sentences, transitions):
+    def wrap(self, h_list):
+        if self.use_sentence_pair:
+            return self.wrap_sentence_pair(h_list)
+        return self.wrap_sentence(h_list)
+
+    # --- Sentence Model Specific ---
+
+    def unwrap_sentence(self, sentences, transitions):
+        batch_size = sentences.shape[0]
+
+        # Build Tokens
+        x = sentences
+
+        # Build Transitions
+        t = transitions
+
+        example = Example()
+        example.tokens = to_gpu(Variable(torch.from_numpy(x), volatile=not self.training))
+        example.transitions = t
+
+        return example
+
+    def wrap_sentence(self, h_list):
+        batch_size = len(h_list) / 2
+        h = get_h(torch.cat(h_list, 0), self.hidden_dim)
+        return [h]
+
+    # --- Sentence Pair Model Specific ---
+
+    def unwrap_sentence_pair(self, sentences, transitions):
         batch_size = sentences.shape[0]
 
         # Build Tokens
@@ -663,34 +686,8 @@ class SentencePairModel(BaseModel):
 
         return example
 
-    def run_spinn(self, example, use_internal_parser=False, validate_transitions=True):
-        state_both, transition_acc, transition_loss = super(SentencePairModel, self).run_spinn(
-            example, use_internal_parser, validate_transitions)
-        batch_size = len(state_both) / 2
-        h_premise = get_h(torch.cat(state_both[:batch_size], 0), self.hidden_dim)
-        h_hypothesis = get_h(torch.cat(state_both[batch_size:], 0), self.hidden_dim)
-        return [h_premise, h_hypothesis], transition_acc, transition_loss
-
-
-class SentenceModel(BaseModel):
-
-    def build_example(self, sentences, transitions):
-        batch_size = sentences.shape[0]
-
-        # Build Tokens
-        x = sentences
-
-        # Build Transitions
-        t = transitions
-
-        example = Example()
-        example.tokens = to_gpu(Variable(torch.from_numpy(x), volatile=not self.training))
-        example.transitions = t
-
-        return example
-
-    def run_spinn(self, example, use_internal_parser=False, validate_transitions=True):
-        state, transition_acc, transition_loss = super(SentenceModel, self).run_spinn(
-            example, use_internal_parser, validate_transitions)
-        h = get_h(torch.cat(state, 0), self.hidden_dim)
-        return [h], transition_acc, transition_loss
+    def wrap_sentence_pair(self, h_list):
+        batch_size = len(h_list) / 2
+        h_premise = get_h(torch.cat(h_list[:batch_size], 0), self.hidden_dim)
+        h_hypothesis = get_h(torch.cat(h_list[batch_size:], 0), self.hidden_dim)
+        return [h_premise, h_hypothesis]
