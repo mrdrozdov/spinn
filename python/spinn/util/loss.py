@@ -25,4 +25,5 @@ def auxiliary_loss(model):
         total_loss += model.spinn.leaf_loss
     if has_gen:
         total_loss += model.spinn.gen_loss
+
     return total_loss

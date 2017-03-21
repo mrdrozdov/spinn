@@ -74,7 +74,7 @@ def train_stats(model, optimizer, A, step):
         transition_cost=model.transition_loss.data[0] if has_transition_loss else 0.0,
         l2_cost=A.get_avg('l2_cost'), # not actual mean
         policy_cost=model.policy_loss.data[0] if has_policy else 0.0,
-        value_cost=model.spinn.value_loss.data[0] if has_value else 0.0,
+        value_cost=model.value_loss.data[0] if has_value else 0.0,
         invalid=A.get_avg('invalid') if has_invalid else 0.0,
         ninvalid=sum(A.get('ninvalid')) / float(sum(A.get('ntotal'))) if has_invalid else 0.0,
         epsilon=model.spinn.epsilon if has_epsilon else 0.0,
@@ -114,9 +114,9 @@ def train_format(model):
 
     # Cost Component.
     stats_str += " Cost: {total_cost:.5f} {xent_cost:.5f} {transition_cost:.5f} {l2_cost:.5f}"
-    if has_spinn and hasattr(model.spinn, 'policy_loss'):
+    if has_spinn and hasattr(model, 'policy_loss'):
         stats_str += " p{policy_cost:.5f}"
-    if has_spinn and hasattr(model.spinn, 'value_loss'):
+    if has_spinn and hasattr(model, 'value_loss'):
         stats_str += " v{value_cost:.5f}"
     if hasattr(model, 'avg_entropy'):
         stats_str += " e{avg_entropy:.5f}"
