@@ -270,7 +270,7 @@ def get_flags():
     gflags.DEFINE_string("eval_data_path", None, "Can contain multiple file paths, separated "
         "using ':' tokens. The first file should be the dev set, and is used for determining "
         "when to save the early stopping 'best' checkpoints.")
-    gflags.DEFINE_integer("seq_length", 30, "")
+    gflags.DEFINE_integer("seq_length", 200, "")
     gflags.DEFINE_integer("eval_seq_length", None, "")
     gflags.DEFINE_boolean("smart_batching", True, "Organize batches using sequence length.")
     gflags.DEFINE_boolean("use_peano", True, "A mind-blowing sorting key.")
