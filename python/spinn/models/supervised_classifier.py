@@ -28,11 +28,11 @@ import torch.optim as optim
 
 
 from spinn.models.base import get_data_manager
-from spinn.models.base import main_loop, parse_flags, init_model
+from spinn.models.base import main_loop, get_flags, flag_defaults, init_model
 from spinn.models.base import sequential_only, get_checkpoint_path, evaluate
 
 
-FLAGS = None
+FLAGS = gflags.FLAGS
 
 
 def run(only_forward=False):
@@ -134,6 +134,11 @@ def run(only_forward=False):
 
 
 if __name__ == '__main__':
-    FLAGS = parse_flags()
+    get_flags()
+
+    # Parse command line flags.
+    FLAGS(sys.argv)
+
+    flag_defaults(FLAGS)
 
     run(only_forward=FLAGS.expanded_eval_only_mode)

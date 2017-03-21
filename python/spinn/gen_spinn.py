@@ -19,7 +19,6 @@ from spinn.util.misc import Args, Vocab, Example
 
 from spinn.fat_stack import BaseModel as _BaseModel
 from spinn.fat_stack import SPINN
-from spinn.fat_stack import get_flags as _get_flags
 
 
 T_SKIP   = 2
@@ -57,13 +56,6 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          mlp_bn=FLAGS.mlp_bn,
          gen_h=FLAGS.gen_h,
         )
-
-
-def get_flags(gflags):
-    _get_flags(gflags)
-
-    # GEN settings.
-    gflags.DEFINE_boolean("gen_h", True, "Use generator output as feature.")
 
 
 class GenSPINN(SPINN):
@@ -187,6 +179,9 @@ class BaseModel(_BaseModel):
 
     def build_spinn(self, args, vocab, use_skips, predict_use_cell, use_lengths):
         return GenSPINN(args, vocab, use_skips, predict_use_cell, use_lengths)
+
+    def output_hook(self, output, sentences, transitions, y_batch=None):
+        pass
 
     def get_features_dim(self):
         features_dim = super(BaseModel, self).get_features_dim()

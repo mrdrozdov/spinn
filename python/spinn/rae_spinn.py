@@ -19,7 +19,6 @@ from spinn.util.misc import Args, Vocab, Example
 
 from spinn.fat_stack import BaseModel as _BaseModel
 from spinn.fat_stack import SPINN
-from spinn.fat_stack import get_flags as _get_flags
 
 
 import spinn.cbow
@@ -60,16 +59,6 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          mlp_bn=FLAGS.mlp_bn,
          predict_leaf=FLAGS.predict_leaf,
         )
-
-
-def get_flags(gflags):
-    _get_flags(gflags)
-
-    # RAE settings.
-    gflags.DEFINE_boolean("predict_leaf", True, "Predict whether a node is a leaf or not.")
-
-    # GEN settings.
-    gflags.DEFINE_boolean("gen_h", True, "Use generator output as feature.")
 
 
 class RAESPINN(SPINN):
