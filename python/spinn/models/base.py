@@ -1,4 +1,5 @@
 import os
+import json
 import math
 import random
 import time
@@ -20,6 +21,7 @@ from spinn.util.misc import Accumulator, EvalReporter, time_per_token
 from spinn.util.misc import recursively_set_device
 from spinn.util.metrics import MetricsWriter
 from spinn.util.logging import train_format, train_extra_format, train_stats, train_accumulate
+from spinn.util.logging import eval_format, eval_extra_format
 from spinn.util.loss import auxiliary_loss
 import spinn.util.evalb as evalb
 
@@ -79,6 +81,9 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
     filename, dataset = eval_set
 
     reporter = EvalReporter()
+
+    eval_str = eval_format(model)
+    eval_extra_str = eval_extra_format(model)
 
     # Evaluate
     class_correct = 0
@@ -179,25 +184,31 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
     else:
         eval_trans_acc = 0.0
 
-    stats_str = "Step: %i Eval acc: %f %f %s Time: %5f" % (step, eval_class_acc, eval_trans_acc, filename, time_metric)
+    has_invalid = hasattr(model, 'spinn') and hasattr(model.spinn, 'invalid')
 
-    # Extra Component.
-    stats_str += "\nEval Extra:"
+    stats_args = dict(
+        step=step,
+        class_acc=eval_class_acc,
+        transition_acc=eval_trans_acc,
+        filename=filename,
+        time=time_metric,
+        inv=invalid/float(total_batches)/100.0 if has_invalid else 0.0,
+        ninv=ninvalid/float(ntotal) if has_invalid else 0.0
+        )
 
-    if hasattr(model, 'spinn') and hasattr(model.spinn, 'invalid'):
-        stats_str += " inv={:.7f}".format(invalid/float(total_batches)/100.0)
-        stats_str += " ninv={:.7f}".format(ninvalid/float(ntotal))
+    logger.Log(eval_str.format(**stats_args))
+    logger.Log(eval_extra_str.format(**stats_args))
 
     if len(transition_examples) > 0:
+        transition_str = "Samples:"
         for t_idx in range(len(transition_examples)):
             gold = transition_examples[t_idx][1]
             pred = transition_examples[t_idx][0]
             _, crossing = evalb.crossing(gold, pred)
-            stats_str += "\n{}. crossing={}".format(t_idx, crossing)
-            stats_str += "\n     g{}".format("".join(map(str, gold)))
-            stats_str += "\n     p{}".format("".join(map(str, pred)))
-
-    logger.Log(stats_str)
+            transition_str += "\n{}. crossing={}".format(t_idx, crossing)
+            transition_str += "\n     g{}".format("".join(map(str, gold)))
+            transition_str += "\n     p{}".format("".join(map(str, pred)))
+        logger.Log(transition_str)
 
     if FLAGS.write_eval_report:
         eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".report")
@@ -474,12 +485,26 @@ def main_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterato
             validate_transitions=FLAGS.validate_transitions
             )
 
+    logger.Log("\n\n# ----- BEGIN: Log Configuration ----- #")
+
+    # Print flags.
+    logger.Log("Flag-JSON: {}".format(json.dumps(FLAGS.FlagValuesDict())))
+
+    # Preview train string template.
     train_str = train_format(model)
     logger.Log("Train-Format: {}".format(train_str))
     train_extra_str = train_extra_format(model)
     logger.Log("Train-Extra-Format: {}".format(train_extra_str))
 
-     # Train
+    # Preview eval string template.
+    eval_str = eval_format(model)
+    logger.Log("Eval-Format: {}".format(eval_str))
+    eval_extra_str = eval_extra_format(model)
+    logger.Log("Eval-Extra-Format: {}".format(eval_extra_str))
+
+    logger.Log("# ----- END: Log Configuration ----- #\n\n")
+
+    # Train.
     logger.Log("Training.")
 
     # New Training Loop
@@ -574,7 +599,7 @@ def main_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterato
             logger.Log(train_extra_str.format(**stats_args))
 
             if FLAGS.num_samples > 0:
-                transition_str = ""
+                transition_str = "Samples:"
                 transitions_per_example = model.spinn.get_transitions_per_example()
                 if model.use_sentence_pair and len(transitions_batch.shape) == 3:
                     transitions_batch = np.concatenate([

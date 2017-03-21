@@ -145,3 +145,18 @@ def train_extra_format(model):
         extra_str += " eps={epsilon:.7f}"
 
     return extra_str
+
+
+def eval_format(model):
+    eval_str = "Step: {step} Eval acc: {class_acc:.5f} {transition_acc:.5f} {filename} Time: {time:.5f}"
+
+    return eval_str
+
+
+def eval_extra_format(model):
+    eval_extra_str = "Eval Extra:"
+    if hasattr(model, 'spinn'):
+        eval_extra_str += " inv={inv:.7f}"
+        eval_extra_str += " ninv={ninv:.7f}"
+
+    return eval_extra_str

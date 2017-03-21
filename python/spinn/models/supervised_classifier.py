@@ -1,4 +1,5 @@
 import os
+import json
 import math
 import random
 import pprint
@@ -16,6 +17,7 @@ from spinn.util.blocks import the_gpu, to_gpu, l2_cost, flatten, debug_gradient
 from spinn.util.misc import Accumulator, MetricsLogger, EvalReporter, time_per_token
 from spinn.util.misc import recursively_set_device
 from spinn.util.logging import train_format, train_extra_format, train_stats, train_accumulate
+from spinn.util.logging import eval_format, eval_extra_format
 from spinn.util.loss import auxiliary_loss
 import spinn.util.evalb as evalb
 
@@ -127,6 +129,11 @@ def run(only_forward=False):
 
     # Do an evaluation-only run.
     if only_forward:
+        eval_str = eval_format(model)
+        logger.Log("Eval-Format: {}".format(eval_str))
+        eval_extra_str = eval_extra_format(model)
+        logger.Log("Eval-Extra-Format: {}".format(eval_extra_str))
+
         for index, eval_set in enumerate(eval_iterators):
             acc = evaluate(model, eval_set, logger, step, vocabulary)
     else:
