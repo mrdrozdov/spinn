@@ -140,7 +140,7 @@ class SPINN(nn.Module):
             self.tracker = Tracker(args.size, args.tracker_size, args.lateral_tracking)
             if args.transition_weight is not None:
                 # TODO: Might be interesting to try a different network here.
-                self.predict_use_cell = True
+                self.predict_use_cell = predict_use_cell
                 tinp_size = args.tracker_size * 2 if predict_use_cell else args.tracker_size
                 if self.use_lengths:
                     tinp_size += 2
