@@ -64,6 +64,15 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
         )
 
 
+def get_flags(gflags):
+    # Encode settings.
+    gflags.DEFINE_boolean("use_encode", False, "Encode embeddings with sequential network.")
+    gflags.DEFINE_enum("encode_style", None, ["LSTM", "CNN", "QRNN"], "Encode embeddings with sequential context.")
+    gflags.DEFINE_boolean("encode_reverse", False, "Encode in reverse order.")
+    gflags.DEFINE_boolean("encode_bidirectional", False, "Encode in both directions.")
+    gflags.DEFINE_integer("encode_num_layers", 1, "RNN layers in encoding net.")
+
+
 class Tracker(nn.Module):
 
     def __init__(self, size, tracker_size, lateral_tracking=True):

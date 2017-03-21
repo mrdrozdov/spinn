@@ -19,6 +19,7 @@ from spinn.util.misc import Args, Vocab, Example
 
 from spinn.fat_stack import BaseModel as _BaseModel
 from spinn.fat_stack import SPINN
+from spinn.fat_stack import get_flags as _get_flags
 
 
 import spinn.cbow
@@ -66,6 +67,23 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          rl_entropy=FLAGS.rl_entropy,
          rl_entropy_beta=FLAGS.rl_entropy_beta,
         )
+
+
+def get_flags(gflags):
+    _get_flags(gflags)
+
+    # RL settings.
+    gflags.DEFINE_float("rl_mu", 0.1, "Use in exponential moving average baseline.")
+    gflags.DEFINE_enum("rl_baseline", "ema", ["ema", "value", "greedy"],
+        "Different configurations to approximate reward function.")
+    gflags.DEFINE_enum("rl_reward", "standard", ["standard", "xent"],
+        "Different reward functions to use.")
+    gflags.DEFINE_float("rl_weight", 1.0, "Hyperparam for REINFORCE loss.")
+    gflags.DEFINE_boolean("rl_whiten", False, "Reduce variance in advantage.")
+    gflags.DEFINE_boolean("rl_entropy", False, "Entropy regularization on transition policy.")
+    gflags.DEFINE_float("rl_entropy_beta", 0.001, "Entropy regularization on transition policy.")
+    gflags.DEFINE_float("rl_epsilon", 1.0, "Percent of sampled actions during train time.")
+    gflags.DEFINE_float("rl_epsilon_decay", 50000, "Percent of sampled actions during train time.")
 
 
 class RLSPINN(SPINN):

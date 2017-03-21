@@ -1,4 +1,5 @@
 import os
+import sys
 import math
 import random
 import time
@@ -311,32 +312,6 @@ def get_flags():
         "Use cell output as feature for transition net.")
     gflags.DEFINE_boolean("use_lengths", False, "The transition net will be biased.")
 
-    # Encode settings.
-    gflags.DEFINE_boolean("use_encode", False, "Encode embeddings with sequential network.")
-    gflags.DEFINE_enum("encode_style", None, ["LSTM", "CNN", "QRNN"], "Encode embeddings with sequential context.")
-    gflags.DEFINE_boolean("encode_reverse", False, "Encode in reverse order.")
-    gflags.DEFINE_boolean("encode_bidirectional", False, "Encode in both directions.")
-    gflags.DEFINE_integer("encode_num_layers", 1, "RNN layers in encoding net.")
-
-    # RL settings.
-    gflags.DEFINE_float("rl_mu", 0.1, "Use in exponential moving average baseline.")
-    gflags.DEFINE_enum("rl_baseline", "ema", ["ema", "value", "greedy"],
-        "Different configurations to approximate reward function.")
-    gflags.DEFINE_enum("rl_reward", "standard", ["standard", "xent"],
-        "Different reward functions to use.")
-    gflags.DEFINE_float("rl_weight", 1.0, "Hyperparam for REINFORCE loss.")
-    gflags.DEFINE_boolean("rl_whiten", False, "Reduce variance in advantage.")
-    gflags.DEFINE_boolean("rl_entropy", False, "Entropy regularization on transition policy.")
-    gflags.DEFINE_float("rl_entropy_beta", 0.001, "Entropy regularization on transition policy.")
-    gflags.DEFINE_float("rl_epsilon", 1.0, "Percent of sampled actions during train time.")
-    gflags.DEFINE_float("rl_epsilon_decay", 50000, "Percent of sampled actions during train time.")
-
-    # RAE settings.
-    gflags.DEFINE_boolean("predict_leaf", True, "Predict whether a node is a leaf or not.")
-
-    # GEN settings.
-    gflags.DEFINE_boolean("gen_h", True, "Use generator output as feature.")
-
     # MLP settings.
     gflags.DEFINE_integer("mlp_dim", 1024, "Dimension of intermediate MLP layers.")
     gflags.DEFINE_integer("num_mlp_layers", 2, "Number of MLP layers.")
@@ -374,6 +349,38 @@ def get_flags():
     gflags.DEFINE_boolean("eval_report_use_preds", True, "If False, use the given transitions in the report, "
         "otherwise use predicted transitions. Note that when predicting transitions but not using them, the "
         "reported predictions will look very odd / not valid.")
+
+
+def parse_flags():
+    get_flags()
+
+    # Parse Standard Flags.
+    FLAGS(sys.argv)
+
+    get_model_flags(FLAGS)
+
+    # Parse Model Specific Flags.
+    FLAGS(sys.argv)
+
+    # Set some programmatic defaults, such as those that depend on current git SHA or a timestamp.
+    flag_defaults(FLAGS)
+
+    return FLAGS
+
+
+def get_model_flags(FLAGS):
+    if FLAGS.model_type == "CBOW":
+        pass
+    elif FLAGS.model_type == "RNN":
+        pass
+    elif FLAGS.model_type == "SPINN":
+        spinn.fat_stack.get_flags(gflags)
+    elif FLAGS.model_type == "RLSPINN":
+        spinn.rl_spinn.get_flags(gflags)
+    elif FLAGS.model_type == "RAESPINN":
+        spinn.rae_spinn.get_flags(gflags)
+    elif FLAGS.model_type == "GENSPINN":
+        spinn.gen_spinn.get_flags(gflags)
 
 
 def flag_defaults(FLAGS):
