@@ -39,6 +39,20 @@ Here's a sample command that runs a fast, low-dimensional CPU training run, trai
 
 For full runs, you'll also need a copy of the 840B word 300D [GloVe word vectors](http://nlp.stanford.edu/projects/glove/).
 
+## Log Analysis
+
+This project contains a handful of tools for easier analysis of your model's performance.
+
+For one, after a periodic number of batches, some useful statistics are printed to a file specified by `--log_path`. This is convenient for visual inspection, and the script [parse_logs.py](https://github.com/mrdrozdov/spinn/blob/master/scripts/parse_logs.py) is an example of how to easily parse this log file.
+
+In addition, there is support for realtime summaries using [Visdom](https://github.com/facebookresearch/visdom). This requires a few steps:
+
+1. Run your experiment normally, but specify a `--metrics_path`.
+2. Run Visdom in it's own terminal instance: `python -m visdom.server`
+3. Run this project's [visdom_reporter.py](https://github.com/mrdrozdov/spinn/blob/master/scripts/visdom_reporter.py) script, specifying a root which matches the `--metrics_path` flag: `python scripts/visdom_reporter.py --root $METRICS_PATH`
+
+Then open Visdom in a browser window to see graphs representing accuracy, loss and some other metrics updated in real time. This is most useful when running multiple experiments simultaneously.
+
 ## Contributing
 
 If you're interested in proposing a change or fix to SPINN, please submit a Pull Request. In addition, ensure that existing tests pass, and add new tests as you see appropriate. To run tests, simply run this command from the root directoy:
