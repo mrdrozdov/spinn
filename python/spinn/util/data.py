@@ -8,7 +8,7 @@ import sys
 import numpy as np
 
 
-from spinn.data import T_SHIFT, T_REDUCE, T_SKIP, T_SUB
+from spinn.data import T_SHIFT, T_REDUCE, T_SKIP, T_STRUCT
 
 # With loaded embedding matrix, the padding vector will be initialized to zero
 # and will not be trained. Hopefully this isn't a problem. It seems better than
@@ -148,20 +148,25 @@ def CropAndPad(dataset, length, logger=None, sentence_pair_data=False):
     # the final stack top is the root of the tree. If cropping is used, it should
     # just introduce empty nodes into the tree.
     if sentence_pair_data:
-        keys = [("premise_transitions", "num_premise_transitions", "premise_tokens"),
-                ("hypothesis_transitions", "num_hypothesis_transitions", "hypothesis_tokens")]
+        keys = [("premise_transitions", "premise_structure_transitions", "num_premise_transitions", "premise_tokens"),
+                ("hypothesis_transitions", "hypothesis_structure_transitions", "num_hypothesis_transitions", "hypothesis_tokens")]
     else:
-        keys = [("transitions", "num_transitions", "tokens")]
+        keys = [("transitions", "structure_transitions", "num_transitions", "tokens")]
 
     for example in dataset:
-        for (transitions_key, num_transitions_key, tokens_key) in keys:
+        for (transitions_key, structure_transitions_key, num_transitions_key, tokens_key) in keys:
+            # Crop and Pad Transitions
             example[num_transitions_key] = len(example[transitions_key])
             transitions_left_padding = length - example[num_transitions_key]
             shifts_before_crop_and_pad = example[transitions_key].count(0)
-            CropAndPadExample(
-                example, transitions_left_padding, length, transitions_key,
-                symbol=T_SKIP, logger=logger)
+            for tkey in [transitions_key, structure_transitions_key]:
+                if tkey in example:
+                    CropAndPadExample(
+                        example, transitions_left_padding, length, tkey,
+                        symbol=T_SKIP, logger=logger)
             shifts_after_crop_and_pad = example[transitions_key].count(0)
+
+            # Crop and Pad Tokens
             tokens_left_padding = shifts_after_crop_and_pad - \
                 shifts_before_crop_and_pad
             CropAndPadExample(
@@ -374,8 +379,8 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
                       [example["hypothesis_tokens"] for example in dataset]],
                      dtype=np.int32), (1, 2, 0))
         if for_rnn:
-            # TODO(SB): Extend this clause to the non-pair case.
             transitions = np.zeros((len(dataset), 2, 0))
+            structure_transitions = np.zeros((len(dataset), 2, 0))
             num_transitions = np.transpose(np.array(
                 [[len(np.array(example["premise_tokens"]).nonzero()[0]) for example in dataset],
                  [len(np.array(example["hypothesis_tokens"]).nonzero()[0]) for example in dataset]],
@@ -383,6 +388,9 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
         else:
             transitions = np.transpose(np.array([[example["premise_transitions"] for example in dataset],
                                     [example["hypothesis_transitions"] for example in dataset]],
+                                   dtype=np.int32), (1, 2, 0))
+            structure_transitions = np.transpose(np.array([[example.get("premise_transitions", []) for example in dataset],
+                                    [example.get("hypothesis_transitions", [-1]) for example in dataset]],
                                    dtype=np.int32), (1, 2, 0))
             num_transitions = np.transpose(np.array(
                 [[example["num_premise_transitions"] for example in dataset],
@@ -393,11 +401,14 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
                      dtype=np.int32)
         if for_rnn:
             transitions = np.zeros((len(dataset), 0))
+            structure_transitions = np.zeros((len(dataset), 0))
             num_transitions = np.array(
                 [len(np.array(example["tokens"]).nonzero()[0]) for example in dataset],
                 dtype=np.int32)
         else:
             transitions = np.array([example["transitions"] for example in dataset],
+                                   dtype=np.int32)
+            structure_transitions = np.array([example.get("structure_transitions", [-1]) for example in dataset],
                                    dtype=np.int32)
             num_transitions = np.array(
                 [example["num_transitions"] for example in dataset],
@@ -408,8 +419,6 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
 
     # NP Array of Strings
     example_ids = np.array([example["example_id"] for example in dataset])
-
-    structure_transitions = transitions.copy()
 
     return X, transitions, y, num_transitions, structure_transitions, example_ids
 

@@ -14,7 +14,7 @@ from spinn.data.boolean import load_boolean_data
 from collections import Counter
 
 
-from spinn.data import T_SHIFT, T_REDUCE, T_SKIP, T_SUB
+from spinn.data import T_SHIFT, T_REDUCE, T_SKIP, T_STRUCT
 
 
 """ FAQ

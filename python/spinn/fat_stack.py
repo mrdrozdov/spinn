@@ -18,7 +18,7 @@ from spinn.util.blocks import get_h, get_c
 from spinn.util.misc import Args, Vocab, Example
 from spinn.util.blocks import HeKaimingInitializer
 
-from spinn.data import T_SHIFT, T_REDUCE, T_SKIP, T_SUB
+from spinn.data import T_SHIFT, T_REDUCE, T_SKIP, T_STRUCT
 
 
 def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS):

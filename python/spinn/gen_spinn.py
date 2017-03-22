@@ -20,7 +20,7 @@ from spinn.util.misc import Args, Vocab, Example
 from spinn.fat_stack import BaseModel as _BaseModel
 from spinn.fat_stack import SPINN
 
-from spinn.data import T_SHIFT, T_REDUCE, T_SKIP, T_SUB
+from spinn.data import T_SHIFT, T_REDUCE, T_SKIP, T_STRUCT
 
 
 def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS):

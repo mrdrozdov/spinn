@@ -509,6 +509,8 @@ def main_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterato
 
         X_batch, transitions_batch, y_batch, num_transitions_batch, structure_transitions, train_ids = get_batch(training_data_iter.next())
 
+        import ipdb; ipdb.set_trace()
+
         total_tokens = sum([(nt+1)/2 for nt in num_transitions_batch.reshape(-1)])
 
         # Reset cached gradients.
