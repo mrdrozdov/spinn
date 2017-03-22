@@ -42,7 +42,6 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          encode_bidirectional=FLAGS.encode_bidirectional,
          encode_num_layers=FLAGS.encode_num_layers,
          use_sentence_pair=use_sentence_pair,
-         use_skips=FLAGS.use_skips,
          lateral_tracking=FLAGS.lateral_tracking,
          use_tracking_in_composition=FLAGS.use_tracking_in_composition,
          predict_use_cell=FLAGS.predict_use_cell,
@@ -104,8 +103,8 @@ class BaseModel(_BaseModel):
 
         self.register_buffer('baseline', torch.FloatTensor([0.0]))
 
-    def build_spinn(self, args, vocab, use_skips, predict_use_cell, use_lengths):
-        return RLSPINN(args, vocab, use_skips, predict_use_cell, use_lengths)
+    def build_spinn(self, args, vocab, predict_use_cell, use_lengths):
+        return RLSPINN(args, vocab, predict_use_cell, use_lengths)
 
     def run_greedy(self, sentences, transitions):
         if self.use_sentence_pair:

@@ -38,7 +38,6 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          encode_bidirectional=FLAGS.encode_bidirectional,
          encode_num_layers=FLAGS.encode_num_layers,
          use_sentence_pair=use_sentence_pair,
-         use_skips=FLAGS.use_skips,
          lateral_tracking=FLAGS.lateral_tracking,
          use_tracking_in_composition=FLAGS.use_tracking_in_composition,
          predict_use_cell=FLAGS.predict_use_cell,
@@ -121,7 +120,7 @@ class Tracker(nn.Module):
 
 class SPINN(nn.Module):
 
-    def __init__(self, args, vocab, use_skips, predict_use_cell, use_lengths):
+    def __init__(self, args, vocab, predict_use_cell, use_lengths):
         super(SPINN, self).__init__()
 
         # Optional debug mode.
@@ -129,7 +128,6 @@ class SPINN(nn.Module):
 
         self.transition_weight = args.transition_weight
         self.use_lengths = use_lengths
-        self.use_skips = use_skips
 
         # Reduce function for semantic composition.
         self.reduce = Reduce(args.size, args.tracker_size, args.use_tracking_in_composition)
@@ -141,11 +139,9 @@ class SPINN(nn.Module):
                 tinp_size = args.tracker_size * 2 if predict_use_cell else args.tracker_size
                 if self.use_lengths:
                     tinp_size += 2
-                self.transition_net = nn.Linear(tinp_size, 3 if use_skips else 2)
+                self.transition_net = nn.Linear(tinp_size, 2)
 
-        # Predict 2 or 3 actions depending on whether SKIPs will be predicted.
-        choices = [T_SHIFT, T_REDUCE, T_SKIP] if use_skips else [T_SHIFT, T_REDUCE]
-        self.choices = np.array(choices, dtype=np.int32)
+        self.choices = np.array([T_SHIFT, T_REDUCE], dtype=np.int32)
 
     def reset_state(self):
         self.memories = []
@@ -317,7 +313,7 @@ class SPINN(nn.Module):
             # Run if:
             # A. We have a tracking component and,
             # B. There is at least one transition that will not be skipped.
-            if hasattr(self, 'tracker') and (self.use_skips or sum(cant_skip) > 0):
+            if hasattr(self, 'tracker') and sum(cant_skip) > 0:
 
                 # Prepare tracker input.
                 if self.debug and any(len(buf) < 1 or len(stack) for buf, stack in zip(self.bufs, self.stacks)):
@@ -483,7 +479,6 @@ class BaseModel(nn.Module):
                  encode_reverse=None,
                  encode_bidirectional=None,
                  encode_num_layers=None,
-                 use_skips=False,
                  lateral_tracking=None,
                  use_tracking_in_composition=None,
                  predict_use_cell=None,
@@ -522,7 +517,7 @@ class BaseModel(nn.Module):
         vocab.vectors = initial_embeddings
 
         # Build parsing component.
-        self.spinn = self.build_spinn(args, vocab, use_skips, predict_use_cell, use_lengths)
+        self.spinn = self.build_spinn(args, vocab, predict_use_cell, use_lengths)
 
         # Build classiifer.
         features_dim = self.get_features_dim()
@@ -577,8 +572,8 @@ class BaseModel(nn.Module):
             raise NotImplementedError
         return encoding_net
 
-    def build_spinn(self, args, vocab, use_skips, predict_use_cell, use_lengths):
-        return SPINN(args, vocab, use_skips, predict_use_cell, use_lengths)
+    def build_spinn(self, args, vocab, predict_use_cell, use_lengths):
+        return SPINN(args, vocab, predict_use_cell, use_lengths)
 
     def run_spinn(self, example, use_internal_parser, validate_transitions=True):
         self.spinn.reset_state()

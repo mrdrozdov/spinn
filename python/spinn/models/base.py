@@ -292,9 +292,6 @@ def get_flags():
     gflags.DEFINE_string("embedding_data_path", None,
         "If set, load GloVe-formatted embeddings from here.")
 
-    # Data preprocessing settings.
-    gflags.DEFINE_boolean("use_skips", False, "Pad transitions with SKIP actions.")
-
     # Model architecture settings.
     gflags.DEFINE_enum("model_type", "RNN", ["CBOW", "RNN", "SPINN", "RLSPINN", "RAESPINN", "GENSPINN"], "")
     gflags.DEFINE_integer("gpu", -1, "")

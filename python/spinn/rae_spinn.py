@@ -42,7 +42,6 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          encode_bidirectional=FLAGS.encode_bidirectional,
          encode_num_layers=FLAGS.encode_num_layers,
          use_sentence_pair=use_sentence_pair,
-         use_skips=FLAGS.use_skips,
          lateral_tracking=FLAGS.lateral_tracking,
          use_tracking_in_composition=FLAGS.use_tracking_in_composition,
          predict_use_cell=FLAGS.predict_use_cell,
@@ -57,8 +56,8 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
 
 class RAESPINN(SPINN):
 
-    def __init__(self, args, vocab, use_skips, predict_use_cell, use_lengths, predict_leaf):
-        super(RAESPINN, self).__init__(args, vocab, use_skips, predict_use_cell, use_lengths)
+    def __init__(self, args, vocab, predict_use_cell, use_lengths, predict_leaf):
+        super(RAESPINN, self).__init__(args, vocab, predict_use_cell, use_lengths)
         model_dim = args.size * 2
         self.decompose = nn.Linear(model_dim, model_dim * 2)
 
@@ -139,5 +138,5 @@ class BaseModel(_BaseModel):
         self.predict_leaf = predict_leaf
         super(BaseModel, self).__init__(**kwargs)
 
-    def build_spinn(self, args, vocab, use_skips, predict_use_cell, use_lengths):
-        return RAESPINN(args, vocab, use_skips, predict_use_cell, use_lengths, self.predict_leaf)
+    def build_spinn(self, args, vocab, predict_use_cell, use_lengths):
+        return RAESPINN(args, vocab, predict_use_cell, use_lengths, self.predict_leaf)

@@ -32,9 +32,6 @@ def default_args(**kwargs):
     args['tracking_lstm_hidden_dim'] = 4
     args['transition_weight'] = None
 
-    # Data Args
-    args['use_skips'] = False
-
     # Other
     args['predict_leaf'] = True
 

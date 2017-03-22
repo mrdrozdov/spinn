@@ -42,7 +42,6 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          encode_bidirectional=FLAGS.encode_bidirectional,
          encode_num_layers=FLAGS.encode_num_layers,
          use_sentence_pair=use_sentence_pair,
-         use_skips=FLAGS.use_skips,
          lateral_tracking=FLAGS.lateral_tracking,
          use_tracking_in_composition=FLAGS.use_tracking_in_composition,
          predict_use_cell=FLAGS.predict_use_cell,
@@ -57,8 +56,8 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
 
 class GenSPINN(SPINN):
 
-    def __init__(self, args, vocab, use_skips, predict_use_cell, use_lengths):
-        super(GenSPINN, self).__init__(args, vocab, use_skips, predict_use_cell, use_lengths)
+    def __init__(self, args, vocab, predict_use_cell, use_lengths):
+        super(GenSPINN, self).__init__(args, vocab, predict_use_cell, use_lengths)
 
         vocab_size = vocab.vectors.shape[0]
         self.inp_dim = args.size
@@ -174,8 +173,8 @@ class BaseModel(_BaseModel):
         self.gen_h = gen_h
         super(BaseModel, self).__init__(**kwargs)
 
-    def build_spinn(self, args, vocab, use_skips, predict_use_cell, use_lengths):
-        return GenSPINN(args, vocab, use_skips, predict_use_cell, use_lengths)
+    def build_spinn(self, args, vocab, predict_use_cell, use_lengths):
+        return GenSPINN(args, vocab, predict_use_cell, use_lengths)
 
     def output_hook(self, output, sentences, transitions, y_batch=None):
         pass

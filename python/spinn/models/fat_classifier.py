@@ -353,7 +353,6 @@ def run(only_forward=False):
          encode_bidirectional=FLAGS.encode_bidirectional,
          encode_num_layers=FLAGS.encode_num_layers,
          use_sentence_pair=use_sentence_pair,
-         use_skips=FLAGS.use_skips,
          lateral_tracking=FLAGS.lateral_tracking,
          use_tracking_in_composition=FLAGS.use_tracking_in_composition,
          predict_use_cell=FLAGS.predict_use_cell,
@@ -599,9 +598,6 @@ if __name__ == '__main__':
     gflags.DEFINE_integer("shuffle_eval_seed", 123, "Seed shuffling of eval data.")
     gflags.DEFINE_string("embedding_data_path", None,
         "If set, load GloVe-formatted embeddings from here.")
-
-    # Data preprocessing settings.
-    gflags.DEFINE_boolean("use_skips", False, "Pad transitions with SKIP actions.")
 
     # Model architecture settings.
     gflags.DEFINE_enum("model_type", "RNN", ["CBOW", "RNN", "SPINN", "RLSPINN", "RAESPINN", "GENSPINN"], "")
