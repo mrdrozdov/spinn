@@ -103,6 +103,9 @@ class BaseModel(nn.Module):
         return emb
 
     def forward(self, sentences, transitions, y_batch=None, **kwargs):
+        # Useful when investigating dynamic batching.
+        self.seq_lengths = sentences.shape[1] - (sentences == 0).sum(1)
+
         x = self.unwrap(sentences, transitions)
         emb = self.run_embed(x)
         hh = torch.squeeze(self.run_rnn(emb))
