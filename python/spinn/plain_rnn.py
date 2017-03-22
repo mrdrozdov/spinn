@@ -17,12 +17,8 @@ from spinn.util.misc import Args, Vocab
 
 
 def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS):
-    if data_manager.SENTENCE_PAIR_DATA:
-        model_cls = SentencePairModel
-        use_sentence_pair = True
-    else:
-        model_cls = SentenceModel
-        use_sentence_pair = False
+    use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
+    model_cls = BaseModel
 
     return model_cls(model_dim=FLAGS.model_dim,
          word_embedding_dim=FLAGS.word_embedding_dim,
@@ -57,6 +53,7 @@ class BaseModel(nn.Module):
                 ):
         super(BaseModel, self).__init__()
 
+        self.use_sentence_pair = use_sentence_pair
         self.model_dim = model_dim
 
         classifier_dropout_rate = 1. - classifier_keep_rate
@@ -105,46 +102,47 @@ class BaseModel(nn.Module):
 
         return emb
 
+    def forward(self, sentences, transitions, y_batch=None, **kwargs):
+        x = self.unwrap(sentences, transitions)
+        emb = self.run_embed(x)
+        hh = torch.squeeze(self.run_rnn(emb))
+        h = self.wrap(hh)
+        output = self.mlp(h)
 
-class SentencePairModel(BaseModel):
+        return output
 
-    def build_example(self, sentences, transitions):
+    # --- Sentence Style Switches ---
+
+    def unwrap(self, sentences, transitions):
+        if self.use_sentence_pair:
+            return self.unwrap_sentence_pair(sentences, transitions)
+        return self.unwrap_sentence(sentences, transitions)
+
+    def wrap(self, hh):
+        if self.use_sentence_pair:
+            return self.wrap_sentence_pair(hh)
+        return self.wrap_sentence(hh)
+
+    # --- Sentence Specific ---
+
+    def unwrap_sentence_pair(self, sentences, transitions):
         batch_size = sentences.shape[0]
 
-        # Build Tokens
         x_prem = sentences[:,:,0]
         x_hyp = sentences[:,:,1]
         x = np.concatenate([x_prem, x_hyp], axis=0)
 
         return to_gpu(Variable(torch.from_numpy(x), volatile=not self.training))
 
-    def forward(self, sentences, transitions, y_batch=None, **kwargs):
-        batch_size = sentences.shape[0]
-
-        # Build Tokens
-        x = self.build_example(sentences, transitions)
-
-        emb = self.run_embed(x)
-
-        hh = torch.squeeze(self.run_rnn(emb))
+    def wrap_sentence_pair(self, hh):
+        batch_size = hh.size(0) / 2
         h = torch.cat([hh[:batch_size], hh[batch_size:]], 1)
-        output = self.mlp(h)
+        return h
 
-        return output
+    # --- Sentence Pair Specific ---
 
-
-class SentenceModel(BaseModel):
-
-    def build_example(self, sentences, transitions):
+    def unwrap_sentence(self, sentences, transitions):
         return to_gpu(Variable(torch.from_numpy(sentences), volatile=not self.training))
 
-    def forward(self, sentences, transitions, y_batch=None, **kwargs):
-        # Build Tokens
-        x = self.build_example(sentences, transitions)
-
-        emb = self.run_embed(x)
-
-        h = torch.squeeze(self.run_rnn(emb))
-        output = self.mlp(h)
-
-        return output
+    def wrap_sentence(self, hh):
+        return hh
