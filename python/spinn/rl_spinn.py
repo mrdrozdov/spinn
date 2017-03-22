@@ -110,25 +110,6 @@ class BaseModel(_BaseModel):
 
         self.register_buffer('baseline', torch.FloatTensor([0.0]))
 
-        if self.rl_baseline == "value":
-            if kwargs['use_sentence_pair']:
-                value_net_cls = spinn.cbow.SentencePairModel
-            else:
-                value_net_cls = spinn.cbow.SentenceModel
-            self.value_net = value_net_cls(
-                model_dim=kwargs['model_dim'],
-                word_embedding_dim=kwargs['word_embedding_dim'],
-                vocab_size=kwargs['vocab_size'],
-                initial_embeddings=kwargs['initial_embeddings'],
-                mlp_dim=kwargs['mlp_dim'],
-                num_mlp_layers=0,
-                embedding_keep_rate=kwargs['embedding_keep_rate'],
-                classifier_keep_rate=kwargs['classifier_keep_rate'],
-                use_sentence_pair=kwargs['use_sentence_pair'],
-                num_classes=1,
-                use_embed=False,
-                )
-
     def build_spinn(self, args, vocab, use_skips, predict_use_cell, use_lengths):
         return RLSPINN(args, vocab, use_skips, predict_use_cell, use_lengths)
 
@@ -179,21 +160,6 @@ class BaseModel(_BaseModel):
             mu = self.rl_mu
             self.baseline[0] = self.baseline[0] * (1 - mu) + rewards.mean() * mu
             baseline = self.baseline[0]
-        elif self.rl_baseline == "value":
-            # Pass inputs to Value Net
-            if embeds is not None:
-                value_inp = torch.cat([torch.cat(e, 0).view(1,len(e),-1) for e in embeds], 0)
-                value_outp = self.value_net(value_inp, transitions)
-            else:
-                value_outp = self.value_net(sentences, transitions)
-
-            # Estimate Reward
-            value_prob = value_outp
-
-            # Save MSE Loss using Reward as target
-            self.value_loss = nn.MSELoss()(value_prob, to_gpu(Variable(rewards, volatile=not self.training)))
-
-            baseline = value_prob.data.cpu()
         elif self.rl_baseline == "greedy":
             # Pass inputs to Greedy Max
             greedy_outp = self.run_greedy(sentences, transitions)
@@ -273,8 +239,7 @@ class BaseModel(_BaseModel):
         # Calculate advantage.
         advantage = rewards - baseline
 
-        # Whiten advantage. Note: Might only make sense when using value net.
-        # source: https://rllab.readthedocs.io/en/latest/user/implement_algo_basic.html#normalizing-the-returns
+        # Whiten advantage. This is also called Variance Normalization.
         if self.rl_whiten:
             advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
 

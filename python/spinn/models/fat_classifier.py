@@ -641,7 +641,7 @@ if __name__ == '__main__':
 
     # RL settings.
     gflags.DEFINE_float("rl_mu", 0.1, "Use in exponential moving average baseline.")
-    gflags.DEFINE_enum("rl_baseline", "ema", ["ema", "value", "greedy"],
+    gflags.DEFINE_enum("rl_baseline", "ema", ["ema", "greedy"],
         "Different configurations to approximate reward function.")
     gflags.DEFINE_enum("rl_reward", "standard", ["standard", "xent"],
         "Different reward functions to use.")
