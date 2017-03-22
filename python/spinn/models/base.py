@@ -507,9 +507,8 @@ def main_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterato
 
         start = time.time()
 
-        X_batch, transitions_batch, y_batch, num_transitions_batch, structure_transitions, train_ids = get_batch(training_data_iter.next())
-
-        import ipdb; ipdb.set_trace()
+        batch = get_batch(training_data_iter.next())
+        X_batch, transitions_batch, y_batch, num_transitions_batch, structure_transitions, train_ids = batch
 
         total_tokens = sum([(nt+1)/2 for nt in num_transitions_batch.reshape(-1)])
 
@@ -571,7 +570,7 @@ def main_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterato
 
         total_time = end - start
 
-        train_accumulate(model, A)
+        train_accumulate(model, A, batch)
         A.add('class_acc', class_acc)
         A.add('total_tokens', total_tokens)
         A.add('total_time', total_time)

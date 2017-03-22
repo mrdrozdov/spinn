@@ -6,8 +6,7 @@ import os
 from spinn import util
 from spinn.data.snli import load_snli_data
 from spinn.data.sst import load_sst_data
-from spinn.data.arithmetic import load_sign_data
-from spinn.data.arithmetic import load_simple_data
+from spinn.data.arithmetic import load_sign_data, load_simple_data
 from spinn.data.dual_arithmetic import load_eq_data
 from spinn.data.dual_arithmetic import load_relational_data
 from spinn.data.boolean import load_boolean_data
@@ -407,6 +406,24 @@ class ArithmeticTestCase(unittest.TestCase):
 
             # The transitions should be padded on the left.
             assert t_is_left_padded(ts)
+
+    def test_structure_transitions_1(self):
+        structure_transitions = load_simple_data.structure_transitions
+        tokens = map(str, '++000')
+        transitions = [0, 0, 0, 0, 1, 1, 0, 1, 1]
+        expected =    [0, 0, 0, 0, 1, 3, 0, 1, 3]
+        actual = structure_transitions(tokens, transitions)
+
+        assert all(a == e for a, e in zip(actual, expected))
+
+    def test_structure_transitions_2(self):
+        structure_transitions = load_simple_data.structure_transitions
+        tokens = map(str, '++000')
+        transitions = [0, 0, 0, 1, 0, 1, 1, 0, 1]
+        expected =    [0, 0, 0, 1, 0, 3, 1, 0, 3]
+        actual = structure_transitions(tokens, transitions)
+
+        assert all(a == e for a, e in zip(actual, expected))
 
 
 class DualArithmeticTestCase(unittest.TestCase):
