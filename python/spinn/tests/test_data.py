@@ -14,6 +14,9 @@ from spinn.data.boolean import load_boolean_data
 from collections import Counter
 
 
+from spinn.data import T_SHIFT, T_REDUCE, T_SKIP, T_SUB
+
+
 """ FAQ
 
 1. How are sentences padded?
@@ -57,9 +60,9 @@ def t_is_valid(ts):
 
     try:
         for t in ts:
-            if t == util.SHIFT_SYMBOL:
+            if t == T_SHIFT:
                 stack.append(buf.pop())
-            elif t == util.REDUCE_SYMBOL:
+            elif t == T_REDUCE:
                 stack.append(stack.pop() + stack.pop())
     except:
         return False
@@ -68,19 +71,19 @@ def t_is_valid(ts):
 
 
 def t_is_left_padded(ts):
-    assert len([t for t in ts if t == util.SKIP_SYMBOL]) > 0, \
+    assert len([t for t in ts if t == T_SKIP]) > 0, \
         "Transitions must be padded for this check to work"
 
     assert ts[0] != ts[-1], "This check does not work for transitions padded on both ends."
 
-    return ts[0] == util.SKIP_SYMBOL
+    return ts[0] == T_SKIP
 
 
 def t_is_left_to_right(ts):
     for t in ts:
-        if t == util.SKIP_SYMBOL:
+        if t == T_SKIP:
             continue
-        if t == util.SHIFT_SYMBOL:
+        if t == T_SHIFT:
             return True
         else:
             # If the first symbol is a REDUCE, then the transitions are reversed.
@@ -212,8 +215,8 @@ class SNLITestCase(unittest.TestCase):
             assert not s_is_left_padded(prem_s)
             
             # The num_transitions should count non-skip transitions
-            assert len([x for x in hyp_t if x != util.SKIP_SYMBOL]) == num_hyp_t
-            assert len([x for x in prem_t if x != util.SKIP_SYMBOL]) == num_prem_t
+            assert len([x for x in hyp_t if x != T_SKIP]) == num_hyp_t
+            assert len([x for x in prem_t if x != T_SKIP]) == num_prem_t
 
             # The transitions should start with SKIP and end with REDUCE (ignoring SKIPs).
             assert t_is_left_to_right(hyp_t)
@@ -332,7 +335,7 @@ class SSTTestCase(unittest.TestCase):
             assert not s_is_left_padded(s)
             
             # The num_transitions should count non-skip transitions
-            assert len([x for x in ts if x != util.SKIP_SYMBOL]) == num_t
+            assert len([x for x in ts if x != T_SKIP]) == num_t
 
             # The transitions should start with SKIP and end with REDUCE (ignoring SKIPs).
             assert t_is_left_to_right(ts)
@@ -369,7 +372,7 @@ class ArithmeticTestCase(unittest.TestCase):
             assert not s_is_left_padded(s)
 
             # The num_transitions should count non-skip transitions
-            assert len([x for x in ts if x != util.SKIP_SYMBOL]) == num_t
+            assert len([x for x in ts if x != T_SKIP]) == num_t
 
             # The transitions should start with SKIP and end with REDUCE (ignoring SKIPs).
             assert t_is_left_to_right(ts)
@@ -403,7 +406,7 @@ class ArithmeticTestCase(unittest.TestCase):
             assert not s_is_left_padded(s)
 
             # The num_transitions should count non-skip transitions
-            assert len([x for x in ts if x != util.SKIP_SYMBOL]) == num_t
+            assert len([x for x in ts if x != T_SKIP]) == num_t
 
             # The transitions should start with SKIP and end with REDUCE (ignoring SKIPs).
             assert t_is_left_to_right(ts)
@@ -441,7 +444,7 @@ class DualArithmeticTestCase(unittest.TestCase):
                 assert not s_is_left_padded(s)
 
                 # The num_transitions should count non-skip transitions
-                assert len([x for x in ts if x != util.SKIP_SYMBOL]) == num_t
+                assert len([x for x in ts if x != T_SKIP]) == num_t
 
                 # The transitions should start with SKIP and end with REDUCE (ignoring SKIPs).
                 assert t_is_left_to_right(ts)
@@ -476,7 +479,7 @@ class DualArithmeticTestCase(unittest.TestCase):
                 assert not s_is_left_padded(s)
 
                 # The num_transitions should count non-skip transitions
-                assert len([x for x in ts if x != util.SKIP_SYMBOL]) == num_t
+                assert len([x for x in ts if x != T_SKIP]) == num_t
 
                 # The transitions should start with SKIP and end with REDUCE (ignoring SKIPs).
                 assert t_is_left_to_right(ts)
@@ -526,7 +529,7 @@ class BooleanTestCase(unittest.TestCase):
             assert not s_is_left_padded(s)
 
             # The num_transitions should count non-skip transitions
-            assert len([x for x in ts if x != util.SKIP_SYMBOL]) == num_t
+            assert len([x for x in ts if x != T_SKIP]) == num_t
 
             # The transitions should start with SKIP and end with REDUCE (ignoring SKIPs).
             assert t_is_left_to_right(ts)

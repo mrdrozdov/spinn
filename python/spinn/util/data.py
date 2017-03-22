@@ -8,6 +8,8 @@ import sys
 import numpy as np
 
 
+from spinn.data import T_SHIFT, T_REDUCE, T_SKIP, T_SUB
+
 # With loaded embedding matrix, the padding vector will be initialized to zero
 # and will not be trained. Hopefully this isn't a problem. It seems better than
 # random initialization...
@@ -17,9 +19,9 @@ PADDING_TOKEN = "*PADDING*"
 # it's a common token that is pretrained, but shouldn't look like any content words.
 UNK_TOKEN = "_"
 
-SKIP_SYMBOL = 2
-SHIFT_SYMBOL = 0
-REDUCE_SYMBOL = 1
+T_SHIFT = 0
+T_REDUCE = 1
+T_SKIP = 2
 SENTENCE_PADDING_SYMBOL = 0
 
 CORE_VOCABULARY = {PADDING_TOKEN: 0,
@@ -160,7 +162,7 @@ def CropAndPad(dataset, length, logger=None, sentence_pair_data=False, use_left_
             shifts_before_crop_and_pad = example[transitions_key].count(0)
             CropAndPadExample(
                 example, transitions_left_padding, length, transitions_key,
-                symbol=SKIP_SYMBOL, logger=logger)
+                symbol=T_SKIP, logger=logger)
             shifts_after_crop_and_pad = example[transitions_key].count(0)
             tokens_left_padding = shifts_after_crop_and_pad - \
                 shifts_before_crop_and_pad
@@ -537,5 +539,5 @@ def convert_binary_bracketed_seq(seq):
         if item != "(":
             if item != ")":
                 tokens.append(item)
-            transitions.append(REDUCE_SYMBOL if item == ")" else SHIFT_SYMBOL)
+            transitions.append(T_REDUCE if item == ")" else T_SHIFT)
     return tokens, transitions
