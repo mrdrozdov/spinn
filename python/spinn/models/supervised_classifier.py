@@ -82,8 +82,7 @@ def run(only_forward=False):
     training_data = util.PreprocessDataset(
         raw_training_data, vocabulary, FLAGS.seq_length, data_manager, eval_mode=False, logger=logger,
         sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-        for_rnn=sequential_only(),
-        use_left_padding=FLAGS.use_left_padding)
+        for_rnn=sequential_only())
     training_data_iter = util.MakeTrainingIterator(
         training_data, FLAGS.batch_size, FLAGS.smart_batching, FLAGS.use_peano,
         sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
@@ -97,8 +96,7 @@ def run(only_forward=False):
             FLAGS.eval_seq_length if FLAGS.eval_seq_length is not None else FLAGS.seq_length,
             data_manager, eval_mode=True, logger=logger,
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-            for_rnn=sequential_only(),
-            use_left_padding=FLAGS.use_left_padding)
+            for_rnn=sequential_only())
         eval_it = util.MakeEvalIterator(eval_data,
             FLAGS.batch_size, FLAGS.eval_data_limit, bucket_eval=FLAGS.bucket_eval,
             shuffle=FLAGS.shuffle_eval, rseed=FLAGS.shuffle_eval_seed)

@@ -59,8 +59,8 @@ def get_batch(batch):
 
 def truncate(X_batch, transitions_batch, num_transitions_batch):
     # Truncate each batch to max length within the batch.
-    X_batch_is_left_padded = (not FLAGS.use_left_padding or sequential_only())
-    transitions_batch_is_left_padded = FLAGS.use_left_padding
+    X_batch_is_left_padded = sequential_only()
+    transitions_batch_is_left_padded = True
     max_transitions = np.max(num_transitions_batch)
     seq_length = X_batch.shape[1]
 
@@ -294,7 +294,6 @@ def get_flags():
 
     # Data preprocessing settings.
     gflags.DEFINE_boolean("use_skips", False, "Pad transitions with SKIP actions.")
-    gflags.DEFINE_boolean("use_left_padding", True, "Pad transitions only on the LHS.")
 
     # Model architecture settings.
     gflags.DEFINE_enum("model_type", "RNN", ["CBOW", "RNN", "SPINN", "RLSPINN", "RAESPINN", "GENSPINN"], "")

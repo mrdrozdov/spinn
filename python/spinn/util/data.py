@@ -141,7 +141,7 @@ def CropAndPadExample(example, left_padding, target_length, key, symbol=0, logge
         example[key] + ([symbol] * right_padding)
 
 
-def CropAndPad(dataset, length, logger=None, sentence_pair_data=False, use_left_padding=True):
+def CropAndPad(dataset, length, logger=None, sentence_pair_data=False):
     # NOTE: This can probably be done faster in NumPy if it winds up making a
     # difference.
     # Always make sure that the transitions are aligned at the left edge, so
@@ -157,8 +157,6 @@ def CropAndPad(dataset, length, logger=None, sentence_pair_data=False, use_left_
         for (transitions_key, num_transitions_key, tokens_key) in keys:
             example[num_transitions_key] = len(example[transitions_key])
             transitions_left_padding = length - example[num_transitions_key]
-            if not use_left_padding and transitions_left_padding > 0:
-                transitions_left_padding = 0
             shifts_before_crop_and_pad = example[transitions_key].count(0)
             CropAndPadExample(
                 example, transitions_left_padding, length, transitions_key,
@@ -362,14 +360,14 @@ def MakeBucketEvalIterator(sources, batch_size):
 
 
 def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=False, logger=None,
-                      sentence_pair_data=False, for_rnn=False, use_left_padding=True):
+                      sentence_pair_data=False, for_rnn=False):
     # TODO(SB): Simpler version for plain RNN.
     dataset = TrimDataset(dataset, seq_length, eval_mode=eval_mode, sentence_pair_data=sentence_pair_data)
     dataset = TokensToIDs(vocabulary, dataset, sentence_pair_data=sentence_pair_data)
     if for_rnn:
         dataset = CropAndPadForRNN(dataset, seq_length, logger=logger, sentence_pair_data=sentence_pair_data)
     else:
-        dataset = CropAndPad(dataset, seq_length, logger=logger, sentence_pair_data=sentence_pair_data, use_left_padding=use_left_padding)
+        dataset = CropAndPad(dataset, seq_length, logger=logger, sentence_pair_data=sentence_pair_data)
 
     if sentence_pair_data:
         X = np.transpose(np.array([[example["premise_tokens"] for example in dataset],

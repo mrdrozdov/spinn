@@ -82,8 +82,8 @@ def get_batch(batch):
 
 def truncate(X_batch, transitions_batch, num_transitions_batch):
     # Truncate each batch to max length within the batch.
-    X_batch_is_left_padded = (not FLAGS.use_left_padding or sequential_only())
-    transitions_batch_is_left_padded = FLAGS.use_left_padding
+    X_batch_is_left_padded = sequential_only()
+    transitions_batch_is_left_padded = True
     max_transitions = np.max(num_transitions_batch)
     seq_length = X_batch.shape[1]
 
@@ -294,8 +294,7 @@ def run(only_forward=False):
     training_data = util.PreprocessDataset(
         raw_training_data, vocabulary, FLAGS.seq_length, data_manager, eval_mode=False, logger=logger,
         sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-        for_rnn=sequential_only(),
-        use_left_padding=FLAGS.use_left_padding)
+        for_rnn=sequential_only())
     training_data_iter = util.MakeTrainingIterator(
         training_data, FLAGS.batch_size, FLAGS.smart_batching, FLAGS.use_peano,
         sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
@@ -309,8 +308,7 @@ def run(only_forward=False):
             FLAGS.eval_seq_length if FLAGS.eval_seq_length is not None else FLAGS.seq_length,
             data_manager, eval_mode=True, logger=logger,
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-            for_rnn=sequential_only(),
-            use_left_padding=FLAGS.use_left_padding)
+            for_rnn=sequential_only())
         eval_it = util.MakeEvalIterator(eval_data,
             FLAGS.batch_size, FLAGS.eval_data_limit, bucket_eval=FLAGS.bucket_eval,
             shuffle=FLAGS.shuffle_eval, rseed=FLAGS.shuffle_eval_seed)
@@ -604,7 +602,6 @@ if __name__ == '__main__':
 
     # Data preprocessing settings.
     gflags.DEFINE_boolean("use_skips", False, "Pad transitions with SKIP actions.")
-    gflags.DEFINE_boolean("use_left_padding", True, "Pad transitions only on the LHS.")
 
     # Model architecture settings.
     gflags.DEFINE_enum("model_type", "RNN", ["CBOW", "RNN", "SPINN", "RLSPINN", "RAESPINN", "GENSPINN"], "")
