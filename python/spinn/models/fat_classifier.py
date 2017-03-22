@@ -62,42 +62,10 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 
+from spinn.models.base import sequential_only, get_batch, truncate
+
 
 FLAGS = gflags.FLAGS
-
-
-def sequential_only():
-    return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW"
-
-
-def get_batch(batch):
-    X_batch, transitions_batch, y_batch, num_transitions_batch, example_ids = batch
-
-    # Truncate batch.
-    X_batch, transitions_batch = truncate(
-        X_batch, transitions_batch, num_transitions_batch)
-
-    return X_batch, transitions_batch, y_batch, num_transitions_batch, example_ids
-
-
-def truncate(X_batch, transitions_batch, num_transitions_batch):
-    # Truncate each batch to max length within the batch.
-    X_batch_is_left_padded = sequential_only()
-    transitions_batch_is_left_padded = True
-    max_transitions = np.max(num_transitions_batch)
-    seq_length = X_batch.shape[1]
-
-    if X_batch_is_left_padded:
-        X_batch = X_batch[:, seq_length - max_transitions:]
-    else:
-        X_batch = X_batch[:, :max_transitions]
-
-    if transitions_batch_is_left_padded:
-        transitions_batch = transitions_batch[:, seq_length - max_transitions:]
-    else:
-        transitions_batch = transitions_batch[:, :max_transitions]
-
-    return X_batch, transitions_batch
 
 
 def evaluate(model, eval_set, logger, step, vocabulary=None):

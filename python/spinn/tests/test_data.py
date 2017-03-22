@@ -193,7 +193,7 @@ class SNLITestCase(unittest.TestCase):
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             for_rnn=for_rnn)
 
-        tokens, transitions, labels, num_transitions, _ = data
+        tokens, transitions, labels, num_transitions = data[:4]
         
         # Filter examples that don't have lengths <= seq_length
         assert tokens.shape == (2, seq_length, 2)
@@ -246,7 +246,7 @@ class SNLITestCase(unittest.TestCase):
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             for_rnn=for_rnn)
 
-        tokens, transitions, labels, num_transitions, _ = data
+        tokens, transitions, labels, num_transitions = data[:4]
 
         for s, ts, (num_hyp_t, num_prem_t) in zip(tokens, transitions, num_transitions):
             hyp_t = ts[:, 0]
@@ -276,7 +276,7 @@ class SNLITestCase(unittest.TestCase):
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             for_rnn=for_rnn)
 
-        tokens, transitions, labels, num_transitions, _ = data
+        tokens, transitions, labels, num_transitions = data[:4]
 
         for s, ts, (num_hyp_t, num_prem_t) in zip(tokens, transitions, num_transitions):
             hyp_t = ts[:, 0]
@@ -316,7 +316,7 @@ class SSTTestCase(unittest.TestCase):
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             for_rnn=for_rnn)
 
-        tokens, transitions, labels, num_transitions, _ = data
+        tokens, transitions, labels, num_transitions = data[:4]
 
         # Filter examples that don't have lengths <= seq_length
         assert tokens.shape == (10, seq_length)
@@ -356,7 +356,7 @@ class ArithmeticTestCase(unittest.TestCase):
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             for_rnn=for_rnn)
 
-        seqs, transitions, labels, num_transitions, _ = data
+        seqs, transitions, labels, num_transitions = data[:4]
 
         for s, ts, num_t in zip(seqs, transitions, num_transitions):
 
@@ -389,7 +389,7 @@ class ArithmeticTestCase(unittest.TestCase):
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             for_rnn=for_rnn)
 
-        seqs, transitions, labels, num_transitions, _ = data
+        seqs, transitions, labels, num_transitions = data[:4]
 
         for s, ts, num_t in zip(seqs, transitions, num_transitions):
 
@@ -425,7 +425,7 @@ class DualArithmeticTestCase(unittest.TestCase):
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             for_rnn=for_rnn)
 
-        seqs, transitions, labels, num_transitions, _ = data
+        seqs, transitions, labels, num_transitions = data[:4]
 
         for _s, _ts, _num_t in zip(seqs, transitions, num_transitions):
 
@@ -459,7 +459,7 @@ class DualArithmeticTestCase(unittest.TestCase):
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             for_rnn=for_rnn)
 
-        seqs, transitions, labels, num_transitions, _ = data
+        seqs, transitions, labels, num_transitions = data[:4]
 
         for _s, _ts, _num_t in zip(seqs, transitions, num_transitions):
 
@@ -505,7 +505,7 @@ class BooleanTestCase(unittest.TestCase):
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             for_rnn=for_rnn)
 
-        tokens, transitions, labels, num_transitions, _ = data
+        tokens, transitions, labels, num_transitions = data[:4]
 
         # Filter examples that don't have lengths <= seq_length
         assert tokens.shape == (7, seq_length)
