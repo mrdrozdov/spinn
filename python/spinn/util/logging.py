@@ -45,8 +45,6 @@ def train_accumulate(model, A, batch):
 
     if has_invalid:
         A.add('invalid', model.spinn.invalid)
-        A.add('ninvalid', model.spinn. n_invalid)
-        A.add('ntotal', model.spinn. n_total)
 
     # TODO: Add support for other data sets.
     if not model.use_sentence_pair and structure_transitions.sum() > 0:
@@ -94,7 +92,6 @@ def train_stats(model, optimizer, A, step):
         policy_cost=model.policy_loss.data[0] if has_policy else 0.0,
         value_cost=model.value_loss.data[0] if has_value else 0.0,
         invalid=A.get_avg('invalid') if has_invalid else 0.0,
-        ninvalid=sum(A.get('ninvalid')) / float(sum(A.get('ntotal'))) if has_invalid else 0.0,
         epsilon=model.spinn.epsilon if has_epsilon else 0.0,
         avg_entropy=A.get('avg_entropy') if has_entropy else 0.0,
         rae_cost=model.spinn.rae_loss.data[0] if has_rae else 0.0,
@@ -159,7 +156,6 @@ def train_extra_format(model):
     extra_str += " lr={learning_rate:.7f}"
     if hasattr(model, "spinn") and hasattr(model.spinn, "invalid"):
         extra_str += " inv={invalid:.7f}"
-        extra_str += " ninv={ninvalid:.7f}"
     if hasattr(model, "spinn"):
         extra_str += " sub={struct:.7f}"
     if hasattr(model, "spinn") and hasattr(model.spinn, "epsilon"):
@@ -178,6 +174,5 @@ def eval_extra_format(model):
     eval_extra_str = "Eval Extra:"
     if hasattr(model, 'spinn'):
         eval_extra_str += " inv={inv:.7f}"
-        eval_extra_str += " ninv={ninv:.7f}"
 
     return eval_extra_str

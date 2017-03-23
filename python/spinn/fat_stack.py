@@ -446,10 +446,8 @@ class SPINN(nn.Module):
             select_t_logits = torch.index_select(t_logits, 0, index)
             transition_loss = nn.NLLLoss()(select_t_logits, select_t_given) * self.transition_weight
 
-            n_invalid = (invalid_count > 0).sum()
-            self.invalid = n_invalid / float(batch_size)
-            self.n_invalid = n_invalid
-            self.n_total = n_total
+            self.n_invalid = (invalid_count > 0).sum()
+            self.invalid = self.n_invalid / float(batch_size)
 
         self.loss_phase_hook()
 
