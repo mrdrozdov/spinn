@@ -137,8 +137,8 @@ def train_format(model):
         stats_str += " p{policy_cost:.5f}"
     if has_spinn and hasattr(model, 'value_loss'):
         stats_str += " v{value_cost:.5f}"
-    if hasattr(model, 'avg_entropy'):
-        stats_str += " e{avg_entropy:.5f}"
+    # if hasattr(model, 'avg_entropy'):
+    #     stats_str += " e{avg_entropy:.5f}"
     if has_spinn and hasattr(model.spinn, 'rae_loss'):
         stats_str += " rae{rae_cost:.5f}"
     if has_spinn and hasattr(model.spinn, 'leaf_loss'):

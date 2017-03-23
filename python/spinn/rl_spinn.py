@@ -107,10 +107,7 @@ class BaseModel(_BaseModel):
         return RLSPINN(args, vocab, predict_use_cell, use_lengths)
 
     def run_greedy(self, sentences, transitions):
-        if self.use_sentence_pair:
-            inference_model_cls = SentencePairModel
-        else:
-            inference_model_cls = SentenceModel
+        inference_model_cls = BaseModel
 
         # HACK: This is a pretty simple way to create the inference time version of SPINN.
         # The reason a copy is necessary is because there is some retained state in the
