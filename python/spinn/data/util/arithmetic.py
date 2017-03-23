@@ -60,26 +60,34 @@ class ArithmeticData(object):
                     yield result, seq
 
 
-    def convert_to_sexpr(self, prefix_seq):
-        ret = []
-
-        depth = 0
-        right_branch = False
-        for i in range(len(prefix_seq)):
-            token = prefix_seq[i]
-            if token in self.ops:
-                ret.extend(["(", token, "("])
-
-                depth += 2
-                right_branch = False
+    def convert_to_sexpr_helper(self, seq):
+        # Runs in O(n^2) time but is correct.
+        op = seq[0]
+        left_start = 1
+        depth = 1
+        right_start = None
+        for i in range(left_start, len(seq)):
+            if seq[i] in self.ops:
+                depth += 1
             else:
-                ret.append(token)
-                if right_branch:
-                    ret.extend([")", ")"])
-                    depth -= 2
-                else:
-                    right_branch = True
+                depth -= 1
+            if depth == 0:
+                right_start = i + 1
+                break
 
-        ret.extend([")"] * depth)
+        if right_start - left_start == 1:
+            left = [seq[left_start]]
+        else:
+            left = self.convert_to_sexpr_helper(seq[left_start:right_start])
 
-        return ret
+        if len(seq) - right_start == 1:
+            right = [seq[right_start]]
+        else:
+            right = self.convert_to_sexpr_helper(seq[right_start:])
+
+        return ["(", op, "("] + left + right + [")", ")"]
+
+    def convert_to_sexpr(self, prefix_seq):
+        seq = list(prefix_seq)
+
+        return self.convert_to_sexpr_helper(seq)

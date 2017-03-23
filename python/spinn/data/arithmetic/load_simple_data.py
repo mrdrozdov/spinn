@@ -11,25 +11,25 @@ LABEL_MAP = {str(x): i for i, x in enumerate(OUTPUTS)}
 def structure_transitions(tokens, transitions):
 
     OP = 0
-    LEFT = 1
-    RIGHT = 2
-    COMPLETE = 3
+    INT = 1
+    OPINT = 2
+    INTINT = 3
 
     def is_op(x):
         return x == '-' or x == '+'
 
     def SHIFT(x):
-        return OP if is_op(x) else COMPLETE
+        return OP if is_op(x) else INT
 
     def REDUCE(left, right):
-        if left == LEFT and right == COMPLETE:
-            return COMPLETE
-        elif left == OP and right == RIGHT:
-            return COMPLETE
-        elif left == OP and right == COMPLETE:
-            return LEFT
-        elif left == COMPLETE and right == COMPLETE:
-            return RIGHT
+        if left == OP and right == INT:
+            return OPINT
+        elif left == INT and right == INT:
+            return INTINT
+        elif left == OP and right == INTINT:
+            return INT
+        elif left == OPINT and right == INT:
+            return INT
         else:
             raise Exception
 
@@ -37,7 +37,7 @@ def structure_transitions(tokens, transitions):
     stack = []
     ret = []
 
-    for t in transitions:
+    for i, t in enumerate(transitions):
         if t == T_SHIFT:
             x = buf.pop()
             stack.append(SHIFT(x))
@@ -47,7 +47,7 @@ def structure_transitions(tokens, transitions):
             new_stack_item = REDUCE(left, right)
             stack.append(new_stack_item)
 
-            if new_stack_item == COMPLETE and (len(buf) > 0 or len(stack) > 0):
+            if new_stack_item == INT and i < len(transitions) - 1:
                 ret.append(T_STRUCT)
             else:
                 ret.append(T_REDUCE)

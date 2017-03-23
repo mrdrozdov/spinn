@@ -411,7 +411,7 @@ class ArithmeticTestCase(unittest.TestCase):
         structure_transitions = load_simple_data.structure_transitions
         tokens = map(str, '++000')
         transitions = [0, 0, 0, 0, 1, 1, 0, 1, 1]
-        expected =    [0, 0, 0, 0, 1, 3, 0, 1, 3]
+        expected =    [0, 0, 0, 0, 1, 3, 0, 1, 1]
         actual = structure_transitions(tokens, transitions)
 
         assert all(a == e for a, e in zip(actual, expected))
@@ -420,7 +420,16 @@ class ArithmeticTestCase(unittest.TestCase):
         structure_transitions = load_simple_data.structure_transitions
         tokens = map(str, '++000')
         transitions = [0, 0, 0, 1, 0, 1, 1, 0, 1]
-        expected =    [0, 0, 0, 1, 0, 3, 1, 0, 3]
+        expected =    [0, 0, 0, 1, 0, 3, 1, 0, 1]
+        actual = structure_transitions(tokens, transitions)
+
+        assert all(a == e for a, e in zip(actual, expected))
+
+    def test_structure_transitions_3(self):
+        structure_transitions = load_simple_data.structure_transitions
+        tokens = ['-', '-', '-1', '-', '-4', '-8', '5']
+        transitions = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1]
+        expected =    [0, 0, 0, 0, 0, 0, 1, 3, 1, 3, 0, 1, 1]
         actual = structure_transitions(tokens, transitions)
 
         assert all(a == e for a, e in zip(actual, expected))

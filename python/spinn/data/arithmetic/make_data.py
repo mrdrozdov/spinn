@@ -102,6 +102,8 @@ if __name__ == '__main__':
                 else:
                     exclude_dict[check_label].add(check)
 
+                print seq
+
                 print "{}\t{}".format(data_type.LABELS[label],
                     " ".join(dataset.convert_to_sexpr(seq)),
                     )
