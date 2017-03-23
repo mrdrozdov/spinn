@@ -1,6 +1,7 @@
 import gflags
 
 import itertools
+from tqdm import tqdm
 
 from spinn import util
 from spinn.data.util.arithmetic import ArithmeticData
@@ -81,7 +82,7 @@ if __name__ == '__main__':
     dataset = ArithmeticData(NUMBERS)
     generator = dataset.generate_prefix_seqs(length)
 
-    for idx in range(limit):
+    for idx in tqdm(range(limit)):
 
         label = min(idx // label_size, len(data_type.LABELS) - 1)
         desired_length = min(3 + 2 * ((idx % label_size) // length_size), length)
@@ -101,8 +102,6 @@ if __name__ == '__main__':
                     continue
                 else:
                     exclude_dict[check_label].add(check)
-
-                print seq
 
                 print "{}\t{}".format(data_type.LABELS[label],
                     " ".join(dataset.convert_to_sexpr(seq)),
