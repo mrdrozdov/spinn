@@ -132,9 +132,8 @@ class BaseModel(_BaseModel):
             rewards = torch.eq(probs.max(1)[1], target).float()
         elif rl_reward == "xent": # Cross Entropy Loss.
             _target = target.long().view(-1, 1)
-            mask = torch.zeros(probs.size()).scatter_(1, _target, 1.0) # one hots
             log_inv_prob = torch.log(1 - probs) # get the log of the inverse probabilities
-            rewards = -1 * (log_inv_prob * mask).sum(1)
+            rewards = -1 * torch.gather(log_inv_prob, 1, _target)
         else:
             raise NotImplementedError
 
@@ -194,10 +193,8 @@ class BaseModel(_BaseModel):
         # Filter logits.
         t_logits = torch.index_select(t_logits, 0, t_index)
 
-        actions = torch.from_numpy(t_preds[t_mask]).long().view(-1, 1)
-        action_mask = torch.zeros(t_logits.size()).scatter_(1, actions, 1.0)
-        action_mask = to_gpu(Variable(action_mask, volatile=not self.training))
-        log_p_action = torch.sum(t_logits * action_mask, 1)
+        actions = to_gpu(Variable(torch.from_numpy(t_preds[t_mask]).long().view(-1, 1), volatile=not self.training))
+        log_p_action = torch.gather(t_logits, 1, actions)
 
         # source: https://github.com/miyosuda/async_deep_reinforce/issues/1
         if self.rl_entropy:
