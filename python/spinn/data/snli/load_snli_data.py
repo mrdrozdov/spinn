@@ -16,6 +16,8 @@ def convert_binary_bracketing(parse, lowercase=False):
     tokens = []
 
     for word in parse.split(' '):
+        if len(word) == 0:
+            continue
         if word[0] != "(":
             if word == ")":
                 transitions.append(1)
