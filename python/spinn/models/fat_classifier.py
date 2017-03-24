@@ -89,7 +89,7 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
     transition_examples = []
 
     for i, batch in enumerate(dataset):
-        eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, eval_ids = get_batch(batch)
+        eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch = get_batch(batch)[:4]
 
         # Run model.
         output = model(eval_X_batch, eval_transitions_batch, eval_y_batch,
@@ -397,7 +397,7 @@ def run(only_forward=False):
     else:
         # Build log format strings.
         model.train()
-        X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = get_batch(training_data_iter.next())
+        X_batch, transitions_batch, y_batch, num_transitions_batch = get_batch(training_data_iter.next())[:4]
         model(X_batch, transitions_batch, y_batch,
                 use_internal_parser=FLAGS.use_internal_parser,
                 validate_transitions=FLAGS.validate_transitions
@@ -420,7 +420,8 @@ def run(only_forward=False):
 
             start = time.time()
 
-            X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = get_batch(training_data_iter.next())
+            batch = get_batch(training_data_iter.next())
+            X_batch, transitions_batch, y_batch, num_transitions_batch = batch[:4]
 
             total_tokens = sum([(nt+1)/2 for nt in num_transitions_batch.reshape(-1)])
 
@@ -482,7 +483,7 @@ def run(only_forward=False):
 
             total_time = end - start
 
-            train_accumulate(model, A)
+            train_accumulate(model, A, batch)
             A.add('class_acc', class_acc)
             A.add('total_tokens', total_tokens)
             A.add('total_time', total_time)
