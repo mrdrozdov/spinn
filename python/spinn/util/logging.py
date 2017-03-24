@@ -16,7 +16,7 @@ def train_accumulate(model, A, batch):
     X_batch, transitions_batch, y_batch, num_transitions_batch, structure_transitions, train_ids = batch
 
     has_spinn = hasattr(model, 'spinn')
-    has_transition_loss = hasattr(model, 'transition_loss')
+    has_transition_loss = hasattr(model, 'transition_loss') and model.transition_loss is not None
     has_invalid = has_spinn and hasattr(model.spinn, 'invalid')
     has_policy = has_spinn and hasattr(model, 'policy_loss')
     has_value = has_spinn and hasattr(model, 'value_loss')
@@ -59,7 +59,7 @@ def train_accumulate(model, A, batch):
 def train_stats(model, optimizer, A, step):
 
     has_spinn = hasattr(model, 'spinn')
-    has_transition_loss = hasattr(model, 'transition_loss')
+    has_transition_loss = hasattr(model, 'transition_loss') and model.transition_loss is not None
     has_invalid = has_spinn and hasattr(model.spinn, 'invalid')
     has_policy = has_spinn and hasattr(model, 'policy_loss')
     has_value = has_spinn and hasattr(model, 'value_loss')
