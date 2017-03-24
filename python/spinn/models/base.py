@@ -438,19 +438,6 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
     total_params = sum([reduce(lambda x, y: x * y, w.size(), 1.0) for w in model.parameters()])
     logger.Log("Total params: {}".format(total_params))
 
-    # GPU support.
-    the_gpu.gpu = FLAGS.gpu
-    if FLAGS.gpu >= 0:
-        model.cuda()
-    else:
-        model.cpu()
-    recursively_set_device(optimizer.state_dict(), the_gpu.gpu)
-
-    # Debug
-    def set_debug(self):
-        self.debug = FLAGS.debug
-    model.apply(set_debug)
-
     return model, optimizer, trainer
 
 

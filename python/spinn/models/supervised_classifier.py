@@ -125,6 +125,19 @@ def run(only_forward=False):
         step = 0
         best_dev_error = 1.0
 
+    # GPU support.
+    the_gpu.gpu = FLAGS.gpu
+    if FLAGS.gpu >= 0:
+        model.cuda()
+    else:
+        model.cpu()
+    recursively_set_device(optimizer.state_dict(), FLAGS.gpu)
+
+    # Debug
+    def set_debug(self):
+        self.debug = FLAGS.debug
+    model.apply(set_debug)
+
     # Do an evaluation-only run.
     if only_forward:
         eval_str = eval_format(model)
