@@ -47,7 +47,7 @@ def structure_transitions(tokens, transitions):
             new_stack_item = REDUCE(left, right)
             stack.append(new_stack_item)
 
-            if new_stack_item == INT and i < len(transitions) - 1:
+            if new_stack_item == INT:
                 ret.append(T_STRUCT)
             else:
                 ret.append(T_REDUCE)
