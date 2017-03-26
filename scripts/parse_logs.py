@@ -14,8 +14,6 @@ FMT_TRAIN_EXTRA = "Train-Extra-Format: "
 FMT_EVAL = "Eval-Format: "
 FMT_EVAL_EXTRA = "Eval-Extra-Format: "
 
-PREFIX_FLAGS = "Flag-JSON: "
-
 IS_TRAIN = "Acc:"
 IS_TRAIN_EXTRA = "Train Extra:"
 IS_EVAL = "Eval acc:"
@@ -44,6 +42,23 @@ def get_json_data(filename, prefix):
     raise Exception("Format string not found.")
 
 
+def get_flags(filename):
+    PREFIX_FLAGS = "Flag Values:\n"
+    TERMINAL = "}\n"
+    data = ""
+    read_json = False
+    with open(filename) as f:
+        for line in f:
+            if read_json:
+                data += line
+                if TERMINAL in line:
+                    break
+            if PREFIX_FLAGS in line:
+                read_json = True
+    print(data)
+    return json.loads(data)
+
+
 def is_train(line):
     return line.find(FMT_TRAIN) < 0 and line.find(IS_TRAIN) >= 0
 
@@ -61,7 +76,7 @@ def is_eval_extra(line):
 
 
 def read_file(filename):
-    flags = get_json_data(filename, PREFIX_FLAGS)
+    flags = get_flags(filename)
     train_str, train_extra_str = get_format(filename, FMT_TRAIN), get_format(filename, FMT_TRAIN_EXTRA)
     eval_str, eval_extra_str = get_format(filename, FMT_EVAL), get_format(filename, FMT_EVAL_EXTRA)
 

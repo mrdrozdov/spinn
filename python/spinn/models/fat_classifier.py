@@ -20,6 +20,7 @@ Note: If you get an error starting with "TypeError: ('Wrong number of dimensions
 """
 
 import os
+import json
 import math
 import random
 import pprint
@@ -222,8 +223,7 @@ def run(only_forward=False):
         logger.Log("Bad data type.")
         return
 
-    pp = pprint.PrettyPrinter(indent=4)
-    logger.Log("Flag values:\n" + pp.pformat(FLAGS.FlagValuesDict()))
+    logger.Log("Flag Values:\n" + json.dumps(FLAGS.FlagValuesDict(), indent=4, sort_keys=True))
 
     # Load the data.
     raw_training_data, vocabulary = data_manager.load_data(
