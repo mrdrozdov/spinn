@@ -66,12 +66,12 @@ class Tracker(nn.Module):
         super(Tracker, self).__init__()
 
         # Initialize layers.
-        self.buf = Linear()(size, 4 * tracker_size, bias=False)
+        self.buf = Linear()(size, 4 * tracker_size, bias=True)
         self.stack1 = Linear()(size, 4 * tracker_size, bias=False)
         self.stack2 = Linear()(size, 4 * tracker_size, bias=False)
 
         if lateral_tracking:
-            self.lateral = Linear(initializer=HeKaimingInitializer)(tracker_size, 4 * tracker_size)
+            self.lateral = Linear(initializer=HeKaimingInitializer)(tracker_size, 4 * tracker_size, bias=False)
         else:
             self.transform = Linear(initializer=HeKaimingInitializer)(4 * tracker_size, tracker_size)
 
