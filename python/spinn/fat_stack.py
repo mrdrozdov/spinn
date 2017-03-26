@@ -310,28 +310,31 @@ class SPINN(nn.Module):
             # Keep track of key values to determine accuracy and loss.
             self.memory = {}
 
+            # Prepare tracker input.
+            if self.debug and any(len(buf) < 1 or len(stack) for buf, stack in zip(self.bufs, self.stacks)):
+                # To elaborate on this exception, when cropping examples it is possible
+                # that your first 1 or 2 actions is a reduce action. It is unclear if this
+                # is a bug in cropping or a bug in how we think about cropping. In the meantime,
+                # turn on the truncate batch flag, and set the eval_seq_length very high.
+                raise IndexError("Warning: You are probably trying to encode examples"
+                      "with cropped transitions. Although, this is a reasonable"
+                      "feature, when predicting/validating transitions, you"
+                      "probably will not get the behavior that you expect. Disable"
+                      "this exception if you dare.")
+            self.memory['top_buf'] = bundle(buf[-1] if len(buf) > 0 else self.zeros for buf in self.bufs)
+            self.memory['top_stack_1'] = bundle(stack[-1] if len(stack) > 0 else self.zeros for stack in self.stacks)
+            self.memory['top_stack_2'] = bundle(stack[-2] if len(stack) > 1 else self.zeros for stack in self.stacks)
+
             # Run if:
             # A. We have a tracking component and,
             # B. There is at least one transition that will not be skipped.
             if hasattr(self, 'tracker') and sum(cant_skip) > 0:
 
-                # Prepare tracker input.
-                if self.debug and any(len(buf) < 1 or len(stack) for buf, stack in zip(self.bufs, self.stacks)):
-                    # To elaborate on this exception, when cropping examples it is possible
-                    # that your first 1 or 2 actions is a reduce action. It is unclear if this
-                    # is a bug in cropping or a bug in how we think about cropping. In the meantime,
-                    # turn on the truncate batch flag, and set the eval_seq_length very high.
-                    raise IndexError("Warning: You are probably trying to encode examples"
-                          "with cropped transitions. Although, this is a reasonable"
-                          "feature, when predicting/validating transitions, you"
-                          "probably will not get the behavior that you expect. Disable"
-                          "this exception if you dare.")
-                top_buf = bundle(buf[-1] if len(buf) > 0 else self.zeros for buf in self.bufs)
-                top_stack_1 = bundle(stack[-1] if len(stack) > 0 else self.zeros for stack in self.stacks)
-                top_stack_2 = bundle(stack[-2] if len(stack) > 1 else self.zeros for stack in self.stacks)
-
                 # Get hidden output from the tracker. Used to predict transitions.
-                tracker_h, tracker_c = self.tracker(top_buf, top_stack_1, top_stack_2)
+                tracker_h, tracker_c = self.tracker(
+                    self.memory['top_buf'],
+                    self.memory['top_stack_1'],
+                    self.memory['top_stack_2'])
 
                 if hasattr(self, 'transition_net'):
                     transition_inp = [tracker_h]
