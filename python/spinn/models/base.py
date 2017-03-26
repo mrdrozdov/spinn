@@ -15,7 +15,6 @@ from spinn.data.boolean import load_boolean_data
 from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.snli import load_snli_data
-from spinn.data.multinli import load_multinli_data
 from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import ModelTrainer, the_gpu, to_gpu, l2_cost, flatten
 from spinn.util.misc import Accumulator, EvalReporter, time_per_token
@@ -218,8 +217,6 @@ def get_data_manager(data_type):
         data_manager = load_sst_binary_data
     elif data_type == "snli":
         data_manager = load_snli_data
-    elif data_type == "multinli":
-        data_manager = load_multinli_data
     elif data_type == "arithmetic":
         data_manager = load_simple_data
     elif data_type == "listops":
