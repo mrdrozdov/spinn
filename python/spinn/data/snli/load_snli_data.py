@@ -16,8 +16,6 @@ def convert_binary_bracketing(parse, lowercase=False):
     tokens = []
 
     for word in parse.split(' '):
-        if len(word) == 0:
-            continue
         if word[0] != "(":
             if word == ")":
                 transitions.append(1)
@@ -33,6 +31,7 @@ def convert_binary_bracketing(parse, lowercase=False):
 def load_data(path, lowercase=False):
     print "Loading", path
     examples = []
+    failed_parse = 0
     with codecs.open(path, encoding='utf-8') as f:
         for line in f:
             try:
@@ -48,10 +47,15 @@ def load_data(path, lowercase=False):
             example["label"] = loaded_example["gold_label"]
             example["premise"] = loaded_example["sentence1"]
             example["hypothesis"] = loaded_example["sentence2"]
-            (example["premise_tokens"], example["premise_transitions"]) = convert_binary_bracketing(loaded_example["sentence1_binary_parse"], lowercase=lowercase)
-            (example["hypothesis_tokens"], example["hypothesis_transitions"]) = convert_binary_bracketing(loaded_example["sentence2_binary_parse"], lowercase=lowercase)
             example["example_id"] = loaded_example.get('pairID', 'NoID')
-            examples.append(example)
+            if loaded_example["sentence1_binary_parse"] and loaded_example["sentence2_binary_parse"]:
+                (example["premise_tokens"], example["premise_transitions"]) = convert_binary_bracketing(loaded_example["sentence1_binary_parse"], lowercase=lowercase)
+                (example["hypothesis_tokens"], example["hypothesis_transitions"]) = convert_binary_bracketing(loaded_example["sentence2_binary_parse"], lowercase=lowercase)
+                examples.append(example)
+            else:
+                failed_parse += 1
+    if failed_parse > 0:
+        print("Warning: Failed to convert binary parse for {} examples.".format(failed_parse))
     return examples, None
 
 
