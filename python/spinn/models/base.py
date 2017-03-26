@@ -458,10 +458,8 @@ def main_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterato
             validate_transitions=FLAGS.validate_transitions
             )
 
-    logger.Log("\n\n# ----- BEGIN: Log Configuration ----- #")
-
-    # Print flags.
-    logger.Log("Flag-JSON: {}".format(json.dumps(FLAGS.FlagValuesDict())))
+    logger.Log("")
+    logger.Log("# ----- BEGIN: Log Configuration ----- #")
 
     # Preview train string template.
     train_str = train_format(model)
@@ -475,7 +473,8 @@ def main_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterato
     eval_extra_str = eval_extra_format(model)
     logger.Log("Eval-Extra-Format: {}".format(eval_extra_str))
 
-    logger.Log("# ----- END: Log Configuration ----- #\n\n")
+    logger.Log("# ----- END: Log Configuration ----- #")
+    logger.Log("")
 
     # Train.
     logger.Log("Training.")

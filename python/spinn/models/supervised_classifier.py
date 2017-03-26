@@ -42,8 +42,7 @@ def run(only_forward=False):
 
     data_manager = get_data_manager(FLAGS.data_type)
 
-    pp = pprint.PrettyPrinter(indent=4)
-    logger.Log("Flag values:\n" + pp.pformat(FLAGS.FlagValuesDict()))
+    logger.Log("Flag Values:\n" + json.dumps(FLAGS.FlagValuesDict(), indent=4, sort_keys=True))
 
     # Load the data.
     raw_training_data, vocabulary = data_manager.load_data(
