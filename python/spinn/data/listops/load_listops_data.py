@@ -8,12 +8,13 @@ LABEL_MAP = {str(x): i for i, x in enumerate(OUTPUTS)}
 
 
 def spans(tokens, transitions):
-    distinct_spans = []
-    structure_spans = []
-
     n = len(tokens)
     stack = []
     buf = list(reversed([(l, r) for l, r in zip(range(n), range(1, n+1))]))
+
+    distinct_spans = []
+    structure_spans = []
+    reduced = [False] * n
 
     def SHIFT(item):
         distinct_spans.append(item)
@@ -22,6 +23,9 @@ def spans(tokens, transitions):
     def REDUCE(l, r):
         new_stack_item = (l[0], r[1])
         distinct_spans.append(new_stack_item)
+        if tokens[r[1]-1] == ']' and not reduced[r[1]-1]:
+            reduced[r[1]-1] = True
+            structure_spans.append(new_stack_item)
         return new_stack_item
 
     for t in transitions:

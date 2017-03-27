@@ -611,7 +611,18 @@ class ListopsTestCase(unittest.TestCase):
         actual, _ = load_listops_data.spans(tokens, transitions)
         actual = set([el for el in actual if el[0] < el[1] - 1])
 
-        assert expected == actual, "Expected: {}\nActual: {}".format(expected, actual)
+        assert expected == actual, "\nExpected: {}\nActual: {}".format(expected, actual)
+
+    def test_strucure_spans(self):
+        structure_transitions = load_listops_data.spans
+        tokens = ['[MAX', '3', '[MAX', '1', '7', ']', ']']
+        ts = '0010010101101'
+        transitions = map(int, ts)
+        expected = set([(2,6), (0,7)])
+        _, actual = load_listops_data.spans(tokens, transitions)
+        actual = set(actual)
+
+        assert expected == actual, "\nExpected: {}\nActual: {}".format(expected, actual)
 
 
 if __name__ == '__main__':
