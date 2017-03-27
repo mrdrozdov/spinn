@@ -148,22 +148,21 @@ def CropAndPad(dataset, length, logger=None, sentence_pair_data=False):
     # the final stack top is the root of the tree. If cropping is used, it should
     # just introduce empty nodes into the tree.
     if sentence_pair_data:
-        keys = [("premise_transitions", "premise_structure_transitions", "num_premise_transitions", "premise_tokens"),
-                ("hypothesis_transitions", "hypothesis_structure_transitions", "num_hypothesis_transitions", "hypothesis_tokens")]
+        keys = [("premise_transitions", "num_premise_transitions", "premise_tokens"),
+                ("hypothesis_transitions", "num_hypothesis_transitions", "hypothesis_tokens")]
     else:
-        keys = [("transitions", "structure_transitions", "num_transitions", "tokens")]
+        keys = [("transitions", "num_transitions", "tokens")]
 
     for example in dataset:
-        for (transitions_key, structure_transitions_key, num_transitions_key, tokens_key) in keys:
+        for (transitions_key, num_transitions_key, tokens_key) in keys:
             # Crop and Pad Transitions
             example[num_transitions_key] = len(example[transitions_key])
             transitions_left_padding = length - example[num_transitions_key]
             shifts_before_crop_and_pad = example[transitions_key].count(0)
-            for tkey in [transitions_key, structure_transitions_key]:
-                if tkey in example:
-                    CropAndPadExample(
-                        example, transitions_left_padding, length, tkey,
-                        symbol=T_SKIP, logger=logger)
+            if transitions_key in example:
+                CropAndPadExample(
+                    example, transitions_left_padding, length, transitions_key,
+                    symbol=T_SKIP, logger=logger)
             shifts_after_crop_and_pad = example[transitions_key].count(0)
 
             # Crop and Pad Tokens
@@ -380,7 +379,6 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
                      dtype=np.int32), (1, 2, 0))
         if for_rnn:
             transitions = np.zeros((len(dataset), 2, 0))
-            structure_transitions = np.zeros((len(dataset), 2, 0))
             num_transitions = np.transpose(np.array(
                 [[len(np.array(example["premise_tokens"]).nonzero()[0]) for example in dataset],
                  [len(np.array(example["hypothesis_tokens"]).nonzero()[0]) for example in dataset]],
@@ -388,9 +386,6 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
         else:
             transitions = np.transpose(np.array([[example["premise_transitions"] for example in dataset],
                                     [example["hypothesis_transitions"] for example in dataset]],
-                                   dtype=np.int32), (1, 2, 0))
-            structure_transitions = np.transpose(np.array([[example.get("premise_transitions", []) for example in dataset],
-                                    [example.get("hypothesis_transitions", [-1]) for example in dataset]],
                                    dtype=np.int32), (1, 2, 0))
             num_transitions = np.transpose(np.array(
                 [[example["num_premise_transitions"] for example in dataset],
@@ -401,14 +396,11 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
                      dtype=np.int32)
         if for_rnn:
             transitions = np.zeros((len(dataset), 0))
-            structure_transitions = np.zeros((len(dataset), 0))
             num_transitions = np.array(
                 [len(np.array(example["tokens"]).nonzero()[0]) for example in dataset],
                 dtype=np.int32)
         else:
             transitions = np.array([example["transitions"] for example in dataset],
-                                   dtype=np.int32)
-            structure_transitions = np.array([example.get("structure_transitions", [-1]) for example in dataset],
                                    dtype=np.int32)
             num_transitions = np.array(
                 [example["num_transitions"] for example in dataset],
@@ -417,10 +409,12 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
         [data_manager.LABEL_MAP[example["label"]] for example in dataset],
         dtype=np.int32)
 
+    spans = np.array([example.get("spans", None) for example in dataset])
+
     # NP Array of Strings
     example_ids = np.array([example["example_id"] for example in dataset])
 
-    return X, transitions, y, num_transitions, structure_transitions, example_ids
+    return X, transitions, y, num_transitions, spans, example_ids
 
 
 def BuildVocabulary(raw_training_data, raw_eval_sets, embedding_path, logger=None, sentence_pair_data=False):

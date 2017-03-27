@@ -46,15 +46,6 @@ def train_accumulate(model, A, batch):
     if has_invalid:
         A.add('invalid', model.spinn.invalid)
 
-    # TODO: Add support for other data sets.
-    if not model.use_sentence_pair and structure_transitions.sum() > 0:
-        structure_mask = structure_transitions == T_STRUCT
-        reduce_mask = np.array([m['t_preds'] for m in model.spinn.memories]).T == T_REDUCE
-        n_struct_correct = np.logical_and(structure_mask, reduce_mask).sum()
-        n_struct = structure_mask.sum()
-        A.add('n_struct_correct', n_struct_correct)
-        A.add('n_struct', n_struct)
-
 
 def train_stats(model, optimizer, A, step):
 
@@ -156,8 +147,6 @@ def train_extra_format(model):
     extra_str += " lr={learning_rate:.7f}"
     if hasattr(model, "spinn") and hasattr(model.spinn, "invalid"):
         extra_str += " inv={invalid:.7f}"
-    if hasattr(model, "spinn"):
-        extra_str += " sub={struct:.7f}"
     if hasattr(model, "spinn") and hasattr(model.spinn, "epsilon"):
         extra_str += " eps={epsilon:.7f}"
 

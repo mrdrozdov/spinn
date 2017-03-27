@@ -59,6 +59,7 @@ def load_data(path, lowercase=None):
             example["sentence"] = seq
             example["tokens"] = tokens
             example["transitions"] = transitions
+            example["spans"] = spans(tokens, transitions)
             example["example_id"] = str(example_id)
 
             examples.append(example)

@@ -48,7 +48,7 @@ def sequential_only():
 
 
 def get_batch(batch):
-    X_batch, transitions_batch, y_batch, num_transitions_batch, structure_transitions, example_ids = batch
+    X_batch, transitions_batch, y_batch, num_transitions_batch, spans, example_ids = batch
 
     # Truncate each batch to max length within the batch.
     X_batch_is_left_padded = sequential_only()
@@ -59,9 +59,8 @@ def get_batch(batch):
     # Truncate batch.
     X_batch = truncate(X_batch, seq_length, max_length, X_batch_is_left_padded)
     transitions_batch = truncate(transitions_batch, seq_length, max_length, transitions_batch_is_left_padded)
-    structure_transitions = truncate(structure_transitions, seq_length, max_length, transitions_batch_is_left_padded)
 
-    return X_batch, transitions_batch, y_batch, num_transitions_batch, structure_transitions, example_ids
+    return X_batch, transitions_batch, y_batch, num_transitions_batch, spans, example_ids
 
 
 def truncate(data, seq_length, max_length, left_padded):
@@ -97,7 +96,7 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
     transition_examples = []
 
     for i, batch in enumerate(dataset):
-        eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, structure_transitions, eval_ids = get_batch(batch)
+        eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, spans, eval_ids = get_batch(batch)
 
         # Run model.
         output = model(eval_X_batch, eval_transitions_batch, eval_y_batch,
@@ -452,7 +451,7 @@ def main_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterato
 
     # Build log format strings.
     model.train()
-    X_batch, transitions_batch, y_batch, num_transitions_batch, structure_transitions, train_ids = get_batch(training_data_iter.next())
+    X_batch, transitions_batch, y_batch, num_transitions_batch, spans, train_ids = get_batch(training_data_iter.next())
     model(X_batch, transitions_batch, y_batch,
             use_internal_parser=FLAGS.use_internal_parser,
             validate_transitions=FLAGS.validate_transitions
@@ -489,7 +488,7 @@ def main_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterato
         start = time.time()
 
         batch = get_batch(training_data_iter.next())
-        X_batch, transitions_batch, y_batch, num_transitions_batch, structure_transitions, train_ids = batch
+        X_batch, transitions_batch, y_batch, num_transitions_batch, spans, train_ids = batch
 
         total_tokens = sum([(nt+1)/2 for nt in num_transitions_batch.reshape(-1)])
 
