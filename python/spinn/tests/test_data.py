@@ -10,7 +10,11 @@ from spinn.data.arithmetic import load_sign_data, load_simple_data
 from spinn.data.dual_arithmetic import load_eq_data
 from spinn.data.dual_arithmetic import load_relational_data
 from spinn.data.boolean import load_boolean_data
+from spinn.data.listops import load_listops_data
 from collections import Counter
+
+
+import spinn.data.listops.base as listops_base
 
 
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP, T_STRUCT
@@ -44,6 +48,7 @@ sign_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..",
 simple_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "arithmetic", "simple5_1k.tsv")
 eq_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "dual_arithmetic", "eq5_1k.tsv")
 relational_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "dual_arithmetic", "relational5_1k.tsv")
+listops_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "listops", "test_d8.tsv")
 word_embedding_dim = 5
 
 
@@ -553,6 +558,49 @@ class BooleanTestCase(unittest.TestCase):
 
             # The transitions should be padded on the left.
             assert t_is_left_padded(ts)
+
+
+def suite_single_seq(seq_length, for_rnn, data_manager, path, starts_with, limit=100):
+    raw_data, vocabulary = data_manager.load_data(path)
+
+    data = util.PreprocessDataset(
+        raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
+        sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
+        for_rnn=for_rnn)
+
+    seqs, transitions, labels, num_transitions = data[:4]
+
+    for i, (s, ts, num_t) in enumerate(zip(seqs, transitions, num_transitions)):
+
+        if i > limit: break
+
+        # The sentence should begin with an operator.
+        assert s[0] in starts_with, "{}: {} not in {}".format(i, s[0], starts_with)
+
+        # The sentences should be padded on the right.
+        assert not s_is_left_padded(s)
+
+        # The num_transitions should count non-skip transitions
+        assert len([x for x in ts if x != T_SKIP]) == num_t
+
+        # The transitions should start with SKIP and end with REDUCE (ignoring SKIPs).
+        assert t_is_left_to_right(ts)
+
+        # The transitions should be padded on the left.
+        assert t_is_left_padded(ts)
+
+
+class ListopsTestCase(unittest.TestCase):
+
+    def test_preprocess_listops(self):
+        seq_length = 100
+        for_rnn = False
+        data_manager = load_listops_data
+        path = listops_data_path
+        starts_with = ['[MIN', '[MAX', '[FIRST', '[LAST']
+        starts_with = [listops_base.FIXED_VOCABULARY[k] for k in starts_with]
+
+        suite_single_seq(seq_length, for_rnn, data_manager, path, starts_with)
 
 
 if __name__ == '__main__':
