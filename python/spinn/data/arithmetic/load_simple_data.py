@@ -1,3 +1,4 @@
+from collections import namedtuple
 from spinn import util
 
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP, T_STRUCT
@@ -7,29 +8,32 @@ SENTENCE_PAIR_DATA = False
 OUTPUTS = range(-10, 11)
 LABEL_MAP = {str(x): i for i, x in enumerate(OUTPUTS)}
 
+Node = namedtuple('Node', 'tag span')
+
 
 def spans(tokens, transitions):
     n = len(tokens)
     stack = []
-    buf = list(reversed([(l, r) for l, r in zip(range(n), range(1, n+1))]))
+    buf = [Node("leaf", (l, r)) for l, r in zip(range(n), range(1, n+1))]
+    buf = list(reversed(buf))
 
-    distinct_spans = []
-    structure_spans = []
+    nodes = []
     reduced = [False] * n
 
     OPERATORS = ['+', '-']
 
     def SHIFT(item):
-        distinct_spans.append(item)
+        nodes.append(item)
         return item
 
     def REDUCE(l, r):
-        new_stack_item = (l[0], r[1])
-        distinct_spans.append(new_stack_item)
-        i = l[0]
+        tag = None
+        i = l.span[0]
         if tokens[i] in OPERATORS and not reduced[i]:
             reduced[i] = True
-            structure_spans.append(new_stack_item)
+            tag = "struct"
+        new_stack_item = Node(tag=tag, span=(l.span[0], r.span[1]))
+        nodes.append(new_stack_item)
         return new_stack_item
 
     for t in transitions:
@@ -39,7 +43,7 @@ def spans(tokens, transitions):
             r, l = stack.pop(), stack.pop()
             stack.append(REDUCE(l, r))
 
-    return distinct_spans, structure_spans
+    return nodes
 
 
 def load_data(path, lowercase=None):
@@ -55,6 +59,7 @@ def load_data(path, lowercase=None):
             example["sentence"] = seq
             example["tokens"] = tokens
             example["transitions"] = transitions
+            example["structure_spans"] = spans(tokens, transitions)[1]
             example["example_id"] = str(example_id)
 
             examples.append(example)
