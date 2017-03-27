@@ -8,54 +8,38 @@ OUTPUTS = range(-10, 11)
 LABEL_MAP = {str(x): i for i, x in enumerate(OUTPUTS)}
 
 
-def structure_transitions(tokens, transitions):
-
-    OP = 0
-    INT = 1
-    OPINT = 2
-    INTINT = 3
-
-    def is_op(x):
-        return x == '-' or x == '+'
-
-    def SHIFT(x):
-        return OP if is_op(x) else INT
-
-    def REDUCE(left, right):
-        if left == OP and right == INT:
-            return OPINT
-        elif left == INT and right == INT:
-            return INTINT
-        elif left == OP and right == INTINT:
-            return INT
-        elif left == OPINT and right == INT:
-            return INT
-        else:
-            raise Exception
-
-    buf = list(reversed(tokens))
+def spans(tokens, transitions):
+    n = len(tokens)
     stack = []
-    ret = []
+    buf = list(reversed([(l, r) for l, r in zip(range(n), range(1, n+1))]))
 
-    for i, t in enumerate(transitions):
-        if t == T_SHIFT:
-            x = buf.pop()
-            stack.append(SHIFT(x))
-            ret.append(T_SHIFT)
-        elif t == T_REDUCE:
-            right, left = stack.pop(), stack.pop()
-            new_stack_item = REDUCE(left, right)
-            stack.append(new_stack_item)
+    distinct_spans = []
+    structure_spans = []
+    reduced = [False] * n
 
-            if new_stack_item == INT:
-                ret.append(T_STRUCT)
-            else:
-                ret.append(T_REDUCE)
-        elif t == T_SKIP:
-            ret.append(T_SKIP)
-        else:
-            raise Exception
-    return ret
+    OPERATORS = ['+', '-']
+
+    def SHIFT(item):
+        distinct_spans.append(item)
+        return item
+
+    def REDUCE(l, r):
+        new_stack_item = (l[0], r[1])
+        distinct_spans.append(new_stack_item)
+        i = l[0]
+        if tokens[i] in OPERATORS and not reduced[i]:
+            reduced[i] = True
+            structure_spans.append(new_stack_item)
+        return new_stack_item
+
+    for t in transitions:
+        if t == 0:
+            stack.append(SHIFT(buf.pop()))
+        elif t == 1:
+            r, l = stack.pop(), stack.pop()
+            stack.append(REDUCE(l, r))
+
+    return distinct_spans, structure_spans
 
 
 def load_data(path, lowercase=None):
@@ -71,7 +55,6 @@ def load_data(path, lowercase=None):
             example["sentence"] = seq
             example["tokens"] = tokens
             example["transitions"] = transitions
-            example["structure_transitions"] = structure_transitions(tokens[:], transitions[:])
             example["example_id"] = str(example_id)
 
             examples.append(example)

@@ -412,7 +412,7 @@ class ArithmeticTestCase(unittest.TestCase):
             # The transitions should be padded on the left.
             assert t_is_left_padded(ts)
 
-    def test_structure_transitions_1(self):
+    def xtest_structure_transitions_1(self):
         structure_transitions = load_simple_data.structure_transitions
         tokens = map(str, '++000')
         transitions = [0, 0, 0, 0, 1, 1, 0, 1, 1]
@@ -421,7 +421,7 @@ class ArithmeticTestCase(unittest.TestCase):
 
         assert all(a == e for a, e in zip(actual, expected))
 
-    def test_structure_transitions_2(self):
+    def xtest_structure_transitions_2(self):
         structure_transitions = load_simple_data.structure_transitions
         tokens = map(str, '++000')
         transitions = [0, 0, 0, 1, 0, 1, 1, 0, 1]
@@ -430,7 +430,7 @@ class ArithmeticTestCase(unittest.TestCase):
 
         assert all(a == e for a, e in zip(actual, expected))
 
-    def test_structure_transitions_3(self):
+    def xtest_structure_transitions_3(self):
         structure_transitions = load_simple_data.structure_transitions
         tokens = ['-', '-', '-1', '-', '-4', '-8', '5']
         transitions = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1]
@@ -438,6 +438,26 @@ class ArithmeticTestCase(unittest.TestCase):
         actual = structure_transitions(tokens, transitions)
 
         assert all(a == e for a, e in zip(actual, expected))
+
+    def test_spans(self):
+        spans = load_simple_data.spans
+        tokens = ['-', '-', '-1', '-', '-4', '-8', '5']
+        transitions = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1]
+        expected = set([(4,6), (3,6), (2,6), (1,6), (1,7), (0,7)])
+        actual, _ = spans(tokens, transitions)
+        actual = set([el for el in actual if el[0] < el[1] - 1])
+
+        assert expected == actual, "\nExpected: {}\nActual: {}".format(expected, actual)
+
+    def test_strucure_spans(self):
+        spans = load_simple_data.spans
+        tokens = ['-', '-', '-1', '-', '-4', '-8', '5']
+        transitions = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1]
+        expected = set([(3,6), (1,6), (0,7)])
+        _, actual = spans(tokens, transitions)
+        actual = set(actual)
+
+        assert expected == actual, "\nExpected: {}\nActual: {}".format(expected, actual)
 
 
 class DualArithmeticTestCase(unittest.TestCase):
@@ -603,7 +623,6 @@ class ListopsTestCase(unittest.TestCase):
         suite_single_seq(seq_length, for_rnn, data_manager, path, starts_with)
 
     def test_spans(self):
-        structure_transitions = load_listops_data.spans
         tokens = ['[MAX', '3', '[MAX', '1', '7', ']', ']']
         ts = '0010010101101'
         transitions = map(int, ts)
@@ -614,7 +633,6 @@ class ListopsTestCase(unittest.TestCase):
         assert expected == actual, "\nExpected: {}\nActual: {}".format(expected, actual)
 
     def test_strucure_spans(self):
-        structure_transitions = load_listops_data.spans
         tokens = ['[MAX', '3', '[MAX', '1', '7', ']', ']']
         ts = '0010010101101'
         transitions = map(int, ts)
