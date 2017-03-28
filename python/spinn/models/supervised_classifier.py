@@ -19,6 +19,7 @@ from spinn.util.misc import recursively_set_device
 from spinn.util.metrics import MetricsWriter
 from spinn.util.logging import train_format, train_extra_format, train_stats, train_accumulate
 from spinn.util.logging import train_rl_format, train_rl_stats, train_rl_accumulate
+from spinn.util.logging import train_metrics, train_rl_metrics, eval_metrics, eval_rl_metrics
 from spinn.util.logging import eval_format, eval_extra_format, eval_stats, eval_accumulate
 from spinn.util.loss import auxiliary_loss
 import spinn.util.evalb as evalb
@@ -39,10 +40,11 @@ from spinn.models.base import sequential_only, get_checkpoint_path
 FLAGS = gflags.FLAGS
 
 
-def evaluate(model, data_manager, eval_set, logger, step, vocabulary=None):
+def evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabulary=None):
     filename, dataset = eval_set
 
     A = Accumulator()
+    M = MetricsWriter(os.path.join(FLAGS.metrics_path, FLAGS.experiment_name))
     reporter = EvalReporter()
 
     eval_str = eval_format(model)
@@ -120,6 +122,9 @@ def evaluate(model, data_manager, eval_set, logger, step, vocabulary=None):
 
     eval_class_acc = stats_args['class_acc']
     eval_trans_acc = stats_args['transition_acc']
+
+    if index == 0:
+        eval_metrics(M, stats_args, step)
 
     return eval_class_acc, eval_trans_acc
 
@@ -254,17 +259,14 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
             A.add('l2_cost', l2_loss.data[0])
             stats_args = train_stats(model, optimizer, A, step)
 
-            metric_stats = ['class_acc', 'total_cost', 'transition_acc', 'transition_cost']
-            for key in metric_stats:
-                M.write(key, stats_args[key], step)
+            train_metrics(M, stats_args, step)
 
             logger.Log(train_str.format(**stats_args))
             logger.Log(train_extra_str.format(**stats_args))
 
             if FLAGS.model_type == "RLSPINN":
                 stats_rl_args = train_rl_stats(model, optimizer, A, step)
-                for key in stats_rl_args.keys():
-                    M.write(key, stats_rl_args[key], step)
+                train_rl_metrics(M, stats_rl_args, step)
                 logger.Log(train_rl_str.format(**stats_rl_args))
 
         if step % FLAGS.sample_interval_steps == 0 and FLAGS.num_samples > 0:
@@ -304,14 +306,11 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
 
         if step > 0 and step % FLAGS.eval_interval_steps == 0:
             for index, eval_set in enumerate(eval_iterators):
-                acc, tacc = evaluate(model, data_manager, eval_set, logger, step)
+                acc, tacc = evaluate(FLAGS, model, data_manager, eval_set, index, logger, step)
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
                     logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
                     trainer.save(best_checkpoint_path, step, best_dev_error)
-                if index == 0:
-                    M.write('eval_class_acc', acc, step)
-                    M.write('eval_transition_acc', tacc, step)
             progress_bar.reset()
 
         if step > FLAGS.ckpt_step and step % FLAGS.ckpt_interval_steps == 0:
@@ -429,7 +428,7 @@ def run(only_forward=False):
         logger.Log("Eval-Extra-Format: {}".format(eval_extra_str))
 
         for index, eval_set in enumerate(eval_iterators):
-            acc = evaluate(model, eval_set, logger, step, vocabulary)
+            acc = evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabulary)
     else:
         train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_iter, eval_iterators, logger, step, best_dev_error)
 

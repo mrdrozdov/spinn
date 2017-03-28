@@ -65,6 +65,17 @@ def train_rl_accumulate(model, data_manager, A, batch):
     A.add('adv_var_magnitude', model.stats['var_magnitude'])
 
 
+def train_metrics(M, stats_args, step):
+    metric_stats = ['class_acc', 'total_cost', 'transition_acc', 'transition_cost', 'struct']
+    for key in metric_stats:
+        M.write(key, stats_args[key], step)
+
+
+def train_rl_metrics(M, stats_args, step):
+    for key in stats_args.keys():
+        M.write(key, stats_args[key], step)
+
+
 def train_stats(model, optimizer, A, step):
 
     has_spinn = hasattr(model, 'spinn')
@@ -274,6 +285,16 @@ def eval_extra_format(model):
         extra_str += " sub{struct:.3f}"
 
     return extra_str
+
+
+def eval_metrics(M, stats_args, step):
+    metric_stats = ['class_acc', 'transition_acc', 'struct']
+    for key in metric_stats:
+        M.write("eval_" + key, stats_args[key], step)
+
+
+def eval_rl_metrics(M, stats_args, step):
+    pass
 
 
 def eval_stats(model, A, step):
