@@ -58,6 +58,13 @@ def train_accumulate(model, data_manager, A, batch):
             A.add('n_struct_common', len(common))
 
 
+def train_rl_accumulate(model, data_manager, A, batch):
+    A.add('adv_mean', model.stats['mean'])
+    A.add('adv_mean_magnitude', model.stats['mean_magnitude'])
+    A.add('adv_var', model.stats['var'])
+    A.add('adv_var_magnitude', model.stats['var_magnitude'])
+
+
 def train_stats(model, optimizer, A, step):
 
     has_spinn = hasattr(model, 'spinn')
@@ -118,6 +125,26 @@ def train_stats(model, optimizer, A, step):
     return ret
 
 
+def train_rl_stats(model, data_manager, A, batch):
+    adv_mean = np.array(A.get('adv_mean'), dtype=np.float32)
+    adv_mean_magnitude = np.array(A.get('adv_mean_magnitude'), dtype=np.float32)
+    adv_var = np.array(A.get('adv_var'), dtype=np.float32)
+    adv_var_magnitude = np.array(A.get('adv_var_magnitude'), dtype=np.float32)
+
+    ret = dict(
+        mean_adv_mean=adv_mean.mean(),
+        mean_adv_mean_magnitude=adv_mean_magnitude.mean(),
+        mean_adv_var=adv_var.mean(),
+        mean_adv_var_magnitude=adv_var_magnitude.mean(),
+        var_adv_mean=adv_mean.var(),
+        var_adv_mean_magnitude=adv_mean_magnitude.var(),
+        var_adv_var=adv_var.var(),
+        var_adv_var_magnitude=adv_var_magnitude.var()
+        )
+
+    return ret
+
+
 def train_format(model):
 
     has_spinn = hasattr(model, 'spinn')
@@ -156,13 +183,32 @@ def train_extra_format(model):
 
     # Extra Component.
     extra_str = "Train Extra:"
-    extra_str += " lr={learning_rate:.7f}"
-    if hasattr(model, "spinn") and hasattr(model.spinn, "invalid"):
-        extra_str += " inv={invalid:.7f}"
-    if hasattr(model, "spinn"):
-        extra_str += " sub={struct:.7f}"
+    extra_str += " lr{learning_rate:.7f}"
     if hasattr(model, "spinn") and hasattr(model.spinn, "epsilon"):
-        extra_str += " eps={epsilon:.7f}"
+        extra_str += " eps{epsilon:.7f}"
+    if hasattr(model, "spinn") and hasattr(model.spinn, "invalid"):
+        extra_str += " inv{invalid:.3f}"
+    if hasattr(model, "spinn"):
+        extra_str += " sub{struct:.3f}"
+
+    return extra_str
+
+
+def train_rl_format(model):
+
+    # Extra Component.
+    extra_str = "Train RL:"
+    extra_str += " am{mean_adv_mean:.5f}"
+    extra_str += " amm{mean_adv_mean_magnitude:.5f}"
+    extra_str += " av{mean_adv_var:.5f}"
+    extra_str += " avm{mean_adv_var_magnitude:.5f}"
+
+    extra_str += " "
+    extra_str += "(am{var_adv_mean:.5f}"
+    extra_str += " amm{var_adv_mean_magnitude:.5f}"
+    extra_str += " av{var_adv_var:.5f}"
+    extra_str += " avm{var_adv_var_magnitude:.5f}"
+    extra_str += ")"
 
     return extra_str
 
@@ -223,9 +269,9 @@ def eval_format(model):
 def eval_extra_format(model):
     extra_str = "Eval Extra:"
     if hasattr(model, 'spinn'):
-        extra_str += " inv={invalid:.7f}"
+        extra_str += " inv{invalid:.3f}"
     if hasattr(model, "spinn"):
-        extra_str += " sub={struct:.7f}"
+        extra_str += " sub{struct:.3f}"
 
     return extra_str
 

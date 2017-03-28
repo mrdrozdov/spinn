@@ -18,6 +18,7 @@ from spinn.util.misc import Accumulator, MetricsLogger, EvalReporter, time_per_t
 from spinn.util.misc import recursively_set_device
 from spinn.util.metrics import MetricsWriter
 from spinn.util.logging import train_format, train_extra_format, train_stats, train_accumulate
+from spinn.util.logging import train_rl_format, train_rl_stats, train_rl_accumulate
 from spinn.util.logging import eval_format, eval_extra_format, eval_stats, eval_accumulate
 from spinn.util.loss import auxiliary_loss
 import spinn.util.evalb as evalb
@@ -149,6 +150,10 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
     train_extra_str = train_extra_format(model)
     logger.Log("Train-Extra-Format: {}".format(train_extra_str))
 
+    if FLAGS.model_type == "RLSPINN":
+        train_rl_str = train_rl_format(model)
+        logger.Log("Train-RL-Format: {}".format(train_rl_str))
+
     # Preview eval string template.
     eval_str = eval_format(model)
     logger.Log("Eval-Format: {}".format(eval_str))
@@ -238,6 +243,9 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
         A.add('total_tokens', total_tokens)
         A.add('total_time', total_time)
 
+        if FLAGS.model_type == "RLSPINN":
+            train_rl_accumulate(model, data_manager, A, batch)
+
         if step % FLAGS.statistics_interval_steps == 0:
             progress_bar.step(i=FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
             progress_bar.finish()
@@ -252,6 +260,12 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
 
             logger.Log(train_str.format(**stats_args))
             logger.Log(train_extra_str.format(**stats_args))
+
+            if FLAGS.model_type == "RLSPINN":
+                stats_rl_args = train_rl_stats(model, optimizer, A, step)
+                for key in stats_rl_args.keys():
+                    M.write(key, stats_rl_args[key], step)
+                logger.Log(train_rl_str.format(**stats_rl_args))
 
         if step % FLAGS.sample_interval_steps == 0 and FLAGS.num_samples > 0:
             model.train()

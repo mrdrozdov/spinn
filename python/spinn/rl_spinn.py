@@ -168,6 +168,14 @@ class BaseModel(_BaseModel):
         return baseline
 
     def reinforce(self, advantage):
+        """
+        t_preds  = 200...111 (flattened predictions from sub_batches 1...N)
+        t_mask   = 011...111 (binary mask, selecting non-skips only)
+        t_logits = (B*N)xC (tensor of sub_batch_size * sub_num_batches x transition classes)
+        a_index  = 011...(N-1)(N-1)(N-1) (masked sub_batch_indices for each transition)
+        t_index  = 013...(B*N-3)(B*N-2)(B*N-1) (masked indices across all sub_batches)
+        """
+
         # TODO: Many of these ops are on the cpu. Might be worth shifting to GPU.
 
         t_preds = np.concatenate([m['t_preds'] for m in self.spinn.memories if m.get('t_preds', None) is not None])
@@ -182,6 +190,13 @@ class BaseModel(_BaseModel):
         a_index = torch.from_numpy(a_index[t_mask]).long()
 
         t_index = to_gpu(Variable(torch.from_numpy(np.arange(t_mask.shape[0])[t_mask])).long())
+
+        self.stats = dict(
+            mean=advantage.mean(),
+            mean_magnitude=advantage.abs().mean(),
+            var=advantage.var(),
+            var_magnitude=advantage.abs().var()
+            )
 
         if self.use_sentence_pair:
             # Handles the case of SNLI where each reward is used for two sentences.
