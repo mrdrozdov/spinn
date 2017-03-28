@@ -444,7 +444,7 @@ class ArithmeticTestCase(unittest.TestCase):
         tokens = ['-', '-', '-1', '-', '-4', '-8', '5']
         transitions = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1]
         expected = set([(4,6), (3,6), (2,6), (1,6), (1,7), (0,7)])
-        actual = spans(tokens, transitions)
+        actual = spans(transitions, tokens)
         actual = set([el.span for el in actual if el.tag != "leaf"])
 
         assert expected == actual, "\nExpected: {}\nActual: {}".format(expected, actual)
@@ -454,7 +454,7 @@ class ArithmeticTestCase(unittest.TestCase):
         tokens = ['-', '-', '-1', '-', '-4', '-8', '5']
         transitions = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1]
         expected = set([(3,6), (1,6), (0,7)])
-        actual = spans(tokens, transitions)
+        actual = spans(transitions, tokens)
         actual = set([el.span for el in actual if el.tag == "struct"])
 
         assert expected == actual, "\nExpected: {}\nActual: {}".format(expected, actual)
@@ -627,7 +627,7 @@ class ListopsTestCase(unittest.TestCase):
         ts = '0010010101101'
         transitions = map(int, ts)
         expected = set([(0,2), (2,4), (2,5), (2,6), (0,6), (0,7)])
-        actual = load_listops_data.spans(tokens, transitions)
+        actual = load_listops_data.spans(transitions, tokens)
         actual = set([el.span for el in actual if el.tag != "leaf"])
 
         assert expected == actual, "\nExpected: {}\nActual: {}".format(expected, actual)
@@ -637,7 +637,7 @@ class ListopsTestCase(unittest.TestCase):
         ts = '0010010101101'
         transitions = map(int, ts)
         expected = set([(2,6), (0,7)])
-        actual = load_listops_data.spans(tokens, transitions)
+        actual = load_listops_data.spans(transitions, tokens)
         actual = set([el.span for el in actual if el.tag == "struct"])
 
         assert expected == actual, "\nExpected: {}\nActual: {}".format(expected, actual)

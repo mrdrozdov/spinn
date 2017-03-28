@@ -11,9 +11,9 @@ from spinn.util.misc import time_per_token
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP, T_STRUCT
 
 
-def train_accumulate(model, A, batch):
+def train_accumulate(model, data_manager, A, batch):
 
-    X_batch, transitions_batch, y_batch, num_transitions_batch, structure_transitions, train_ids = batch
+    X_batch, transitions_batch, y_batch, num_transitions_batch, spans, train_ids = batch
 
     has_spinn = hasattr(model, 'spinn')
     has_transition_loss = hasattr(model, 'transition_loss') and model.transition_loss is not None
@@ -46,6 +46,17 @@ def train_accumulate(model, A, batch):
     if has_invalid:
         A.add('invalid', model.spinn.invalid)
 
+    if has_transition_loss and hasattr(data_manager, 'spans'):
+        transitions_per_example = model.spinn.get_transitions_per_example().tolist()
+        for t_idx, span in enumerate(spans):
+            t_spans = data_manager.spans(transitions_per_example[t_idx])
+            target = set([node.span for node in span if node.tag == 'struct'])
+            actual = set([node.span for node in t_spans])
+            common = set.intersection(target, actual)
+
+            A.add('n_struct_target', len(target))
+            A.add('n_struct_common', len(common))
+
 
 def train_stats(model, optimizer, A, step):
 
@@ -67,9 +78,10 @@ def train_stats(model, optimizer, A, step):
 
     time_metric = time_per_token(A.get('total_tokens'), A.get('total_time'))
 
-    n_struct = A.get('n_struct')
-    if len(n_struct) > 0:
-        struct = np.array(A.get('n_struct_correct')).sum() / float(np.array(n_struct).sum())
+    n_struct_common = A.get('n_struct_common')
+    n_struct_target = A.get('n_struct_target')
+    if len(n_struct_target) > 0:
+        struct = np.array(n_struct_common).sum() / float(np.array(n_struct_target).sum())
     else:
         struct = 0.0
 
@@ -147,6 +159,8 @@ def train_extra_format(model):
     extra_str += " lr={learning_rate:.7f}"
     if hasattr(model, "spinn") and hasattr(model.spinn, "invalid"):
         extra_str += " inv={invalid:.7f}"
+    if hasattr(model, "spinn"):
+        extra_str += " sub={struct:.7f}"
     if hasattr(model, "spinn") and hasattr(model.spinn, "epsilon"):
         extra_str += " eps={epsilon:.7f}"
 

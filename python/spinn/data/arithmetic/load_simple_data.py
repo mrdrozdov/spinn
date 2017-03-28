@@ -11,8 +11,8 @@ LABEL_MAP = {str(x): i for i, x in enumerate(OUTPUTS)}
 Node = namedtuple('Node', 'tag span')
 
 
-def spans(tokens, transitions):
-    n = len(tokens)
+def spans(transitions, tokens=None):
+    n = (len(transitions) + 1) / 2
     stack = []
     buf = [Node("leaf", (l, r)) for l, r in zip(range(n), range(1, n+1))]
     buf = list(reversed(buf))
@@ -29,7 +29,7 @@ def spans(tokens, transitions):
     def REDUCE(l, r):
         tag = None
         i = l.span[0]
-        if tokens[i] in OPERATORS and not reduced[i]:
+        if tokens is not None and tokens[i] in OPERATORS and not reduced[i]:
             reduced[i] = True
             tag = "struct"
         new_stack_item = Node(tag=tag, span=(l.span[0], r.span[1]))
@@ -59,7 +59,7 @@ def load_data(path, lowercase=None):
             example["sentence"] = seq
             example["tokens"] = tokens
             example["transitions"] = transitions
-            example["spans"] = spans(tokens, transitions)
+            example["spans"] = spans(transitions, tokens)
             example["example_id"] = str(example_id)
 
             examples.append(example)

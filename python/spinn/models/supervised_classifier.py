@@ -38,7 +38,7 @@ from spinn.models.base import sequential_only, get_checkpoint_path
 FLAGS = gflags.FLAGS
 
 
-def evaluate(model, eval_set, logger, step, vocabulary=None):
+def evaluate(model, data_manager, eval_set, logger, step, vocabulary=None):
     filename, dataset = eval_set
 
     reporter = EvalReporter()
@@ -151,7 +151,7 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
     return eval_class_acc, eval_trans_acc
 
 
-def train_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterators, logger, step, best_dev_error):
+def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_iter, eval_iterators, logger, step, best_dev_error):
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
     M = MetricsWriter(os.path.join(FLAGS.metrics_path, FLAGS.experiment_name))
@@ -261,7 +261,7 @@ def train_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterat
 
         total_time = end - start
 
-        train_accumulate(model, A, batch)
+        train_accumulate(model, data_manager, A, batch)
         A.add('class_acc', class_acc)
         A.add('total_tokens', total_tokens)
         A.add('total_time', total_time)
@@ -318,7 +318,7 @@ def train_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterat
 
         if step > 0 and step % FLAGS.eval_interval_steps == 0:
             for index, eval_set in enumerate(eval_iterators):
-                acc, tacc = evaluate(model, eval_set, logger, step)
+                acc, tacc = evaluate(model, data_manager, eval_set, logger, step)
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
                     logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
@@ -445,7 +445,7 @@ def run(only_forward=False):
         for index, eval_set in enumerate(eval_iterators):
             acc = evaluate(model, eval_set, logger, step, vocabulary)
     else:
-        train_loop(FLAGS, model, optimizer, trainer, training_data_iter, eval_iterators, logger, step, best_dev_error)
+        train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_iter, eval_iterators, logger, step, best_dev_error)
 
 
 if __name__ == '__main__':
