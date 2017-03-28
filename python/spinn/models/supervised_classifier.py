@@ -18,7 +18,7 @@ from spinn.util.misc import Accumulator, MetricsLogger, EvalReporter, time_per_t
 from spinn.util.misc import recursively_set_device
 from spinn.util.metrics import MetricsWriter
 from spinn.util.logging import train_format, train_extra_format, train_stats, train_accumulate
-from spinn.util.logging import eval_format, eval_extra_format
+from spinn.util.logging import eval_format, eval_extra_format, eval_stats, eval_accumulate
 from spinn.util.loss import auxiliary_loss
 import spinn.util.evalb as evalb
 
@@ -41,14 +41,13 @@ FLAGS = gflags.FLAGS
 def evaluate(model, data_manager, eval_set, logger, step, vocabulary=None):
     filename, dataset = eval_set
 
+    A = Accumulator()
     reporter = EvalReporter()
 
     eval_str = eval_format(model)
     eval_extra_str = eval_extra_format(model)
 
     # Evaluate
-    class_correct = 0
-    class_total = 0
     total_batches = len(dataset)
     progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
@@ -57,12 +56,9 @@ def evaluate(model, data_manager, eval_set, logger, step, vocabulary=None):
     start = time.time()
 
     model.eval()
-
-    transition_preds = []
-    transition_targets = []
-
-    for i, batch in enumerate(dataset):
-        eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, spans, eval_ids = get_batch(batch)
+    for i, dataset_batch in enumerate(dataset):
+        batch = get_batch(dataset_batch)
+        eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, spans, eval_ids = batch
 
         # Run model.
         output = model(eval_X_batch, eval_transitions_batch, eval_y_batch,
@@ -75,24 +71,16 @@ def evaluate(model, data_manager, eval_set, logger, step, vocabulary=None):
         # Calculate class accuracy.
         target = torch.from_numpy(eval_y_batch).long()
         pred = logits.data.max(1)[1].cpu() # get the index of the max log-probability
-        class_correct += pred.eq(target).sum()
-        class_total += target.size(0)
+
+        eval_accumulate(model, data_manager, A, batch)
+        A.add('class_correct', pred.eq(target).sum())
+        A.add('class_total', target.size(0))
 
         # Optionally calculate transition loss/acc.
         transition_loss = model.transition_loss if hasattr(model, 'transition_loss') else None
 
         # Update Aggregate Accuracies
         total_tokens += sum([(nt+1)/2 for nt in eval_num_transitions_batch.reshape(-1)])
-
-        # Track number of examples with completely valid transitions.
-        if hasattr(model, 'spinn') and hasattr(model.spinn, 'invalid'):
-            num_sentences = 2 if model.use_sentence_pair else 1
-            invalid += model.spinn.invalid
-
-        # Accumulate stats for transition accuracy.
-        if transition_loss is not None:
-            transition_preds.append([m["t_preds"] for m in model.spinn.memories if m.get('t_preds', None) is not None])
-            transition_targets.append([m["t_given"] for m in model.spinn.memories if m.get('t_given', None) is not None])
 
         if FLAGS.write_eval_report:
             reporter_args = [pred, target, eval_ids, output.data.cpu().numpy()]
@@ -116,30 +104,11 @@ def evaluate(model, data_manager, eval_set, logger, step, vocabulary=None):
     end = time.time()
     total_time = end - start
 
-    # Get time per token.
-    time_metric = time_per_token([total_tokens], [total_time])
+    A.add('total_tokens', total_tokens)
+    A.add('total_time', total_time)
 
-    # Get class accuracy.
-    eval_class_acc = class_correct / float(class_total)
-
-    # Get transition accuracy if applicable.
-    if len(transition_preds) > 0:
-        all_preds = np.array(flatten(transition_preds))
-        all_truth = np.array(flatten(transition_targets))
-        eval_trans_acc = (all_preds == all_truth).sum() / float(all_truth.shape[0])
-    else:
-        eval_trans_acc = 0.0
-
-    has_invalid = hasattr(model, 'spinn') and hasattr(model.spinn, 'invalid')
-
-    stats_args = dict(
-        step=step,
-        class_acc=eval_class_acc,
-        transition_acc=eval_trans_acc,
-        filename=filename,
-        time=time_metric,
-        inv=invalid/float(total_batches) if has_invalid else 0.0,
-        )
+    stats_args = eval_stats(model, A, step)
+    stats_args['filename'] = filename
 
     logger.Log(eval_str.format(**stats_args))
     logger.Log(eval_extra_str.format(**stats_args))
@@ -147,6 +116,9 @@ def evaluate(model, data_manager, eval_set, logger, step, vocabulary=None):
     if FLAGS.write_eval_report:
         eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".report")
         reporter.write_report(eval_report_path)
+
+    eval_class_acc = stats_args['class_acc']
+    eval_trans_acc = stats_args['transition_acc']
 
     return eval_class_acc, eval_trans_acc
 
