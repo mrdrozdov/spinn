@@ -157,10 +157,6 @@ def train_rl_stats(model, data_manager, A, batch):
         mean_adv_mean_magnitude=adv_mean_magnitude.mean(),
         mean_adv_var=adv_var.mean(),
         mean_adv_var_magnitude=adv_var_magnitude.mean(),
-        var_adv_mean=adv_mean.var(),
-        var_adv_mean_magnitude=adv_mean_magnitude.var(),
-        var_adv_var=adv_var.var(),
-        var_adv_var_magnitude=adv_var_magnitude.var()
         )
 
     return ret
@@ -223,13 +219,6 @@ def train_rl_format(model):
     extra_str += " amm{mean_adv_mean_magnitude:.5f}"
     extra_str += " av{mean_adv_var:.5f}"
     extra_str += " avm{mean_adv_var_magnitude:.5f}"
-
-    extra_str += " "
-    extra_str += "(am{var_adv_mean:.5f}"
-    extra_str += " amm{var_adv_mean_magnitude:.5f}"
-    extra_str += " av{var_adv_var:.5f}"
-    extra_str += " avm{var_adv_var_magnitude:.5f}"
-    extra_str += ")"
 
     return extra_str
 
