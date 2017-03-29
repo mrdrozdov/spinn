@@ -113,6 +113,9 @@ class BaseModel(_BaseModel):
 
     def forward_hook(self, embeds, batch_size, seq_length):
         if self.rl_baseline == "value":
+            # Break the computational graph.
+            embeds = Variable(embeds.data, volatile=not self.training)
+
             inp = embeds.view(batch_size, seq_length, -1).sum(1).squeeze()
             self.baseline_outp = self.value_net(inp)
 
