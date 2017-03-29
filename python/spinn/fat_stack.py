@@ -529,7 +529,7 @@ class BaseModel(nn.Module):
 
         # Projection will effectively be done by the encoding network.
         use_projection = True if encode_style is None else False
-        input_dim = model_dim if use_projection else word_embedding_dim
+        self.input_dim = input_dim = model_dim if use_projection else word_embedding_dim
 
         # Create dynamic embedding layer.
         self.embed = Embed(input_dim, vocab.size, vectors=vocab.vectors, use_projection=use_projection)
@@ -584,6 +584,9 @@ class BaseModel(nn.Module):
         h = self.wrap(h_list)
         return h, transition_acc, transition_loss
 
+    def forward_hook(self, embeds, batch_size, seq_length):
+        pass
+
     def output_hook(self, output, sentences, transitions, y_batch=None, embeds=None):
         pass
 
@@ -594,6 +597,7 @@ class BaseModel(nn.Module):
         b, l = example.tokens.size()[:2]
 
         embeds = self.embed(example.tokens)
+        self.forward_hook(embeds, b, l)
         embeds = F.dropout(embeds, self.embedding_dropout_rate, training=self.training)
         embeds = torch.chunk(to_cpu(embeds), b, 0)
 

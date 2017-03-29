@@ -101,10 +101,20 @@ class BaseModel(_BaseModel):
         self.rl_entropy_beta = rl_entropy_beta
         self.spinn.epsilon = rl_epsilon
 
+        if self.rl_baseline == "value":
+            self.value_net = MLP(self.input_dim,
+                mlp_dim=1024, num_classes=1, num_mlp_layers=2,
+                mlp_bn=True, classifier_dropout_rate=0.5)
+
         self.register_buffer('baseline', torch.FloatTensor([0.0]))
 
     def build_spinn(self, args, vocab, predict_use_cell, use_lengths):
         return RLSPINN(args, vocab, predict_use_cell, use_lengths)
+
+    def forward_hook(self, embeds, batch_size, seq_length):
+        if self.rl_baseline == "value":
+            inp = embeds.view(batch_size, seq_length, -1).sum(1).squeeze()
+            self.baseline_outp = self.value_net(inp)
 
     def run_greedy(self, sentences, transitions):
         inference_model_cls = BaseModel
@@ -144,24 +154,38 @@ class BaseModel(_BaseModel):
 
         return rewards
 
-    def build_baseline(self, output, rewards, sentences, transitions, y_batch=None, embeds=None):
+    def build_baseline(self, rewards, sentences, transitions, y_batch=None, embeds=None):
         if self.rl_baseline == "ema":
             mu = self.rl_mu
-            self.baseline[0] = self.baseline[0] * (1 - mu) + rewards.mean() * mu
             baseline = self.baseline[0]
+            self.baseline[0] = self.baseline[0] * (1 - mu) + rewards.mean() * mu
         elif self.rl_baseline == "greedy":
             # Pass inputs to Greedy Max
-            greedy_outp = self.run_greedy(sentences, transitions)
+            output = self.run_greedy(sentences, transitions)
 
             # Estimate Reward
             probs = F.softmax(output).data.cpu()
             target = torch.from_numpy(y_batch).long()
-            greedy_rewards = self.build_reward(probs, target, rl_reward="xent")
+            approx_rewards = self.build_reward(probs, target, rl_reward=self.rl_reward)
+
+            baseline = approx_rewards
+        elif self.rl_baseline == "value":
+            # Pass inputs to Greedy Max
+            output = self.baseline_outp
+
+            # Estimate Reward
+            probs = F.sigmoid(output)
+            target = torch.from_numpy(y_batch).long()
+            approx_rewards = self.build_reward(probs.data.cpu(), target, rl_reward=self.rl_reward)
 
             if self.rl_reward == "standard":
-                greedy_rewards = F.sigmoid(greedy_rewards)
+                self.value_loss = nn.BCELoss()(probs, Variable(rewards, volatile=not self.training))
+            elif self.rl_reward == "xent":
+                self.value_loss = nn.MSELoss()(output, Variable(rewards, volatile=not self.training))
+            else:
+                raise NotImplementedError
 
-            baseline = greedy_rewards
+            baseline = approx_rewards
         else:
             raise NotImplementedError
 
@@ -236,7 +260,7 @@ class BaseModel(_BaseModel):
         rewards = self.build_reward(probs, target, rl_reward=self.rl_reward)
 
         # Get Baseline.
-        baseline = self.build_baseline(output, rewards, sentences, transitions, y_batch, embeds)
+        baseline = self.build_baseline(rewards, sentences, transitions, y_batch, embeds)
 
         # Calculate advantage.
         advantage = rewards - baseline
