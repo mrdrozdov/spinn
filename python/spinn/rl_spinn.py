@@ -170,22 +170,18 @@ class BaseModel(_BaseModel):
 
             baseline = approx_rewards
         elif self.rl_baseline == "value":
-            # Pass inputs to Greedy Max
             output = self.baseline_outp
 
-            # Estimate Reward
-            probs = F.sigmoid(output)
-            target = torch.from_numpy(y_batch).long()
-            approx_rewards = self.build_reward(probs.data.cpu(), target, rl_reward=self.rl_reward)
-
             if self.rl_reward == "standard":
-                self.value_loss = nn.BCELoss()(probs, Variable(rewards, volatile=not self.training))
+                baseline = F.sigmoid(output)
+                self.value_loss = nn.BCELoss()(baseline, to_gpu(Variable(rewards, volatile=not self.training)))
             elif self.rl_reward == "xent":
-                self.value_loss = nn.MSELoss()(output, Variable(rewards, volatile=not self.training))
+                baseline = output
+                self.value_loss = nn.MSELoss()(baseline, to_gpu(Variable(rewards, volatile=not self.training)))
             else:
                 raise NotImplementedError
 
-            baseline = approx_rewards
+            baseline = baseline.data.cpu()
         else:
             raise NotImplementedError
 
