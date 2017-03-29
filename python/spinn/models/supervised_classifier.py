@@ -261,11 +261,15 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
 
             train_metrics(M, stats_args, step)
 
+            if FLAGS.model_type == "RLSPINN":
+                stats_rl_args = train_rl_stats(model, optimizer, A, step)
+                for k in stats_rl_args.keys():
+                    stats_args[k] = stats_rl_args[k]
+
             logger.Log(train_str.format(**stats_args))
             logger.Log(train_extra_str.format(**stats_args))
 
             if FLAGS.model_type == "RLSPINN":
-                stats_rl_args = train_rl_stats(model, optimizer, A, step)
                 train_rl_metrics(M, stats_rl_args, step)
                 logger.Log(train_rl_str.format(**stats_rl_args))
 

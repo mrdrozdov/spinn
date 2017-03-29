@@ -18,8 +18,6 @@ def train_accumulate(model, data_manager, A, batch):
     has_spinn = hasattr(model, 'spinn')
     has_transition_loss = hasattr(model, 'transition_loss') and model.transition_loss is not None
     has_invalid = has_spinn and hasattr(model.spinn, 'invalid')
-    has_policy = has_spinn and hasattr(model, 'policy_loss')
-    has_value = has_spinn and hasattr(model, 'value_loss')
     has_rae = has_spinn and hasattr(model.spinn, 'rae_loss')
     has_leaf = has_spinn and hasattr(model.spinn, 'leaf_loss')
     has_gen = has_spinn and hasattr(model.spinn, 'gen_loss')
@@ -59,6 +57,15 @@ def train_accumulate(model, data_manager, A, batch):
 
 
 def train_rl_accumulate(model, data_manager, A, batch):
+    has_policy = hasattr(model, 'policy_loss')
+    has_value = hasattr(model, 'value_loss')
+
+    if has_policy:
+        A.add('policy_cost', model.policy_loss.data[0])
+
+    if has_value:
+        A.add('value_cost', model.value_loss.data[0])
+
     A.add('adv_mean', model.stats['mean'])
     A.add('adv_mean_magnitude', model.stats['mean_magnitude'])
     A.add('adv_var', model.stats['var'])
@@ -110,8 +117,6 @@ def train_stats(model, optimizer, A, step):
         xent_cost=A.get_avg('xent_cost'), # not actual mean
         transition_cost=model.transition_loss.data[0] if has_transition_loss else 0.0,
         l2_cost=A.get_avg('l2_cost'), # not actual mean
-        policy_cost=model.policy_loss.data[0] if has_policy else 0.0,
-        value_cost=model.value_loss.data[0] if has_value else 0.0,
         invalid=A.get_avg('invalid') if has_invalid else 0.0,
         epsilon=model.spinn.epsilon if has_epsilon else 0.0,
         avg_entropy=A.get('avg_entropy') if has_entropy else 0.0,
@@ -137,12 +142,17 @@ def train_stats(model, optimizer, A, step):
 
 
 def train_rl_stats(model, data_manager, A, batch):
+    has_policy = hasattr(model, 'policy_loss')
+    has_value = hasattr(model, 'value_loss')
+
     adv_mean = np.array(A.get('adv_mean'), dtype=np.float32)
     adv_mean_magnitude = np.array(A.get('adv_mean_magnitude'), dtype=np.float32)
     adv_var = np.array(A.get('adv_var'), dtype=np.float32)
     adv_var_magnitude = np.array(A.get('adv_var_magnitude'), dtype=np.float32)
 
     ret = dict(
+        policy_cost=A.get_avg('policy_cost') if has_policy else 0.0,
+        value_cost=A.get_avg('value_cost') if has_value else 0.0,
         mean_adv_mean=adv_mean.mean(),
         mean_adv_mean_magnitude=adv_mean_magnitude.mean(),
         mean_adv_var=adv_var.mean(),
