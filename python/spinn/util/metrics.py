@@ -1,4 +1,5 @@
 import os
+import math
 import struct
 import itertools
 
@@ -26,7 +27,7 @@ class MetricsWriter(MetricsBase):
 
 
 class MetricsReader(MetricsBase):
-    def read(self, key, offset=None, limit=None):
+    def read(self, key, offset=None, limit=None, nan_default=0.0, inf_default=0.0):
         table = []
         with open(self._filename(key), 'r+b') as f:
 
@@ -46,5 +47,9 @@ class MetricsReader(MetricsBase):
                     break
 
                 row = struct.unpack(fmt, inp)
+                if math.isnan(row[0]):
+                    row = (nan_default, row[1])
+                elif math.isinf(row[0]):
+                    row = (inf_default, row[1])
                 table.append(row)
         return table
