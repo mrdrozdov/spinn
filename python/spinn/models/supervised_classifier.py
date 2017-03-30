@@ -22,6 +22,7 @@ from spinn.util.logging import train_rl_format, train_rl_stats, train_rl_accumul
 from spinn.util.logging import train_metrics, train_rl_metrics, eval_metrics, eval_rl_metrics
 from spinn.util.logging import eval_format, eval_extra_format, eval_stats, eval_accumulate
 from spinn.util.loss import auxiliary_loss
+from spinn.util.sparks import sparks
 import spinn.util.evalb as evalb
 
 # PyTorch
@@ -88,7 +89,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabula
         if FLAGS.write_eval_report:
             reporter_args = [pred, target, eval_ids, output.data.cpu().numpy()]
             if hasattr(model, 'transition_loss'):
-                transitions_per_example = model.spinn.get_transitions_per_example(
+                transitions_per_example, _ = model.spinn.get_transitions_per_example(
                     style="preds" if FLAGS.eval_report_use_preds else "given")
                 if model.use_sentence_pair:
                     batch_size = pred.size(0)
@@ -279,14 +280,14 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
                 use_internal_parser=FLAGS.use_internal_parser,
                 validate_transitions=FLAGS.validate_transitions
                 )
-            tr_transitions_per_example = model.spinn.get_transitions_per_example()
+            tr_transitions_per_example, tr_strength = model.spinn.get_transitions_per_example()
 
             model.eval()
             model(X_batch, transitions_batch, y_batch,
                 use_internal_parser=FLAGS.use_internal_parser,
                 validate_transitions=FLAGS.validate_transitions
                 )
-            ev_transitions_per_example = model.spinn.get_transitions_per_example()
+            ev_transitions_per_example, ev_strength = model.spinn.get_transitions_per_example()
 
             transition_str = "Samples:"
             if model.use_sentence_pair and len(transitions_batch.shape) == 3:
@@ -301,10 +302,14 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
                 gold = transitions_batch[t_idx]
                 pred_tr = tr_transitions_per_example[t_idx]
                 pred_ev = ev_transitions_per_example[t_idx]
+                stength_tr = sparks([1] + tr_strength[t_idx].tolist())
+                stength_ev = sparks([1] + ev_strength[t_idx].tolist())
                 _, crossing = evalb.crossing(gold, pred)
                 transition_str += "\n{}. crossing={}".format(t_idx, crossing)
                 transition_str += "\n     g{}".format("".join(map(str, gold)))
+                transition_str += "\n      {}".format(stength_tr[1:].encode('utf-8'))
                 transition_str += "\n    pt{}".format("".join(map(str, pred_tr)))
+                transition_str += "\n      {}".format(stength_ev[1:].encode('utf-8'))
                 transition_str += "\n    pe{}".format("".join(map(str, pred_ev)))
             logger.Log(transition_str)
 

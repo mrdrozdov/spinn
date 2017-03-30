@@ -232,10 +232,21 @@ class SPINN(nn.Module):
         else:
             raise NotImplementedError
 
+        t_preds = np.concatenate([m['t_preds'] for m in self.memories if m.get('t_preds', None) is not None])
+        t_preds = torch.from_numpy(t_preds).long()
+        t_logits = torch.cat([m['t_logits'] for m in self.memories if m.get('t_logits', None) is not None], 0).data.cpu()
+        t_logits = torch.cat([t_logits, torch.zeros(t_logits.size(0), 1)], 1)
+        t_strength = torch.gather(t_logits, 1, t_preds.view(-1, 1))
+
         _transitions = [m[source].reshape(1, -1) for m in self.memories if m.get(source, None) is not None]
         transitions = np.concatenate(_transitions).T
 
-        return transitions
+        t_strength = torch.exp(t_strength.view(*list(reversed(transitions.shape))).t())
+
+        skip_mask = (torch.from_numpy(transitions) == T_SKIP).byte()
+        t_strength[skip_mask] = 0.
+
+        return transitions, t_strength
 
     def t_shift(self, buf, stack, tracking, buf_tops, trackings):
         """SHIFT: Should dequeue buffer and item to stack."""

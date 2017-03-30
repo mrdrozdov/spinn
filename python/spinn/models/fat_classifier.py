@@ -89,7 +89,6 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
 
     transition_preds = []
     transition_targets = []
-    transition_examples = []
 
     for i, batch in enumerate(dataset):
         eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch = get_batch(batch)[:4]
@@ -119,31 +118,6 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
             transition_preds.append([m["t_preds"] for m in model.spinn.memories])
             transition_targets.append([m["t_given"] for m in model.spinn.memories])
 
-        if FLAGS.evalb or FLAGS.num_samples > 0:
-            transitions_per_example = model.spinn.get_transitions_per_example()
-            if model.use_sentence_pair:
-                eval_transitions_batch = np.concatenate([
-                    eval_transitions_batch[:,:,0], eval_transitions_batch[:,:,1]], axis=0)
-
-        if FLAGS.num_samples > 0 and len(transition_examples) < FLAGS.num_samples and i % (step % 11 + 1) == 0:
-            r = random.randint(0, len(transitions_per_example) - 1)
-            transition_examples.append((transitions_per_example[r], eval_transitions_batch[r]))
-
-        if FLAGS.write_eval_report:
-            reporter_args = [pred, target, eval_ids, output.data.cpu().numpy()]
-            if hasattr(model, 'transition_loss'):
-                transitions_per_example = model.spinn.get_transitions_per_example(
-                    style="preds" if FLAGS.eval_report_use_preds else "given")
-                if model.use_sentence_pair:
-                    batch_size = pred.size(0)
-                    sent1_transitions = transitions_per_example[:batch_size]
-                    sent2_transitions = transitions_per_example[batch_size:]
-                    reporter_args.append(sent1_transitions)
-                    reporter_args.append(sent2_transitions)
-                else:
-                    reporter_args.append(transitions_per_example)
-            reporter.save_batch(*reporter_args)
-
         # Print Progress
         progress_bar.step(i+1, total=total_batches)
     progress_bar.finish()
@@ -170,20 +144,7 @@ def evaluate(model, eval_set, logger, step, vocabulary=None):
     # Extra Component.
     stats_str += "\nEval Extra:"
 
-    if len(transition_examples) > 0:
-        for t_idx in range(len(transition_examples)):
-            gold = transition_examples[t_idx][1]
-            pred = transition_examples[t_idx][0]
-            _, crossing = evalb.crossing(gold, pred)
-            stats_str += "\n{}. crossing={}".format(t_idx, crossing)
-            stats_str += "\n     g{}".format("".join(map(str, gold)))
-            stats_str += "\n     p{}".format("".join(map(str, pred)))
-
     logger.Log(stats_str)
-
-    if FLAGS.write_eval_report:
-        eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".report")
-        reporter.write_report(eval_report_path)
 
     return eval_class_acc
 
@@ -419,21 +380,6 @@ def run(only_forward=False):
 
                 logger.Log(train_str.format(**stats_args))
                 logger.Log(train_extra_str.format(**stats_args))
-
-                if FLAGS.num_samples > 0:
-                    transition_str = ""
-                    transitions_per_example = model.spinn.get_transitions_per_example()
-                    if model.use_sentence_pair and len(transitions_batch.shape) == 3:
-                        transitions_batch = np.concatenate([
-                            transitions_batch[:,:,0], transitions_batch[:,:,1]], axis=0)
-                    for t_idx in range(FLAGS.num_samples):
-                        gold = transitions_batch[t_idx]
-                        pred = transitions_per_example[t_idx]
-                        _, crossing = evalb.crossing(gold, pred)
-                        transition_str += "\n{}. crossing={}".format(t_idx, crossing)
-                        transition_str += "\n     g{}".format("".join(map(str, gold)))
-                        transition_str += "\n     p{}".format("".join(map(str, pred)))
-                    logger.Log(transition_str)
 
             if step > 0 and step % FLAGS.eval_interval_steps == 0:
                 for index, eval_set in enumerate(eval_iterators):
