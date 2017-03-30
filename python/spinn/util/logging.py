@@ -21,7 +21,6 @@ def train_accumulate(model, data_manager, A, batch):
     has_rae = has_spinn and hasattr(model.spinn, 'rae_loss')
     has_leaf = has_spinn and hasattr(model.spinn, 'leaf_loss')
     has_gen = has_spinn and hasattr(model.spinn, 'gen_loss')
-    has_entropy = hasattr(model, 'avg_entropy')
 
     # Accumulate stats for transition accuracy.
     if has_transition_loss:
@@ -37,9 +36,6 @@ def train_accumulate(model, data_manager, A, batch):
     # Accumulate stats for word prediction accuracy.
     if has_gen:
         A.add('gen_acc', model.spinn.gen_acc)
-
-    if has_entropy:
-        A.add('entropy', model.avg_entropy)
 
     if has_invalid:
         A.add('invalid', model.spinn.invalid)
@@ -83,7 +79,6 @@ def train_stats(model, optimizer, A, step):
     has_leaf = has_spinn and hasattr(model.spinn, 'leaf_loss')
     has_gen = has_spinn and hasattr(model.spinn, 'gen_loss')
     has_epsilon = has_spinn and hasattr(model.spinn, "epsilon")
-    has_entropy = hasattr(model, 'avg_entropy')
 
     if has_transition_loss:
         all_preds = np.array(flatten(A.get('preds')))
@@ -101,7 +96,6 @@ def train_stats(model, optimizer, A, step):
         l2_cost=A.get_avg('l2_cost'), # not actual mean
         invalid=A.get_avg('invalid') if has_invalid else 0.0,
         epsilon=model.spinn.epsilon if has_epsilon else 0.0,
-        avg_entropy=A.get('avg_entropy') if has_entropy else 0.0,
         rae_cost=model.spinn.rae_loss.data[0] if has_rae else 0.0,
         leaf_acc=A.get_avg('leaf_acc') if has_leaf else 0.0,
         leaf_cost=model.spinn.leaf_loss.data[0] if has_leaf else 0.0,
@@ -162,8 +156,6 @@ def train_format(model):
         stats_str += " p{policy_cost:.5f}"
     if has_spinn and hasattr(model, 'value_loss'):
         stats_str += " v{value_cost:.5f}"
-    # if hasattr(model, 'avg_entropy'):
-    #     stats_str += " e{avg_entropy:.5f}"
     if has_spinn and hasattr(model.spinn, 'rae_loss'):
         stats_str += " rae{rae_cost:.5f}"
     if has_spinn and hasattr(model.spinn, 'leaf_loss'):
@@ -214,7 +206,6 @@ def eval_accumulate(model, data_manager, A, batch):
     has_rae = has_spinn and hasattr(model.spinn, 'rae_loss')
     has_leaf = has_spinn and hasattr(model.spinn, 'leaf_loss')
     has_gen = has_spinn and hasattr(model.spinn, 'gen_loss')
-    has_entropy = hasattr(model, 'avg_entropy')
 
     # Accumulate stats for transition accuracy.
     if has_transition_loss:
@@ -230,9 +221,6 @@ def eval_accumulate(model, data_manager, A, batch):
     # Accumulate stats for word prediction accuracy.
     if has_gen:
         A.add('gen_acc', model.spinn.gen_acc)
-
-    if has_entropy:
-        A.add('entropy', model.avg_entropy)
 
     if has_invalid:
         A.add('invalid', model.spinn.invalid)
@@ -273,7 +261,6 @@ def eval_stats(model, A, step):
     has_leaf = has_spinn and hasattr(model.spinn, 'leaf_loss')
     has_gen = has_spinn and hasattr(model.spinn, 'gen_loss')
     has_epsilon = has_spinn and hasattr(model.spinn, "epsilon")
-    has_entropy = hasattr(model, 'avg_entropy')
 
     class_correct = A.get('class_correct')
     class_total = A.get('class_total')
@@ -296,7 +283,6 @@ def eval_stats(model, A, step):
         # value_cost=model.value_loss.data[0] if has_value else 0.0,
         invalid=A.get_avg('invalid') if has_invalid else 0.0,
         # epsilon=model.spinn.epsilon if has_epsilon else 0.0,
-        # avg_entropy=A.get('avg_entropy') if has_entropy else 0.0,
         # rae_cost=model.spinn.rae_loss.data[0] if has_rae else 0.0,
         # leaf_acc=A.get_avg('leaf_acc') if has_leaf else 0.0,
         # leaf_cost=model.spinn.leaf_loss.data[0] if has_leaf else 0.0,
