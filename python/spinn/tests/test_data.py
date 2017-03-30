@@ -17,7 +17,7 @@ from collections import Counter
 import spinn.data.listops.base as listops_base
 
 
-from spinn.data import T_SHIFT, T_REDUCE, T_SKIP, T_STRUCT
+from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
 
 """ FAQ

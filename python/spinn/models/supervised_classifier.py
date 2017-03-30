@@ -61,7 +61,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabula
     model.eval()
     for i, dataset_batch in enumerate(dataset):
         batch = get_batch(dataset_batch)
-        eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, spans, eval_ids = batch
+        eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, eval_ids = batch
 
         # Run model.
         output = model(eval_X_batch, eval_transitions_batch, eval_y_batch,
@@ -140,7 +140,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
 
     # Build log format strings.
     model.train()
-    X_batch, transitions_batch, y_batch, num_transitions_batch, spans, train_ids = get_batch(training_data_iter.next())
+    X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = get_batch(training_data_iter.next())
     model(X_batch, transitions_batch, y_batch,
             use_internal_parser=FLAGS.use_internal_parser,
             validate_transitions=FLAGS.validate_transitions
@@ -181,7 +181,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
         start = time.time()
 
         batch = get_batch(training_data_iter.next())
-        X_batch, transitions_batch, y_batch, num_transitions_batch, spans, train_ids = batch
+        X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = batch
 
         total_tokens = sum([(nt+1)/2 for nt in num_transitions_batch.reshape(-1)])
 

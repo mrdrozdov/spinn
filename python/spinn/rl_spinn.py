@@ -20,7 +20,7 @@ from spinn.util.misc import Args, Vocab, Example
 from spinn.fat_stack import BaseModel as _BaseModel
 from spinn.fat_stack import SPINN
 
-from spinn.data import T_SHIFT, T_REDUCE, T_SKIP, T_STRUCT
+from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
 
 def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS):
@@ -102,9 +102,11 @@ class BaseModel(_BaseModel):
         self.spinn.epsilon = rl_epsilon
 
         if self.rl_baseline == "value":
-            self.value_net = MLP(self.input_dim,
+            self.v_dim = 100
+            self.v_rnn = nn.LSTM(self.input_dim, self.v_dim, num_layers=1, batch_first=True)
+            self.value_net = MLP(self.v_dim,
                 mlp_dim=1024, num_classes=1, num_mlp_layers=2,
-                mlp_bn=True, classifier_dropout_rate=0.5)
+                mlp_bn=True, classifier_dropout_rate=0.1)
 
         self.register_buffer('baseline', torch.FloatTensor([0.0]))
 

@@ -1,7 +1,7 @@
 from collections import namedtuple
 from spinn import util
 
-from spinn.data import T_SHIFT, T_REDUCE, T_SKIP, T_STRUCT
+from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 from spinn.data.arithmetic.base import NUMBERS, FIXED_VOCABULARY
 
 SENTENCE_PAIR_DATA = False
@@ -59,7 +59,6 @@ def load_data(path, lowercase=None):
             example["sentence"] = seq
             example["tokens"] = tokens
             example["transitions"] = transitions
-            example["spans"] = spans(transitions, tokens)
             example["example_id"] = str(example_id)
 
             examples.append(example)

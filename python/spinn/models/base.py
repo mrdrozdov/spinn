@@ -48,7 +48,7 @@ def sequential_only():
 
 
 def get_batch(batch):
-    X_batch, transitions_batch, y_batch, num_transitions_batch, spans, example_ids = batch
+    X_batch, transitions_batch, y_batch, num_transitions_batch, example_ids = batch
 
     # Truncate each batch to max length within the batch.
     X_batch_is_left_padded = sequential_only()
@@ -60,7 +60,7 @@ def get_batch(batch):
     X_batch = truncate(X_batch, seq_length, max_length, X_batch_is_left_padded)
     transitions_batch = truncate(transitions_batch, seq_length, max_length, transitions_batch_is_left_padded)
 
-    return X_batch, transitions_batch, y_batch, num_transitions_batch, spans, example_ids
+    return X_batch, transitions_batch, y_batch, num_transitions_batch, example_ids
 
 
 def truncate(data, seq_length, max_length, left_padded):

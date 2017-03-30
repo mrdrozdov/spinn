@@ -8,12 +8,12 @@ Log format convenience methods for training spinn.
 import numpy as np
 from spinn.util.blocks import flatten
 from spinn.util.misc import time_per_token
-from spinn.data import T_SHIFT, T_REDUCE, T_SKIP, T_STRUCT
+from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
 
 def train_accumulate(model, data_manager, A, batch):
 
-    X_batch, transitions_batch, y_batch, num_transitions_batch, spans, train_ids = batch
+    X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = batch
 
     has_spinn = hasattr(model, 'spinn')
     has_transition_loss = hasattr(model, 'transition_loss') and model.transition_loss is not None
@@ -44,17 +44,6 @@ def train_accumulate(model, data_manager, A, batch):
     if has_invalid:
         A.add('invalid', model.spinn.invalid)
 
-    if has_transition_loss and hasattr(data_manager, 'spans'):
-        transitions_per_example = model.spinn.get_transitions_per_example().tolist()
-        for t_idx, span in enumerate(spans):
-            t_spans = data_manager.spans(transitions_per_example[t_idx])
-            target = set([node.span for node in span if node.tag == 'struct'])
-            actual = set([node.span for node in t_spans])
-            common = set.intersection(target, actual)
-
-            A.add('n_struct_target', len(target))
-            A.add('n_struct_common', len(common))
-
 
 def train_rl_accumulate(model, data_manager, A, batch):
     has_policy = hasattr(model, 'policy_loss')
@@ -73,7 +62,7 @@ def train_rl_accumulate(model, data_manager, A, batch):
 
 
 def train_metrics(M, stats_args, step):
-    metric_stats = ['class_acc', 'total_cost', 'transition_acc', 'transition_cost', 'struct']
+    metric_stats = ['class_acc', 'total_cost', 'transition_acc', 'transition_cost']
     for key in metric_stats:
         M.write(key, stats_args[key], step)
 
@@ -103,13 +92,6 @@ def train_stats(model, optimizer, A, step):
 
     time_metric = time_per_token(A.get('total_tokens'), A.get('total_time'))
 
-    n_struct_common = A.get('n_struct_common')
-    n_struct_target = A.get('n_struct_target')
-    if len(n_struct_target) > 0:
-        struct = sum(n_struct_common) / float(sum(n_struct_target))
-    else:
-        struct = 0.0
-
     ret = dict(
         step=step,
         class_acc=A.get_avg('class_acc'),
@@ -125,7 +107,6 @@ def train_stats(model, optimizer, A, step):
         leaf_cost=model.spinn.leaf_loss.data[0] if has_leaf else 0.0,
         gen_acc=A.get_avg('gen_acc') if has_gen else 0.0,
         gen_cost=model.spinn.gen_loss.data[0] if has_gen else 0.0,
-        struct=struct,
         learning_rate=optimizer.lr,
         time=time_metric,
     )
@@ -205,8 +186,6 @@ def train_extra_format(model):
         extra_str += " eps{epsilon:.7f}"
     if hasattr(model, "spinn") and hasattr(model.spinn, "invalid"):
         extra_str += " inv{invalid:.3f}"
-    if hasattr(model, "spinn"):
-        extra_str += " sub{struct:.3f}"
 
     return extra_str
 
@@ -225,7 +204,7 @@ def train_rl_format(model):
 
 def eval_accumulate(model, data_manager, A, batch):
 
-    X_batch, transitions_batch, y_batch, num_transitions_batch, spans, train_ids = batch
+    X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = batch
 
     has_spinn = hasattr(model, 'spinn')
     has_transition_loss = hasattr(model, 'transition_loss') and model.transition_loss is not None
@@ -258,17 +237,6 @@ def eval_accumulate(model, data_manager, A, batch):
     if has_invalid:
         A.add('invalid', model.spinn.invalid)
 
-    if has_transition_loss and hasattr(data_manager, 'spans'):
-        transitions_per_example = model.spinn.get_transitions_per_example().tolist()
-        for t_idx, span in enumerate(spans):
-            t_spans = data_manager.spans(transitions_per_example[t_idx])
-            target = set([node.span for node in span if node.tag == 'struct'])
-            actual = set([node.span for node in t_spans])
-            common = set.intersection(target, actual)
-
-            A.add('n_struct_target', len(target))
-            A.add('n_struct_common', len(common))
-
 
 def eval_format(model):
     eval_str = "Step: {step} Eval acc: {class_acc:.5f} {transition_acc:.5f} {filename} Time: {time:.5f}"
@@ -280,14 +248,12 @@ def eval_extra_format(model):
     extra_str = "Eval Extra:"
     if hasattr(model, 'spinn'):
         extra_str += " inv{invalid:.3f}"
-    if hasattr(model, "spinn"):
-        extra_str += " sub{struct:.3f}"
 
     return extra_str
 
 
 def eval_metrics(M, stats_args, step):
-    metric_stats = ['class_acc', 'transition_acc', 'struct']
+    metric_stats = ['class_acc', 'transition_acc']
     for key in metric_stats:
         M.write("eval_" + key, stats_args[key], step)
 
@@ -320,13 +286,6 @@ def eval_stats(model, A, step):
 
     time_metric = time_per_token(A.get('total_tokens'), A.get('total_time'))
 
-    n_struct_common = A.get('n_struct_common')
-    n_struct_target = A.get('n_struct_target')
-    if len(n_struct_target) > 0:
-        struct = sum(n_struct_common) / float(sum(n_struct_target))
-    else:
-        struct = 0.0
-
     ret = dict(
         step=step,
         class_acc=class_acc,
@@ -343,7 +302,6 @@ def eval_stats(model, A, step):
         # leaf_cost=model.spinn.leaf_loss.data[0] if has_leaf else 0.0,
         # gen_acc=A.get_avg('gen_acc') if has_gen else 0.0,
         # gen_cost=model.spinn.gen_loss.data[0] if has_gen else 0.0,
-        struct=struct,
         time=time_metric,
     )
 

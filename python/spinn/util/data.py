@@ -8,7 +8,7 @@ import sys
 import numpy as np
 
 
-from spinn.data import T_SHIFT, T_REDUCE, T_SKIP, T_STRUCT
+from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
 # With loaded embedding matrix, the padding vector will be initialized to zero
 # and will not be trained. Hopefully this isn't a problem. It seems better than
@@ -409,12 +409,10 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
         [data_manager.LABEL_MAP[example["label"]] for example in dataset],
         dtype=np.int32)
 
-    spans = np.array([example.get("spans", None) for example in dataset])
-
     # NP Array of Strings
     example_ids = np.array([example["example_id"] for example in dataset])
 
-    return X, transitions, y, num_transitions, spans, example_ids
+    return X, transitions, y, num_transitions, example_ids
 
 
 def BuildVocabulary(raw_training_data, raw_eval_sets, embedding_path, logger=None, sentence_pair_data=False):
