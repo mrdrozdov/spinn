@@ -187,6 +187,7 @@ def get_flags():
         "Different reward functions to use.")
     gflags.DEFINE_float("rl_weight", 1.0, "Hyperparam for REINFORCE loss.")
     gflags.DEFINE_boolean("rl_whiten", False, "Reduce variance in advantage.")
+    gflags.DEFINE_boolean("rl_valid", True, "Only consider non-validated actions.")
     gflags.DEFINE_boolean("rl_entropy", False, "Entropy regularization on transition policy.")
     gflags.DEFINE_float("rl_entropy_beta", 0.001, "Entropy regularization on transition policy.")
     gflags.DEFINE_float("rl_epsilon", 1.0, "Percent of sampled actions during train time.")
@@ -268,6 +269,9 @@ def flag_defaults(FLAGS):
 
     if FLAGS.model_type == "CBOW" or FLAGS.model_type == "RNN":
         FLAGS.num_samples = 0
+
+    if not torch.cuda.is_available():
+        FLAGS.gpu = -1
 
 
 def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_manager):

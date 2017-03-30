@@ -371,6 +371,7 @@ class SPINN(nn.Module):
                         transition_preds = validated_preds
 
                     # Keep track of which predictions have been valid.
+                    self.memory["t_valid_mask"] = np.logical_not(invalid_mask)
                     invalid_count += invalid_mask
 
                     # If the given action is skip, then must skip.

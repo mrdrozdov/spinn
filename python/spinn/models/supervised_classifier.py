@@ -290,7 +290,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
 
             transition_str = "Samples:"
             if model.use_sentence_pair and len(transitions_batch.shape) == 3:
-                _transitions_batch = np.concatenate([
+                transitions_batch = np.concatenate([
                     transitions_batch[:,:,0], transitions_batch[:,:,1]], axis=0)
 
             # This could be done prior to running the batch for a tiny speed boost.
@@ -298,7 +298,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
             random.shuffle(t_idxs)
             t_idxs = sorted(t_idxs[:FLAGS.num_samples])
             for t_idx in t_idxs:
-                gold = _transitions_batch[t_idx]
+                gold = transitions_batch[t_idx]
                 pred_tr = tr_transitions_per_example[t_idx]
                 pred_ev = ev_transitions_per_example[t_idx]
                 _, crossing = evalb.crossing(gold, pred)

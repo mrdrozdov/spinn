@@ -56,6 +56,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          rl_reward=FLAGS.rl_reward,
          rl_weight=FLAGS.rl_weight,
          rl_whiten=FLAGS.rl_whiten,
+         rl_valid=FLAGS.rl_valid,
          rl_entropy=FLAGS.rl_entropy,
          rl_entropy_beta=FLAGS.rl_entropy_beta,
         )
@@ -84,6 +85,7 @@ class BaseModel(_BaseModel):
                  rl_reward=None,
                  rl_weight=None,
                  rl_whiten=None,
+                 rl_valid=None,
                  rl_epsilon=None,
                  rl_entropy=None,
                  rl_entropy_beta=None,
@@ -97,6 +99,7 @@ class BaseModel(_BaseModel):
         self.rl_reward = rl_reward
         self.rl_weight = rl_weight
         self.rl_whiten = rl_whiten
+        self.rl_valid = rl_valid
         self.rl_entropy = rl_entropy
         self.rl_entropy_beta = rl_entropy_beta
         self.spinn.epsilon = rl_epsilon
@@ -206,7 +209,11 @@ class BaseModel(_BaseModel):
 
         t_preds = np.concatenate([m['t_preds'] for m in self.spinn.memories if m.get('t_preds', None) is not None])
         t_mask = np.concatenate([m['t_mask'] for m in self.spinn.memories if m.get('t_mask', None) is not None])
+        t_valid_mask = np.concatenate([m['t_valid_mask'] for m in self.spinn.memories if m.get('t_mask', None) is not None])
         t_logits = torch.cat([m['t_logits'] for m in self.spinn.memories if m.get('t_logits', None) is not None], 0)
+
+        if self.rl_valid:
+            t_mask = np.logical_and(t_mask, t_valid_mask)
 
         batch_size = advantage.size(0)
         seq_length = t_preds.shape[0] / batch_size
