@@ -104,7 +104,7 @@ class BaseModel(_BaseModel):
         if self.rl_baseline == "value":
             self.v_dim = 100
             self.v_rnn = nn.LSTM(self.input_dim, self.v_dim, num_layers=1, batch_first=True)
-            self.value_net = MLP(self.v_dim,
+            self.v_mlp = MLP(self.v_dim,
                 mlp_dim=1024, num_classes=1, num_mlp_layers=2,
                 mlp_bn=True, classifier_dropout_rate=0.1)
 
@@ -114,12 +114,13 @@ class BaseModel(_BaseModel):
         return RLSPINN(args, vocab, predict_use_cell, use_lengths)
 
     def forward_hook(self, embeds, batch_size, seq_length):
-        if self.rl_baseline == "value":
+        if self.rl_baseline == "value" and self.training:
             # Break the computational graph.
-            embeds = Variable(embeds.data, volatile=not self.training)
-
-            inp = embeds.view(batch_size, seq_length, -1).sum(1).squeeze()
-            self.baseline_outp = self.value_net(inp)
+            x = Variable(embeds.data, volatile=not self.training).view(batch_size, seq_length, -1)
+            h0 = Variable(to_gpu(torch.zeros(1, batch_size, self.v_dim)), volatile=not self.training)
+            c0 = Variable(to_gpu(torch.zeros(1, batch_size, self.v_dim)), volatile=not self.training)
+            output, (hn, cn) = self.v_rnn(x, (h0, c0))
+            self.baseline_outp = self.v_mlp(hn.squeeze())
 
     def run_greedy(self, sentences, transitions):
         inference_model_cls = BaseModel
