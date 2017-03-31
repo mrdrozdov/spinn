@@ -48,6 +48,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          mlp_bn=FLAGS.mlp_bn,
          predict_leaf=FLAGS.predict_leaf,
          encode=layers["input_encoder"],
+         composition=layers["composition"],
         )
 
 

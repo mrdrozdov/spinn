@@ -48,6 +48,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          mlp_bn=FLAGS.mlp_bn,
          gen_h=FLAGS.gen_h,
          encode=layers["input_encoder"],
+         composition=layers["composition"],
         )
 
 

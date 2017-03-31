@@ -56,6 +56,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          rl_entropy=FLAGS.rl_entropy,
          rl_entropy_beta=FLAGS.rl_entropy_beta,
          encode=layers["input_encoder"],
+         composition=layers["composition"],
         )
 
 

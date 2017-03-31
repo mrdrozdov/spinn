@@ -7,7 +7,6 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 
-
 def default_args(**kwargs):
     args = {}
 
@@ -37,6 +36,13 @@ def default_args(**kwargs):
 
     # Layers
     args['encode'] = nn.Linear(args['word_embedding_dim'], args['model_dim'])
+
+    class Reduce(nn.Module):
+        def forward(self, lefts, rights, tracking):
+            batch_size = len(lefts)
+            return torch.chunk(torch.cat(lefts, 0) - torch.cat(rights, 0), batch_size, 0)
+
+    args['composition'] = Reduce()
 
     for k in kwargs.keys():
         args[k] = kwargs[k]

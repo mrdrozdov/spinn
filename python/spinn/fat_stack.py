@@ -45,6 +45,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          num_mlp_layers=FLAGS.num_mlp_layers,
          mlp_bn=FLAGS.mlp_bn,
          encode=layers["input_encoder"],
+         composition=layers["composition"],
         )
 
 
@@ -118,7 +119,7 @@ class SPINN(nn.Module):
         self.use_lengths = use_lengths
 
         # Reduce function for semantic composition.
-        self.reduce = Reduce(args.size, args.tracker_size, args.use_tracking_in_composition)
+        self.reduce = args.composition
         if args.tracker_size is not None:
             self.tracker = Tracker(args.size, args.tracker_size, args.lateral_tracking)
             if args.transition_weight is not None:
@@ -491,6 +492,7 @@ class BaseModel(nn.Module):
                  mlp_bn=None,
                  classifier_keep_rate=None,
                  encode=None,
+                 composition=None,
                  **kwargs
                 ):
         super(BaseModel, self).__init__()
@@ -506,6 +508,7 @@ class BaseModel(nn.Module):
         args.size = model_dim/2
         args.tracker_size = tracking_lstm_hidden_dim
         args.transition_weight = transition_weight
+        args.composition = composition
 
         self.initial_embeddings = initial_embeddings
         self.word_embedding_dim = word_embedding_dim
