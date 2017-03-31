@@ -21,7 +21,7 @@ from spinn.util.blocks import HeKaimingInitializer
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
 
-def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS):
+def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, layers):
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
@@ -33,10 +33,6 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          embedding_keep_rate=FLAGS.embedding_keep_rate,
          tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
          transition_weight=FLAGS.transition_weight,
-         encode_style=FLAGS.encode_style,
-         encode_reverse=FLAGS.encode_reverse,
-         encode_bidirectional=FLAGS.encode_bidirectional,
-         encode_num_layers=FLAGS.encode_num_layers,
          use_sentence_pair=use_sentence_pair,
          lateral_tracking=FLAGS.lateral_tracking,
          use_tracking_in_composition=FLAGS.use_tracking_in_composition,
@@ -48,15 +44,8 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          mlp_dim=FLAGS.mlp_dim,
          num_mlp_layers=FLAGS.num_mlp_layers,
          mlp_bn=FLAGS.mlp_bn,
-         rl_mu=FLAGS.rl_mu,
-         rl_baseline=FLAGS.rl_baseline,
-         rl_reward=FLAGS.rl_reward,
-         rl_weight=FLAGS.rl_weight,
-         rl_whiten=FLAGS.rl_whiten,
-         rl_entropy=FLAGS.rl_entropy,
-         rl_entropy_beta=FLAGS.rl_entropy_beta,
-         predict_leaf=FLAGS.predict_leaf,
-         gen_h=FLAGS.gen_h,
+         encode=layers["input_encoder"],
+         composition=layers["composition"],
         )
 
 
@@ -130,7 +119,7 @@ class SPINN(nn.Module):
         self.use_lengths = use_lengths
 
         # Reduce function for semantic composition.
-        self.reduce = Reduce(args.size, args.tracker_size, args.use_tracking_in_composition)
+        self.reduce = args.composition
         if args.tracker_size is not None:
             self.tracker = Tracker(args.size, args.tracker_size, args.lateral_tracking)
             if args.transition_weight is not None:
@@ -488,7 +477,6 @@ class BaseModel(nn.Module):
                  embedding_keep_rate=None,
                  tracking_lstm_hidden_dim=4,
                  transition_weight=None,
-                 encode_style=None,
                  encode_reverse=None,
                  encode_bidirectional=None,
                  encode_num_layers=None,
@@ -503,7 +491,8 @@ class BaseModel(nn.Module):
                  num_mlp_layers=None,
                  mlp_bn=None,
                  classifier_keep_rate=None,
-                 use_projection=None,
+                 encode=None,
+                 composition=None,
                  **kwargs
                 ):
         super(BaseModel, self).__init__()
@@ -519,6 +508,7 @@ class BaseModel(nn.Module):
         args.size = model_dim/2
         args.tracker_size = tracking_lstm_hidden_dim
         args.transition_weight = transition_weight
+        args.composition = composition
 
         self.initial_embeddings = initial_embeddings
         self.word_embedding_dim = word_embedding_dim
@@ -539,19 +529,10 @@ class BaseModel(nn.Module):
 
         self.embedding_dropout_rate = 1. - embedding_keep_rate
 
-        # Projection will effectively be done by the encoding network.
-        use_projection = True if encode_style is None else False
-        self.input_dim = input_dim = model_dim if use_projection else word_embedding_dim
-
         # Create dynamic embedding layer.
-        self.embed = Embed(input_dim, vocab.size, vectors=vocab.vectors, use_projection=use_projection)
+        self.embed = Embed(word_embedding_dim, vocab.size, vectors=vocab.vectors)
 
-        # Optionally build input encoder.
-        if encode_style is not None:
-            self.encode = self.build_input_encoder(encode_style=encode_style,
-                word_embedding_dim=word_embedding_dim, model_dim=model_dim,
-                num_layers=encode_num_layers, bidirectional=encode_bidirectional, reverse=encode_reverse,
-                dropout=self.embedding_dropout_rate)
+        self.encode = encode
 
     def get_features_dim(self):
         features_dim = self.hidden_dim * 2 if self.use_sentence_pair else self.hidden_dim
@@ -574,16 +555,6 @@ class BaseModel(nn.Module):
         else:
             features = h[0]
         return features
-
-    def build_input_encoder(self, encode_style="LSTM", word_embedding_dim=None, model_dim=None,
-                            num_layers=None, bidirectional=None, reverse=None, dropout=None):
-        if encode_style == "LSTM":
-            encoding_net = LSTM(word_embedding_dim, model_dim,
-                num_layers=num_layers, bidirectional=bidirectional, reverse=reverse,
-                dropout=dropout)
-        else:
-            raise NotImplementedError
-        return encoding_net
 
     def build_spinn(self, args, vocab, predict_use_cell, use_lengths):
         return SPINN(args, vocab, predict_use_cell, use_lengths)
@@ -609,14 +580,10 @@ class BaseModel(nn.Module):
         b, l = example.tokens.size()[:2]
 
         embeds = self.embed(example.tokens)
+        embeds = self.encode(embeds)
         self.forward_hook(embeds, b, l)
         embeds = F.dropout(embeds, self.embedding_dropout_rate, training=self.training)
         embeds = torch.chunk(to_cpu(embeds), b, 0)
-
-        if hasattr(self, 'encode'):
-            to_encode = torch.cat([e.unsqueeze(0) for e in embeds], 0)
-            encoded = self.encode(to_encode)
-            embeds = [x.squeeze() for x in torch.chunk(encoded, b, 0)]
 
         # Make Buffers
         embeds = [torch.chunk(x, l, 0) for x in embeds]

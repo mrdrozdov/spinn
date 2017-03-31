@@ -16,7 +16,7 @@ from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
-from spinn.util.blocks import ModelTrainer, the_gpu, to_gpu, l2_cost, flatten
+from spinn.util.blocks import ModelTrainer, the_gpu, to_gpu, l2_cost, flatten, Linear, Reduce
 from spinn.util.misc import Accumulator, EvalReporter, time_per_token
 from spinn.util.misc import recursively_set_device
 from spinn.util.metrics import MetricsWriter
@@ -172,9 +172,11 @@ def get_flags():
         "Use cell output as feature for transition net.")
     gflags.DEFINE_boolean("use_lengths", False, "The transition net will be biased.")
 
+    # Reduce settings.
+    gflags.DEFINE_enum("reduce", "treelstm", ["treelstm", "tanh"], "Specify composition function.")
+
     # Encode settings.
-    gflags.DEFINE_boolean("use_encode", False, "Encode embeddings with sequential network.")
-    gflags.DEFINE_enum("encode_style", None, ["LSTM", "CNN", "QRNN"], "Encode embeddings with sequential context.")
+    gflags.DEFINE_enum("encode", "projection", ["pass", "projection", "gru"], "Encode embeddings with sequential context.")
     gflags.DEFINE_boolean("encode_reverse", False, "Encode in reverse order.")
     gflags.DEFINE_boolean("encode_bidirectional", False, "Encode in both directions.")
     gflags.DEFINE_integer("encode_num_layers", 1, "RNN layers in encoding net.")
@@ -263,10 +265,6 @@ def flag_defaults(FLAGS):
     if not FLAGS.metrics_path:
         FLAGS.metrics_path = FLAGS.log_path
 
-    # HACK: The "use_encode" flag will be deprecated. Instead use something like encode_style=LSTM.
-    if FLAGS.use_encode:
-        FLAGS.encode_style = "LSTM"
-
     if FLAGS.model_type == "CBOW" or FLAGS.model_type == "RNN":
         FLAGS.num_samples = 0
 
@@ -290,9 +288,43 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
     elif FLAGS.model_type == "GENSPINN":
         build_model = spinn.gen_spinn.build_model
     else:
-        raise Exception("Requested unimplemented model type %s" % FLAGS.model_type)
+        raise NotImplementedError
 
-    model = build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS)
+    # Input Encoder.
+    if FLAGS.encode == "projection":
+        input_encoder = Linear()(FLAGS.word_embedding_dim, FLAGS.model_dim)
+    elif FLAGS.encode == "gru":
+        # TODO: Needs to reshape the inputs!
+        # input_encoder = GRU(word_embedding_dim, model_dim,
+        #         num_layers=FLAGS.encode_num_layers,
+        #         bidirectional=FLAGS.encode_bidirectional,
+        #         reverse=FLAGS.encode_reverse)
+        raise NotImplementedError
+    elif FLAGS.encode == "pass":
+        input_encoder = lambda x: x
+    else:
+        raise NotImplementedError
+
+    # Composition Function.
+    if FLAGS.reduce == "treelstm":
+        composition = Reduce(FLAGS.model_dim / 2,
+            FLAGS.tracking_lstm_hidden_dim,
+            FLAGS.use_tracking_in_composition)
+    elif FLAGS.reduce == "tanh":
+        class ReduceTanh(nn.Module):
+            def forward(self, lefts, rights, tracking=None):
+                batch_size = len(lefts)
+                ret = torch.cat(lefts, 0) + F.tanh(torch.cat(rights, 0))
+                return torch.chunk(ret, batch_size, 0)
+        composition = ReduceTanh()
+    else:
+        raise NotImplementedError
+
+    layers = {}
+    layers["input_encoder"] = input_encoder
+    layers["composition"] = composition
+
+    model = build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, layers)
 
     # Build optimizer.
     if FLAGS.optimizer_type == "Adam":

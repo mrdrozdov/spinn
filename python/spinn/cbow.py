@@ -16,7 +16,7 @@ from spinn.util.blocks import Embed, to_gpu, MLP
 from spinn.util.misc import Args, Vocab
 
 
-def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS):
+def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, layers):
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
@@ -33,6 +33,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          mlp_dim=FLAGS.mlp_dim,
          num_mlp_layers=FLAGS.num_mlp_layers,
          mlp_bn=FLAGS.mlp_bn,
+         encode=layers["input_encoder"],
         )
 
 
@@ -50,6 +51,7 @@ class BaseModel(nn.Module):
                  num_mlp_layers=None,
                  mlp_bn=None,
                  use_sentence_pair=False,
+                 encode=None,
                  **kwargs
                 ):
         super(BaseModel, self).__init__()
@@ -66,17 +68,20 @@ class BaseModel(nn.Module):
         vocab.size = initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size
         vocab.vectors = initial_embeddings
 
-        self.embed = Embed(args.size, vocab.size, vectors=vocab.vectors)
+        self.embed = Embed(word_embedding_dim, vocab.size, vectors=vocab.vectors)
 
         mlp_input_dim = model_dim * 2 if use_sentence_pair else model_dim
 
         self.mlp = MLP(mlp_input_dim, mlp_dim, num_classes,
             num_mlp_layers, mlp_bn, classifier_dropout_rate)
 
+        self.encode = encode
+
     def run_embed(self, x):
         batch_size, seq_length = x.size()
 
         emb = self.embed(x)
+        emb = self.encode(emb)
         emb = torch.cat([b.unsqueeze(0) for b in torch.chunk(emb, batch_size, 0)], 0)
 
         return emb

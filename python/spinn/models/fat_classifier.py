@@ -251,11 +251,6 @@ def run(only_forward=False):
         step = 0
         best_dev_error = 1.0
 
-    # Print model size.
-    logger.Log("Architecture: {}".format(model))
-    total_params = sum([reduce(lambda x, y: x * y, w.size(), 1.0) for w in model.parameters()])
-    logger.Log("Total params: {}".format(total_params))
-
     # GPU support.
     the_gpu.gpu = FLAGS.gpu
     if FLAGS.gpu >= 0:
