@@ -91,7 +91,7 @@ class SPINNTestCase(unittest.TestCase):
                 batch_size = len(lefts)
                 return torch.chunk(torch.cat(lefts, 0) - torch.cat(rights, 0), batch_size, 0)
 
-        model.embed.projection = Projection()
+        model.encode = Projection()
         model.spinn.reduce = Reduce()
 
         model(X, transitions)

@@ -23,7 +23,7 @@ from spinn.fat_stack import SPINN
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
 
-def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS):
+def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, layers):
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
@@ -37,10 +37,6 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
          tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
          transition_weight=FLAGS.transition_weight,
-         encode_style=FLAGS.encode_style,
-         encode_reverse=FLAGS.encode_reverse,
-         encode_bidirectional=FLAGS.encode_bidirectional,
-         encode_num_layers=FLAGS.encode_num_layers,
          use_sentence_pair=use_sentence_pair,
          lateral_tracking=FLAGS.lateral_tracking,
          use_tracking_in_composition=FLAGS.use_tracking_in_composition,
@@ -51,6 +47,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          num_mlp_layers=FLAGS.num_mlp_layers,
          mlp_bn=FLAGS.mlp_bn,
          gen_h=FLAGS.gen_h,
+         encode=layers["input_encoder"],
         )
 
 

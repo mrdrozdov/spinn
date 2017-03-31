@@ -35,6 +35,9 @@ def default_args(**kwargs):
     # Other
     args['predict_leaf'] = True
 
+    # Layers
+    args['encode'] = nn.Linear(args['word_embedding_dim'], args['model_dim'])
+
     for k in kwargs.keys():
         args[k] = kwargs[k]
 

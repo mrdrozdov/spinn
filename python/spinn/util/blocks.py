@@ -278,13 +278,10 @@ class ModelTrainer(object):
 
 
 class Embed(nn.Module):
-    def __init__(self, size, vocab_size, vectors, use_projection=True):
+    def __init__(self, size, vocab_size, vectors):
         super(Embed, self).__init__()
         if vectors is None:
             self.embed = nn.Embedding(vocab_size, size)
-        else:
-            if use_projection:
-                self.projection = nn.Linear(vectors.shape[1], size)
         self.vectors = vectors
 
     def forward(self, tokens):
@@ -293,8 +290,6 @@ class Embed(nn.Module):
         else:
             embeds = self.vectors.take(tokens.data.cpu().numpy().ravel(), axis=0)
             embeds = to_gpu(Variable(torch.from_numpy(embeds), volatile=tokens.volatile))
-            if hasattr(self, 'projection'):
-                embeds = self.projection(embeds)
 
         return embeds
 
