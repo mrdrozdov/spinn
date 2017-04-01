@@ -16,7 +16,8 @@ from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
-from spinn.util.blocks import ModelTrainer, the_gpu, to_gpu, l2_cost, flatten, Linear, Reduce
+from spinn.util.blocks import ModelTrainer, the_gpu, to_gpu, l2_cost, flatten
+from spinn.util.blocks import Linear, Reduce, ReduceTreeGRU
 from spinn.util.misc import Accumulator, EvalReporter, time_per_token
 from spinn.util.misc import recursively_set_device
 from spinn.util.metrics import MetricsWriter
@@ -173,7 +174,7 @@ def get_flags():
     gflags.DEFINE_boolean("use_lengths", False, "The transition net will be biased.")
 
     # Reduce settings.
-    gflags.DEFINE_enum("reduce", "treelstm", ["treelstm", "tanh"], "Specify composition function.")
+    gflags.DEFINE_enum("reduce", "treelstm", ["treelstm", "treegru", "tanh"], "Specify composition function.")
 
     # Encode settings.
     gflags.DEFINE_enum("encode", "projection", ["pass", "projection", "gru"], "Encode embeddings with sequential context.")
@@ -317,6 +318,10 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
                 ret = torch.cat(lefts, 0) + F.tanh(torch.cat(rights, 0))
                 return torch.chunk(ret, batch_size, 0)
         composition = ReduceTanh()
+    elif FLAGS.reduce == "treegru":
+        composition = ReduceTreeGRU(FLAGS.model_dim,
+            FLAGS.tracking_lstm_hidden_dim,
+            FLAGS.use_tracking_in_composition)
     else:
         raise NotImplementedError
 

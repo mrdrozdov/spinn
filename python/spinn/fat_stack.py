@@ -73,9 +73,9 @@ class Tracker(nn.Module):
         self.c = self.h = None
 
     def forward(self, top_buf, top_stack_1, top_stack_2):
-        tracker_inp = self.buf(top_buf.h)
-        tracker_inp += self.stack1(top_stack_1.h)
-        tracker_inp += self.stack2(top_stack_2.h)
+        tracker_inp = self.buf(top_buf)
+        tracker_inp += self.stack1(top_stack_1)
+        tracker_inp += self.stack2(top_stack_2)
 
         batch_size = tracker_inp.size(0)
 
@@ -321,9 +321,9 @@ class SPINN(nn.Module):
                       "feature, when predicting/validating transitions, you"
                       "probably will not get the behavior that you expect. Disable"
                       "this exception if you dare.")
-            self.memory['top_buf'] = bundle(buf[-1] if len(buf) > 0 else self.zeros for buf in self.bufs)
-            self.memory['top_stack_1'] = bundle(stack[-1] if len(stack) > 0 else self.zeros for stack in self.stacks)
-            self.memory['top_stack_2'] = bundle(stack[-2] if len(stack) > 1 else self.zeros for stack in self.stacks)
+            self.memory['top_buf'] = torch.cat([buf[-1] if len(buf) > 0 else self.zeros for buf in self.bufs], 0)
+            self.memory['top_stack_1'] = torch.cat([stack[-1] if len(stack) > 0 else self.zeros for stack in self.stacks], 0)
+            self.memory['top_stack_2'] = torch.cat([stack[-2] if len(stack) > 1 else self.zeros for stack in self.stacks], 0)
 
             # Run if:
             # A. We have a tracking component and,
@@ -500,12 +500,12 @@ class BaseModel(nn.Module):
         self.use_sentence_pair = use_sentence_pair
         self.use_difference_feature = use_difference_feature
         self.use_product_feature = use_product_feature
-        self.hidden_dim = hidden_dim = model_dim / 2
+        self.hidden_dim = hidden_dim = model_dim
 
         args = Args()
         args.lateral_tracking = lateral_tracking
         args.use_tracking_in_composition = use_tracking_in_composition
-        args.size = model_dim/2
+        args.size = model_dim
         args.tracker_size = tracking_lstm_hidden_dim
         args.transition_weight = transition_weight
         args.composition = composition
@@ -638,7 +638,7 @@ class BaseModel(nn.Module):
 
     def wrap_sentence(self, h_list):
         batch_size = len(h_list) / 2
-        h = get_h(torch.cat(h_list, 0), self.hidden_dim)
+        h = torch.cat(h_list, 0)
         return [h]
 
     # --- Sentence Pair Model Specific ---
@@ -664,6 +664,6 @@ class BaseModel(nn.Module):
 
     def wrap_sentence_pair(self, h_list):
         batch_size = len(h_list) / 2
-        h_premise = get_h(torch.cat(h_list[:batch_size], 0), self.hidden_dim)
-        h_hypothesis = get_h(torch.cat(h_list[batch_size:], 0), self.hidden_dim)
+        h_premise = torch.cat(h_list[:batch_size], 0)
+        h_hypothesis = torch.cat(h_list[batch_size:], 0)
         return [h_premise, h_hypothesis]

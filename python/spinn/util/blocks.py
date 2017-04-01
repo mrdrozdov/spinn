@@ -211,10 +211,71 @@ def lstm(c_prev, x):
     return c, h
 
 
-def treelstm(c_left, c_right, gates, use_dropout=False, training=None):
-    hidden_dim = c_left.size()[1]
+class ReduceTreeGRU(nn.Module):
+    """
+    Computes the following TreeGRU (x is optional):
 
-    assert gates.size()[1] == hidden_dim * 5, "Need to have 5 gates."
+    hprev = left + right
+    r = sigm(Ur_x(x) + Wr(hprev))
+    z = sigm(Uz_x(x) + Wz(hprev))
+    c = tanh(Uc_x(x) + V_l(left * r) + V_r(right * r))
+    h = (1-z) * hprev + z * c
+    or:
+    h = hprev + z * (c - hprev)
+
+    Standard GRU would be:
+
+    r = sigm(Ur_x(x) + Wr(hprev))
+    z = sigm(Uz_x(x) + Wz(hprev))
+    c = tanh(Uc_x(x) + V(hprev * r))
+    h = (1-z) * hprev + z * c
+    or:
+    h = hprev + z * (c - hprev)
+
+    """
+
+    def __init__(self, size, tracker_size=None, use_tracking_in_composition=None):
+        super(ReduceTreeGRU, self).__init__()
+        self.size = size
+        self.W = Linear(initializer=HeKaimingInitializer)(size, 2 * size)
+        self.Vl = Linear(initializer=HeKaimingInitializer)(size, size)
+        self.Vr = Linear(initializer=HeKaimingInitializer)(size, size)
+        if tracker_size is not None and use_tracking_in_composition:
+            self.U = Linear(initializer=HeKaimingInitializer)(tracker_size, 3 * size)
+
+    def forward(self, left, right, tracking=None):
+        def slice_gate(gate_data, hidden_dim, i):
+            return gate_data[:, i * hidden_dim:(i + 1) * hidden_dim]
+
+        batch_size = len(left)
+        size = self.size
+
+        left = torch.cat(left, 0)
+        right = torch.cat(right, 0)
+        hprev = left + right
+
+        W = self.W(hprev)
+        r, z = [slice_gate(W, size, i) for i in range(2)]
+        c = 0
+
+        if hasattr(self, "U"):
+            tracking = bundle(tracking)
+            U = self.U(tracking.h)
+            Ur, Uz, Uc = [slice_gate(U, size, i) for i in range(3)]
+            r = Ur + r
+            z = Uz + z
+            c = Uc + c
+
+        r = F.sigmoid(r)
+        z = F.sigmoid(z)
+        c = F.tanh(c + self.Vl(left * r) + self.Vr(right * r))
+        h = hprev + z * (c - hprev)
+
+        return torch.chunk(h, batch_size, 0)
+
+
+def treelstm(c_left, c_right, gates):
+    hidden_dim = c_left.size()[1]
 
     def slice_gate(gate_data, i):
         return gate_data[:, i * hidden_dim:(i + 1) * hidden_dim]
@@ -232,9 +293,6 @@ def treelstm(c_left, c_right, gates, use_dropout=False, training=None):
 
     # Compute new cell and hidden value
     i_val = i_gate * cell_inp
-    dropout_rate = 0.1
-    if use_dropout:
-        i_val = F.dropout(i_val, dropout_rate, training=training)
     c_t = fl_gate * c_left + fr_gate * c_right + i_val
     h_t = o_gate * F.tanh(c_t)
 
@@ -387,7 +445,7 @@ class Reduce(nn.Module):
         lstm_in += self.right(right.h)
         if hasattr(self, 'track'):
             lstm_in += self.track(tracking.h)
-        out = unbundle(treelstm(left.c, right.c, lstm_in, training=self.training))
+        out = unbundle(treelstm(left.c, right.c, lstm_in))
         return out
 
 
