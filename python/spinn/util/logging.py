@@ -126,10 +126,6 @@ def train_format(model):
 
     # Accuracy Component.
     stats_str += " Acc: {class_acc:.5f} {transition_acc:.5f}"
-    if has_spinn and hasattr(model.spinn, 'leaf_loss'):
-        stats_str += " leaf{leaf_acc:.5f}"
-    if has_spinn and hasattr(model.spinn, 'gen_loss'):
-        stats_str += " gen{gen_acc:.5f}"
 
     # Cost Component.
     stats_str += " Cost: {total_cost:.5f} {xent_cost:.5f} {transition_cost:.5f} {l2_cost:.5f}"
@@ -185,14 +181,6 @@ def eval_accumulate(model, data_manager, A, batch):
         truth = [m["t_given"] for m in model.spinn.memories if m.get('t_given', None) is not None]
         A.add('preds', preds)
         A.add('truth', truth)
-
-    # Accumulate stats for leaf prediction accuracy.
-    if has_leaf:
-        A.add('leaf_acc', model.spinn.leaf_acc)
-
-    # Accumulate stats for word prediction accuracy.
-    if has_gen:
-        A.add('gen_acc', model.spinn.gen_acc)
 
     if has_invalid:
         A.add('invalid', model.spinn.invalid)
