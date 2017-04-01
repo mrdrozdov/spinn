@@ -7,6 +7,8 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 
+from spinn.util.misc import Args
+
 def default_args(**kwargs):
     args = {}
 
@@ -31,9 +33,6 @@ def default_args(**kwargs):
     args['tracking_lstm_hidden_dim'] = 4
     args['transition_weight'] = None
 
-    # Other
-    args['predict_leaf'] = True
-
     # Layers
     args['encode'] = nn.Linear(args['word_embedding_dim'], args['model_dim'])
 
@@ -42,7 +41,18 @@ def default_args(**kwargs):
             batch_size = len(lefts)
             return torch.chunk(torch.cat(lefts, 0) - torch.cat(rights, 0), batch_size, 0)
 
-    args['composition'] = Reduce()
+    composition_args = Args()
+    composition_args.lateral_tracking = True
+    composition_args.use_tracking_in_composition = True
+    composition_args.size = args['model_dim']
+    composition_args.tracker_size = args['tracking_lstm_hidden_dim']
+    composition_args.transition_weight = args['transition_weight']
+    composition_args.wrap_items = lambda x: torch.cat(x, 0)
+    composition_args.extract_h = lambda x: x
+    composition_args.extract_c = None
+    composition_args.composition = Reduce()
+
+    args['composition_args'] = composition_args
 
     for k in kwargs.keys():
         args[k] = kwargs[k]

@@ -16,7 +16,7 @@ from spinn.util.blocks import Embed, to_gpu, MLP
 from spinn.util.misc import Args, Vocab
 
 
-def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, layers):
+def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, layers, composition_args):
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 

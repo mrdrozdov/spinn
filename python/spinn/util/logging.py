@@ -18,9 +18,6 @@ def train_accumulate(model, data_manager, A, batch):
     has_spinn = hasattr(model, 'spinn')
     has_transition_loss = hasattr(model, 'transition_loss') and model.transition_loss is not None
     has_invalid = has_spinn and hasattr(model.spinn, 'invalid')
-    has_rae = has_spinn and hasattr(model.spinn, 'rae_loss')
-    has_leaf = has_spinn and hasattr(model.spinn, 'leaf_loss')
-    has_gen = has_spinn and hasattr(model.spinn, 'gen_loss')
 
     # Accumulate stats for transition accuracy.
     if has_transition_loss:
@@ -28,14 +25,6 @@ def train_accumulate(model, data_manager, A, batch):
         truth = [m["t_given"] for m in model.spinn.memories if m.get('t_given', None) is not None]
         A.add('preds', preds)
         A.add('truth', truth)
-
-    # Accumulate stats for leaf prediction accuracy.
-    if has_leaf:
-        A.add('leaf_acc', model.spinn.leaf_acc)
-
-    # Accumulate stats for word prediction accuracy.
-    if has_gen:
-        A.add('gen_acc', model.spinn.gen_acc)
 
     if has_invalid:
         A.add('invalid', model.spinn.invalid)
@@ -75,9 +64,6 @@ def train_stats(model, optimizer, A, step):
     has_invalid = has_spinn and hasattr(model.spinn, 'invalid')
     has_policy = has_spinn and hasattr(model, 'policy_loss')
     has_value = has_spinn and hasattr(model, 'value_loss')
-    has_rae = has_spinn and hasattr(model.spinn, 'rae_loss')
-    has_leaf = has_spinn and hasattr(model.spinn, 'leaf_loss')
-    has_gen = has_spinn and hasattr(model.spinn, 'gen_loss')
     has_epsilon = has_spinn and hasattr(model.spinn, "epsilon")
 
     if has_transition_loss:
@@ -96,11 +82,6 @@ def train_stats(model, optimizer, A, step):
         l2_cost=A.get_avg('l2_cost'), # not actual mean
         invalid=A.get_avg('invalid') if has_invalid else 0.0,
         epsilon=model.spinn.epsilon if has_epsilon else 0.0,
-        rae_cost=model.spinn.rae_loss.data[0] if has_rae else 0.0,
-        leaf_acc=A.get_avg('leaf_acc') if has_leaf else 0.0,
-        leaf_cost=model.spinn.leaf_loss.data[0] if has_leaf else 0.0,
-        gen_acc=A.get_avg('gen_acc') if has_gen else 0.0,
-        gen_cost=model.spinn.gen_loss.data[0] if has_gen else 0.0,
         learning_rate=optimizer.lr,
         time=time_metric,
     )
@@ -156,12 +137,6 @@ def train_format(model):
         stats_str += " p{policy_cost:.5f}"
     if has_spinn and hasattr(model, 'value_loss'):
         stats_str += " v{value_cost:.5f}"
-    if has_spinn and hasattr(model.spinn, 'rae_loss'):
-        stats_str += " rae{rae_cost:.5f}"
-    if has_spinn and hasattr(model.spinn, 'leaf_loss'):
-        stats_str += " leaf{leaf_cost:.5f}"
-    if has_spinn and hasattr(model.spinn, 'gen_loss'):
-        stats_str += " gen{gen_cost:.5f}"
 
     # Time Component.
     stats_str += " Time: {time:.5f}"
@@ -203,9 +178,6 @@ def eval_accumulate(model, data_manager, A, batch):
     has_invalid = has_spinn and hasattr(model.spinn, 'invalid')
     has_policy = has_spinn and hasattr(model, 'policy_loss')
     has_value = has_spinn and hasattr(model, 'value_loss')
-    has_rae = has_spinn and hasattr(model.spinn, 'rae_loss')
-    has_leaf = has_spinn and hasattr(model.spinn, 'leaf_loss')
-    has_gen = has_spinn and hasattr(model.spinn, 'gen_loss')
 
     # Accumulate stats for transition accuracy.
     if has_transition_loss:
@@ -257,9 +229,6 @@ def eval_stats(model, A, step):
     has_invalid = has_spinn and hasattr(model.spinn, 'invalid')
     has_policy = has_spinn and hasattr(model, 'policy_loss')
     has_value = has_spinn and hasattr(model, 'value_loss')
-    has_rae = has_spinn and hasattr(model.spinn, 'rae_loss')
-    has_leaf = has_spinn and hasattr(model.spinn, 'leaf_loss')
-    has_gen = has_spinn and hasattr(model.spinn, 'gen_loss')
     has_epsilon = has_spinn and hasattr(model.spinn, "epsilon")
 
     class_correct = A.get('class_correct')
@@ -283,11 +252,6 @@ def eval_stats(model, A, step):
         # value_cost=model.value_loss.data[0] if has_value else 0.0,
         invalid=A.get_avg('invalid') if has_invalid else 0.0,
         # epsilon=model.spinn.epsilon if has_epsilon else 0.0,
-        # rae_cost=model.spinn.rae_loss.data[0] if has_rae else 0.0,
-        # leaf_acc=A.get_avg('leaf_acc') if has_leaf else 0.0,
-        # leaf_cost=model.spinn.leaf_loss.data[0] if has_leaf else 0.0,
-        # gen_acc=A.get_avg('gen_acc') if has_gen else 0.0,
-        # gen_cost=model.spinn.gen_loss.data[0] if has_gen else 0.0,
         time=time_metric,
     )
 

@@ -49,8 +49,6 @@ from spinn.util.logging import train_format, train_extra_format, train_stats, tr
 from spinn.util.loss import auxiliary_loss
 import spinn.util.evalb as evalb
 
-import spinn.gen_spinn
-import spinn.rae_spinn
 import spinn.rl_spinn
 import spinn.fat_stack
 import spinn.plain_rnn

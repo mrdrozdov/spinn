@@ -21,7 +21,7 @@ from spinn.util.blocks import HeKaimingInitializer
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
 
-def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, layers):
+def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, layers, composition_args):
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
@@ -45,7 +45,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          num_mlp_layers=FLAGS.num_mlp_layers,
          mlp_bn=FLAGS.mlp_bn,
          encode=layers["input_encoder"],
-         composition=layers["composition"],
+         composition_args=composition_args,
         )
 
 
@@ -117,6 +117,9 @@ class SPINN(nn.Module):
 
         self.transition_weight = args.transition_weight
         self.use_lengths = use_lengths
+
+        self.wrap_items = args.wrap_items
+        self.extract_h = args.extract_h
 
         # Reduce function for semantic composition.
         self.reduce = args.composition
@@ -321,9 +324,9 @@ class SPINN(nn.Module):
                       "feature, when predicting/validating transitions, you"
                       "probably will not get the behavior that you expect. Disable"
                       "this exception if you dare.")
-            self.memory['top_buf'] = torch.cat([buf[-1] if len(buf) > 0 else self.zeros for buf in self.bufs], 0)
-            self.memory['top_stack_1'] = torch.cat([stack[-1] if len(stack) > 0 else self.zeros for stack in self.stacks], 0)
-            self.memory['top_stack_2'] = torch.cat([stack[-2] if len(stack) > 1 else self.zeros for stack in self.stacks], 0)
+            self.memory['top_buf'] = self.wrap_items([buf[-1] if len(buf) > 0 else self.zeros for buf in self.bufs])
+            self.memory['top_stack_1'] = self.wrap_items([stack[-1] if len(stack) > 0 else self.zeros for stack in self.stacks])
+            self.memory['top_stack_2'] = self.wrap_items([stack[-2] if len(stack) > 1 else self.zeros for stack in self.stacks])
 
             # Run if:
             # A. We have a tracking component and,
@@ -332,9 +335,9 @@ class SPINN(nn.Module):
 
                 # Get hidden output from the tracker. Used to predict transitions.
                 tracker_h, tracker_c = self.tracker(
-                    self.memory['top_buf'],
-                    self.memory['top_stack_1'],
-                    self.memory['top_stack_2'])
+                    self.extract_h(self.memory['top_buf']),
+                    self.extract_h(self.memory['top_stack_1']),
+                    self.extract_h(self.memory['top_stack_2']))
 
                 if hasattr(self, 'transition_net'):
                     transition_inp = [tracker_h]
@@ -492,7 +495,7 @@ class BaseModel(nn.Module):
                  mlp_bn=None,
                  classifier_keep_rate=None,
                  encode=None,
-                 composition=None,
+                 composition_args=None,
                  **kwargs
                 ):
         super(BaseModel, self).__init__()
@@ -500,15 +503,10 @@ class BaseModel(nn.Module):
         self.use_sentence_pair = use_sentence_pair
         self.use_difference_feature = use_difference_feature
         self.use_product_feature = use_product_feature
-        self.hidden_dim = hidden_dim = model_dim
 
-        args = Args()
-        args.lateral_tracking = lateral_tracking
-        args.use_tracking_in_composition = use_tracking_in_composition
-        args.size = model_dim
-        args.tracker_size = tracking_lstm_hidden_dim
-        args.transition_weight = transition_weight
-        args.composition = composition
+        self.hidden_dim = composition_args.size
+        self.wrap_items = composition_args.wrap_items
+        self.extract_h = composition_args.extract_h
 
         self.initial_embeddings = initial_embeddings
         self.word_embedding_dim = word_embedding_dim
@@ -520,7 +518,7 @@ class BaseModel(nn.Module):
         vocab.vectors = initial_embeddings
 
         # Build parsing component.
-        self.spinn = self.build_spinn(args, vocab, predict_use_cell, use_lengths)
+        self.spinn = self.build_spinn(composition_args, vocab, predict_use_cell, use_lengths)
 
         # Build classiifer.
         features_dim = self.get_features_dim()
@@ -636,9 +634,9 @@ class BaseModel(nn.Module):
 
         return example
 
-    def wrap_sentence(self, h_list):
-        batch_size = len(h_list) / 2
-        h = torch.cat(h_list, 0)
+    def wrap_sentence(self, items):
+        batch_size = len(items) / 2
+        h = self.extract_h(self.wrap_items(items))
         return [h]
 
     # --- Sentence Pair Model Specific ---
@@ -662,8 +660,8 @@ class BaseModel(nn.Module):
 
         return example
 
-    def wrap_sentence_pair(self, h_list):
-        batch_size = len(h_list) / 2
-        h_premise = torch.cat(h_list[:batch_size], 0)
-        h_hypothesis = torch.cat(h_list[batch_size:], 0)
+    def wrap_sentence_pair(self, items):
+        batch_size = len(items) / 2
+        h_premise = self.extract_h(self.wrap_items(items[:batch_size]))
+        h_hypothesis = self.extract_h(self.wrap_items(items[batch_size:]))
         return [h_premise, h_hypothesis]

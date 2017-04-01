@@ -7,8 +7,6 @@ from spinn.fat_stack import SPINN, BaseModel
 
 import spinn.fat_stack
 import spinn.rl_spinn
-import spinn.rae_spinn
-import spinn.gen_spinn
 from spinn.util.blocks import ModelTrainer
 
 # PyTorch
@@ -66,13 +64,9 @@ class SPINNTestCase(unittest.TestCase):
     def test_init_models(self):
         MockModel(spinn.fat_stack.BaseModel, default_args())
         MockModel(spinn.rl_spinn.BaseModel, default_args())
-        MockModel(spinn.rae_spinn.BaseModel, default_args())
-        MockModel(spinn.gen_spinn.BaseModel, default_args())
 
         MockModel(spinn.fat_stack.BaseModel, default_args(use_sentence_pair=True))
         MockModel(spinn.rl_spinn.BaseModel, default_args(use_sentence_pair=True))
-        MockModel(spinn.rae_spinn.BaseModel, default_args(use_sentence_pair=True))
-        MockModel(spinn.gen_spinn.BaseModel, default_args(use_sentence_pair=True))
 
 
     def test_basic_stack(self):

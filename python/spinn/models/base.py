@@ -17,17 +17,15 @@ from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import ModelTrainer, the_gpu, to_gpu, l2_cost, flatten
-from spinn.util.blocks import Linear, Reduce, ReduceTreeGRU
+from spinn.util.blocks import Linear, Reduce, ReduceTreeGRU, bundle
 from spinn.util.misc import Accumulator, EvalReporter, time_per_token
-from spinn.util.misc import recursively_set_device
+from spinn.util.misc import recursively_set_device, Args
 from spinn.util.metrics import MetricsWriter
 from spinn.util.logging import train_format, train_extra_format, train_stats, train_accumulate
 from spinn.util.logging import eval_format, eval_extra_format
 from spinn.util.loss import auxiliary_loss
 import spinn.util.evalb as evalb
 
-import spinn.gen_spinn
-import spinn.rae_spinn
 import spinn.rl_spinn
 import spinn.fat_stack
 import spinn.plain_rnn
@@ -148,7 +146,7 @@ def get_flags():
         "If set, load GloVe-formatted embeddings from here.")
 
     # Model architecture settings.
-    gflags.DEFINE_enum("model_type", "RNN", ["CBOW", "RNN", "SPINN", "RLSPINN", "RAESPINN", "GENSPINN"], "")
+    gflags.DEFINE_enum("model_type", "RNN", ["CBOW", "RNN", "SPINN", "RLSPINN"], "")
     gflags.DEFINE_integer("gpu", -1, "")
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")
@@ -195,12 +193,6 @@ def get_flags():
     gflags.DEFINE_float("rl_entropy_beta", 0.001, "Entropy regularization on transition policy.")
     gflags.DEFINE_float("rl_epsilon", 1.0, "Percent of sampled actions during train time.")
     gflags.DEFINE_float("rl_epsilon_decay", 50000, "Percent of sampled actions during train time.")
-
-    # RAE settings.
-    gflags.DEFINE_boolean("predict_leaf", True, "Predict whether a node is a leaf or not.")
-
-    # GEN settings.
-    gflags.DEFINE_boolean("gen_h", True, "Use generator output as feature.")
 
     # MLP settings.
     gflags.DEFINE_integer("mlp_dim", 1024, "Dimension of intermediate MLP layers.")
@@ -284,10 +276,6 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
         build_model = spinn.fat_stack.build_model
     elif FLAGS.model_type == "RLSPINN":
         build_model = spinn.rl_spinn.build_model
-    elif FLAGS.model_type == "RAESPINN":
-        build_model = spinn.rae_spinn.build_model
-    elif FLAGS.model_type == "GENSPINN":
-        build_model = spinn.gen_spinn.build_model
     else:
         raise NotImplementedError
 
@@ -307,7 +295,21 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
         raise NotImplementedError
 
     # Composition Function.
+    composition_args = Args()
+    composition_args.lateral_tracking = FLAGS.lateral_tracking
+    composition_args.use_tracking_in_composition = FLAGS.use_tracking_in_composition
+    composition_args.size = FLAGS.model_dim
+    composition_args.tracker_size = FLAGS.tracking_lstm_hidden_dim
+    composition_args.transition_weight = FLAGS.transition_weight
+    composition_args.wrap_items = lambda x: torch.cat(x, 0)
+    composition_args.extract_h = lambda x: x
+    composition_args.extract_c = None
+
     if FLAGS.reduce == "treelstm":
+        composition_args.wrap_items = lambda x: bundle(x)
+        composition_args.extract_h = lambda x: x.h
+        composition_args.extract_c = lambda x: x.c
+        composition_args.size = FLAGS.model_dim / 2
         composition = Reduce(FLAGS.model_dim / 2,
             FLAGS.tracking_lstm_hidden_dim,
             FLAGS.use_tracking_in_composition)
@@ -327,9 +329,10 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
 
     layers = {}
     layers["input_encoder"] = input_encoder
-    layers["composition"] = composition
 
-    model = build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, layers)
+    composition_args.composition = composition
+
+    model = build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, layers, composition_args)
 
     # Build optimizer.
     if FLAGS.optimizer_type == "Adam":

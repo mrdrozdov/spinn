@@ -23,7 +23,7 @@ from spinn.fat_stack import SPINN
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
 
-def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, layers):
+def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, layers, composition_args):
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
@@ -56,7 +56,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          rl_entropy=FLAGS.rl_entropy,
          rl_entropy_beta=FLAGS.rl_entropy_beta,
          encode=layers["input_encoder"],
-         composition=layers["composition"],
+         composition_args=composition_args,
         )
 
 
