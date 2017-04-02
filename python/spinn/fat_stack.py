@@ -10,7 +10,6 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 
-from spinn.util.blocks import Reduce
 from spinn.util.blocks import LSTMState, Embed, MLP, Linear, LSTM
 from spinn.util.blocks import reverse_tensor
 from spinn.util.blocks import bundle, unbundle, to_cpu, to_gpu, treelstm, lstm
@@ -21,7 +20,7 @@ from spinn.util.blocks import HeKaimingInitializer
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
 
-def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, layers, composition_args):
+def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, context_args, composition_args):
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
@@ -44,7 +43,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          mlp_dim=FLAGS.mlp_dim,
          num_mlp_layers=FLAGS.num_mlp_layers,
          mlp_bn=FLAGS.mlp_bn,
-         encode=layers["input_encoder"],
+         context_args=context_args,
          composition_args=composition_args,
         )
 
@@ -494,7 +493,7 @@ class BaseModel(nn.Module):
                  num_mlp_layers=None,
                  mlp_bn=None,
                  classifier_keep_rate=None,
-                 encode=None,
+                 context_args=None,
                  composition_args=None,
                  **kwargs
                 ):
@@ -530,7 +529,9 @@ class BaseModel(nn.Module):
         # Create dynamic embedding layer.
         self.embed = Embed(word_embedding_dim, vocab.size, vectors=vocab.vectors)
 
-        self.encode = encode
+        self.encode = context_args.encoder
+        self.reshape_input = context_args.reshape_input
+        self.reshape_context = context_args.reshape_context
 
     def get_features_dim(self):
         features_dim = self.hidden_dim * 2 if self.use_sentence_pair else self.hidden_dim
@@ -578,7 +579,9 @@ class BaseModel(nn.Module):
         b, l = example.tokens.size()[:2]
 
         embeds = self.embed(example.tokens)
+        embeds = self.reshape_input(embeds, b, l)
         embeds = self.encode(embeds)
+        embeds = self.reshape_context(embeds, b, l)
         self.forward_hook(embeds, b, l)
         embeds = F.dropout(embeds, self.embedding_dropout_rate, training=self.training)
         embeds = torch.chunk(to_cpu(embeds), b, 0)

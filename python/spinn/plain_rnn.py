@@ -16,7 +16,7 @@ from spinn.util.blocks import Embed, to_gpu, MLP
 from spinn.util.misc import Args, Vocab
 
 
-def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, layers, composition_args):
+def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, context_args, composition_args):
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
     model_cls = BaseModel
 
@@ -33,7 +33,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          mlp_dim=FLAGS.mlp_dim,
          num_mlp_layers=FLAGS.num_mlp_layers,
          mlp_bn=FLAGS.mlp_bn,
-         encode=layers["input_encoder"],
+         context_args=context_args,
         )
 
 
@@ -50,7 +50,7 @@ class BaseModel(nn.Module):
                  mlp_dim=None,
                  num_mlp_layers=None,
                  mlp_bn=None,
-                 encode=None,
+                 context_args=None,
                  **kwargs
                 ):
         super(BaseModel, self).__init__()
@@ -77,7 +77,9 @@ class BaseModel(nn.Module):
         self.mlp = MLP(mlp_input_dim, mlp_dim, num_classes,
             num_mlp_layers, mlp_bn, classifier_dropout_rate)
 
-        self.encode = encode
+        self.encode = context_args.encoder
+        self.reshape_input = context_args.reshape_input
+        self.reshape_context = context_args.reshape_context
 
     def run_rnn(self, x):
         batch_size, seq_len, model_dim = x.data.size()
@@ -99,11 +101,13 @@ class BaseModel(nn.Module):
     def run_embed(self, x):
         batch_size, seq_length = x.size()
 
-        emb = self.embed(x)
-        emb = self.encode(emb)
-        emb = torch.cat([b.unsqueeze(0) for b in torch.chunk(emb, batch_size, 0)], 0)
+        embeds = self.embed(x)
+        embeds = self.reshape_input(embeds, batch_size, seq_length)
+        embeds = self.encode(embeds)
+        embeds = self.reshape_context(embeds, batch_size, seq_length)
+        embeds = torch.cat([b.unsqueeze(0) for b in torch.chunk(embeds, batch_size, 0)], 0)
 
-        return emb
+        return embeds
 
     def forward(self, sentences, transitions, y_batch=None, **kwargs):
         # Useful when investigating dynamic batching.

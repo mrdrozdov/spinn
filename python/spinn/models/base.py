@@ -17,7 +17,7 @@ from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import ModelTrainer, the_gpu, to_gpu, l2_cost, flatten
-from spinn.util.blocks import Linear, Reduce, ReduceTreeGRU, bundle
+from spinn.util.blocks import Linear, LSTM, EncodeGRU, ReduceTreeLSTM, ReduceTreeGRU, bundle
 from spinn.util.misc import Accumulator, EvalReporter, time_per_token
 from spinn.util.misc import recursively_set_device, Args
 from spinn.util.metrics import MetricsWriter
@@ -280,19 +280,25 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
         raise NotImplementedError
 
     # Input Encoder.
+    context_args = Args()
+    context_args.reshape_input = lambda x, batch_size, seq_length: x
+    context_args.reshape_context = lambda x, batch_size, seq_length: x
+
     if FLAGS.encode == "projection":
-        input_encoder = Linear()(FLAGS.word_embedding_dim, FLAGS.model_dim)
+        encoder = Linear()(FLAGS.word_embedding_dim, FLAGS.model_dim)
     elif FLAGS.encode == "gru":
-        # TODO: Needs to reshape the inputs!
-        # input_encoder = GRU(word_embedding_dim, model_dim,
-        #         num_layers=FLAGS.encode_num_layers,
-        #         bidirectional=FLAGS.encode_bidirectional,
-        #         reverse=FLAGS.encode_reverse)
-        raise NotImplementedError
+        context_args.reshape_input = lambda x, batch_size, seq_length: x.view(batch_size, seq_length, -1)
+        context_args.reshape_context = lambda x, batch_size, seq_length: x.view(batch_size * seq_length, -1)
+        encoder = EncodeGRU(FLAGS.word_embedding_dim, FLAGS.model_dim,
+                num_layers=FLAGS.encode_num_layers,
+                bidirectional=FLAGS.encode_bidirectional,
+                reverse=FLAGS.encode_reverse)
     elif FLAGS.encode == "pass":
-        input_encoder = lambda x: x
+        encoder = lambda x: x
     else:
         raise NotImplementedError
+
+    context_args.encoder = encoder
 
     # Composition Function.
     composition_args = Args()
@@ -310,7 +316,7 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
         composition_args.extract_h = lambda x: x.h
         composition_args.extract_c = lambda x: x.c
         composition_args.size = FLAGS.model_dim / 2
-        composition = Reduce(FLAGS.model_dim / 2,
+        composition = ReduceTreeLSTM(FLAGS.model_dim / 2,
             FLAGS.tracking_lstm_hidden_dim,
             FLAGS.use_tracking_in_composition)
     elif FLAGS.reduce == "tanh":
@@ -327,12 +333,9 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
     else:
         raise NotImplementedError
 
-    layers = {}
-    layers["input_encoder"] = input_encoder
-
     composition_args.composition = composition
 
-    model = build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, layers, composition_args)
+    model = build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, context_args, composition_args)
 
     # Build optimizer.
     if FLAGS.optimizer_type == "Adam":

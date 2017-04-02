@@ -352,6 +352,52 @@ class Embed(nn.Module):
         return embeds
 
 
+class GRU(nn.Module):
+    def __init__(self, inp_dim, model_dim, num_layers=1, reverse=False, bidirectional=False, dropout=None):
+        super(GRU, self).__init__()
+        self.model_dim = model_dim
+        self.reverse = reverse
+        self.bidirectional = bidirectional
+        self.bi = 2 if self.bidirectional else 1
+        self.num_layers = num_layers
+        self.rnn = nn.GRU(inp_dim, model_dim / self.bi, num_layers=num_layers,
+            batch_first=True,
+            bidirectional=self.bidirectional,
+            dropout=dropout)
+
+    def forward(self, x, h0=None):
+        bi = self.bi
+        num_layers = self.num_layers
+        batch_size, seq_len = x.size()[:2]
+        model_dim = self.model_dim
+
+        if self.reverse:
+            x = reverse_tensor(x, dim=1)
+
+        # Initialize state unless it is given.
+        if h0 is None:
+            h0 = to_gpu(Variable(torch.zeros(num_layers * bi, batch_size, model_dim / bi), volatile=not self.training))
+
+        # Expects (input, h_0):
+        #   input => seq_len x batch_size x model_dim
+        #   h_0   => (num_layers x bi[1,2]) x batch_size x model_dim
+        output, hn = self.rnn(x, h0)
+
+        if self.reverse:
+            output = reverse_tensor(output, dim=1)
+
+        return output, hn
+
+
+class EncodeGRU(GRU):
+    def __init__(self, *args, **kwargs):
+        super(EncodeGRU, self).__init__(*args, **kwargs)
+
+    def forward(self, x, h0=None):
+        output, hn = super(EncodeGRU, self).forward(x, h0)
+        return output.contiguous()
+
+
 class LSTM(nn.Module):
     def __init__(self, inp_dim, model_dim, num_layers=1, reverse=False, bidirectional=False, dropout=None):
         super(LSTM, self).__init__()
@@ -392,7 +438,7 @@ class LSTM(nn.Module):
         return output
 
 
-class Reduce(nn.Module):
+class ReduceTreeLSTM(nn.Module):
     """TreeLSTM composition module for SPINN.
 
     The TreeLSTM has two to three inputs: the first two are the left and right
@@ -406,7 +452,7 @@ class Reduce(nn.Module):
     """
 
     def __init__(self, size, tracker_size=None, use_tracking_in_composition=None):
-        super(Reduce, self).__init__()
+        super(ReduceTreeLSTM, self).__init__()
         self.left = Linear(initializer=HeKaimingInitializer)(size, 5 * size)
         self.right = Linear(initializer=HeKaimingInitializer)(size, 5 * size, bias=False)
         if tracker_size is not None and use_tracking_in_composition:

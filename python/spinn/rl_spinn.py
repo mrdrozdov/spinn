@@ -11,7 +11,6 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 
-from spinn.util.blocks import Reduce
 from spinn.util.blocks import LSTMState, Embed, MLP
 from spinn.util.blocks import bundle, unbundle, to_cpu, to_gpu, the_gpu, treelstm, lstm
 from spinn.util.blocks import get_h, get_c
@@ -23,7 +22,7 @@ from spinn.fat_stack import SPINN
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
 
-def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, layers, composition_args):
+def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, context_args, composition_args):
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
@@ -55,7 +54,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          rl_valid=FLAGS.rl_valid,
          rl_entropy=FLAGS.rl_entropy,
          rl_entropy_beta=FLAGS.rl_entropy_beta,
-         encode=layers["input_encoder"],
+         context_args=context_args,
          composition_args=composition_args,
         )
 
