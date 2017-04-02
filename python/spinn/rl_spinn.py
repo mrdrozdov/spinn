@@ -60,8 +60,11 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
 
 
 class RLSPINN(SPINN):
+    epsilon = 1.0
+    temperature = 1.0
+
     def predict_actions(self, transition_output):
-        transition_dist = F.softmax(transition_output).data
+        transition_dist = F.softmax(transition_output + self.temperature).data
         transition_greedy = transition_dist.cpu().numpy().argmax(axis=1)
         if self.training:
             transitions_sampled = torch.multinomial(transition_dist, 1).view(-1).cpu().numpy()

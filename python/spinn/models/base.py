@@ -193,6 +193,8 @@ def get_flags():
     gflags.DEFINE_float("rl_entropy_beta", 0.001, "Entropy regularization on transition policy.")
     gflags.DEFINE_float("rl_epsilon", 1.0, "Percent of sampled actions during train time.")
     gflags.DEFINE_float("rl_epsilon_decay", 50000, "Percent of sampled actions during train time.")
+    gflags.DEFINE_float("rl_confidence_interval", 1000, "Penalize probabilities of transitions.")
+    gflags.DEFINE_float("rl_confidence_penalty", 0.0, "Penalize probabilities of transitions.")
 
     # MLP settings.
     gflags.DEFINE_integer("mlp_dim", 1024, "Dimension of intermediate MLP layers.")
