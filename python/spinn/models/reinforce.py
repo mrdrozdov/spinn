@@ -190,11 +190,14 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
         # Epsilon Greedy w. Decay.
         model.spinn.epsilon = FLAGS.rl_epsilon * math.exp(-step/FLAGS.rl_epsilon_decay)
 
-        # Confidence Penalty for Soft Wake/Sleep
+        # Confidence Penalty for Transition Predictions.
         temperature = math.sin(step / float(FLAGS.rl_confidence_interval) * math.pi)
         temperature = (temperature + 1) / 2
-        temperature = temperature * FLAGS.rl_confidence_penalty
-        model.spinn.temperature = temperature
+        model.spinn.temperature = temperature * FLAGS.rl_confidence_penalty
+
+        # Soft Wake/Sleep based on temperature.
+        if FLAGS.rl_wake_sleep:
+            model.rl_weight = (1-temperature) * FLAGS.rl_weight
 
         # Run model.
         output = model(X_batch, transitions_batch, y_batch,
