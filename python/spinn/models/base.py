@@ -194,7 +194,7 @@ def get_flags():
     gflags.DEFINE_float("rl_epsilon", 1.0, "Percent of sampled actions during train time.")
     gflags.DEFINE_float("rl_epsilon_decay", 50000, "Percent of sampled actions during train time.")
     gflags.DEFINE_float("rl_confidence_interval", 1000, "Penalize probabilities of transitions.")
-    gflags.DEFINE_float("rl_confidence_penalty", 0.0, "Penalize probabilities of transitions.")
+    gflags.DEFINE_float("rl_confidence_penalty", None, "Penalize probabilities of transitions.")
     gflags.DEFINE_boolean("rl_wake_sleep", False, "Inverse relationship between temperature and rl_weight.")
 
     # MLP settings.

@@ -193,7 +193,9 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
         # Confidence Penalty for Transition Predictions.
         temperature = math.sin(step / float(FLAGS.rl_confidence_interval) * math.pi)
         temperature = (temperature + 1) / 2
-        model.spinn.temperature = temperature * FLAGS.rl_confidence_penalty
+        
+        if FLAGS.rl_confidence_penalty:
+            model.spinn.temperature = temperature * FLAGS.rl_confidence_penalty
 
         # Soft Wake/Sleep based on temperature.
         if FLAGS.rl_wake_sleep:
