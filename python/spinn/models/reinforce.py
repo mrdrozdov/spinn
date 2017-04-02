@@ -197,7 +197,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
 
         # Soft Wake/Sleep based on temperature.
         if FLAGS.rl_wake_sleep:
-            model.rl_weight = (1-temperature) * FLAGS.rl_weight
+            model.rl_weight = temperature * FLAGS.rl_weight
 
         # Run model.
         output = model(X_batch, transitions_batch, y_batch,
