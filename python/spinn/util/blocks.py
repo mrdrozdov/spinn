@@ -389,6 +389,76 @@ class GRU(nn.Module):
         return output, hn
 
 
+class IntraAttention(nn.Module):
+    def __init__(self, inp_size, outp_size, distance_bias=True):
+        super(IntraAttention, self).__init__()
+        self.inp_size = inp_size
+        self.outp_size = outp_size
+        self.distance_bias = distance_bias
+        self.f = nn.Linear(inp_size, outp_size)
+
+    def d(self, batch_size, seq_len, max_distance=10, scale=0.01):
+        """
+        Generates a bias term based on distance. Something like:
+
+        [[[0, 1, 2, 3],
+          [1, 0, 1, 2],
+          [2, 1, 0, 1],
+          ...
+          ],
+         [[0, 1, 2, 3],
+          [1, 0, 1, 2],
+          [2, 1, 0, 1],
+          ...
+          ],
+          ...
+         ]
+
+        """
+
+        bias = torch.range(0, seq_len-1).float().unsqueeze(0).repeat(seq_len, 1)
+        diff = torch.range(0, seq_len-1).float().unsqueeze(1).expand_as(bias)
+        bias = (bias - diff).abs()
+        bias = bias.clamp(0, max_distance)
+
+        bias = bias * scale
+
+        bias = bias.unsqueeze(0).expand(batch_size, seq_len, seq_len)
+        bias = bias.contiguous()
+
+        bias = Variable(bias, volatile=not self.training)
+
+        return bias
+
+    def forward(self, x):
+        hidden_dim = self.outp_size
+        distance_bias = self.distance_bias
+        batch_size, seq_len, _ = x.size()
+
+        f = self.f(x.view(batch_size * seq_len, -1)).view(batch_size, seq_len, -1)
+
+        f_broadcast = f.unsqueeze(1).expand(batch_size, seq_len, seq_len, hidden_dim)
+
+        # assert f_broadcast[0, 0, 0, :] == f_broadcast[0, 1, 0, :]
+
+        e = torch.bmm(f, f.transpose(1, 2))
+        e = e.view(batch_size * seq_len, seq_len)
+
+        if self.distance_bias:
+            d = self.d(batch_size, seq_len).view(batch_size * seq_len, seq_len)
+            e = e + d
+
+        e = F.softmax(e)
+        e = e.view(batch_size, seq_len, seq_len, 1)
+        e = e.expand_as(f_broadcast)
+
+        # assert e[0, 0, :, 0].sum() == 1
+
+        a = (f_broadcast * e).sum(2).squeeze()
+
+        return a
+
+
 class EncodeGRU(GRU):
     def __init__(self, *args, **kwargs):
         super(EncodeGRU, self).__init__(*args, **kwargs)

@@ -16,8 +16,8 @@ from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
-from spinn.util.blocks import ModelTrainer, the_gpu, to_gpu, l2_cost, flatten
-from spinn.util.blocks import Linear, LSTM, EncodeGRU, ReduceTreeLSTM, ReduceTreeGRU, bundle
+from spinn.util.blocks import ModelTrainer, the_gpu, to_gpu, l2_cost, flatten, bundle
+from spinn.util.blocks import Linear, LSTM, EncodeGRU, ReduceTreeLSTM, ReduceTreeGRU, IntraAttention
 from spinn.util.misc import Accumulator, EvalReporter, time_per_token
 from spinn.util.misc import recursively_set_device, Args
 from spinn.util.metrics import MetricsWriter
@@ -175,7 +175,7 @@ def get_flags():
     gflags.DEFINE_enum("reduce", "treelstm", ["treelstm", "treegru", "tanh"], "Specify composition function.")
 
     # Encode settings.
-    gflags.DEFINE_enum("encode", "projection", ["pass", "projection", "gru"], "Encode embeddings with sequential context.")
+    gflags.DEFINE_enum("encode", "projection", ["pass", "projection", "gru", "attn"], "Encode embeddings with sequential context.")
     gflags.DEFINE_boolean("encode_reverse", False, "Encode in reverse order.")
     gflags.DEFINE_boolean("encode_bidirectional", False, "Encode in both directions.")
     gflags.DEFINE_integer("encode_num_layers", 1, "RNN layers in encoding net.")
@@ -293,6 +293,10 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
                 num_layers=FLAGS.encode_num_layers,
                 bidirectional=FLAGS.encode_bidirectional,
                 reverse=FLAGS.encode_reverse)
+    elif FLAGS.encode == "attn":
+        context_args.reshape_input = lambda x, batch_size, seq_length: x.view(batch_size, seq_length, -1)
+        context_args.reshape_context = lambda x, batch_size, seq_length: x.view(batch_size * seq_length, -1)
+        encoder = IntraAttention(FLAGS.word_embedding_dim, FLAGS.model_dim)
     elif FLAGS.encode == "pass":
         encoder = lambda x: x
     else:
