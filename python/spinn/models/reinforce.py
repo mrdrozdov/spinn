@@ -155,10 +155,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
     logger.Log("Train-Format: {}".format(train_str))
     train_extra_str = train_extra_format(model)
     logger.Log("Train-Extra-Format: {}".format(train_extra_str))
-
-    if FLAGS.model_type == "RLSPINN":
-        train_rl_str = train_rl_format(model)
-        logger.Log("Train-RL-Format: {}".format(train_rl_str))
+    train_rl_str = train_rl_format(model)
+    logger.Log("Train-RL-Format: {}".format(train_rl_str))
 
     # Preview eval string template.
     eval_str = eval_format(model)
@@ -189,8 +187,17 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
         # Reset cached gradients.
         optimizer.zero_grad()
 
-        if FLAGS.model_type == "RLSPINN":
-            model.spinn.epsilon = FLAGS.rl_epsilon * math.exp(-step/FLAGS.rl_epsilon_decay)
+        # Epsilon Greedy w. Decay.
+        model.spinn.epsilon = FLAGS.rl_epsilon * math.exp(-step/FLAGS.rl_epsilon_decay)
+
+        # Confidence Penalty for Transition Predictions.
+        temperature = math.sin(step / float(FLAGS.rl_confidence_interval) * math.pi)
+        temperature = (temperature + 1) / 2
+        model.spinn.temperature = temperature * FLAGS.rl_confidence_penalty
+
+        # Soft Wake/Sleep based on temperature.
+        if FLAGS.rl_wake_sleep:
+            model.rl_weight = (1-temperature) * FLAGS.rl_weight
 
         # Run model.
         output = model(X_batch, transitions_batch, y_batch,
@@ -249,8 +256,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
         A.add('total_tokens', total_tokens)
         A.add('total_time', total_time)
 
-        if FLAGS.model_type == "RLSPINN":
-            train_rl_accumulate(model, data_manager, A, batch)
+        train_rl_accumulate(model, data_manager, A, batch)
 
         if step % FLAGS.statistics_interval_steps == 0:
             progress_bar.step(i=FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
@@ -262,17 +268,14 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
 
             train_metrics(M, stats_args, step)
 
-            if FLAGS.model_type == "RLSPINN":
-                stats_rl_args = train_rl_stats(model, optimizer, A, step)
-                for k in stats_rl_args.keys():
-                    stats_args[k] = stats_rl_args[k]
+            stats_rl_args = train_rl_stats(model, optimizer, A, step)
+            for k in stats_rl_args.keys():
+                stats_args[k] = stats_rl_args[k]
 
             logger.Log(train_str.format(**stats_args))
             logger.Log(train_extra_str.format(**stats_args))
-
-            if FLAGS.model_type == "RLSPINN":
-                train_rl_metrics(M, stats_rl_args, step)
-                logger.Log(train_rl_str.format(**stats_rl_args))
+            train_rl_metrics(M, stats_rl_args, step)
+            logger.Log(train_rl_str.format(**stats_rl_args))
 
         if step % FLAGS.sample_interval_steps == 0 and FLAGS.num_samples > 0:
             model.train()
@@ -450,7 +453,7 @@ if __name__ == '__main__':
 
     flag_defaults(FLAGS)
 
-    if FLAGS.model_type == "RLSPINN":
-        raise Exception("Please use reinforce.py instead of supervised_classifier.py for RLSPINN.")
+    if FLAGS.model_type != "RLSPINN":
+        raise Exception("Reinforce is only implemented for RLSPINN.")
 
     run(only_forward=FLAGS.expanded_eval_only_mode)
