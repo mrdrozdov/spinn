@@ -53,7 +53,10 @@ def train_metrics(M, stats_args, step):
 
 
 def train_rl_metrics(M, stats_args, step):
-    for key in stats_args.keys():
+    stats_rl_args_keys = ['policy_cost', 'value_cost',
+        'mean_adv_mean', 'mean_adv_mean_magnitude',
+        'mean_adv_var', 'mean_adv_var_magnitude']
+    for key in stats_rl_args_keys:
         M.write(key, stats_args[key], step)
 
 
@@ -81,7 +84,6 @@ def train_stats(model, optimizer, A, step):
         transition_cost=model.transition_loss.data[0] if has_transition_loss else 0.0,
         l2_cost=A.get_avg('l2_cost'), # not actual mean
         invalid=A.get_avg('invalid') if has_invalid else 0.0,
-        epsilon=model.spinn.epsilon if has_epsilon else 0.0,
         learning_rate=optimizer.lr,
         time=time_metric,
     )
@@ -113,6 +115,8 @@ def train_rl_stats(model, data_manager, A, batch):
         mean_adv_mean_magnitude=adv_mean_magnitude.mean(),
         mean_adv_var=adv_var.mean(),
         mean_adv_var_magnitude=adv_var_magnitude.mean(),
+        epsilon=model.spinn.epsilon,
+        temperature=model.spinn.temperature,
         )
 
     return ret
@@ -145,8 +149,6 @@ def train_extra_format(model):
     # Extra Component.
     extra_str = "Train Extra:"
     extra_str += " lr{learning_rate:.7f}"
-    if hasattr(model, "spinn") and hasattr(model.spinn, "epsilon"):
-        extra_str += " eps{epsilon:.7f}"
     if hasattr(model, "spinn") and hasattr(model.spinn, "invalid"):
         extra_str += " inv{invalid:.3f}"
 
@@ -161,6 +163,8 @@ def train_rl_format(model):
     extra_str += " amm{mean_adv_mean_magnitude:.5f}"
     extra_str += " av{mean_adv_var:.5f}"
     extra_str += " avm{mean_adv_var_magnitude:.5f}"
+    extra_str += " t{temperature:.3f}"
+    extra_str += " eps{epsilon:.7f}"
 
     return extra_str
 
