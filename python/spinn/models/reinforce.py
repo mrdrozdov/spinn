@@ -191,7 +191,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
         model.spinn.epsilon = FLAGS.rl_epsilon * math.exp(-step/FLAGS.rl_epsilon_decay)
 
         # Confidence Penalty for Transition Predictions.
-        temperature = math.sin(step / float(FLAGS.rl_confidence_interval) * math.pi)
+        temperature = math.sin(step / float(FLAGS.rl_confidence_interval) * 2 * math.pi)
         temperature = (temperature + 1) / 2
         
         if FLAGS.rl_confidence_penalty:
