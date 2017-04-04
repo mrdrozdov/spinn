@@ -1,3 +1,4 @@
+import sys
 import os
 import json
 import math
@@ -26,6 +27,7 @@ from spinn.util.logging import train_format, train_extra_format, train_stats, tr
 from spinn.util.logging import eval_format, eval_extra_format
 from spinn.util.loss import auxiliary_loss
 import spinn.util.evalb as evalb
+from spinn.util.logparse import parse_flags
 
 import spinn.rl_spinn
 import spinn.fat_stack
@@ -299,7 +301,15 @@ def get_flags():
         "reported predictions will look very odd / not valid.")
 
 
-def flag_defaults(FLAGS):
+def flag_defaults(FLAGS, load_log_flags=False):
+    if load_log_flags:
+        log_flags = parse_flags(log_path(FLAGS))
+        for k in log_flags.keys():
+            setattr(FLAGS, k, log_flags[k])
+
+        # Optionally override flags from log file.
+        FLAGS(sys.argv)
+
     if not FLAGS.experiment_name:
         timestamp = str(int(time.time()))
         FLAGS.experiment_name = "{}-{}-{}".format(

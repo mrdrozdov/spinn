@@ -194,7 +194,7 @@ if __name__ == '__main__':
     # Parse command line flags.
     FLAGS(sys.argv)
 
-    flag_defaults(FLAGS)
+    flag_defaults(FLAGS, load_log_flags=True)
 
     if len(FLAGS.eval_data_path.split(":")) > 1:
         raise Exception("The evaluate.py script only runs against one eval set. "
