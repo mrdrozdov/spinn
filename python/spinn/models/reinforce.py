@@ -188,15 +188,18 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
         # Reset cached gradients.
         optimizer.zero_grad()
 
+        epsilon = FLAGS.rl_epsilon * math.exp(-step/FLAGS.rl_epsilon_decay)
+
         # Epsilon Greedy w. Decay.
-        model.spinn.epsilon = FLAGS.rl_epsilon * math.exp(-step/FLAGS.rl_epsilon_decay)
+        model.spinn.epsilon = epsilon
 
         # Confidence Penalty for Transition Predictions.
         temperature = math.sin(math.pi / 2 + step / float(FLAGS.rl_confidence_interval) * 2 * math.pi)
         temperature = (temperature + 1) / 2
         
         if FLAGS.rl_confidence_penalty:
-            model.spinn.temperature = 1e-3 + temperature * FLAGS.rl_confidence_penalty
+            max_temp = max(1.0, epsilon * FLAGS.rl_confidence_penalty)
+            model.spinn.temperature = 1e-3 + temperature * max_temp
 
         # Soft Wake/Sleep based on temperature.
         if FLAGS.rl_wake_sleep:
