@@ -196,7 +196,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
         temperature = (temperature + 1) / 2
         
         if FLAGS.rl_confidence_penalty:
-            model.spinn.temperature = 1. + temperature * FLAGS.rl_confidence_penalty
+            model.spinn.temperature = 1e-3 + temperature * FLAGS.rl_confidence_penalty
 
         # Soft Wake/Sleep based on temperature.
         if FLAGS.rl_wake_sleep:
