@@ -1,3 +1,4 @@
+import sys
 import os
 import json
 import math
@@ -7,6 +8,7 @@ import time
 import gflags
 import numpy as np
 
+from spinn import util
 from spinn.data.arithmetic import load_sign_data
 from spinn.data.arithmetic import load_simple_data
 from spinn.data.dual_arithmetic import load_eq_data
@@ -25,6 +27,7 @@ from spinn.util.logging import train_format, train_extra_format, train_stats, tr
 from spinn.util.logging import eval_format, eval_extra_format
 from spinn.util.loss import auxiliary_loss
 import spinn.util.evalb as evalb
+from spinn.util.logparse import parse_flags
 
 import spinn.rl_spinn
 import spinn.fat_stack
@@ -44,6 +47,10 @@ FLAGS = gflags.FLAGS
 
 def sequential_only():
     return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW"
+
+
+def log_path(FLAGS):
+    return os.path.join(FLAGS.log_path, FLAGS.experiment_name) + ".log"
 
 
 def get_batch(batch):
@@ -105,6 +112,63 @@ def get_checkpoint_path(ckpt_path, experiment_name, suffix=".ckpt", best=False):
     if best:
         checkpoint_path += "_best"
     return checkpoint_path
+
+
+def load_data_and_embeddings(FLAGS, data_manager, logger, training_data_path, eval_data_path):
+    # Load the data.
+    raw_training_data, vocabulary = data_manager.load_data(
+        training_data_path, FLAGS.lowercase)
+
+    # Load the eval data.
+    raw_eval_sets = []
+    raw_eval_data, _ = data_manager.load_data(eval_data_path, FLAGS.lowercase)
+    raw_eval_sets.append((eval_data_path, raw_eval_data))
+
+    # Prepare the vocabulary.
+    if not vocabulary:
+        logger.Log("In open vocabulary mode. Using loaded embeddings without fine-tuning.")
+        vocabulary = util.BuildVocabulary(
+            raw_training_data, raw_eval_sets, FLAGS.embedding_data_path, logger=logger,
+            sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
+    else:
+        logger.Log("In fixed vocabulary mode. Training embeddings.")
+
+    # Load pretrained embeddings.
+    if FLAGS.embedding_data_path:
+        logger.Log("Loading vocabulary with " + str(len(vocabulary))
+                   + " words from " + FLAGS.embedding_data_path)
+        initial_embeddings = util.LoadEmbeddingsFromText(
+            vocabulary, FLAGS.word_embedding_dim, FLAGS.embedding_data_path)
+    else:
+        initial_embeddings = None
+
+    # Trim dataset, convert token sequences to integer sequences, crop, and
+    # pad.
+    logger.Log("Preprocessing training data.")
+    training_data = util.PreprocessDataset(
+        raw_training_data, vocabulary, FLAGS.seq_length, data_manager, eval_mode=False, logger=logger,
+        sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
+        for_rnn=sequential_only())
+    training_data_iter = util.MakeTrainingIterator(
+        training_data, FLAGS.batch_size, FLAGS.smart_batching, FLAGS.use_peano,
+        sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
+
+    # Preprocess eval sets.
+    eval_iterators = []
+    for filename, raw_eval_set in raw_eval_sets:
+        logger.Log("Preprocessing eval data: " + filename)
+        eval_data = util.PreprocessDataset(
+            raw_eval_set, vocabulary,
+            FLAGS.eval_seq_length if FLAGS.eval_seq_length is not None else FLAGS.seq_length,
+            data_manager, eval_mode=True, logger=logger,
+            sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
+            for_rnn=sequential_only())
+        eval_it = util.MakeEvalIterator(eval_data,
+            FLAGS.batch_size, FLAGS.eval_data_limit, bucket_eval=FLAGS.bucket_eval,
+            shuffle=FLAGS.shuffle_eval, rseed=FLAGS.shuffle_eval_seed)
+        eval_iterators.append((filename, eval_it))
+
+    return vocabulary, initial_embeddings, training_data_iter, eval_iterators
 
 
 def get_flags():
@@ -237,7 +301,15 @@ def get_flags():
         "reported predictions will look very odd / not valid.")
 
 
-def flag_defaults(FLAGS):
+def flag_defaults(FLAGS, load_log_flags=False):
+    if load_log_flags:
+        log_flags = parse_flags(log_path(FLAGS))
+        for k in log_flags.keys():
+            setattr(FLAGS, k, log_flags[k])
+
+        # Optionally override flags from log file.
+        FLAGS(sys.argv)
+
     if not FLAGS.experiment_name:
         timestamp = str(int(time.time()))
         FLAGS.experiment_name = "{}-{}-{}".format(
