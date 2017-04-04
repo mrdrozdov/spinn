@@ -35,6 +35,7 @@ import torch.optim as optim
 from spinn.models.base import get_data_manager, get_flags, get_batch
 from spinn.models.base import flag_defaults, init_model
 from spinn.models.base import sequential_only, get_checkpoint_path
+from spinn.models.base import load_data_and_embeddings
 
 
 FLAGS = gflags.FLAGS
@@ -316,60 +317,9 @@ def run(only_forward=False):
 
     logger.Log("Flag Values:\n" + json.dumps(FLAGS.FlagValuesDict(), indent=4, sort_keys=True))
 
-    # Load the data.
-    raw_training_data, vocabulary = data_manager.load_data(
-        FLAGS.training_data_path, FLAGS.lowercase)
-
-    # Load the eval data.
-    raw_eval_sets = []
-    if FLAGS.eval_data_path:
-        for eval_filename in FLAGS.eval_data_path.split(":"):
-            raw_eval_data, _ = data_manager.load_data(eval_filename, FLAGS.lowercase)
-            raw_eval_sets.append((eval_filename, raw_eval_data))
-
-    # Prepare the vocabulary.
-    if not vocabulary:
-        logger.Log("In open vocabulary mode. Using loaded embeddings without fine-tuning.")
-        vocabulary = util.BuildVocabulary(
-            raw_training_data, raw_eval_sets, FLAGS.embedding_data_path, logger=logger,
-            sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
-    else:
-        logger.Log("In fixed vocabulary mode. Training embeddings.")
-
-    # Load pretrained embeddings.
-    if FLAGS.embedding_data_path:
-        logger.Log("Loading vocabulary with " + str(len(vocabulary))
-                   + " words from " + FLAGS.embedding_data_path)
-        initial_embeddings = util.LoadEmbeddingsFromText(
-            vocabulary, FLAGS.word_embedding_dim, FLAGS.embedding_data_path)
-    else:
-        initial_embeddings = None
-
-    # Trim dataset, convert token sequences to integer sequences, crop, and
-    # pad.
-    logger.Log("Preprocessing training data.")
-    training_data = util.PreprocessDataset(
-        raw_training_data, vocabulary, FLAGS.seq_length, data_manager, eval_mode=False, logger=logger,
-        sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-        for_rnn=sequential_only())
-    training_data_iter = util.MakeTrainingIterator(
-        training_data, FLAGS.batch_size, FLAGS.smart_batching, FLAGS.use_peano,
-        sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
-
-    # Preprocess eval sets.
-    eval_iterators = []
-    for filename, raw_eval_set in raw_eval_sets:
-        logger.Log("Preprocessing eval data: " + filename)
-        eval_data = util.PreprocessDataset(
-            raw_eval_set, vocabulary,
-            FLAGS.eval_seq_length if FLAGS.eval_seq_length is not None else FLAGS.seq_length,
-            data_manager, eval_mode=True, logger=logger,
-            sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-            for_rnn=sequential_only())
-        eval_it = util.MakeEvalIterator(eval_data,
-            FLAGS.batch_size, FLAGS.eval_data_limit, bucket_eval=FLAGS.bucket_eval,
-            shuffle=FLAGS.shuffle_eval, rseed=FLAGS.shuffle_eval_seed)
-        eval_iterators.append((filename, eval_it))
+    # Get Data and Embeddings
+    vocabulary, initial_embeddings, training_data_iter, eval_iterators = \
+        load_data_and_embeddings(FLAGS, data_manager, logger, FLAGS.training_data_path, FLAGS.eval_data_path)
 
     # Build model.
     vocab_size = len(vocabulary)
