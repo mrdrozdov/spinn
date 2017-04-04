@@ -65,12 +65,11 @@ class RLSPINN(SPINN):
 
     def predict_actions(self, transition_output):
         transition_dist = F.softmax(transition_output / max(self.temperature, 1e-8)).data
-        transition_greedy = transition_dist.cpu().numpy().argmax(axis=1)
         if self.training:
             transitions_sampled = torch.multinomial(transition_dist, 1).view(-1).cpu().numpy()
-            r = np.random.binomial(1, self.epsilon, len(transitions_sampled))
-            transition_preds = np.where(r, transitions_sampled, transition_greedy)
+            transition_preds = transitions_sampled
         else:
+            transition_greedy = transition_dist.cpu().numpy().argmax(axis=1)
             transition_preds = transition_greedy
         return transition_preds
 
