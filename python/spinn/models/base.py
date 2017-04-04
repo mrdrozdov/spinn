@@ -358,12 +358,14 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
     context_args = Args()
     context_args.reshape_input = lambda x, batch_size, seq_length: x
     context_args.reshape_context = lambda x, batch_size, seq_length: x
+    context_args.input_dim = FLAGS.word_embedding_dim
 
     if FLAGS.encode == "projection":
         encoder = Linear()(FLAGS.word_embedding_dim, FLAGS.model_dim)
     elif FLAGS.encode == "gru":
         context_args.reshape_input = lambda x, batch_size, seq_length: x.view(batch_size, seq_length, -1)
         context_args.reshape_context = lambda x, batch_size, seq_length: x.view(batch_size * seq_length, -1)
+        context_args.input_dim = FLAGS.model_dim
         encoder = EncodeGRU(FLAGS.word_embedding_dim, FLAGS.model_dim,
                 num_layers=FLAGS.encode_num_layers,
                 bidirectional=FLAGS.encode_bidirectional,
@@ -371,6 +373,7 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
     elif FLAGS.encode == "attn":
         context_args.reshape_input = lambda x, batch_size, seq_length: x.view(batch_size, seq_length, -1)
         context_args.reshape_context = lambda x, batch_size, seq_length: x.view(batch_size * seq_length, -1)
+        context_args.input_dim = FLAGS.model_dim
         encoder = IntraAttention(FLAGS.word_embedding_dim, FLAGS.model_dim)
     elif FLAGS.encode == "pass":
         encoder = lambda x: x

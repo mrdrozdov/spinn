@@ -529,6 +529,8 @@ class BaseModel(nn.Module):
         # Create dynamic embedding layer.
         self.embed = Embed(word_embedding_dim, vocab.size, vectors=vocab.vectors)
 
+        self.input_dim = context_args.input_dim
+
         self.encode = context_args.encoder
         self.reshape_input = context_args.reshape_input
         self.reshape_context = context_args.reshape_context
