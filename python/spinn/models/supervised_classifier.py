@@ -330,13 +330,11 @@ def run(only_forward=False):
     # Prepare the vocabulary.
     if not vocabulary:
         logger.Log("In open vocabulary mode. Using loaded embeddings without fine-tuning.")
-        train_embeddings = False
         vocabulary = util.BuildVocabulary(
             raw_training_data, raw_eval_sets, FLAGS.embedding_data_path, logger=logger,
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
     else:
         logger.Log("In fixed vocabulary mode. Training embeddings.")
-        train_embeddings = True
 
     # Load pretrained embeddings.
     if FLAGS.embedding_data_path:
