@@ -362,8 +362,7 @@ class GRU(nn.Module):
         self.num_layers = num_layers
         self.rnn = nn.GRU(inp_dim, model_dim / self.bi, num_layers=num_layers,
             batch_first=True,
-            bidirectional=self.bidirectional,
-            dropout=dropout)
+            bidirectional=self.bidirectional)
 
     def forward(self, x, h0=None):
         bi = self.bi
@@ -426,7 +425,7 @@ class IntraAttention(nn.Module):
         bias = bias.unsqueeze(0).expand(batch_size, seq_len, seq_len)
         bias = bias.contiguous()
 
-        bias = Variable(bias, volatile=not self.training)
+        bias = to_gpu(Variable(bias, volatile=not self.training))
 
         return bias
 
