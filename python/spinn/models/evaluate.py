@@ -34,7 +34,7 @@ import torch.optim as optim
 
 from spinn.models.base import get_data_manager, get_flags, get_batch
 from spinn.models.base import flag_defaults, init_model
-from spinn.models.base import sequential_only, get_checkpoint_path
+from spinn.models.base import sequential_only, get_checkpoint_path, log_path
 from spinn.models.base import load_data_and_embeddings
 
 
@@ -131,7 +131,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabula
 
 
 def run():
-    logger = afs_safe_logger.Logger(os.path.join(FLAGS.log_path, FLAGS.experiment_name) + ".log")
+    logger = afs_safe_logger.Logger(log_path(FLAGS))
 
     data_manager = get_data_manager(FLAGS.data_type)
 

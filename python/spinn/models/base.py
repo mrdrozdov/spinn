@@ -47,6 +47,10 @@ def sequential_only():
     return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW"
 
 
+def log_path(FLAGS):
+    return os.path.join(FLAGS.log_path, FLAGS.experiment_name) + ".log"
+
+
 def get_batch(batch):
     X_batch, transitions_batch, y_batch, num_transitions_batch, example_ids = batch
 
