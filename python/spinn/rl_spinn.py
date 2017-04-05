@@ -40,7 +40,6 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          lateral_tracking=FLAGS.lateral_tracking,
          use_tracking_in_composition=FLAGS.use_tracking_in_composition,
          predict_use_cell=FLAGS.predict_use_cell,
-         use_lengths=FLAGS.use_lengths,
          use_difference_feature=FLAGS.use_difference_feature,
          use_product_feature=FLAGS.use_product_feature,
          num_mlp_layers=FLAGS.num_mlp_layers,
@@ -112,8 +111,8 @@ class BaseModel(_BaseModel):
 
         self.register_buffer('baseline', torch.FloatTensor([0.0]))
 
-    def build_spinn(self, args, vocab, predict_use_cell, use_lengths):
-        return RLSPINN(args, vocab, predict_use_cell, use_lengths)
+    def build_spinn(self, args, vocab, predict_use_cell):
+        return RLSPINN(args, vocab, predict_use_cell)
 
     def forward_hook(self, embeds, batch_size, seq_length):
         if self.rl_baseline == "value" and self.training:
@@ -154,11 +153,6 @@ class BaseModel(_BaseModel):
             rewards = -1 * torch.gather(log_inv_prob, 1, _target)
         else:
             raise NotImplementedError
-
-        if self.spinn.use_lengths:
-            for i, (buf, stack) in enumerate(zip(self.spinn.bufs, self.spinn.stacks)):
-                if len(buf) == 1 and len(stack) == 2:
-                    rewards[i] += 1
 
         return rewards
 

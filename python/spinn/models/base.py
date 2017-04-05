@@ -233,7 +233,6 @@ def get_flags():
         "Use tracking lstm output as input for the reduce function.")
     gflags.DEFINE_boolean("predict_use_cell", True,
         "Use cell output as feature for transition net.")
-    gflags.DEFINE_boolean("use_lengths", False, "The transition net will be biased.")
 
     # Reduce settings.
     gflags.DEFINE_enum("reduce", "treelstm", ["treelstm", "treegru", "tanh"], "Specify composition function.")

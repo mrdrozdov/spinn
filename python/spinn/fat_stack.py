@@ -36,7 +36,6 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          lateral_tracking=FLAGS.lateral_tracking,
          use_tracking_in_composition=FLAGS.use_tracking_in_composition,
          predict_use_cell=FLAGS.predict_use_cell,
-         use_lengths=FLAGS.use_lengths,
          use_difference_feature=FLAGS.use_difference_feature,
          use_product_feature=FLAGS.use_product_feature,
          classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
@@ -108,14 +107,13 @@ class Tracker(nn.Module):
 
 class SPINN(nn.Module):
 
-    def __init__(self, args, vocab, predict_use_cell, use_lengths):
+    def __init__(self, args, vocab, predict_use_cell):
         super(SPINN, self).__init__()
 
         # Optional debug mode.
         self.debug = False
 
         self.transition_weight = args.transition_weight
-        self.use_lengths = use_lengths
 
         self.wrap_items = args.wrap_items
         self.extract_h = args.extract_h
@@ -128,8 +126,6 @@ class SPINN(nn.Module):
                 # TODO: Might be interesting to try a different network here.
                 self.predict_use_cell = predict_use_cell
                 tinp_size = args.tracker_size * 2 if predict_use_cell else args.tracker_size
-                if self.use_lengths:
-                    tinp_size += 2
                 self.transition_net = nn.Linear(tinp_size, 2)
 
         self.choices = np.array([T_SHIFT, T_REDUCE], dtype=np.int32)
@@ -340,10 +336,6 @@ class SPINN(nn.Module):
 
                 if hasattr(self, 'transition_net'):
                     transition_inp = [tracker_h]
-                    if self.use_lengths:
-                        buf_lens = to_gpu(Variable(torch.FloatTensor([len(buf) for buf in self.bufs]), volatile=not self.training).view(-1, 1))
-                        stack_lens = to_gpu(Variable(torch.FloatTensor([len(stack) for stack in self.stacks]), volatile=not self.training).view(-1, 1))
-                        transition_inp += [buf_lens, stack_lens]
                     if self.predict_use_cell:
                         transition_inp += [tracker_c]
                     transition_inp = torch.cat(transition_inp, 1)
@@ -485,7 +477,6 @@ class BaseModel(nn.Module):
                  lateral_tracking=None,
                  use_tracking_in_composition=None,
                  predict_use_cell=None,
-                 use_lengths=None,
                  use_sentence_pair=False,
                  use_difference_feature=False,
                  use_product_feature=False,
@@ -517,7 +508,7 @@ class BaseModel(nn.Module):
         vocab.vectors = initial_embeddings
 
         # Build parsing component.
-        self.spinn = self.build_spinn(composition_args, vocab, predict_use_cell, use_lengths)
+        self.spinn = self.build_spinn(composition_args, vocab, predict_use_cell)
 
         # Build classiifer.
         features_dim = self.get_features_dim()
@@ -557,8 +548,8 @@ class BaseModel(nn.Module):
             features = h[0]
         return features
 
-    def build_spinn(self, args, vocab, predict_use_cell, use_lengths):
-        return SPINN(args, vocab, predict_use_cell, use_lengths)
+    def build_spinn(self, args, vocab, predict_use_cell):
+        return SPINN(args, vocab, predict_use_cell)
 
     def run_spinn(self, example, use_internal_parser, validate_transitions=True):
         self.spinn.reset_state()
