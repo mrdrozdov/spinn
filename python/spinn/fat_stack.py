@@ -16,6 +16,7 @@ from spinn.util.blocks import bundle, unbundle, to_cpu, to_gpu, treelstm, lstm
 from spinn.util.blocks import get_h, get_c
 from spinn.util.misc import Args, Vocab, Example
 from spinn.util.blocks import HeKaimingInitializer
+from spinn.util.catalan import ShiftProbabilities
 
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
@@ -130,15 +131,17 @@ class SPINN(nn.Module):
 
         self.choices = np.array([T_SHIFT, T_REDUCE], dtype=np.int32)
 
+        self.shift_probabilities = ShiftProbabilities()
+
     def reset_state(self):
         self.memories = []
 
     def forward(self, example, use_internal_parser=False, validate_transitions=True):
-        self.buffers_n = (example.tokens.data != 0).long().sum(1).view(-1).tolist()
+        self.n_tokens = (example.tokens.data != 0).long().sum(1).view(-1).tolist()
 
         if self.debug:
             seq_length = example.tokens.size(1)
-            assert all(buf_n <= (seq_length + 1) // 2 for buf_n in self.buffers_n), \
+            assert all(buf_n <= (seq_length + 1) // 2 for buf_n in self.n_tokens), \
                 "All sentences (including cropped) must be the appropriate length."
 
         self.bufs = example.bufs
@@ -152,10 +155,15 @@ class SPINN(nn.Module):
             np.zeros(self.bufs[0][0].size(), dtype=np.float32)),
             volatile=self.bufs[0][0].volatile))
 
-        # Trim unused tokens.
-        self.bufs = [[zeros] + b[-b_n:] for b, b_n in zip(self.bufs, self.buffers_n)]
+        # Initialize Buffers. Trim unused tokens.
+        self.bufs = [[zeros] + b[-b_n:] for b, b_n in zip(self.bufs, self.n_tokens)]
 
+        # Initialize Stacks.
         self.stacks = [[zeros, zeros] for buf in self.bufs]
+
+        # Initialize other.
+        self.n_reduces = np.array([0 for _ in self.bufs])
+        self.n_steps = np.array([0 for _ in self.bufs])
 
         if hasattr(self, 'tracker'):
             self.tracker.reset_state()
@@ -418,6 +426,12 @@ class SPINN(nn.Module):
             # APPEND ALL MEMORIES. MASK LATER.
 
             self.memories.append(self.memory)
+
+            # Update number of reduces seen so far.
+            self.n_reduces += (np.array(transition_arr) == T_REDUCE)
+
+            # Update number of non-skip actions seen so far.
+            self.n_steps += (np.array(transition_arr) != T_SKIP)
 
         # Loss Phase
         # ==========

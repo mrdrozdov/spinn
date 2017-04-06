@@ -25,6 +25,7 @@ class Catalan(object):
                 pass
             return c
 
+
 class CatalanPyramid(object):
     def __init__(self):
         self.cat = Catalan()
@@ -106,3 +107,15 @@ class CatalanPyramid(object):
         pyr = self.normalize_pyramid(pyr)
         table = self.build_lookup_table(pyr)
         return table
+
+
+class ShiftProbabilities(object):
+    def __init__(self):
+        self.cache = dict()
+        self.builder = CatalanPyramid()
+
+    def prob(self, n_reduces, i, n_tokens):
+        if n_tokens not in self.cache:
+            self.cache[n_tokens] = self.builder.lookup_table(n_tokens)
+        table = self.cache[n_tokens]
+        return table[n_reduces][i]
