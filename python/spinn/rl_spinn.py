@@ -53,6 +53,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          rl_valid=FLAGS.rl_valid,
          rl_entropy=FLAGS.rl_entropy,
          rl_entropy_beta=FLAGS.rl_entropy_beta,
+         rl_catalan=FLAGS.rl_catalan,
          context_args=context_args,
          composition_args=composition_args,
         )
@@ -61,11 +62,25 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
 class RLSPINN(SPINN):
     epsilon = 1.0
     temperature = 1.0
+    catalan = True
 
     def predict_actions(self, transition_output):
-        transition_dist = F.softmax(transition_output / max(self.temperature, 1e-8)).data
+        transition_dist = F.softmax(transition_output / max(self.temperature, 1e-8)).data.cpu()
+
         if self.training:
-            transitions_sampled = torch.multinomial(transition_dist, 1).view(-1).cpu().numpy()
+            # Interpolate between the uniform random distrubition of binary trees
+            # and the distribution from the transition_net's softmax.
+            if self.catalan:
+                A = F.softmax(transition_output).data[:,0]
+                B = torch.zeros(A.size()).fill_(0.5)
+                p = transition_dist[:,0]
+                i = (p-B)/(A-B)
+                C = [self.shift_probabilities.prob(n_red, n_step, n_tok)
+                    for n_red, n_step, n_tok in zip(self.n_reduces, self.n_steps, self.n_tokens)]
+                C = torch.FloatTensor(C).unsqueeze(1)
+                transition_dist = torch.cat([C, 1-C], 1)
+            
+            transitions_sampled = torch.multinomial(transition_dist, 1).view(-1).numpy()
             transition_preds = transitions_sampled
         else:
             transition_greedy = transition_dist.cpu().numpy().argmax(axis=1)
@@ -87,6 +102,7 @@ class BaseModel(_BaseModel):
                  rl_epsilon=None,
                  rl_entropy=None,
                  rl_entropy_beta=None,
+                 rl_catalan=None,
                  **kwargs):
         super(BaseModel, self).__init__(**kwargs)
 
@@ -101,6 +117,7 @@ class BaseModel(_BaseModel):
         self.rl_entropy = rl_entropy
         self.rl_entropy_beta = rl_entropy_beta
         self.spinn.epsilon = rl_epsilon
+        self.spinn.catalan = rl_catalan
 
         if self.rl_baseline == "value":
             self.v_dim = 100
