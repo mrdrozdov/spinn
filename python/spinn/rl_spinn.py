@@ -178,6 +178,8 @@ class BaseModel(_BaseModel):
             mu = self.rl_mu
             baseline = self.baseline[0]
             self.baseline[0] = self.baseline[0] * (1 - mu) + rewards.mean() * mu
+        elif self.rl_baseline == "pass":
+            baseline = 0.
         elif self.rl_baseline == "greedy":
             # Pass inputs to Greedy Max
             output = self.run_greedy(sentences, transitions)
