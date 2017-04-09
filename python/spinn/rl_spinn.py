@@ -71,7 +71,7 @@ class RLSPINN(SPINN):
             # Interpolate between the uniform random distrubition of binary trees
             # and the distribution from the transition_net's softmax.
             if self.catalan:
-                A = F.softmax(transition_output).data[:,0]
+                A = F.softmax(transition_output).data[:,0].cpu()
                 B = torch.zeros(A.size()).fill_(0.5)
                 p = transition_dist[:,0]
                 i = (p-B)/(A-B)
@@ -79,7 +79,7 @@ class RLSPINN(SPINN):
                     for n_red, n_step, n_tok in zip(self.n_reduces, self.n_steps, self.n_tokens)]
                 C = torch.FloatTensor(C).unsqueeze(1)
                 transition_dist = torch.cat([C, 1-C], 1)
-            
+
             transitions_sampled = torch.multinomial(transition_dist, 1).view(-1).numpy()
             transition_preds = transitions_sampled
         else:
