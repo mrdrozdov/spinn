@@ -28,7 +28,7 @@ def convert_binary_bracketing(parse, lowercase=False):
                 transitions.append(0)
     return tokens, transitions
 
-def load_data(path, lowercase=False):
+def load_data(path, lowercase=False, choose=lambda x: True):
     print "Loading", path
     examples = []
     failed_parse = 0
@@ -41,6 +41,9 @@ def load_data(path, lowercase=False):
                 line = "{}"
             loaded_example = json.loads(line)
             if loaded_example["gold_label"] not in LABEL_MAP:
+                continue
+
+            if not choose(loaded_example):
                 continue
 
             example = {}

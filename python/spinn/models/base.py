@@ -115,13 +115,22 @@ def get_checkpoint_path(ckpt_path, experiment_name, suffix=".ckpt", best=False):
 
 
 def load_data_and_embeddings(FLAGS, data_manager, logger, training_data_path, eval_data_path):
+
+    choose_train = lambda x: True
+    if FLAGS.train_genre is not None:
+        choose_train = lambda x: x.get('genre') == FLAGS.train_genre
+
+    choose_eval = lambda x: True
+    if FLAGS.eval_genre is not None:
+        choose_eval = lambda x: x.get('genre') == FLAGS.eval_genre
+
     # Load the data.
     raw_training_data, vocabulary = data_manager.load_data(
-        training_data_path, FLAGS.lowercase)
+        training_data_path, FLAGS.lowercase, choose_train)
 
     # Load the eval data.
     raw_eval_sets = []
-    raw_eval_data, _ = data_manager.load_data(eval_data_path, FLAGS.lowercase)
+    raw_eval_data, _ = data_manager.load_data(eval_data_path, FLAGS.lowercase, choose_eval)
     raw_eval_sets.append((eval_data_path, raw_eval_data))
 
     # Prepare the vocabulary.
@@ -183,6 +192,12 @@ def get_flags():
     # Data types.
     gflags.DEFINE_enum("data_type", "bl", ["bl", "sst", "sst-binary", "snli", "multinli", "arithmetic", "listops", "sign", "eq", "relational"],
         "Which data handler and classifier to use.")
+
+    # Choose Genre.
+    # 'fiction', 'government', 'slate', 'telephone', 'travel'
+    # 'facetoface', 'letters', 'nineeleven', 'oup', 'verbatim'
+    gflags.DEFINE_string("train_genre", None, "Filter MultiNLI data by genre.")
+    gflags.DEFINE_string("eval_genre", None, "Filter MultiNLI data by genre.")
 
     # Where to store checkpoints
     gflags.DEFINE_string("log_path", "./logs", "A directory in which to write logs.")
