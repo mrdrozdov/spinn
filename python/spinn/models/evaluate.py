@@ -147,8 +147,8 @@ def run():
 
     model, optimizer, trainer = init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_manager)
 
-    standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name)
-    best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name, best=True)
+    standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.load_experiment_name)
+    best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.load_experiment_name, best=True)
 
     # Load checkpoint if available.
     if FLAGS.load_best and os.path.isfile(best_checkpoint_path):
