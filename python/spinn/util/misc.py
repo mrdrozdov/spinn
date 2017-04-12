@@ -98,10 +98,14 @@ class EvalReporter(object):
                     f.write(report_str.format(**report_dict))
 
 
-def recursively_set_device(inp, gpu=-1):
+def recursively_set_device(inp, gpu):
     if hasattr(inp, 'keys'):
         for k in inp.keys():
             inp[k] = recursively_set_device(inp[k], gpu)
+    elif isinstance(inp, list):
+        return [recursively_set_device(ii, gpu) for ii in inp]
+    elif isinstance(inp, tuple):
+        return (recursively_set_device(ii, gpu) for ii in inp)
     elif hasattr(inp, 'cpu'):
         if gpu >= 0:
             inp = inp.cuda()

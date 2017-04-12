@@ -50,7 +50,7 @@ def sequential_only():
 
 
 def log_path(FLAGS, load=False):
-    lp = FLAGS.log_load_path if load else FLAGS.log_path
+    lp = FLAGS.load_log_path if load else FLAGS.log_path
     en = FLAGS.load_experiment_name if load else FLAGS.experiment_name
     return os.path.join(lp, en) + ".log"
 
@@ -204,7 +204,7 @@ def get_flags():
 
     # Where to store checkpoints
     gflags.DEFINE_string("log_path", "./logs", "A directory in which to write logs.")
-    gflags.DEFINE_string("log_load_path", None, "A directory in which to write logs.")
+    gflags.DEFINE_string("load_log_path", None, "A directory in which to write logs.")
     gflags.DEFINE_string("ckpt_path", None, "Where to save/load checkpoints. Can be either "
         "a filename or a directory. In the latter case, the experiment name serves as the "
         "base for the filename.")
@@ -322,12 +322,13 @@ def get_flags():
 
 def flag_defaults(FLAGS, load_log_flags=False):
     if load_log_flags:
-        log_flags = parse_flags(log_path(FLAGS, load=True))
-        for k in log_flags.keys():
-            setattr(FLAGS, k, log_flags[k])
+        if FLAGS.load_log_path and os.path.exists(log_path(FLAGS, load=True)):
+            log_flags = parse_flags(log_path(FLAGS, load=True))
+            for k in log_flags.keys():
+                setattr(FLAGS, k, log_flags[k])
 
-        # Optionally override flags from log file.
-        FLAGS(sys.argv)
+            # Optionally override flags from log file.
+            FLAGS(sys.argv)
 
     if not FLAGS.experiment_name:
         timestamp = str(int(time.time()))
@@ -343,14 +344,14 @@ def flag_defaults(FLAGS, load_log_flags=False):
     if not FLAGS.sha:
         FLAGS.sha = os.popen('git rev-parse HEAD').read().strip()
 
-    if not FLAGS.log_load_path:
-        FLAGS.log_load_path = FLAGS.log_path
+    if not FLAGS.load_log_path:
+        FLAGS.load_log_path = FLAGS.log_path
 
     if not FLAGS.load_experiment_name:
         FLAGS.load_experiment_name = FLAGS.experiment_name
 
     if not FLAGS.ckpt_path:
-        FLAGS.ckpt_path = FLAGS.log_load_path
+        FLAGS.ckpt_path = FLAGS.load_log_path
 
     if not FLAGS.sample_interval_steps:
         FLAGS.sample_interval_steps = FLAGS.statistics_interval_steps
