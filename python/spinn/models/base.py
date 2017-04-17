@@ -126,14 +126,27 @@ def load_data_and_embeddings(FLAGS, data_manager, logger, training_data_path, ev
     if FLAGS.eval_genre is not None:
         choose_eval = lambda x: x.get('genre') == FLAGS.eval_genre
 
-    # Load the data.
-    raw_training_data, vocabulary = data_manager.load_data(
-        training_data_path, FLAGS.lowercase, choose_train)
+    if FLAGS.data_type == "snli":
+        # Load the data.
+        raw_training_data, vocabulary = data_manager.load_data(
+            training_data_path, FLAGS.lowercase, choose_train)
+    else:
+        # Load the data.
+        raw_training_data, vocabulary = data_manager.load_data(
+            training_data_path, FLAGS.lowercase)
 
-    # Load the eval data.
-    raw_eval_sets = []
-    raw_eval_data, _ = data_manager.load_data(eval_data_path, FLAGS.lowercase, choose_eval)
-    raw_eval_sets.append((eval_data_path, raw_eval_data))
+
+    if FLAGS.data_type == "snli":
+        # Load the eval data.
+        raw_eval_sets = []
+        raw_eval_data, _ = data_manager.load_data(eval_data_path, FLAGS.lowercase, choose_eval)
+        raw_eval_sets.append((eval_data_path, raw_eval_data))
+    else:
+        # Load the eval data.
+        raw_eval_sets = []
+        raw_eval_data, _ = data_manager.load_data(eval_data_path, FLAGS.lowercase)
+        raw_eval_sets.append((eval_data_path, raw_eval_data))
+
 
     # Prepare the vocabulary.
     if not vocabulary:
