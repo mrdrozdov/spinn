@@ -323,7 +323,7 @@ class ModelTrainer(object):
             recursively_set_device(self.optimizer.state_dict(), gpu=the_gpu())
 
     def load(self, filename):
-        checkpoint = torch.load(filename, map_location=lambda storage, loc: storage)
+        checkpoint = torch.load(filename)
         model_state_dict = checkpoint['model_state_dict']
 
         # HACK: Compatability for saving supervised SPINN and loading RL SPINN.
