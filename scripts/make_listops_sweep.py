@@ -35,14 +35,14 @@ FLAGS(sys.argv)
 
 FIXED_PARAMETERS = {
     "data_type":     "listops",
-    "model_type":      "RLSPINN",
+    "model_type":      "SPINN",
     "training_data_path":    FLAGS.training_data_path,
     "eval_data_path":    FLAGS.eval_data_path,
     "log_path": FLAGS.log_path,
     "metrics_path": FLAGS.log_path,
     "ckpt_path":  FLAGS.log_path,
     "word_embedding_dim":   "32",
-    "model_dim":   "64",
+    "model_dim":   "32",
     "seq_length":   "200",
     "eval_seq_length":  "200",
     "eval_interval_steps": "100",
@@ -50,18 +50,19 @@ FIXED_PARAMETERS = {
     "use_internal_parser": "",
     "batch_size":  "64",
     "nouse_tracking_in_composition": "",
+    "mlp_dim": "64"
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "learning_rate":      ("lr", EXP, 0.00003, 0.001),  # RNN likes higher, but below 009.
+    "learning_rate":      ("lr", EXP, 0.00003, 0.01),  # RNN likes higher, but below 009.
     "l2_lambda":          ("l2", EXP, 8e-7, 1e-4),
-    "semantic_classifier_keep_rate": ("skr", LIN, 0.5, 0.95),  # NB: Keep rates may depend considerably on dims.
+    "semantic_classifier_keep_rate": ("skr", LIN, 1.0, 1.0),  # NB: Keep rates may depend considerably on dims.
     "embedding_keep_rate": ("ekr", LIN, 1.0, 1.0),
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.25, 1.0),
-    "tracking_lstm_hidden_dim": ("tdim", EXP, 4, 32),
-    "rl_weight":  ("rlwt", EXP, 0.000001, 0.0009),
-    "transition_weight":  ("trwt", EXP, 1.0, 1.0),
+    "tracking_lstm_hidden_dim": ("tdim", EXP, 4, 16),
+#    "rl_weight":  ("rlwt", EXP, 0.000001, 0.0009),
+    "transition_weight":  ("trwt", EXP, 0.3, 3.0),
 }
 
 sweep_name = "sweep_" + NAME + "_" + \
