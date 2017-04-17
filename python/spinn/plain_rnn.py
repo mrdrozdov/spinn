@@ -57,12 +57,9 @@ class BaseModel(nn.Module):
 
         self.use_sentence_pair = use_sentence_pair
         self.model_dim = model_dim
+        self.hidden_dim = model_dim / 2
 
         classifier_dropout_rate = 1. - classifier_keep_rate
-
-        args = Args()
-        args.size = model_dim
-        args.input_dropout_rate = 1. - embedding_keep_rate
 
         vocab = Vocab()
         vocab.size = initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size
@@ -70,30 +67,30 @@ class BaseModel(nn.Module):
 
         self.embed = Embed(word_embedding_dim, vocab.size, vectors=vocab.vectors)
 
-        self.rnn = nn.LSTM(args.size, model_dim, num_layers=1, batch_first=True)
-
-        mlp_input_dim = model_dim * 2 if use_sentence_pair else model_dim
-
-        self.mlp = MLP(mlp_input_dim, mlp_dim, num_classes,
-            num_mlp_layers, mlp_bn, classifier_dropout_rate)
-
         self.encode = context_args.encoder
         self.reshape_input = context_args.reshape_input
         self.reshape_context = context_args.reshape_context
 
+        self.rnn = nn.LSTM(context_args.input_dim, self.hidden_dim, num_layers=1, batch_first=True)
+
+        mlp_input_dim = self.hidden_dim * 2 if use_sentence_pair else self.hidden_dim
+
+        self.mlp = MLP(mlp_input_dim, mlp_dim, num_classes,
+            num_mlp_layers, mlp_bn, classifier_dropout_rate)
+
     def run_rnn(self, x):
-        batch_size, seq_len, model_dim = x.data.size()
+        batch_size, seq_len, hidden_dim = x.data.size()
 
         num_layers = 1
         bidirectional = False
         bi = 2 if bidirectional else 1
-        h0 = Variable(to_gpu(torch.zeros(num_layers * bi, batch_size, self.model_dim)), volatile=not self.training)
-        c0 = Variable(to_gpu(torch.zeros(num_layers * bi, batch_size, self.model_dim)), volatile=not self.training)
+        h0 = Variable(to_gpu(torch.zeros(num_layers * bi, batch_size, self.hidden_dim)), volatile=not self.training)
+        c0 = Variable(to_gpu(torch.zeros(num_layers * bi, batch_size, self.hidden_dim)), volatile=not self.training)
 
         # Expects (input, h_0):
-        #   input => batch_size x seq_len x model_dim
-        #   h_0   => (num_layers x num_directions[1,2]) x batch_size x model_dim
-        #   c_0   => (num_layers x num_directions[1,2]) x batch_size x model_dim
+        #   input => batch_size x seq_len x hidden_dim
+        #   h_0   => (num_layers x num_directions[1,2]) x batch_size x hidden_dim
+        #   c_0   => (num_layers x num_directions[1,2]) x batch_size x hidden_dim
         output, (hn, cn) = self.rnn(x, (h0, c0))
 
         return hn
