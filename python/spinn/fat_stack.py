@@ -162,8 +162,8 @@ class SPINN(nn.Module):
         self.stacks = [[zeros, zeros] for buf in self.bufs]
 
         # Initialize other.
-        self.n_reduces = np.array([0 for _ in self.bufs])
-        self.n_steps = np.array([0 for _ in self.bufs])
+        self.n_reduces = np.zeros(len(self.bufs), dtype=np.int32)
+        self.n_steps = np.zeros(len(self.bufs), dtype=np.int32)
 
         if hasattr(self, 'tracker'):
             self.tracker.reset_state()
