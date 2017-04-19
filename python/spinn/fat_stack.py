@@ -92,7 +92,7 @@ class Tracker(nn.Module):
 
             return self.h, self.c
         else:
-            outp = self.transform(tracker_inp)
+            outp = self.transform(tracker_inp.clamp(min=0)).clamp(min=0)
             return outp, None
 
     @property

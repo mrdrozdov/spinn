@@ -26,7 +26,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
-    assert FLAGS.use_tracking_in_composition or not FLAGS.tracking_lstm_hidden_dim, \
+    assert FLAGS.use_tracking_in_composition or not FLAGS.tracking_lstm_hidden_dim or (FLAGS.tracking_lstm_hidden_dim and not FLAGS.lateral_tracking and not FLAGS.predict_use_cell), \
         "You appear to want to train an RNN using only RL gradients. This is well defined, but it is nonetheless a terrible idea."
 
     return model_cls(model_dim=FLAGS.model_dim,
