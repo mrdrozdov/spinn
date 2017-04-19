@@ -15,12 +15,20 @@ echo $SLURM_JOBID - `hostname` - $SPINN_FLAGS >> ~/spinn_machine_assignments.txt
 # Make sure we have access to HPC-managed libraries.
 module load python/intel/2.7.12 pytorch/0.1.11_5 protobuf/intel/3.1.0
 
+# Default model.
+MODEL="spinn.models.fat_classifier"
+
+# Optionally override default model.
+if [ -n "$SPINNMODEL" ]; then
+    MODEL=$SPINNMODEL
+fi
+
 # Run.
 export IFS=';'
 for SUB_FLAGS in $SPINN_FLAGS
 do
 	unset IFS
-	python -m spinn.models.fat_classifier  --noshow_progress_bar $SUB_FLAGS &
+	python -m $MODEL  --noshow_progress_bar $SUB_FLAGS &
 done
 
 wait
