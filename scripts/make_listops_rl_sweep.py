@@ -18,10 +18,10 @@ SS_BASE = "SS_BASE"
 
 FLAGS = gflags.FLAGS
 
-gflags.DEFINE_string("training_data_path", "spinn/data/listops/train_d10.tsv", "")
-gflags.DEFINE_string("eval_data_path", "spinn/data/listops/test_d10.tsv", "")
-gflags.DEFINE_string("log_path", "/scratch/apd283/logs/spinn", "")
-gflags.DEFINE_string("metrics_path", "/scratch/apd283/logs/spinn-runs", "")
+gflags.DEFINE_string("training_data_path", "python/spinn/data/listops/train_d10.tsv", "")
+gflags.DEFINE_string("eval_data_path", "python/spinn/data/listops/test_d10.tsv", "")
+gflags.DEFINE_string("log_path", "~/logs/spinn", "")
+gflags.DEFINE_string("metrics_path", "~/logs/spinn-runs", "")
 
 FLAGS(sys.argv)
 
@@ -55,6 +55,12 @@ FIXED_PARAMETERS = {
     "transition_weight": "1",
     "embedding_keep_rate": "1.0",
     "semantic_classifier_keep_rate": "1.0",
+    "rl_baseline": "greedy",
+    "rl_reward": "xent",
+    "rl_wake_sleep": "",
+    "rl_valid": "",
+    "gpu": "0",
+    "num_samples": "5",
 }
 
 # Tunable parameters.
@@ -64,6 +70,8 @@ SWEEP_PARAMETERS = {
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.25, 1.0),
     "tracking_lstm_hidden_dim": ("tdim", EXP, 4, 16),
     "rl_weight":  ("rlwt", EXP, 0.01, 1),
+    "rl_confidence_interval":   ("rlci", LIN, 2, 5),
+    "rl_confidence_penalty":    ("rlcp", LIN, 25, 1000),
 }
 
 sweep_name = "sweep_" + NAME + "_" + \
