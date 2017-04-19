@@ -72,8 +72,8 @@ SWEEP_PARAMETERS = {
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.25, 1.0),
     "tracking_lstm_hidden_dim": ("tdim", EXP, 4, 16),
     "rl_weight":  ("rlwt", EXP, 0.01, 1),
-    "rl_confidence_interval":   ("rlci", LIN, 2, 5),
-    "rl_confidence_penalty":    ("rlcp", LIN, 25, 1000),
+    "rl_confidence_interval":   ("rlci", LIN, 25, 1000),
+    "rl_confidence_penalty":    ("rlcp", LIN, 2, 5),
 }
 
 sweep_name = "sweep_" + NAME + "_" + \
