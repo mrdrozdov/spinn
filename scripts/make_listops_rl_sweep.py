@@ -61,6 +61,8 @@ FIXED_PARAMETERS = {
     "rl_valid": "",
     "gpu": "0",
     "num_samples": "5",
+    "nolateral_tracking": "",
+    "nopredict_use_cell": "",
 }
 
 # Tunable parameters.
