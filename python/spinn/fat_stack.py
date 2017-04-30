@@ -576,7 +576,7 @@ class BaseModel(nn.Module):
     def forward_hook(self, embeds, batch_size, seq_length):
         pass
 
-    def output_hook(self, output, sentences, transitions, y_batch=None, embeds=None):
+    def output_hook(self, output, sentences, transitions, y_batch=None):
         pass
 
     def forward(self, sentences, transitions, y_batch=None,
@@ -591,11 +591,17 @@ class BaseModel(nn.Module):
         embeds = self.reshape_context(embeds, b, l)
         self.forward_hook(embeds, b, l)
         embeds = F.dropout(embeds, self.embedding_dropout_rate, training=self.training)
-        embeds = torch.chunk(to_cpu(embeds), b, 0)
 
         # Make Buffers
-        embeds = [torch.chunk(x, l, 0) for x in embeds]
-        buffers = [list(reversed(x)) for x in embeds]
+        # _embeds = torch.chunk(to_cpu(embeds), b, 0)
+        # _embeds = [torch.chunk(x, l, 0) for x in _embeds]
+        # buffers = [list(reversed(x)) for x in _embeds]
+        ee = torch.chunk(embeds, b * l, 0)[::-1]
+        bb = []
+        for ii in range(b):
+            ex = list(ee[ii*l:(ii+1)*l])
+            bb.append(ex)
+        buffers = bb[::-1]
 
         example.bufs = buffers
 
@@ -611,7 +617,7 @@ class BaseModel(nn.Module):
 
         output = self.mlp(features)
 
-        self.output_hook(output, sentences, transitions, y_batch, embeds)
+        self.output_hook(output, sentences, transitions, y_batch)
 
         return output
 

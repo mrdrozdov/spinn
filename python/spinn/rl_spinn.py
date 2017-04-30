@@ -176,7 +176,7 @@ class BaseModel(_BaseModel):
 
         return rewards
 
-    def build_baseline(self, rewards, sentences, transitions, y_batch=None, embeds=None):
+    def build_baseline(self, rewards, sentences, transitions, y_batch=None):
         if self.rl_baseline == "ema":
             mu = self.rl_mu
             baseline = self.baseline[0]
@@ -272,7 +272,7 @@ class BaseModel(_BaseModel):
 
         return policy_loss
 
-    def output_hook(self, output, sentences, transitions, y_batch=None, embeds=None):
+    def output_hook(self, output, sentences, transitions, y_batch=None):
         if not self.training:
             return
 
@@ -283,7 +283,7 @@ class BaseModel(_BaseModel):
         rewards = self.build_reward(probs, target, rl_reward=self.rl_reward)
 
         # Get Baseline.
-        baseline = self.build_baseline(rewards, sentences, transitions, y_batch, embeds)
+        baseline = self.build_baseline(rewards, sentences, transitions, y_batch)
 
         # Calculate advantage.
         advantage = rewards - baseline
