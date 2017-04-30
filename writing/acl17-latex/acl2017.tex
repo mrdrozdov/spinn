@@ -38,7 +38,7 @@
 
 \newcommand\BibTeX{B{\sc ib}\TeX}
 
-\title{Avoiding Coadaptation for Composition \\ when Exploring Tree Structures for Sequence Classification\Thanks{Thanks for the fish (obligatory {\em Hitchhiker's Guide} Reference)!}}
+\title{The Coadaptation Problem when \\ Learning How and What to Compose}
 
 \author{Andrew Drozdov \\
   New York University \\
@@ -54,92 +54,63 @@
 \begin{document}
 \maketitle
 \begin{abstract}
-  If it is true that some sequences have a tree-like optimal substructure that can
-  be exploited for sequence labeling tasks, then this substructure (or a similar one) should be
-  discoverable using Reinforcement Learning techniques.
-
-  In this work, we present a task called LISTOPS which involves predicting the output
-  of nested list operations. Since, SPINN performs much better than a comparable
-  RNN, we determine that knowing that knowing the substructure of LISTOPS
-  makes this a more feasible task. Nonetheless, when training
-  SPINN's parsing component with the REINFORCE algorithm, it does not succeed
-  to converge to a parsing strategy with a non-neglibible difference from a trivial
-  parsing strategy. This is similar to what has been seen in related work, and we find this
-  to be due to the following reasons:
-
-1. There is a relationship between composition and parsing in SPINN. Composition is highly dependent on parsing.
-
-2. Naively sampling random binary trees using transition based parsing does not uniformly sample over binary trees.
-
-3. There is a lot of variance in this task, exacerbated by the label bias problem encountered in transition based parsing.
-
-We address the first two issues by:
-
-1. Using a soft wake sleep to interpolate between training the parser and the composition function, limiting the coadaptation between the two.
-
-2. Sampling from a ``Catalan Pyramid'', ensuring a uniform distribution over binary trees.
-
-Although do not treat the 3rd issue.
-
+This paper discusses a potential problem with tree-sequence models that induce syntax,
+in that there exists a failure mode when naively treating the relationship between composition and parsing.
+The first section presents a tree-sequence model that induces syntax.
+The second section proposes a strategy that attempts to prevent coadaptation between composition
+and parsing. The third section covers a method for randomly sampling binary trees in a transition-based
+setting, a simple and useful technique for transition-based parsing models.
 \end{abstract}
 
 \section{Introduction}
 
-TODO. Related work: SPINN + REINFORCE \cite{yogatama2016learning}; Inducing Parse Trees \cite{dyer2016rnng}
+The Stacked-augmented Parser-Interpreter Neural Network (SPINN) from \citet{bowman2016fast} is a hybrid tree-sequence model that uses Recursive Neural Networks \citep{socher2011parsing} with TreeLSTM composition units \citep{tai2015improved} to leverage syntactic information for semantic classification tasks. Recent work \citep{yogatama2016learning} has modified SPINN to induce a projective binary structure over its input sentence using signal from the classification task as a reward for a parsing component optimized with the REINFORCE algorithm \citep{williams1992simple}. The tree structures in \citet{yogatama2016learning} are observed to be almost trivial in nature, completely left or right leaning, rarely recovering linguistically inspired structure. This trivial behavior resembles similar behavior to a failure mode of the parser when composition becomes too strongly tied (coadapts) to a type of parse tree structure.
+
+If the coadaptation problem is a true problem, it happens when the composition is exposed to many similar looking parse trees consecutively during training time. During evaluation time, any unseen parse tree would provide significant noise to composition. In turn, the semantic classification task becomes unnecessarily difficult. Similarly, switching parsing strategies abruptly during training can confuse composition, inhibiting downstream task performance until composition adjusts to the new strategy.
+
+In lieu of a perfect parsing strategy during train time (or simply having labeled data), one potential method to prevent composition from coadapting to any parsing strategy is to observe as many trees for a given set of data as possible. This can be done by uniformly sampling over valid parse trees for each input. It might be helpful to still greedily parse any input to benefit semantic classification. When doing so it might help to inhibit the learning of the parser so that is more influenced by successfully randomly sampled structure rather than the biased greedy and potentially trivial structure.
+
+Using SPINN with REINFORCE is descibed in section 2. The schedule used to randomly sample trees and modify the magnitude of gradient updates to the parser is called Soft Wake Sleep and is described in section 3. An algorithm for uniformly sampling binary trees in a transition-based parser is covered in section 4.
 
 % Citations  \citet{bowman2016fast,yogatama2016learning,dyer2016rnng,rennie2016self,williams1992simple}
 
+
+
 \section{SPINN + REINFORCE}
 
-We use a slightly modified thin stack algorithm from \citet{bowman2016fast}
-(pseudocode provided in Appendix A.\ref{rlloss}). It's
-simple to add a method that trains the parser with the REINFORCE algorithm
-\citep{williams1992simple}. REINFORCE approximates the gradient for non-differentiable
-functions, and due to its high variance, it's necessary to subtract a baseline
-from the reward. This difference (commonly called the advantage) has much less
-variance and can be used to make more consistent gradient steps. In our case,
-the reward is provided by the classification accuracy and we run our model in the
-inference setting to baseline the reward \citep{rennie2016self}.
+We use a version of the thin stack algorithm from \citet{bowman2016fast} akin to what is done in \citet{yogatama2016learning}. \footnote{Code published on github. Left out for anonymous submission.}
 
-To illustrate why REINFORCE may be problematic in the context of SPINN, consider
-a parser that returns strictly left branching trees (which turns out to be similar as
-encoding a sequence in the forward direction with a Recurrent Neural Network -- RNN).
-If you train a composition function with this fixated parser for a significant number
-of examples, the composition function will coadapt to this forward sequential structure.
-At this point, changing the behavior of the parser to return strictly right branching parse trees
-(which is similar to encoding a sequence in the backward direction) will introduce examples
-to the composition function that it has not seen previously, leading to noisy compositional
-output, which will propogate noise to any downstream components of the model.
-
-For these reasons, it's highly desirable to prevent coadaptation for two reasons:
+Our initial experiments with SPINN in this setting unveiled two problematic circumstances:
 
 \begin{enumerate}
 \item
-An unprepared compositional function propogates noise throughout the model, making
-classification difficult and exploring non-trivial tree structures too costly.
-\item
-Models that attempt to explore will eventually follow a degenerate training regime and
-fail at their semantic task.
+The model commonly follows parsing behavior that returns strictly left or right branching trees (similar behavior was seen in \citet{yogatama2016learning}).
 \end{enumerate}
 
-In the following section we detail a training strategy that prevents coadaptation and
-improves the exploration of substructures, addressing these two problems.
+\begin{enumerate}
+\item[2]
+When the parser in SPINN becomes fixated in its parsing
+strategy for a significant number of examples, the composition function coadapts with the parsing behavior.
+\end{enumerate}
+
+For these reasons, it's highly desirable to prevent coadaptation
+because an unprepared compositional function propogates noise throughout the model, making
+classification difficult and exploring non-trivial tree structures too costly.
+
+In the following section we detail a training strategy that attempts to prevent coadaptation
+and ease the exploration of substructures.
 
 \section{Soft Wake Sleep}
 
-% Distribution Balanced Image
-\begin{figure}[h]
-\centering
-\includegraphics[width=7cm]{temperature_schedule}
-\caption{The temperature T used to interpolate between greedy and random distributions when sampling transitions follows a strictly positive sinusoidal wave with annealed magnitude. The scale $\rho$ on the REINFORCE loss follows a similar schedule but is not annealed.}
-\end{figure}
-
-By interpolating between training the parser and the composition function, we apply
+To interpolate between training the parser and the composition function, we apply
 temperature to the softmax layer of the transition network defined by an annealed
-sinusoidal schedule. We apply a similar temperature to scale the loss of the transition
-network. The combination of these two actions searches randomly over all relevant binary
-trees, teaching the parser to replicate only useful trees in the future and the composition
-function to exhibit reasonable behavior over many different recursive trees.
+sinusoidal schedule (as seen in Figure~\ref{fig:schedule}). We apply a similar temperature to scale the loss of the transition
+network.
+
+	When $T$ is large ($>1$), the distribution for sampling binary trees is most random. Simultaneously, $\rho$
+will be high and the parser will be most effected by gradient updates. When $T$ is small ($<1$), the parser will sample binary trees from a more greedy-like distribution and the parser will be less effected by updates.
+This periodic behavior encourages the composition function to act reasonably over many different tree structures,
+and discourages the parser from becoming fixated in a trivial parsing strategy.
 
 Adding temperature to the softmax is done by dividing the input of the softmax by a variable
 $T$. The output of the softmax resembles a uniform distribution when $T\to\infty$.
@@ -148,85 +119,23 @@ $T$. The output of the softmax resembles a uniform distribution when $T\to\infty
 \sigma(\frac{\vec{x}}{T}) = \frac{e^{\frac{x}{T}}}{\Sigma_{\hat{x} \in \vec{x}} e^{\frac{\hat{x}}{T}}}
 \end{align}
 
-% Distribution Step/Catalan Image
-% \begin{figure}[tbp]
-%   \centering
-%   \subfloat[Uniformly Random]{\includegraphics[width=0.2\textwidth]{distribution_step}\label{fig:f1}}
-%   \hfill
-%   \subfloat[Catalan Pyramid]{\includegraphics[width=0.2\textwidth]{distribution_balanced}\label{fig:f2}}
-%   \caption{Frequency counts of randomly generated binary trees with N=6 leaves by using the a uniform distribution over Shift/Reduce transitions and the distribution from the Catalan Pyramid for Shift/Reduce transitions in sequence over 10k samples.}
-% \end{figure}
+%%
+% Supervised Loss
+\begin{algorithm}[H]
+\caption{Supervised Model}\label{loss}
+\begin{algorithmic}[1]
 
-\begin{figure}[h]
-\centering
-\includegraphics[width=7cm]{distribution_step}
-\caption{Frequency counts of randomly generated binary trees with N=6 leaves by using the a uniform distribution over Shift/Reduce transitions and the distribution from the Catalan Pyramid for Shift/Reduce transitions in sequence over 10k samples.}
-\label{fig:uniform}
-\end{figure}
+\Function{Model}{sentences, transitions, y}
+\State Ts := transitions.T
+\State outp, Ts$'$ := \Call{SPINN}{sentences, Ts}
+\State y$'$ := $f^y$(outp)
+\State Loss$_y$ := \Call{NLL}{y, y$'$}
+\State Loss$_T$ := \Call{NLL}{Ts, Ts$'$}
+\State \Return Loss$_y$, Loss$_T$
+\EndFunction
 
-\begin{figure}[h]
-\centering
-\includegraphics[width=7cm]{distribution_balanced}
-\caption{Frequency counts of randomly generated binary trees with N=6 leaves by using the a uniform distribution over Shift/Reduce transitions and the distribution from the Catalan Pyramid for Shift/Reduce transitions in sequence over 10k samples.}
-\label{fig:catalan}
-\end{figure}
-
-Iteratively uniformly sampling transitions does not lead to uniforming sampling over binary trees in Shift Reduce Transition Based Parsing. Rather, the distribution of trees resembles a step function as seen in Figure~\ref{fig:uniform}, which shows the frequency counts of binary trees over iterative random samples. To uniformly sample over binary trees, it's necessary to sample from a distribution representing the number of valid paths containing either Shift or Reduce as the next transition. A naive algorithm can come up with this distribution in exponential time by enumerating all possible trees of a given length, and filtering to relevant trees, but this approach is unusuable for trees with even a moderate number leaves. Fortunately, this distribution seems to have a closed form solution which can be recovered in linear time for any transition in any binary tree, and amortized constant time. We present the recursive algorithm in Figure~\ref{fig:catalan} and call the related distribution the Catalan Pyramid as each row contains fractions over the Catalan Numbers (which represent the count of binary trees with N leaves). A quick search did not turn up previous strategies for sampling uniformly over binary trees in transition based parsing.
-
-The distribution from the Catalan Pyramid is not uniformly random at each time step, so the formula for temperature must be adjusted to take the proper distribution into account. Since temperature leads to a uniform distribution at its limit, it is a linear interpolation of the distribution based purely on the logits ($T = 1$) and the uniform distribution. We can recover the linear parameter directly to perform a similar interpolation between any distribution, including the one from the Catalan Pyramid.
-
-\begin{align}
-\sigma(\frac{\vec{x}}{T}) &= i \cdot \sigma(\vec{x}) + (1 - i) \cdot \sigma(0) \\
-i &= \frac{\sigma(\frac{\vec{x}}{T}) - \sigma(0)}{\sigma(\vec{x})}
-\end{align}
-
-% Catalan Pyramid
-\begin{table*}
-\small
-\centering
-\begin{tabular}{|r|l|l|l|l|l|l|l|l|l|l|l|l|l|l|l|}
-\hline & t=0 & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & 10 & 11 & 12 & 13 & 14 \\ \hline
-r=0 & 1 & 1 & $\frac{297}{429}$ & $\frac{165}{297}$ & $\frac{75}{165}$ & $\frac{27}{75}$ & $\frac{7}{27}$ & $\frac{1}{7}$ &   &   &   &   &   &   &   \\
-1 &   &   &   & 1 & $\frac{90}{132}$ & $\frac{48}{90}$ & $\frac{20}{48}$ & $\frac{6}{20}$ & $\frac{1}{6}$ &   &   &   &   &   &   \\
-2 &   &   &   &   &   & 1 & $\frac{28}{42}$ & $\frac{14}{28}$ & $\frac{5}{14}$ & $\frac{1}{5}$ &   &   &   &   &   \\
-3 &   &   &   &   &   &   &   & 1 & $\frac{9}{14}$ & $\frac{4}{9}$ & $\frac{1}{4}$ &   &   &   &   \\
-4 &   &   &   &   &   &   &   &   &   & 1 & $\frac{3}{5}$ & $\frac{1}{3}$ &   &   &   \\
-5 &   &   &   &   &   &   &   &   &   &   &   & 1 & $\frac{1}{2}$ &   &   \\
-6 &   &   &   &   &   &   &   &   &   &   &   &   &   & 1 &   \\
-\hline
-\end{tabular}
-\caption{Catalan Pyramid. Represents probability of predicting shift at timestep t given there have already been r reduces.}
-\label{tab:catalan-pyramid}
-\end{table*}
-
-\section{Experiments}
-
-TODO
-
-\section{Discussion}
-
-We succeed in consistently finding interesting parse trees, but are unable to find a benefit when it comes to predicting sequence lables nor recover a substructure that matches our expectations. We suspect that treating the 3rd issue could be key to future success with SPINN and REINFORCE.
-
-
-\section*{Acknowledgments}
-
-TODO
-
-% include your own bib file like this:
-%\bibliographystyle{acl}
-%\bibliography{acl2017}
-\bibliography{acl2017}
-\bibliographystyle{acl_natbib}
-
-\newpage
-
-\appendix
-
-\section{Algorithms}
-\label{sec:algos}
-
-\subsection{Supervised SPINN}
-\label{sec:algos-spinn}
+\end{algorithmic}
+\end{algorithm}
 
 %%
 % Supervised SPINN
@@ -285,32 +194,6 @@ TODO
 \end{algorithmic}
 \end{algorithm}
 
-\newpage
-
-\subsection{Supervised Model}
-\label{sec:algos-supervised}
-
-%%
-% Supervised Loss
-\begin{algorithm}[H]
-\caption{Supervised Model}\label{loss}
-\begin{algorithmic}[1]
-
-\Function{Model}{sentences, transitions, y}
-\State Ts := transitions.T
-\State outp, Ts$'$ := \Call{SPINN}{sentences, Ts}
-\State y$'$ := $f^y$(outp)
-\State Loss$_y$ := \Call{NLL}{y, y$'$}
-\State Loss$_T$ := \Call{NLL}{Ts, Ts$'$}
-\State \Return Loss$_y$, Loss$_T$
-\EndFunction
-
-\end{algorithmic}
-\end{algorithm}
-
-\subsection{Reinforce Model}
-\label{sec:algos-rl}
-
 % TODO:
 % - Use distribution of transitions as input for reinforce
 % - Use baseline
@@ -333,12 +216,69 @@ TODO
 \end{algorithmic}
 \end{algorithm}
 
-\newpage
+% Distribution Balanced Image
+\begin{figure}[H]
+\centering
+\includegraphics[width=7cm]{temperature_schedule}
+\caption{The temperature T used to interpolate between greedy and random distributions when sampling transitions follows a strictly positive sinusoidal wave with annealed magnitude. The scale $\rho$ on the REINFORCE loss follows a similar schedule but is not annealed.}
+\label{fig:schedule}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=7cm]{distribution_step}
+\caption{Sampling uniformly 10k times results in frequencies that resemble a step function. Trees are represented as 0s (Shift) and 1s (Reduce).}
+\label{fig:notuniform}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=7cm]{distribution_balanced}
+\caption{Sampling from the Catalan Pyramid results in a smoother distribution of frequencies.}
+
+% Frequency counts of randomly generated binary trees with N=6 leaves by using the a uniform distribution over Shift/Reduce transitions and the distribution from the Catalan Pyramid for Shift/Reduce transitions in sequence over 10k samples.}
+\label{fig:uniform}
+\end{figure}
+
+
+
+% Distribution Step/Catalan Image
+% \begin{figure}[tbp]
+%   \centering
+%   \subfloat[Uniformly Random]{\includegraphics[width=0.2\textwidth]{distribution_step}\label{fig:f1}}
+%   \hfill
+%   \subfloat[Catalan Pyramid]{\includegraphics[width=0.2\textwidth]{distribution_balanced}\label{fig:f2}}
+%   \caption{Frequency counts of randomly generated binary trees with N=6 leaves by using the a uniform distribution over Shift/Reduce transitions and the distribution from the Catalan Pyramid for Shift/Reduce transitions in sequence over 10k samples.}
+% \end{figure}
+
+% TEXT TEXT TEXT TEXT TEXT TEXT TEXT TEXT TEXT TEXT TEXT TEXT TEXT TEXT TEXT TEXT TEXT TEXT TEXT TEXT TEXT TEXT TEXT TEXT
+
+% Catalan Pyramid
+\begin{figure*}[t]
+\small
+\centering
+\begin{tabular}{|r|l|l|l|l|l|l|l|l|l|l|l|l|l|l|l|}
+\hline & t=0 & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & 10 & 11 & 12 & 13 & 14 \\ \hline
+r=0 & 1 & 1 & $\frac{297}{429}$ & $\frac{165}{297}$ & $\frac{75}{165}$ & $\frac{27}{75}$ & $\frac{7}{27}$ & $\frac{1}{7}$ &   &   &   &   &   &   &   \\
+1 &   &   &   & 1 & $\frac{90}{132}$ & $\frac{48}{90}$ & $\frac{20}{48}$ & $\frac{6}{20}$ & $\frac{1}{6}$ &   &   &   &   &   &   \\
+2 &   &   &   &   &   & 1 & $\frac{28}{42}$ & $\frac{14}{28}$ & $\frac{5}{14}$ & $\frac{1}{5}$ &   &   &   &   &   \\
+3 &   &   &   &   &   &   &   & 1 & $\frac{9}{14}$ & $\frac{4}{9}$ & $\frac{1}{4}$ &   &   &   &   \\
+4 &   &   &   &   &   &   &   &   &   & 1 & $\frac{3}{5}$ & $\frac{1}{3}$ &   &   &   \\
+5 &   &   &   &   &   &   &   &   &   &   &   & 1 & $\frac{1}{2}$ &   &   \\
+6 &   &   &   &   &   &   &   &   &   &   &   &   &   & 1 &   \\
+\hline
+\end{tabular}
+\caption{Catalan Pyramid. Represents probability of predicting shift at timestep t given there have already been r reduces.}
+\label{tab:catalan}
+\end{figure*}
 
 \section{Catalan Pyramid}
-\label{sec:catalan}
 
-For a sequence with N tokens, N*2 - 1 transitions, and N - 1 reduce transitions, can build a so-called ``Catalan Pyramid'' (Table~\ref{tab:catalan-pyramid}) using these 6 rules:
+Iteratively uniformly sampling transitions does not lead to uniforming sampling over binary trees in Shift Reduce Transition Based Parsing. Rather, the distribution of trees resembles a step function as seen in Figure~\ref{fig:notuniform}, which shows the frequency counts of binary trees over iterative random samples. To uniformly sample over binary trees, it's necessary to sample from a distribution representing the number of valid paths containing either Shift or Reduce as the next transition, and results in a smoother plot of frequency counts (Figure~\ref{fig:uniform}). A naive algorithm can come up with this distribution in exponential time by enumerating all possible trees of a given length, and filtering to relevant trees, but this approach is unusuable for trees with even a moderate number leaves. Fortunately, this distribution seems to have a closed form solution which can be recovered in linear time for any transition in any binary tree, and amortized constant time. We present the recursive algorithm in the following subsection and call the related distribution the Catalan Pyramid (Table~\ref{tab:catalan}) as each row contains fractions over the Catalan Numbers (which represent the count of binary trees with N leaves). A quick search did not turn up previous strategies for sampling uniformly over binary trees in transition based parsing.
+
+\subsection{Algorithm}
+
+For a sequence with N tokens, N*2 - 1 transitions, and N - 1 reduce transitions, can build a so-called ``Catalan Pyramid'' (Table~\ref{tab:catalan}) using these 6 rules:
 
 \begin{enumerate}
 \item
@@ -356,5 +296,27 @@ $row_{i,j,1} = row_{i,j,0} + row_{i-1,j,1}$
 \end{enumerate}
 
 These rules will build the non-zero fractions in each row of the table (0=numerator, 1=denominator), then padding the fractions as show with zeros will give you the probability of SHIFTing given that you are at timestep $t$ and have already REDUCEd $r$ times.
+
+\subsection{Linear Interpolation of Probabilities}
+
+The distribution from the Catalan Pyramid is not uniformly random at each time step, so the formula for temperature must be adjusted to take the proper distribution into account. Since temperature leads to a uniform distribution at its limit, it is a linear interpolation of the distribution based purely on the logits ($T = 1$) and the uniform distribution. We can recover the linear parameter directly to perform a similar interpolation between any distribution, including the one from the Catalan Pyramid.
+
+\begin{align}
+\sigma(\frac{\vec{x}}{T}) &= i \cdot \sigma(\vec{x}) + (1 - i) \cdot \sigma(0) \\
+i &= \frac{\sigma(\frac{\vec{x}}{T}) - \sigma(0)}{\sigma(\vec{x})}
+\end{align}
+
+
+\section*{Acknowledgments}
+
+Left out for anonymous submission.
+
+% \newpage
+
+% include your own bib file like this:
+%\bibliographystyle{acl}
+%\bibliography{acl2017}
+\bibliography{acl2017}
+\bibliographystyle{acl_natbib}
 
 \end{document}
