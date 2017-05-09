@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "listops"
-SWEEP_RUNS = 8
+NAME = "listops_05_09"
+SWEEP_RUNS = 16
 
 LIN = "LIN"
 EXP = "EXP"
@@ -18,8 +18,8 @@ SS_BASE = "SS_BASE"
 
 FLAGS = gflags.FLAGS
 
-gflags.DEFINE_string("training_data_path", "python/spinn/data/listops/train_d10.tsv", "")
-gflags.DEFINE_string("eval_data_path", "python/spinn/data/listops/test_d10.tsv", "")
+gflags.DEFINE_string("training_data_path", "spinn/data/listops/train_d10.tsv", "")
+gflags.DEFINE_string("eval_data_path", "spinn/data/listops/test_d10.tsv", "")
 gflags.DEFINE_string("log_path", "~/logs/spinn", "")
 gflags.DEFINE_string("metrics_path", "~/logs/spinn-runs", "")
 
@@ -42,16 +42,17 @@ FIXED_PARAMETERS = {
     "log_path": FLAGS.log_path,
     "metrics_path": FLAGS.metrics_path,
     "ckpt_path":  FLAGS.log_path,
-    "word_embedding_dim":   "32",
+    "word_embedding_dim":   "8",
     "model_dim":   "8",
     "seq_length":   "600",
     "eval_seq_length":  "600",
     "eval_interval_steps": "100",
     "statistics_interval_steps": "100",
     "use_internal_parser": "",
-    "batch_size":  "64",
+    "batch_size":  "32",
     "nouse_tracking_in_composition": "",
     "mlp_dim": "64",
+    "mlp_num_layers": "1",
     "transition_weight": "1",
     "embedding_keep_rate": "1.0",
     "semantic_classifier_keep_rate": "1.0",
@@ -59,21 +60,21 @@ FIXED_PARAMETERS = {
     "rl_reward": "xent",
     "rl_wake_sleep": "",
     "rl_valid": "",
-    "gpu": "0",
+    "norl_confidence_penalty": "",
     "num_samples": "5",
     "nolateral_tracking": "",
     "nopredict_use_cell": "",
+    "encode": "pass",
+    "norl_catalan": "",
+    "norl_wake_sleep": "",
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
     "learning_rate":      ("lr", EXP, 0.00003, 0.01),  # RNN likes higher, but below 009.
-    "l2_lambda":          ("l2", EXP, 8e-7, 1e-4),
-    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.25, 1.0),
-    "tracking_lstm_hidden_dim": ("tdim", EXP, 4, 16),
-    "rl_weight":  ("rlwt", EXP, 0.01, 1),
-    "rl_confidence_interval":   ("rlci", LIN, 25, 1000),
-    "rl_confidence_penalty":    ("rlcp", LIN, 2, 5),
+    "l2_lambda":          ("l2", EXP, 4e-7, 1e-4),
+    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.33, 1.0),
+    "rl_weight":  ("rlwt", EXP, 0.01, 1)
 }
 
 sweep_name = "sweep_" + NAME + "_" + \
