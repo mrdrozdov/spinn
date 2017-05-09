@@ -7,8 +7,6 @@
 #SBATCH -t24:00:00
 #SBATCH --qos=mhealth
 
-#PRINCE PRINCE_GPU_COMPUTE_MODE=default
-
 # Log what we're running and where.
 echo $SLURM_JOBID - `hostname` - $SPINN_FLAGS >> ~/spinn_machine_assignments.txt
 

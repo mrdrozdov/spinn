@@ -6,6 +6,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=12000
 #SBATCH -t24:00:00
+#SBATCH --qos=mhealth
 
 #PRINCE PRINCE_GPU_COMPUTE_MODE=default
 
