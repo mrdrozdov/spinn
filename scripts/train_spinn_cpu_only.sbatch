@@ -2,8 +2,8 @@
 
 # Generic job script for all experiments.
 
-#SBATCH -c4
-#SBATCH --mem=1000
+#SBATCH -c2
+#SBATCH --mem=2000
 #SBATCH -t24:00:00
 #SBATCH --qos=mhealth
 
