@@ -63,6 +63,10 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
 
 
 class RLSPINN(SPINN):
+    temperature = 1.0
+    catalan = True
+    eplison = 1.0
+
     def predict_actions(self, transition_output):
         transition_dist = F.softmax(transition_output / max(self.temperature, 1e-8)).data.cpu()
 
