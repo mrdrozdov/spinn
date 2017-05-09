@@ -427,6 +427,7 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
     composition_args.use_tracking_in_composition = FLAGS.use_tracking_in_composition
     composition_args.size = FLAGS.model_dim
     composition_args.tracker_size = FLAGS.tracking_lstm_hidden_dim
+    composition_args.use_internal_parser = FLAGS.use_internal_parser
     composition_args.transition_weight = FLAGS.transition_weight
     composition_args.wrap_items = lambda x: torch.cat(x, 0)
     composition_args.extract_h = lambda x: x

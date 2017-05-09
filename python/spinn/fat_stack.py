@@ -54,17 +54,16 @@ class Tracker(nn.Module):
         super(Tracker, self).__init__()
 
         # Initialize layers.
-        self.buf = Linear()(size, 4 * tracker_size, bias=True)
-        self.stack1 = Linear()(size, 4 * tracker_size, bias=False)
-        self.stack2 = Linear()(size, 4 * tracker_size, bias=False)
-
         if lateral_tracking:
+            self.buf = Linear()(size, 4 * tracker_size, bias=True)
+            self.stack1 = Linear()(size, 4 * tracker_size, bias=False)
+            self.stack2 = Linear()(size, 4 * tracker_size, bias=False)
             self.lateral = Linear(initializer=HeKaimingInitializer)(tracker_size, 4 * tracker_size, bias=False)
+            self.state_size = tracker_size
         else:
-            self.transform = Linear(initializer=HeKaimingInitializer)(4 * tracker_size, tracker_size)
+            self.state_size = size * 3
 
         self.lateral_tracking = lateral_tracking
-        self.state_size = tracker_size
 
         self.reset_state()
 
@@ -72,13 +71,13 @@ class Tracker(nn.Module):
         self.c = self.h = None
 
     def forward(self, top_buf, top_stack_1, top_stack_2):
-        tracker_inp = self.buf(top_buf)
-        tracker_inp += self.stack1(top_stack_1)
-        tracker_inp += self.stack2(top_stack_2)
-
-        batch_size = tracker_inp.size(0)
-
         if self.lateral_tracking:
+            tracker_inp = self.buf(top_buf)
+            tracker_inp += self.stack1(top_stack_1)
+            tracker_inp += self.stack2(top_stack_2)
+
+            batch_size = tracker_inp.size(0)
+
             if self.h is not None:
                 tracker_inp += self.lateral(self.h)
             if self.c is None:
@@ -92,8 +91,7 @@ class Tracker(nn.Module):
 
             return self.h, self.c
         else:
-            outp = self.transform(tracker_inp.clamp(min=0)).clamp(min=0)
-            return outp, None
+            return torch.cat([top_buf, top_stack_1, top_stack_2], 1), None
 
     @property
     def states(self):
@@ -121,12 +119,15 @@ class SPINN(nn.Module):
 
         # Reduce function for semantic composition.
         self.reduce = args.composition
-        if args.tracker_size is not None:
+        if args.tracker_size is not None or args.use_internal_parser:
             self.tracker = Tracker(args.size, args.tracker_size, args.lateral_tracking)
             if args.transition_weight is not None:
                 # TODO: Might be interesting to try a different network here.
                 self.predict_use_cell = predict_use_cell
-                tinp_size = args.tracker_size * 2 if predict_use_cell else args.tracker_size
+                if self.tracker.lateral_tracking:
+                    tinp_size = self.tracker.state_size * 2 if predict_use_cell else self.tracker.state_size
+                else:
+                    tinp_size = self.tracker.state_size
                 self.transition_net = nn.Linear(tinp_size, 2)
 
         self.choices = np.array([T_SHIFT, T_REDUCE], dtype=np.int32)
@@ -344,7 +345,7 @@ class SPINN(nn.Module):
 
                 if hasattr(self, 'transition_net'):
                     transition_inp = [tracker_h]
-                    if self.predict_use_cell:
+                    if self.tracker.lateral_tracking and self.predict_use_cell:
                         transition_inp += [tracker_c]
                     transition_inp = torch.cat(transition_inp, 1)
                     transition_output = self.transition_net(transition_inp)
