@@ -3,7 +3,7 @@
 # Generic job script for all experiments.
 
 #SBATCH -c2
-#SBATCH --mem=2000
+#SBATCH --mem=8000
 #SBATCH -t24:00:00
 #SBATCH --qos=mhealth
 
