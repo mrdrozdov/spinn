@@ -103,7 +103,7 @@ class Tracker(nn.Module):
 
             return self.h, self.c
         else:
-            return torch.cat([self.buf_ln(top_buf), self.stack1_ln(top_stack_1), self.stack2_ln(top_stack_2)], 1), None
+            return torch.cat([top_buf, top_stack_1, top_stack_2], 1), None
 
     @property
     def states(self):
@@ -132,7 +132,7 @@ class SPINN(nn.Module):
         # Reduce function for semantic composition.
         self.reduce = args.composition
         if args.tracker_size is not None or args.use_internal_parser:
-            self.tracker = Tracker(args.size, args.tracker_size, args.lateral_tracking, args.tracking_ln)
+            self.tracker = Tracker(args.size, args.tracker_size, lateral_tracking=args.lateral_tracking, tracking_ln=args.tracking_ln)
             if args.transition_weight is not None:
                 # TODO: Might be interesting to try a different network here.
                 self.predict_use_cell = predict_use_cell

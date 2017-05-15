@@ -442,9 +442,9 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
         composition_args.extract_c = lambda x: x.c
         composition_args.size = FLAGS.model_dim / 2
         composition = ReduceTreeLSTM(FLAGS.model_dim / 2,
-            FLAGS.tracking_lstm_hidden_dim,
-            FLAGS.use_tracking_in_composition,
-            FLAGS.composition_ln)
+            tracker_size=FLAGS.tracking_lstm_hidden_dim,
+            use_tracking_in_composition=FLAGS.use_tracking_in_composition,
+            composition_ln=FLAGS.composition_ln)
     elif FLAGS.reduce == "tanh":
         class ReduceTanh(nn.Module):
             def forward(self, lefts, rights, tracking=None):
