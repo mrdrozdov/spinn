@@ -543,18 +543,15 @@ class ReduceTreeLSTM(nn.Module):
             tracker is present.
     """
 
-    def __init__(self, size, tracker_size=None, use_tracking_in_composition=None, composition_ln=True):
+    def __init__(self, size, tracker_size=None, use_tracking_in_composition=None):
         super(ReduceTreeLSTM, self).__init__()
-        self.composition_ln = composition_ln
         self.left = Linear(initializer=HeKaimingInitializer)(size, 5 * size)
         self.right = Linear(initializer=HeKaimingInitializer)(size, 5 * size, bias=False)
-        if composition_ln:
-            self.left_ln = LayerNormalization(size)
-            self.right_ln = LayerNormalization(size)
+        self.left_ln = LayerNormalization(size)
+        self.right_ln = LayerNormalization(size)
         if tracker_size is not None and use_tracking_in_composition:
             self.track = Linear(initializer=HeKaimingInitializer)(tracker_size, 5 * size, bias=False)
-            if composition_ln:
-                self.track_ln = LayerNormalization(size)
+            self.track_ln = LayerNormalization(size)
 
     def forward(self, left_in, right_in, tracking=None):
         """Perform batched TreeLSTM composition.
@@ -585,19 +582,10 @@ class ReduceTreeLSTM(nn.Module):
         """
         left, right = bundle(left_in), bundle(right_in)
         tracking = bundle(tracking)
-
-        if self.composition_ln:
-            lstm_in = self.left(self.left_ln(left.h))
-            lstm_in += self.right(self.right_ln(right.h))
-        else:
-            lstm_in = self.left(left.h)
-            lstm_in += self.right(right.h) 
-
+        lstm_in = self.left(self.left_ln(left.h))
+        lstm_in += self.right(self.right_ln(right.h))
         if hasattr(self, 'track'):
-            if self.composition_ln:
-                lstm_in += self.track(self.track_ln(tracking.h))
-            else:
-                lstm_in += self.track(tracking.h)
+            lstm_in += self.track(self.track_ln(tracking.h))
         out = unbundle(treelstm(left.c, right.c, lstm_in))
         return out
 

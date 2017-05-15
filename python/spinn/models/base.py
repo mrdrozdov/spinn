@@ -258,13 +258,11 @@ def get_flags():
 
     # Tracker settings.
     gflags.DEFINE_integer("tracking_lstm_hidden_dim", None, "Set to none to avoid using tracker.")
-    gflags.DEFINE_boolean("tracking_ln", True, "When True, layer normalization is used in tracking.")
     gflags.DEFINE_float("transition_weight", None, "Set to none to avoid predicting transitions.")
     gflags.DEFINE_boolean("lateral_tracking", True,
         "Use previous tracker state as input for new state.")
     gflags.DEFINE_boolean("use_tracking_in_composition", True,
         "Use tracking lstm output as input for the reduce function.")
-    gflags.DEFINE_boolean("composition_ln", True, "When True, layer normalization is used in TreeLSTM composition.")
     gflags.DEFINE_boolean("predict_use_cell", True,
         "Use cell output as feature for transition net.")
 
@@ -426,7 +424,6 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
     # Composition Function.
     composition_args = Args()
     composition_args.lateral_tracking = FLAGS.lateral_tracking
-    composition_args.tracking_ln = FLAGS.tracking_ln
     composition_args.use_tracking_in_composition = FLAGS.use_tracking_in_composition
     composition_args.size = FLAGS.model_dim
     composition_args.tracker_size = FLAGS.tracking_lstm_hidden_dim
@@ -443,8 +440,7 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
         composition_args.size = FLAGS.model_dim / 2
         composition = ReduceTreeLSTM(FLAGS.model_dim / 2,
             FLAGS.tracking_lstm_hidden_dim,
-            FLAGS.use_tracking_in_composition,
-            FLAGS.composition_ln)
+            FLAGS.use_tracking_in_composition)
     elif FLAGS.reduce == "tanh":
         class ReduceTanh(nn.Module):
             def forward(self, lefts, rights, tracking=None):

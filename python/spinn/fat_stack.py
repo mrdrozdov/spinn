@@ -35,7 +35,6 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          transition_weight=FLAGS.transition_weight,
          use_sentence_pair=use_sentence_pair,
          lateral_tracking=FLAGS.lateral_tracking,
-         tracking_ln=FLAGS.tracking_ln,
          use_tracking_in_composition=FLAGS.use_tracking_in_composition,
          predict_use_cell=FLAGS.predict_use_cell,
          use_difference_feature=FLAGS.use_difference_feature,
@@ -51,7 +50,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
 
 class Tracker(nn.Module):
 
-    def __init__(self, size, tracker_size, lateral_tracking=True, tracking_ln=True):
+    def __init__(self, size, tracker_size, lateral_tracking=True):
         super(Tracker, self).__init__()
 
         # Initialize layers.
@@ -64,13 +63,11 @@ class Tracker(nn.Module):
         else:
             self.state_size = size * 3
 
-        if tracking_ln:
-            self.buf_ln = LayerNormalization(size)
-            self.stack1_ln = LayerNormalization(size)
-            self.stack2_ln = LayerNormalization(size)
+        self.buf_ln = LayerNormalization(size)
+        self.stack1_ln = LayerNormalization(size)
+        self.stack2_ln = LayerNormalization(size)
 
         self.lateral_tracking = lateral_tracking
-        self.tracking_ln = tracking_ln
 
         self.reset_state()
 
@@ -78,15 +75,10 @@ class Tracker(nn.Module):
         self.c = self.h = None
 
     def forward(self, top_buf, top_stack_1, top_stack_2):
-        if self.tracking_ln:
-            top_buf = self.buf_ln(top_buf)
-            top_stack_1 = self.stack1_ln(top_stack_1)
-            top_stack_2 = self.stack2_ln(top_stack_2)
-
         if self.lateral_tracking:
-            tracker_inp = self.buf(top_buf)
-            tracker_inp += self.stack1(top_stack_1)
-            tracker_inp += self.stack2(top_stack_2)
+            tracker_inp = self.buf(self.buf_ln(top_buf))
+            tracker_inp += self.stack1(self.stack1_ln(top_stack_1))
+            tracker_inp += self.stack2(self.stack2_ln(top_stack_2))
 
             batch_size = tracker_inp.size(0)
 
@@ -132,7 +124,7 @@ class SPINN(nn.Module):
         # Reduce function for semantic composition.
         self.reduce = args.composition
         if args.tracker_size is not None or args.use_internal_parser:
-            self.tracker = Tracker(args.size, args.tracker_size, args.lateral_tracking, args.tracking_ln)
+            self.tracker = Tracker(args.size, args.tracker_size, args.lateral_tracking)
             if args.transition_weight is not None:
                 # TODO: Might be interesting to try a different network here.
                 self.predict_use_cell = predict_use_cell
@@ -502,7 +494,6 @@ class BaseModel(nn.Module):
                  encode_bidirectional=None,
                  encode_num_layers=None,
                  lateral_tracking=None,
-                 tracking_ln=None,
                  use_tracking_in_composition=None,
                  predict_use_cell=None,
                  use_sentence_pair=False,
@@ -529,7 +520,6 @@ class BaseModel(nn.Module):
         self.initial_embeddings = initial_embeddings
         self.word_embedding_dim = word_embedding_dim
         self.model_dim = model_dim
-
         classifier_dropout_rate = 1. - classifier_keep_rate
 
         vocab = Vocab()
