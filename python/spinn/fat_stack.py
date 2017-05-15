@@ -13,7 +13,7 @@ import torch.optim as optim
 from spinn.util.blocks import LSTMState, Embed, MLP, Linear, LSTM
 from spinn.util.blocks import reverse_tensor
 from spinn.util.blocks import bundle, unbundle, to_cpu, to_gpu, treelstm, lstm
-from spinn.util.blocks import get_h, get_c
+from spinn.util.blocks import get_h, get_c, LayerNormalization
 from spinn.util.misc import Args, Vocab, Example
 from spinn.util.blocks import HeKaimingInitializer
 from spinn.util.catalan import ShiftProbabilities
@@ -42,7 +42,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
          mlp_dim=FLAGS.mlp_dim,
          num_mlp_layers=FLAGS.num_mlp_layers,
-         mlp_bn=FLAGS.mlp_bn,
+         mlp_ln=FLAGS.mlp_ln,
          context_args=context_args,
          composition_args=composition_args,
         )
@@ -63,6 +63,10 @@ class Tracker(nn.Module):
         else:
             self.state_size = size * 3
 
+        self.buf_ln = LayerNormalization(size)
+        self.stack1_ln = LayerNormalization(size)
+        self.stack2_ln = LayerNormalization(size)
+
         self.lateral_tracking = lateral_tracking
 
         self.reset_state()
@@ -72,9 +76,9 @@ class Tracker(nn.Module):
 
     def forward(self, top_buf, top_stack_1, top_stack_2):
         if self.lateral_tracking:
-            tracker_inp = self.buf(top_buf)
-            tracker_inp += self.stack1(top_stack_1)
-            tracker_inp += self.stack2(top_stack_2)
+            tracker_inp = self.buf(self.buf_ln(top_buf))
+            tracker_inp += self.stack1(self.stack1_ln(top_stack_1))
+            tracker_inp += self.stack2(self.stack2_ln(top_stack_2))
 
             batch_size = tracker_inp.size(0)
 
@@ -91,7 +95,7 @@ class Tracker(nn.Module):
 
             return self.h, self.c
         else:
-            return torch.cat([top_buf, top_stack_1, top_stack_2], 1), None
+            return torch.cat([self.buf_ln(top_buf), self.stack1_ln(top_stack_1), self.stack2_ln(top_stack_2)], 1), None
 
     @property
     def states(self):
@@ -497,7 +501,7 @@ class BaseModel(nn.Module):
                  use_product_feature=False,
                  mlp_dim=None,
                  num_mlp_layers=None,
-                 mlp_bn=None,
+                 mlp_ln=None,
                  classifier_keep_rate=None,
                  context_args=None,
                  composition_args=None,
@@ -528,7 +532,7 @@ class BaseModel(nn.Module):
         # Build classiifer.
         features_dim = self.get_features_dim()
         self.mlp = MLP(features_dim, mlp_dim, num_classes,
-            num_mlp_layers, mlp_bn, classifier_dropout_rate)
+            num_mlp_layers, mlp_ln, classifier_dropout_rate)
 
         self.embedding_dropout_rate = 1. - embedding_keep_rate
 

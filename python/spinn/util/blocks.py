@@ -211,6 +211,27 @@ def lstm(c_prev, x):
     return c, h
 
 
+class LayerNormalization(nn.Module):
+    # From: https://discuss.pytorch.org/t/lstm-with-layer-normalization/2150
+
+    def __init__(self, hidden_size, eps=1e-5):
+        super(LayerNormalization, self).__init__()
+        
+        self.eps = eps
+        self.hidden_size = hidden_size
+        self.a2 = nn.Parameter(torch.ones(1, hidden_size), requires_grad=True)
+        self.b2 = nn.Parameter(torch.zeros(1, hidden_size), requires_grad=True)
+        
+    def forward(self, z):
+        mu = torch.mean(z)
+        sigma = torch.std(z)
+
+        ln_out = (z - mu.expand_as(z)) / (sigma.expand_as(z) + self.eps)
+
+        ln_out = ln_out * self.a2.expand_as(ln_out) + self.b2.expand_as(ln_out)
+        return ln_out
+
+
 class ReduceTreeGRU(nn.Module):
     """
     Computes the following TreeGRU (x is optional):
@@ -231,6 +252,8 @@ class ReduceTreeGRU(nn.Module):
     h = (1-z) * hprev + z * c
     or:
     h = hprev + z * (c - hprev)
+
+    # TODO: Add layer normalization.
 
     """
 
@@ -524,8 +547,11 @@ class ReduceTreeLSTM(nn.Module):
         super(ReduceTreeLSTM, self).__init__()
         self.left = Linear(initializer=HeKaimingInitializer)(size, 5 * size)
         self.right = Linear(initializer=HeKaimingInitializer)(size, 5 * size, bias=False)
+        self.left_ln = LayerNormalization(size)
+        self.right_ln = LayerNormalization(size)
         if tracker_size is not None and use_tracking_in_composition:
             self.track = Linear(initializer=HeKaimingInitializer)(tracker_size, 5 * size, bias=False)
+            self.track_ln = LayerNormalization(size)
 
     def forward(self, left_in, right_in, tracking=None):
         """Perform batched TreeLSTM composition.
@@ -556,45 +582,46 @@ class ReduceTreeLSTM(nn.Module):
         """
         left, right = bundle(left_in), bundle(right_in)
         tracking = bundle(tracking)
-        lstm_in = self.left(left.h)
-        lstm_in += self.right(right.h)
+        lstm_in = self.left(self.left_ln(left.h))
+        lstm_in += self.right(self.right_ln(right.h))
         if hasattr(self, 'track'):
-            lstm_in += self.track(tracking.h)
+            lstm_in += self.track(self.track_ln(tracking.h))
         out = unbundle(treelstm(left.c, right.c, lstm_in))
         return out
 
 
 class MLP(nn.Module):
-    def __init__(self, mlp_input_dim, mlp_dim, num_classes, num_mlp_layers, mlp_bn,
+    def __init__(self, mlp_input_dim, mlp_dim, num_classes, num_mlp_layers, mlp_ln,
                  classifier_dropout_rate=0.0):
         super(MLP, self).__init__()
 
         self.num_mlp_layers = num_mlp_layers
-        self.mlp_bn = mlp_bn
+        self.mlp_ln = mlp_ln
         self.classifier_dropout_rate = classifier_dropout_rate
 
         features_dim = mlp_input_dim
 
-        if mlp_bn:
-            self.bn_inp = nn.BatchNorm1d(features_dim)
+        if mlp_ln:
+            self.ln_inp = LayerNormalization(mlp_input_dim)
+
         for i in range(num_mlp_layers):
             setattr(self, 'l{}'.format(i), Linear(initializer=HeKaimingInitializer)(features_dim, mlp_dim))
-            if mlp_bn:
-                setattr(self, 'bn{}'.format(i), nn.BatchNorm1d(mlp_dim))
+            if mlp_ln:
+                setattr(self, 'ln{}'.format(i), LayerNormalization(mlp_dim))
             features_dim = mlp_dim
         setattr(self, 'l{}'.format(num_mlp_layers), Linear(initializer=HeKaimingInitializer)(features_dim, num_classes))
 
     def forward(self, h):
-        if self.mlp_bn:
-            h = self.bn_inp(h)
+        if self.mlp_ln:
+            h = self.ln_inp(h)
         h = F.dropout(h, self.classifier_dropout_rate, training=self.training)
         for i in range(self.num_mlp_layers):
             layer = getattr(self, 'l{}'.format(i))
             h = layer(h)
             h = F.relu(h)
-            if self.mlp_bn:
-                bn = getattr(self, 'bn{}'.format(i))
-                h = bn(h)
+            if self.mlp_ln:
+                ln = getattr(self, 'ln{}'.format(i))
+                h = ln(h)
             h = F.dropout(h, self.classifier_dropout_rate, training=self.training)
         layer = getattr(self, 'l{}'.format(self.num_mlp_layers))
         y = layer(h)

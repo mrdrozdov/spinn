@@ -32,7 +32,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
          mlp_dim=FLAGS.mlp_dim,
          num_mlp_layers=FLAGS.num_mlp_layers,
-         mlp_bn=FLAGS.mlp_bn,
+         mlp_ln=FLAGS.mlp_ln,
          context_args=context_args,
         )
 
@@ -49,7 +49,7 @@ class BaseModel(nn.Module):
                  classifier_keep_rate=None,
                  mlp_dim=None,
                  num_mlp_layers=None,
-                 mlp_bn=None,
+                 mlp_ln=None,
                  use_sentence_pair=False,
                  context_args=None,
                  **kwargs
@@ -73,7 +73,7 @@ class BaseModel(nn.Module):
         mlp_input_dim = model_dim * 2 if use_sentence_pair else model_dim
 
         self.mlp = MLP(mlp_input_dim, mlp_dim, num_classes,
-            num_mlp_layers, mlp_bn, classifier_dropout_rate)
+            num_mlp_layers, mlp_ln, classifier_dropout_rate)
 
         self.encode = context_args.encoder
         self.reshape_input = context_args.reshape_input

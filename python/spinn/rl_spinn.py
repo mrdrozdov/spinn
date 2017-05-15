@@ -46,7 +46,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          use_difference_feature=FLAGS.use_difference_feature,
          use_product_feature=FLAGS.use_product_feature,
          num_mlp_layers=FLAGS.num_mlp_layers,
-         mlp_bn=FLAGS.mlp_bn,
+         mlp_ln=FLAGS.mlp_ln,
          rl_mu=FLAGS.rl_mu,
          rl_epsilon=FLAGS.rl_epsilon,
          rl_baseline=FLAGS.rl_baseline,
@@ -127,7 +127,7 @@ class BaseModel(_BaseModel):
             self.v_rnn = nn.LSTM(self.input_dim, self.v_dim, num_layers=1, batch_first=True)
             self.v_mlp = MLP(self.v_dim,
                 mlp_dim=1024, num_classes=1, num_mlp_layers=2,
-                mlp_bn=True, classifier_dropout_rate=0.1)
+                mlp_ln=True, classifier_dropout_rate=0.1)
 
         self.register_buffer('baseline', torch.FloatTensor([0.0]))
 

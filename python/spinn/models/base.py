@@ -296,7 +296,7 @@ def get_flags():
     # MLP settings.
     gflags.DEFINE_integer("mlp_dim", 1024, "Dimension of intermediate MLP layers.")
     gflags.DEFINE_integer("num_mlp_layers", 2, "Number of MLP layers.")
-    gflags.DEFINE_boolean("mlp_bn", True, "When True, batch normalization is used between MLP layers.")
+    gflags.DEFINE_boolean("mlp_ln", True, "When True, layer normalization is used between MLP layers.")
     gflags.DEFINE_float("semantic_classifier_keep_rate", 0.9,
         "Used for dropout in the semantic task classifier.")
 
