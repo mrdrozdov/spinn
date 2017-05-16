@@ -258,13 +258,13 @@ def get_flags():
 
     # Tracker settings.
     gflags.DEFINE_integer("tracking_lstm_hidden_dim", None, "Set to none to avoid using tracker.")
-    gflags.DEFINE_boolean("tracking_ln", True, "When True, layer normalization is used in tracking.")
+    gflags.DEFINE_boolean("tracking_ln", False, "When True, layer normalization is used in tracking.")
     gflags.DEFINE_float("transition_weight", None, "Set to none to avoid predicting transitions.")
     gflags.DEFINE_boolean("lateral_tracking", True,
         "Use previous tracker state as input for new state.")
     gflags.DEFINE_boolean("use_tracking_in_composition", True,
         "Use tracking lstm output as input for the reduce function.")
-    gflags.DEFINE_boolean("composition_ln", True, "When True, layer normalization is used in TreeLSTM composition.")
+    gflags.DEFINE_boolean("composition_ln", False, "When True, layer normalization is used in TreeLSTM composition.")
     gflags.DEFINE_boolean("predict_use_cell", True,
         "Use cell output as feature for transition net.")
 
@@ -298,7 +298,7 @@ def get_flags():
     # MLP settings.
     gflags.DEFINE_integer("mlp_dim", 1024, "Dimension of intermediate MLP layers.")
     gflags.DEFINE_integer("num_mlp_layers", 2, "Number of MLP layers.")
-    gflags.DEFINE_boolean("mlp_ln", True, "When True, layer normalization is used between MLP layers.")
+    gflags.DEFINE_boolean("mlp_ln", False, "When True, layer normalization is used between MLP layers.")
     gflags.DEFINE_float("semantic_classifier_keep_rate", 0.9,
         "Used for dropout in the semantic task classifier.")
 
