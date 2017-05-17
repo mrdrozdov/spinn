@@ -26,7 +26,7 @@ export IFS=';'
 for SUB_FLAGS in $SPINN_FLAGS
 do
 	unset IFS
-	python -m $MODEL  --noshow_progress_bar $SUB_FLAGS &
+	python -m $MODEL --noshow_progress_bar $SUB_FLAGS &
 done
 
 wait
