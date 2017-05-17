@@ -1,17 +1,19 @@
 import random
+import numpy as np
 
 MIN = "[MIN"
 MAX = "[MAX"
+MED = "[MED"
 FIRST = "[FIRST"
 LAST = "[LAST"
 END = "]"
 
-OPERATORS = [MIN, MAX] # , FIRST, LAST] 
+OPERATORS = [MIN, MAX, MED] # , FIRST, LAST] 
 VALUES = range(10)
 
-VALUE_P = 0.37
-MAX_ARGS = 3
-MAX_DEPTH = 40
+VALUE_P = 0.3
+MAX_ARGS = 5
+MAX_DEPTH = 20
 
 DATA_POINTS = 100000
 
@@ -37,13 +39,15 @@ def generate_tree(depth):
         t = (t, END)
     return t
 
-def to_string(t):
+def to_string(t, parens=True):
     if isinstance(t, str):
         return t
     elif isinstance(t, int):
         return str(t)
     else:
-        return '( ' + to_string(t[0]) + ' ' + to_string(t[1]) + ' )'
+        if parens:
+            return to_string(t[0]) + ' ' + to_string(t[1])
+            return '( ' + to_string(t[0]) + ' ' + to_string(t[1]) + ' )'
 
 def to_value(t):
     if not isinstance(t, tuple):
@@ -51,18 +55,20 @@ def to_value(t):
     l = to_value(t[0])
     r = to_value(t[1])
     if l in OPERATORS:  # Create an unsaturated function.
-        return (l, r)
+        return (l, [r])
     elif r == END:  # l must be an unsaturated function.
-        return l[1]
-    elif isinstance(l, tuple):  # We've hit an unsaturated function and an argument.
         if l[0] == MIN:
-            return (l[0], min(l[1], r))
+            return min(l[1])
         elif l[0] == MAX:
-            return (l[0], max(l[1], r))
+            return max(l[1])
         elif l[0] == FIRST:
-            return (l[0], l[1])
+            return l[1][0]
         elif l[0] == LAST:
-            return (l[0], r)
+            return l[1][-1]
+        elif l[0] == MED:
+            return int(np.median(l[1]))
+    elif isinstance(l, tuple):  # We've hit an unsaturated function and an argument.
+        return (l[0], l[1] + [r])
 
 data = set()
 while len(data) < DATA_POINTS:
