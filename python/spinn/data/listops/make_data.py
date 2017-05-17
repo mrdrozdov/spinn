@@ -11,7 +11,7 @@ END = "]"
 OPERATORS = [MIN, MAX, MED] # , FIRST, LAST] 
 VALUES = range(10)
 
-VALUE_P = 0.3
+VALUE_P = 0.25
 MAX_ARGS = 5
 MAX_DEPTH = 20
 
@@ -46,7 +46,6 @@ def to_string(t, parens=True):
         return str(t)
     else:
         if parens:
-            return to_string(t[0]) + ' ' + to_string(t[1])
             return '( ' + to_string(t[0]) + ' ' + to_string(t[1]) + ' )'
 
 def to_value(t):
