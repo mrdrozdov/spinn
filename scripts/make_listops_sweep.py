@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "listops"
-SWEEP_RUNS = 8
+NAME = "listops_05_18"
+SWEEP_RUNS = 6
 
 LIN = "LIN"
 EXP = "EXP"
@@ -18,8 +18,8 @@ SS_BASE = "SS_BASE"
 
 FLAGS = gflags.FLAGS
 
-gflags.DEFINE_string("training_data_path", "spinn/data/listops/train.tsv", "")
-gflags.DEFINE_string("eval_data_path", "spinn/data/listops/test.tsv", "")
+gflags.DEFINE_string("training_data_path", "spinn/data/listops/train_d20a.tsv", "")
+gflags.DEFINE_string("eval_data_path", "spinn/data/listops/test_d20a.tsv", "")
 gflags.DEFINE_string("log_path", "/home/sb6065/logs", "")
 
 FLAGS(sys.argv)
@@ -41,28 +41,33 @@ FIXED_PARAMETERS = {
     "log_path": FLAGS.log_path,
     "metrics_path": FLAGS.log_path,
     "ckpt_path":  FLAGS.log_path,
-    "word_embedding_dim":   "32",
-    "model_dim":   "32",
-    "seq_length":   "200",
-    "eval_seq_length":  "200",
+    "word_embedding_dim":   "24",
+    "model_dim":   "24",
+    "seq_length":   "100",
+    "eval_seq_length":  "3000",
     "eval_interval_steps": "100",
     "statistics_interval_steps": "100",
     "use_internal_parser": "",
     "batch_size":  "64",
     "nouse_tracking_in_composition": "",
-    "mlp_dim": "64"
+    "nolateral_tracking": "",
+    "encode": "pass",
+    "mlp_dim": "16",
+    "num_mlp_layers": "2",
+    "use_internal_parser": "",
+    "transition_weight": "0.1",
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "learning_rate":      ("lr", EXP, 0.00003, 0.01),  # RNN likes higher, but below 009.
+    "learning_rate":      ("lr", EXP, 0.0006, 0.06),  # RNN likes higher, but below 009.
     "l2_lambda":          ("l2", EXP, 8e-7, 1e-4),
-    "semantic_classifier_keep_rate": ("skr", LIN, 1.0, 1.0),  # NB: Keep rates may depend considerably on dims.
-    "embedding_keep_rate": ("ekr", LIN, 1.0, 1.0),
-    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.25, 1.0),
-    "tracking_lstm_hidden_dim": ("tdim", EXP, 4, 16),
+    "semantic_classifier_keep_rate": ("skr", LIN, 0.8, 1.0),  # NB: Keep rates may depend considerably on dims.
+    "embedding_keep_rate": ("ekr", LIN, 0.8, 1.0),
+    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.33, 1.0),
+#    "tracking_lstm_hidden_dim": ("tdim", EXP, 4, 16),
 #    "rl_weight":  ("rlwt", EXP, 0.000001, 0.0009),
-    "transition_weight":  ("trwt", EXP, 0.3, 3.0),
+#    "transition_weight":  ("trwt", EXP, 0.3, 3.0),
 }
 
 sweep_name = "sweep_" + NAME + "_" + \
@@ -117,5 +122,5 @@ for run_id in range(SWEEP_RUNS):
     if NYU_NON_PBS:
         print "cd spinn/python; python2.7 -m spinn.models.fat_classifier " + flags
     else:
-        print "SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh"
+        print "SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_cpu_only.sh"
     print
