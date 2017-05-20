@@ -35,14 +35,14 @@ FLAGS(sys.argv)
 
 FIXED_PARAMETERS = {
     "data_type":     "listops",
-    "model_type":      "SPINN",
+    "model_type":      "RNN",
     "training_data_path":    FLAGS.training_data_path,
     "eval_data_path":    FLAGS.eval_data_path,
     "log_path": FLAGS.log_path,
     "metrics_path": FLAGS.log_path,
     "ckpt_path":  FLAGS.log_path,
-    "word_embedding_dim":   "24",
-    "model_dim":   "24",
+    "word_embedding_dim":   "16",
+    "model_dim":   "16",
     "seq_length":   "100",
     "eval_seq_length":  "3000",
     "eval_interval_steps": "100",
@@ -64,7 +64,7 @@ SWEEP_PARAMETERS = {
     "l2_lambda":          ("l2", EXP, 8e-7, 1e-4),
     "semantic_classifier_keep_rate": ("skr", LIN, 0.8, 1.0),  # NB: Keep rates may depend considerably on dims.
     "embedding_keep_rate": ("ekr", LIN, 0.8, 1.0),
-    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.33, 1.0),
+    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.5, 1.0),
 #    "tracking_lstm_hidden_dim": ("tdim", EXP, 4, 16),
 #    "rl_weight":  ("rlwt", EXP, 0.000001, 0.0009),
 #    "transition_weight":  ("trwt", EXP, 0.3, 3.0),
@@ -122,5 +122,5 @@ for run_id in range(SWEEP_RUNS):
     if NYU_NON_PBS:
         print "cd spinn/python; python2.7 -m spinn.models.fat_classifier " + flags
     else:
-        print "SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_cpu_only.sh"
+        print "SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh"
     print
