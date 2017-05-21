@@ -21,8 +21,8 @@ def train_accumulate(model, data_manager, A, batch):
 
     # Accumulate stats for transition accuracy.
     if has_transition_loss:
-        preds = [m["t_preds"] for m in model.spinn.memories if m.get('t_preds', None) is not None]
-        truth = [m["t_given"] for m in model.spinn.memories if m.get('t_given', None) is not None]
+        preds = [m["t_preds"] for m in model.spinn.memories if 't_preds' in m]
+        truth = [m["t_given"] for m in model.spinn.memories if 't_given' in m]
         A.add('preds', preds)
         A.add('truth', truth)
 
@@ -181,8 +181,8 @@ def eval_accumulate(model, data_manager, A, batch):
 
     # Accumulate stats for transition accuracy.
     if has_transition_loss:
-        preds = [m["t_preds"] for m in model.spinn.memories if m.get('t_preds', None) is not None]
-        truth = [m["t_given"] for m in model.spinn.memories if m.get('t_given', None) is not None]
+        preds = [m["t_preds"] for m in model.spinn.memories if 't_preds' in m]
+        truth = [m["t_given"] for m in model.spinn.memories if 't_given' in m]
         A.add('preds', preds)
         A.add('truth', truth)
 

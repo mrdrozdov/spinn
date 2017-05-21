@@ -240,9 +240,9 @@ class SPINN(nn.Module):
         else:
             raise NotImplementedError
 
-        t_preds = np.concatenate([m['t_preds'] for m in self.memories if m.get('t_preds', None) is not None])
+        t_preds = np.concatenate([m['t_preds'] for m in self.memories if 't_preds' in m])
         t_preds = torch.from_numpy(t_preds).long()
-        t_logits = torch.cat([m['t_logits'] for m in self.memories if m.get('t_logits', None) is not None], 0).data.cpu()
+        t_logits = torch.cat([m['t_logits'] for m in self.memories if 't_logits' in m], 0).data.cpu()
         t_logits = torch.cat([t_logits, torch.zeros(t_logits.size(0), 1)], 1)
         t_strength = torch.gather(t_logits, 1, t_preds.view(-1, 1))
 
@@ -450,10 +450,10 @@ class SPINN(nn.Module):
         # ==========
 
         if hasattr(self, 'tracker') and hasattr(self, 'transition_net'):
-            t_preds = np.concatenate([m['t_preds'] for m in self.memories if m.get('t_preds', None) is not None])
-            t_given = np.concatenate([m['t_given'] for m in self.memories if m.get('t_given', None) is not None])
-            t_mask = np.concatenate([m['t_mask'] for m in self.memories if m.get('t_mask', None) is not None])
-            t_logits = torch.cat([m['t_logits'] for m in self.memories if m.get('t_logits', None) is not None], 0)
+            t_preds = np.concatenate([m['t_preds'] for m in self.memories if 't_preds' in m])
+            t_given = np.concatenate([m['t_given'] for m in self.memories if 't_given' in m])
+            t_mask = np.concatenate([m['t_mask'] for m in self.memories if 't_mask' in m])
+            t_logits = torch.cat([m['t_logits'] for m in self.memories if 't_logits' in m], 0)
 
             # We compute accuracy and loss after all transitions have complete,
             # since examples can have different lengths when not using skips.
