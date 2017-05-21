@@ -267,7 +267,9 @@ class BaseModel(_BaseModel):
         else:
             entropy = 0.0
 
-        policy_loss = -1. * torch.sum(log_p_action * to_gpu(Variable(advantage, volatile=log_p_action.volatile)) + entropy * self.rl_entropy_beta)
+        # NOTE: Not sure I understand why entropy is inside this multiplication. Investigate?
+        policy_losses = log_p_action * to_gpu(Variable(advantage, volatile=log_p_action.volatile) + entropy * self.rl_entropy_beta)
+        policy_loss = -1. * torch.sum(policy_losses)
         policy_loss /= log_p_action.size(0)
         policy_loss *= self.rl_weight
 
