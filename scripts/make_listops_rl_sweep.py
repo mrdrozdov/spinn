@@ -9,11 +9,12 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "05_20"
+NAME = "05_21"
 SWEEP_RUNS = 16
 
 LIN = "LIN"
 EXP = "EXP"
+BOOL = "BOOL"
 SS_BASE = "SS_BASE"
 
 FLAGS = gflags.FLAGS
@@ -58,13 +59,10 @@ FIXED_PARAMETERS = {
     "semantic_classifier_keep_rate": "1.0",
     "rl_baseline": "greedy",
     "rl_reward": "xent",
-    "rl_wake_sleep": "",
     "rl_valid": "",
     "num_samples": "5",
     "nolateral_tracking": "",
     "encode": "pass",
-    "norl_catalan": "",
-    "norl_wake_sleep": "",
 }
 
 # Tunable parameters.
@@ -73,6 +71,8 @@ SWEEP_PARAMETERS = {
     "learning_rate":      ("lr", EXP, 0.0006, 0.06),  # RNN likes higher, but below 009.
     "l2_lambda":          ("l2", EXP, 8e-7, 1e-4),
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.3, 1.0),
+    "rl_catalan": ("cata", BOOL, None, None),
+    "rl_wake_sleep": ("ws", BOOL, None, None),
 }
 
 sweep_name = "sweep_" + NAME + "_" + \
@@ -101,6 +101,8 @@ for run_id in range(SWEEP_RUNS):
             lmn = np.log(mn)
             lmx = np.log(mx)
             sample = np.exp(lmn + (lmx - lmn) * r)
+        elif t == BOOL:
+            sample = r > 0.5
         elif t==SS_BASE:
             lmn = np.log(mn)
             lmx = np.log(mx)
@@ -111,16 +113,21 @@ for run_id in range(SWEEP_RUNS):
         if isinstance(mn, int):
             sample = int(round(sample, 0))
             val_disp = str(sample)
-        else: 
+            params[param] = sample
+        elif isinstance(mn, float):
             val_disp = "%.2g" % sample
-
-        params[param] = sample
+            params[param] = sample
+        else:
+            val_disp = str(int(sample))
+            if not sample:
+                params['no' + param] = ''
+            else:
+                params[param] = ''
         name += "-" + config[0] + val_disp
 
     flags = ""
     for param in params:
         value = params[param]
-        val_str = ""
         flags += " --" + param + " " + str(value)
 
     flags += " --experiment_name " + name
