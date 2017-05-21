@@ -242,9 +242,9 @@ class SPINN(nn.Module):
 
         t_preds = np.concatenate([m['t_preds'] for m in self.memories if 't_preds' in m])
         t_preds = torch.from_numpy(t_preds).long()
-        t_logits = torch.cat([m['t_logits'] for m in self.memories if 't_logits' in m], 0).data.cpu()
-        t_logits = torch.cat([t_logits, torch.zeros(t_logits.size(0), 1)], 1)
-        t_strength = torch.gather(t_logits, 1, t_preds.view(-1, 1))
+        t_logprobs = torch.cat([m['t_logprobs'] for m in self.memories if 't_logprobs' in m], 0).data.cpu()
+        t_logprobs = torch.cat([t_logprobs, torch.zeros(t_logprobs.size(0), 1)], 1)
+        t_strength = torch.gather(t_logprobs, 1, t_preds.view(-1, 1))
 
         _transitions = [m[source].reshape(1, -1) for m in self.memories if m.get(source, None) is not None]
         transitions = np.concatenate(_transitions).T
@@ -368,7 +368,7 @@ class SPINN(nn.Module):
                     # ===============
 
                     # Distribution of transitions use to calculate transition loss.
-                    self.memory["t_logits"] = F.log_softmax(transition_output)
+                    self.memory["t_logprobs"] = F.log_softmax(transition_output)
 
                     # Given transitions.
                     self.memory["t_given"] = transitions
@@ -453,7 +453,7 @@ class SPINN(nn.Module):
             t_preds = np.concatenate([m['t_preds'] for m in self.memories if 't_preds' in m])
             t_given = np.concatenate([m['t_given'] for m in self.memories if 't_given' in m])
             t_mask = np.concatenate([m['t_mask'] for m in self.memories if 't_mask' in m])
-            t_logits = torch.cat([m['t_logits'] for m in self.memories if 't_logits' in m], 0)
+            t_logprobs = torch.cat([m['t_logprobs'] for m in self.memories if 't_logprobs' in m], 0)
 
             # We compute accuracy and loss after all transitions have complete,
             # since examples can have different lengths when not using skips.
@@ -468,8 +468,8 @@ class SPINN(nn.Module):
             # Transition Loss.
             index = to_gpu(Variable(torch.from_numpy(np.arange(t_mask.shape[0])[t_mask])).long())
             select_t_given = to_gpu(Variable(torch.from_numpy(t_given[t_mask]), volatile=not self.training).long())
-            select_t_logits = torch.index_select(t_logits, 0, index)
-            transition_loss = nn.NLLLoss()(select_t_logits, select_t_given) * self.transition_weight
+            select_t_logprobs = torch.index_select(t_logprobs, 0, index)
+            transition_loss = nn.NLLLoss()(select_t_logprobs, select_t_given) * self.transition_weight
 
             self.n_invalid = (invalid_count > 0).sum()
             self.invalid = self.n_invalid / float(batch_size)

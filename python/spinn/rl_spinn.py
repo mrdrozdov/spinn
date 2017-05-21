@@ -215,7 +215,7 @@ class BaseModel(_BaseModel):
         """
         t_preds  = 200...111 (flattened predictions from sub_batches 1...N)
         t_mask   = 011...111 (binary mask, selecting non-skips only)
-        t_logits = (B*N)xC (tensor of sub_batch_size * sub_num_batches x transition classes)
+        t_logprobs = (B*N)xC (tensor of sub_batch_size * sub_num_batches x transition classes)
         a_index  = 011...(N-1)(N-1)(N-1) (masked sub_batch_indices for each transition)
         t_index  = 013...(B*N-3)(B*N-2)(B*N-1) (masked indices across all sub_batches)
         """
@@ -225,12 +225,13 @@ class BaseModel(_BaseModel):
         t_preds = np.concatenate([m['t_preds'] for m in self.spinn.memories if 't_preds' in m])
         t_mask = np.concatenate([m['t_mask'] for m in self.spinn.memories if 't_mask' in m])
         t_valid_mask = np.concatenate([m['t_valid_mask'] for m in self.spinn.memories if 't_mask' in m])
-        t_logits = torch.cat([m['t_logits'] for m in self.spinn.memories if 't_logits' in m], 0)
+        t_logprobs = torch.cat([m['t_logprobs'] for m in self.spinn.memories if 't_logprobs' in m], 0)
 
         if self.rl_valid:
             t_mask = np.logical_and(t_mask, t_valid_mask)
 
         batch_size = advantage.size(0)
+
         seq_length = t_preds.shape[0] / batch_size
 
         a_index = np.arange(batch_size)
@@ -254,15 +255,15 @@ class BaseModel(_BaseModel):
         advantage = torch.index_select(advantage, 0, a_index)
 
         # Filter logits.
-        t_logits = torch.index_select(t_logits, 0, t_index)
+        t_logprobs = torch.index_select(t_logprobs, 0, t_index)
 
         actions = to_gpu(Variable(torch.from_numpy(t_preds[t_mask]).long().view(-1, 1), volatile=not self.training))
-        log_p_action = torch.gather(t_logits, 1, actions)
+        log_p_action = torch.gather(t_logprobs, 1, actions)
 
         # source: https://github.com/miyosuda/async_deep_reinforce/issues/1
         if self.rl_entropy:
             # TODO: Taking exp of a log is not the best way to get the initial probability...
-            entropy = - (t_logits * torch.exp(t_logits)).sum(1)
+            entropy = - (t_logprobs * torch.exp(t_logprobs)).sum(1)
         else:
             entropy = 0.0
 
