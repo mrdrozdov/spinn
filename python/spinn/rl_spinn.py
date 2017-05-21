@@ -69,11 +69,12 @@ class RLSPINN(SPINN):
 
     def predict_actions(self, transition_output):
         transition_dist = F.softmax(transition_output / max(self.temperature, 1e-8)).data.cpu()
+        print transition_dist
 
         if self.training:
-            # Interpolate between the uniform random distrubition of binary trees
-            # and the distribution from the transition_net's softmax.
             if self.catalan:
+                # Interpolate between the uniform random distrubition of binary trees
+                # and the distribution from the transition_net's softmax.
                 A = F.softmax(transition_output).data[:,0].cpu()
                 B = torch.zeros(A.size()).fill_(0.5)
                 p = transition_dist[:,0]
@@ -86,8 +87,8 @@ class RLSPINN(SPINN):
             transitions_sampled = torch.multinomial(transition_dist, 1).view(-1).numpy()
             transition_preds = transitions_sampled
         else:
-            transition_greedy = transition_dist.cpu().numpy().argmax(axis=1)
-            transition_preds = transition_greedy
+            # Greedy prediction
+            transition_preds = transition_dist.cpu().numpy().argmax(axis=1)
         return transition_preds
 
 
