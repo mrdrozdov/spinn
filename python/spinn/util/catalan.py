@@ -1,16 +1,32 @@
-def interpolate(p, softmax, original, desired):
+def interpolate(p_temp, p, original, desired):
     """
-    interpolate(p, softmax, original, desired)
+    interpolate(p_temp, p, original, desired)
 
     Is used to recalculate temperature in a way that high temperature
     converges at a desired non-uniform value. This operates under the assumption
     that a probability from a "temperature-like" equation can be represented as a
-    fraction of the equation when temperature is 1 (`softmax`), and when temperature
+    fraction of the equation when temperature is 1 (`p`), and when temperature
     is at some other value (`original`). One simple other value to use is the point of
     convergence, which is uniform over the inputs.
+
+    Parameters
+    ----------
+
+    p_temp : FloatTensor
+        The output of sigmoid or softmax using temperature.
+    p : FloatTensor
+        The output of sigmoid or softmax without temperature or when t = 1.
+    original : FloatTensor
+        The original convergence point when sigmoid or softmax with temperature
+        was calculated. This will typically be 0.5.
+    desired : FloatTensor
+        The desired convergence point.
+
+    For examples:
+    https://github.com/mrdrozdov/notebooks/blob/master/temperature.ipynb
     """
-    i = (p-original)/(softmax-original)
-    new_p = i * p + (1-i) * desired
+    i = (p_temp-original)/(p-original)
+    new_p = min(max(i * p_temp + (1-i) * desired, 0), 1)
     return new_p
 
 
