@@ -70,8 +70,8 @@ FIXED_PARAMETERS = {
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "rl_weight":  ("rlwt", EXP, 5.0, 1000.0),
-    "learning_rate":      ("lr", EXP, 0.0006, 0.06),  # RNN likes higher, but below 009.
+    "rl_weight":  ("rlwt", EXP, 5.0, 75.0),
+    "learning_rate":      ("lr", EXP, 0.001, 0.06),
     "l2_lambda":          ("l2", EXP, 8e-7, 1e-4),
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.3, 1.0),
     # "rl_wake_sleep": ("ws", BOOL, None, None),
