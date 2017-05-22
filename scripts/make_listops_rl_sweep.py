@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "05_21"
-SWEEP_RUNS = 16
+NAME = "05_22_real"
+SWEEP_RUNS = 32
 
 LIN = "LIN"
 EXP = "EXP"
@@ -48,35 +48,31 @@ FIXED_PARAMETERS = {
     "model_dim":   "32",
     "seq_length":   "100",
     "eval_seq_length":  "3000",
-    "eval_interval_steps": "100",
-    "statistics_interval_steps": "100",
     "use_internal_parser": "",
     "batch_size":  "64",
     "nouse_tracking_in_composition": "",
     "mlp_dim": "16",
-    "num_mlp_layers": "2",
     "transition_weight": "1",
     "embedding_keep_rate": "1.0",
     "semantic_classifier_keep_rate": "1.0",
-    "rl_baseline": "greedy",
     "rl_reward": "xent",
-    "rl_valid": "",
-    "num_samples": "5",
+    "num_samples": "1",
     "nolateral_tracking": "",
     "encode": "pass",
-    "norl_catalan": "",
-    "norl_wake_sleep": "",
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "rl_weight":  ("rlwt", EXP, 5.0, 75.0),
-    "learning_rate":      ("lr", EXP, 0.001, 0.06),
+    "rl_weight":  ("rlwt", EXP, 2.0, 100.0),
+    "learning_rate":      ("lr", EXP, 0.003, 0.09),
     "l2_lambda":          ("l2", EXP, 8e-7, 1e-4),
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.3, 1.0),
-    # "rl_wake_sleep": ("ws", BOOL, None, None),
-    "rl_baseline": ("base", CHOICE, ["ema", "greedy", "value", "pass"], None),
-
+    #"rl_wake_sleep": ("ws", BOOL, None, None),
+    "rl_epsilon": ("eps", LIN, 0.05, 1.0),
+    "rl_epsilon_decay": ("epsd", EXP, 1000, 100000),
+    #"rl_confidence_penalty": ("rlconf", EXP, 0.00001, 10.0),
+    #"rl_confidence_interval": ("rlconfint", EXP, 10, 1000),
+    "rl_reward": ("rew", CHOICE, ["standard", "xent"], None),
 }
 
 sweep_name = "sweep_" + NAME + "_" + \
@@ -94,6 +90,8 @@ for run_id in range(SWEEP_RUNS):
     name = sweep_name + "_" + str(run_id)
 
     params.update(FIXED_PARAMETERS)
+    # Any param appearing in both sets will be overwritten by the sweep value.
+
     for param in SWEEP_PARAMETERS:
         config = SWEEP_PARAMETERS[param]
         t = config[1]
