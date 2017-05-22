@@ -35,10 +35,10 @@ def train_rl_accumulate(model, data_manager, A, batch):
     has_value = hasattr(model, 'value_loss')
 
     if has_policy:
-        A.add('policy_cost', model.policy_loss.data[0])
+        A.add('policy_loss', model.policy_loss.data[0])
 
     if has_value:
-        A.add('value_cost', model.value_loss.data[0])
+        A.add('value_loss', model.value_loss.data[0])
 
     A.add('adv_mean', model.stats['mean'])
     A.add('adv_mean_magnitude', model.stats['mean_magnitude'])
@@ -47,13 +47,13 @@ def train_rl_accumulate(model, data_manager, A, batch):
 
 
 def train_metrics(M, stats_args, step):
-    metric_stats = ['class_acc', 'total_cost', 'transition_acc', 'transition_cost']
+    metric_stats = ['class_acc', 'total_loss', 'transition_acc', 'transition_loss']
     for key in metric_stats:
         M.write(key, stats_args[key], step)
 
 
 def train_rl_metrics(M, stats_args, step):
-    stats_rl_args_keys = ['policy_cost', 'value_cost',
+    stats_rl_args_keys = ['policy_loss', 'value_loss',
         'mean_adv_mean', 'mean_adv_mean_magnitude',
         'mean_adv_var', 'mean_adv_var_magnitude']
     for key in stats_rl_args_keys:
@@ -77,11 +77,11 @@ def train_stats(model, optimizer, A, step):
         step=step,
         class_acc=A.get_avg('class_acc'),
         transition_acc=avg_trans_acc if has_transition_loss else 0.0,
-        xent_cost=A.get_avg('xent_cost'), # not actual mean
-        transition_cost=model.transition_loss.data[0] if has_transition_loss else 0.0,
-        total_cost=A.get_avg('total_cost'),
-        auxiliary_cost=A.get_avg('auxiliary_cost'),
-        l2_cost=A.get_avg('l2_cost'), # not actual mean
+        xent_loss=A.get_avg('xent_loss'), # not actual mean
+        transition_loss=model.transition_loss.data[0] if has_transition_loss else 0.0,
+        total_loss=A.get_avg('total_loss'),
+        auxiliary_loss=A.get_avg('auxiliary_loss'),
+        l2_loss=A.get_avg('l2_loss'), # not actual mean
         invalid=A.get_avg('invalid') if has_invalid else 0.0,
         learning_rate=optimizer.lr,
         time=time_metric,
@@ -100,8 +100,8 @@ def train_rl_stats(model, data_manager, A, batch):
     adv_var_magnitude = np.array(A.get('adv_var_magnitude'), dtype=np.float32)
 
     ret = dict(
-        policy_cost=A.get_avg('policy_cost') if has_policy else 0.0,
-        value_cost=A.get_avg('value_cost') if has_value else 0.0,
+        policy_loss=A.get_avg('policy_loss') if has_policy else 0.0,
+        value_loss=A.get_avg('value_loss') if has_value else 0.0,
         mean_adv_mean=adv_mean.mean(),
         mean_adv_mean_magnitude=adv_mean_magnitude.mean(),
         mean_adv_var=adv_var.mean(),
@@ -123,11 +123,11 @@ def train_format(model):
     stats_str += " Acc: {class_acc:.5f} {transition_acc:.5f}"
 
     # Cost Component.
-    stats_str += " Cost: {total_cost:.5f} {xent_cost:.5f} {transition_cost:.5f} {l2_cost:.5f}"
+    stats_str += " Cost: {total_loss:.5f} {xent_loss:.5f} {transition_loss:.5f} {l2_loss:.5f}"
     if has_spinn and hasattr(model, 'policy_loss'):
-        stats_str += " p{policy_cost:.5f}"
+        stats_str += " p{policy_loss:.5f}"
     if has_spinn and hasattr(model, 'value_loss'):
-        stats_str += " v{value_cost:.5f}"
+        stats_str += " v{value_loss:.5f}"
 
     # Time Component.
     stats_str += " Time: {time:.5f}"

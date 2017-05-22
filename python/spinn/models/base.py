@@ -18,7 +18,7 @@ from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.snli import load_snli_data
 from spinn.util.data import SimpleProgressBar
-from spinn.util.blocks import ModelTrainer, the_gpu, to_gpu, l2_cost, flatten, bundle
+from spinn.util.blocks import ModelTrainer, the_gpu, to_gpu, flatten, bundle
 from spinn.util.blocks import Linear, LSTM, EncodeGRU, ReduceTreeLSTM, ReduceTreeGRU, IntraAttention
 from spinn.util.misc import Accumulator, EvalReporter, time_per_token
 from spinn.util.misc import recursively_set_device, Args
@@ -252,7 +252,7 @@ def get_flags():
         "Constrain predicted transitions to ones that give a valid parse tree.")
     gflags.DEFINE_float("embedding_keep_rate", 0.9,
         "Used for dropout on transformed embeddings and in the encoder RNN.")
-    gflags.DEFINE_boolean("use_l2_cost", True, "")
+    gflags.DEFINE_boolean("use_l2_loss", True, "")
     gflags.DEFINE_boolean("use_difference_feature", True, "")
     gflags.DEFINE_boolean("use_product_feature", True, "")
 

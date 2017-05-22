@@ -37,11 +37,11 @@ def reverse_tensor(var, dim):
     return inverted_tensor
 
 
-def l2_cost(model, l2_lambda):
-    cost = 0.0
+def get_l2_loss(model, l2_lambda):
+    loss = 0.0
     for w in model.parameters():
-        cost += l2_lambda * torch.sum(torch.pow(w, 2))
-    return cost
+        loss += l2_lambda * torch.sum(torch.pow(w, 2))
+    return loss
 
 
 def flatten(l):
