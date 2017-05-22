@@ -13,7 +13,7 @@ import numpy as np
 from spinn import util
 from spinn.util import afs_safe_logger
 from spinn.util.data import SimpleProgressBar
-from spinn.util.blocks import the_gpu, to_gpu, l2_cost, flatten, debug_gradient
+from spinn.util.blocks import the_gpu, to_gpu, l2_loss, flatten, debug_gradient
 from spinn.util.misc import Accumulator, MetricsLogger, EvalReporter, time_per_token
 from spinn.util.misc import recursively_set_device
 from spinn.util.metrics import MetricsWriter

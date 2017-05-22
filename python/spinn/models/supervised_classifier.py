@@ -13,7 +13,7 @@ import numpy as np
 from spinn import util
 from spinn.util import afs_safe_logger
 from spinn.util.data import SimpleProgressBar
-from spinn.util.blocks import the_gpu, to_gpu, l2_cost, flatten, debug_gradient
+from spinn.util.blocks import the_gpu, to_gpu, get_l2_loss, flatten, debug_gradient
 from spinn.util.misc import Accumulator, MetricsLogger, EvalReporter, time_per_token
 from spinn.util.misc import recursively_set_device
 from spinn.util.metrics import MetricsWriter
@@ -206,7 +206,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
         transition_loss = model.transition_loss if hasattr(model, 'transition_loss') else None
 
         # Extract L2 Cost
-        l2_loss = l2_cost(model, FLAGS.l2_lambda) if FLAGS.use_l2_cost else None
+        l2_loss = get_l2_loss(model, FLAGS.l2_lambda) if FLAGS.use_l2_loss else None
 
         # Accumulate Total Loss Variable
         total_loss = 0.0
@@ -246,8 +246,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
             progress_bar.step(i=FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
             progress_bar.finish()
 
-            A.add('xent_cost', xent_loss.data[0])
-            A.add('l2_cost', l2_loss.data[0])
+            A.add('xent_loss', xent_loss.data[0])
+            A.add('l2_loss', l2_loss.data[0])
             stats_args = train_stats(model, optimizer, A, step)
 
             train_metrics(M, stats_args, step)

@@ -41,7 +41,7 @@ SWEEP_PARAMETERS = {
     "semantic_classifier_keep_rate": (LIN, 0.3, 0.6),
     "embedding_keep_rate": (LIN, 0.3, 0.6),
     "scheduled_sampling_exponent_base": (SS_BASE, 1e-5, 1e-4),
-    "transition_cost_scale": (LIN, 18.0, 28.0),
+    "transition_loss_scale": (LIN, 18.0, 28.0),
     "tracking_lstm_hidden_dim": (EXP, 1, 32)
 }
 

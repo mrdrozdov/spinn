@@ -38,7 +38,7 @@ class LogLine(object):
             val = int(val)
         elif key in ('acc', 'transition_acc'):
             val = float(val)
-        elif key in ('total_cost', 'xent_cost', 'transition_cost', 'l2_cost'):
+        elif key in ('total_loss', 'xent_loss', 'transition_loss', 'l2_loss'):
             val = float(val)
         elif key == 'time_per_example':
             val = float(val)
@@ -51,12 +51,12 @@ class RLTrainLine(LogLine):
         return [
             'date', 'time', '_',
             '_','step', '_', 'acc', 'transition_acc',
-            '_', 'total_cost', 'xent_cost', 'transition_cost', 'l2_cost', 'rl_cost',
+            '_', 'total_loss', 'xent_loss', 'transition_loss', 'l2_loss', 'rl_loss',
             '_', 'time_per_example',
         ]
 
     def __setattr__(self, key, val):
-        if key == 'rl_cost':
+        if key == 'rl_loss':
             val = float(val[1:])
 
         return super(RLTrainLine, self).__setattr__(key, val)
@@ -67,12 +67,12 @@ class RLPolicyTrainLine(RLTrainLine):
         return [
             'date', 'time', '_',
             '_','step', '_', 'acc', 'transition_acc',
-            '_', 'total_cost', 'xent_cost', 'transition_cost', 'l2_cost', 'rl_cost', 'policy_cost',
+            '_', 'total_loss', 'xent_loss', 'transition_loss', 'l2_loss', 'rl_loss', 'policy_loss',
             '_', 'time_per_example',
         ]
 
     def __setattr__(self, key, val):
-        if key == 'policy_cost':
+        if key == 'policy_loss':
             val = float(val[1:])
 
         return super(RLPolicyTrainLine, self).__setattr__(key, val)
@@ -83,7 +83,7 @@ class TrainLine(LogLine):
         return [
             'date', 'time', '_',
             '_','step', '_', 'acc', 'transition_acc',
-            '_', 'total_cost', 'xent_cost', 'transition_cost', 'l2_cost',
+            '_', 'total_loss', 'xent_loss', 'transition_loss', 'l2_loss',
             '_', 'time_per_example',
         ]
 
