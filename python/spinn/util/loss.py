@@ -1,3 +1,6 @@
+import torch
+from torch.autograd import Variable
+
 def auxiliary_loss(model):
 
     has_spinn = hasattr(model, 'spinn')
@@ -8,7 +11,7 @@ def auxiliary_loss(model):
     policy_loss = model.policy_loss if has_policy else None
     value_loss = model.value_loss if has_value else None
 
-    total_loss = 0.0
+    total_loss = Variable(torch.Tensor([0.0]))
     if has_policy:
         total_loss += model.policy_loss
     if has_value:
