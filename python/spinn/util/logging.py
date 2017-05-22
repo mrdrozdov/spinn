@@ -65,9 +65,6 @@ def train_stats(model, optimizer, A, step):
     has_spinn = hasattr(model, 'spinn')
     has_transition_loss = hasattr(model, 'transition_loss') and model.transition_loss is not None
     has_invalid = has_spinn and hasattr(model.spinn, 'invalid')
-    has_policy = has_spinn and hasattr(model, 'policy_loss')
-    has_value = has_spinn and hasattr(model, 'value_loss')
-    has_epsilon = has_spinn and hasattr(model.spinn, "epsilon")
 
     if has_transition_loss:
         all_preds = np.array(flatten(A.get('preds')))
@@ -219,9 +216,6 @@ def eval_stats(model, A, step):
     has_spinn = hasattr(model, 'spinn')
     has_transition_loss = hasattr(model, 'transition_loss') and model.transition_loss is not None
     has_invalid = has_spinn and hasattr(model.spinn, 'invalid')
-    has_policy = has_spinn and hasattr(model, 'policy_loss')
-    has_value = has_spinn and hasattr(model, 'value_loss')
-    has_epsilon = has_spinn and hasattr(model.spinn, "epsilon")
 
     class_correct = A.get('class_correct')
     class_total = A.get('class_total')
@@ -238,12 +232,7 @@ def eval_stats(model, A, step):
         step=step,
         class_acc=class_acc,
         transition_acc=avg_trans_acc if has_transition_loss else 0.0,
-        # xent_cost=A.get_avg('xent_cost'), # not actual mean
-        # transition_cost=model.transition_loss.data[0] if has_transition_loss else 0.0,
-        # policy_cost=model.policy_loss.data[0] if has_policy else 0.0,
-        # value_cost=model.value_loss.data[0] if has_value else 0.0,
         invalid=A.get_avg('invalid') if has_invalid else 0.0,
-        # epsilon=model.spinn.epsilon if has_epsilon else 0.0,
         time=time_metric,
     )
 
