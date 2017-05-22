@@ -289,7 +289,7 @@ def get_flags():
     gflags.DEFINE_boolean("rl_entropy", False, "Entropy regularization on transition policy.")
     gflags.DEFINE_float("rl_entropy_beta", 0.001, "Entropy regularization on transition policy.")
     gflags.DEFINE_float("rl_epsilon", 1.0, "Percent of sampled actions during train time.")
-    gflags.DEFINE_float("rl_epsilon_decay", 50000, "Percent of sampled actions during train time.")
+    gflags.DEFINE_float("rl_epsilon_decay", 50000, "Step constant in epsilon delay equation.")
     gflags.DEFINE_float("rl_confidence_interval", 1000, "Penalize probabilities of transitions.")
     gflags.DEFINE_float("rl_confidence_penalty", None, "Penalize probabilities of transitions.")
     gflags.DEFINE_boolean("rl_catalan", False, "Sample over a uniform distribution of binary trees.")
