@@ -1,5 +1,5 @@
 from collections import namedtuple
-
+from spinn.util.data import *
 
 
 
