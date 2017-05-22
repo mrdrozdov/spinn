@@ -75,21 +75,22 @@ class RLSPINN(SPINN):
             if self.catalan:
                 # Interpolate between the uniform random distrubition of binary trees
                 # and the distribution from the transition_net's softmax.
-                softmax = F.softmax(transition_output).data[:,0].cpu()
+                p_temp = transition_dist[:,0]
+                p = F.softmax(transition_output).data[:,0].cpu()
                 original = torch.zeros(softmax.size()).fill_(0.5)
-                p = transition_dist[:,0]
                 desired = [self.shift_probabilities.prob(n_red, n_step, n_tok)
                     for n_red, n_step, n_tok in zip(self.n_reduces, self.n_steps, self.n_tokens)]
                 desired = torch.FloatTensor(desired)
-                new_p = interpolate(p, softmax, original, desired)
+                new_p = interpolate(p_temp, p, original, desired)
                 new_p = new_p.unsqueeze(1)
                 transition_dist = torch.cat([new_p, 1-new_p], 1)
 
-            transitions_sampled = torch.multinomial(transition_dist, 1).view(-1).numpy()
-            transition_preds = transitions_sampled
+            shift_probs = transition_dist[:, 0].numpy()
+            transition_preds = (np.random.rand(*shift_probs.shape) > shift_probs).astype('int32')
         else:
             # Greedy prediction
-            transition_preds = transition_dist.cpu().numpy().argmax(axis=1)
+            shift_probs = transition_dist[:, 0]
+            transition_preds = torch.round(1 - shift_probs).numpy().astype('int32')
         return transition_preds
 
 
