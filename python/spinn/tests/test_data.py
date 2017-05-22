@@ -73,7 +73,7 @@ def t_is_valid(ts):
                 stack.append(buf.pop())
             elif t == T_REDUCE:
                 stack.append(stack.pop() + stack.pop())
-    except:
+    except BaseException:
         return False
 
     return len(stack) == 1

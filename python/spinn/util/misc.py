@@ -49,7 +49,7 @@ class Accumulator(object):
         if clear:
             try:
                 del self.cache[key]
-            except:
+            except BaseException:
                 pass
         return ret
 
@@ -73,7 +73,8 @@ class EvalReporter(object):
     def __init__(self):
         self.batches = []
 
-    def save_batch(self, preds, target, example_ids, output, sent1_transitions=None, sent2_transitions=None):
+    def save_batch(self, preds, target, example_ids, output,
+                   sent1_transitions=None, sent2_transitions=None):
         sent1_transitions = sent1_transitions if sent1_transitions is not None else [
             None] * len(example_ids)
         sent2_transitions = sent2_transitions if sent2_transitions is not None else [

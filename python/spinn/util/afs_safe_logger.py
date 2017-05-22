@@ -13,7 +13,8 @@ class Logger(object):
     WARNING = 2
     ERROR = 3
 
-    def __init__(self, log_path=None, json_log_path=None, show_level=False, min_print_level=0, min_file_level=0):
+    def __init__(self, log_path=None, json_log_path=None,
+                 show_level=False, min_print_level=0, min_file_level=0):
         # log_path: The full path for the log file to write. The file will be appended
         #   to if it exists.
         # min_print_level: Only messages with level above this level will be printed to stderr.

@@ -16,7 +16,8 @@ from spinn.spinn_core_model import BaseModel as _BaseModel
 from spinn.spinn_core_model import SPINN
 
 
-def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, context_args, composition_args):
+def build_model(data_manager, initial_embeddings, vocab_size,
+                num_classes, FLAGS, context_args, composition_args):
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 

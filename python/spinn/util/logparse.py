@@ -6,7 +6,7 @@ Really easy log parsing.
 
 try:
     from parse import *
-except:
+except BaseException:
     pass
 import json
 

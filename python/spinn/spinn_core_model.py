@@ -18,7 +18,8 @@ from spinn.util.catalan import ShiftProbabilities
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
 
-def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, context_args, composition_args):
+def build_model(data_manager, initial_embeddings, vocab_size,
+                num_classes, FLAGS, context_args, composition_args):
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
@@ -304,7 +305,8 @@ class SPINN(nn.Module):
     def loss_phase_hook(self):
         pass
 
-    def run(self, inp_transitions, run_internal_parser=False, use_internal_parser=False, validate_transitions=True):
+    def run(self, inp_transitions, run_internal_parser=False,
+            use_internal_parser=False, validate_transitions=True):
         transition_loss = None
         transition_acc = 0.0
         num_transitions = inp_transitions.shape[1]
@@ -328,7 +330,8 @@ class SPINN(nn.Module):
             self.memory = {}
 
             # Prepare tracker input.
-            if self.debug and any(len(buf) < 1 or len(stack) for buf, stack in zip(self.bufs, self.stacks)):
+            if self.debug and any(len(buf) < 1 or len(stack)
+                                  for buf, stack in zip(self.bufs, self.stacks)):
                 # To elaborate on this exception, when cropping examples it is possible
                 # that your first 1 or 2 actions is a reduce action. It is unclear if this
                 # is a bug in cropping or a bug in how we think about cropping. In the meantime,

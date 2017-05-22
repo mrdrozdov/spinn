@@ -69,7 +69,8 @@ def to_string(expr):
     if isinstance(expr, str):
         return expr
     elif len(expr) == 3:
-        return "( " + to_string(expr[0]) + " ( " + to_string(expr[1]) + " " + to_string(expr[2]) + " ) )"
+        return "( " + to_string(expr[0]) + \
+            " ( " + to_string(expr[1]) + " " + to_string(expr[2]) + " ) )"
     else:
         return "( " + to_string(expr[0]) + " " + to_string(expr[1]) + " )"
 
@@ -105,7 +106,8 @@ if __name__ == "__main__":
 
     filename = 'pbl_dev.tsv'
     f = open(filename, 'w')
-    for i in range(int(TRAIN_PORTION * len(outputs)), int((TRAIN_PORTION + DEV_PORTION) * len(outputs))):
+    for i in range(int(TRAIN_PORTION * len(outputs)),
+                   int((TRAIN_PORTION + DEV_PORTION) * len(outputs))):
         output = outputs[i]
         f.write(output + "\n")
     f.close()

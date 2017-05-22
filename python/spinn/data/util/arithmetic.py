@@ -51,7 +51,7 @@ class ArithmeticData(object):
             try:
                 seq = self.gen_prefix_seq(max_len)
                 result = self.eval_prefix_seq(copy.copy(seq))
-            except:
+            except BaseException:
                 pass
             else:
                 if result >= min and result <= max:

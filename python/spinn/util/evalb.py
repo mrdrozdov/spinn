@@ -33,7 +33,7 @@ def crossing(gold, pred):
                     crosses.append((g, p))
                     break
         count = len(crosses)
-    except:
+    except BaseException:
         crosses = []
         count = -1
     return crosses, count

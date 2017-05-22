@@ -41,7 +41,7 @@ class SimpleData(ArithmeticDataType):
     def is_label(self, x):
         try:
             return self.LABELS.index(x)
-        except:
+        except BaseException:
             return -1
 
 

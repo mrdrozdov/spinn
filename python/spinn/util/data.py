@@ -234,7 +234,7 @@ def MakeTrainingIterator(sources, batch_size, smart_batches=True, use_peano=True
                 num_transitions = sources[3][i]
                 key = get_key(num_transitions)
                 keys.append((i, key))
-            keys = sorted(keys, key=lambda (_, key): key)
+            keys = sorted(keys, key=lambda __key: __key[1])
 
             # Group indices from buckets into batches, so that
             # examples in each batch have similar length.
@@ -417,7 +417,8 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
     return X, transitions, y, num_transitions, example_ids
 
 
-def BuildVocabulary(raw_training_data, raw_eval_sets, embedding_path, logger=None, sentence_pair_data=False):
+def BuildVocabulary(raw_training_data, raw_eval_sets, embedding_path,
+                    logger=None, sentence_pair_data=False):
     # Find the set of words that occur in the data.
     logger.Log("Constructing vocabulary...")
     types_in_data = set()
@@ -432,7 +433,7 @@ def BuildVocabulary(raw_training_data, raw_eval_sets, embedding_path, logger=Non
                                                                 for example in dataset]))
     logger.Log("Found " + str(len(types_in_data)) + " word types.")
 
-    if embedding_path == None:
+    if embedding_path is None:
         logger.Log(
             "Warning: Open-vocabulary models require pretrained vectors. Running with empty vocabulary.")
         vocabulary = CORE_VOCABULARY

@@ -143,11 +143,15 @@ def run():
     if FLAGS.load_best and os.path.isfile(best_checkpoint_path):
         logger.Log("Found best checkpoint, restoring.")
         step, best_dev_error = trainer.load(best_checkpoint_path)
-        logger.Log("Resuming at step: {} with best dev accuracy: {}".format(step, 1. - best_dev_error))
+        logger.Log(
+            "Resuming at step: {} with best dev accuracy: {}".format(
+                step, 1. - best_dev_error))
     elif os.path.isfile(standard_checkpoint_path):
         logger.Log("Found checkpoint, restoring.")
         step, best_dev_error = trainer.load(standard_checkpoint_path)
-        logger.Log("Resuming at step: {} with best dev accuracy: {}".format(step, 1. - best_dev_error))
+        logger.Log(
+            "Resuming at step: {} with best dev accuracy: {}".format(
+                step, 1. - best_dev_error))
     else:
         assert not only_forward, "Can't run an eval-only run without a checkpoint. Supply a checkpoint."
         step = 0

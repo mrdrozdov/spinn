@@ -124,7 +124,8 @@ def evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabula
     return eval_class_acc, eval_trans_acc
 
 
-def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_iter, eval_iterators, logger, step, best_dev_error):
+def train_loop(FLAGS, data_manager, model, optimizer, trainer,
+               training_data_iter, eval_iterators, logger, step, best_dev_error):
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
     M = MetricsWriter(os.path.join(FLAGS.metrics_path, FLAGS.experiment_name))
@@ -296,7 +297,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
         if step > 0 and step % FLAGS.eval_interval_steps == 0:
             for index, eval_set in enumerate(eval_iterators):
                 acc, tacc = evaluate(FLAGS, model, data_manager, eval_set, index, logger, step)
-                if FLAGS.ckpt_on_best_dev_error and index == 0 and (1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
+                if FLAGS.ckpt_on_best_dev_error and index == 0 and (
+                        1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
                     logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
                     trainer.save(best_checkpoint_path, step, best_dev_error)
@@ -336,11 +338,15 @@ def run(only_forward=False):
     if FLAGS.load_best and os.path.isfile(best_checkpoint_path):
         logger.Log("Found best checkpoint, restoring.")
         step, best_dev_error = trainer.load(best_checkpoint_path)
-        logger.Log("Resuming at step: {} with best dev accuracy: {}".format(step, 1. - best_dev_error))
+        logger.Log(
+            "Resuming at step: {} with best dev accuracy: {}".format(
+                step, 1. - best_dev_error))
     elif os.path.isfile(standard_checkpoint_path):
         logger.Log("Found checkpoint, restoring.")
         step, best_dev_error = trainer.load(standard_checkpoint_path)
-        logger.Log("Resuming at step: {} with best dev accuracy: {}".format(step, 1. - best_dev_error))
+        logger.Log(
+            "Resuming at step: {} with best dev accuracy: {}".format(
+                step, 1. - best_dev_error))
     else:
         assert not only_forward, "Can't run an eval-only run without a checkpoint. Supply a checkpoint."
         step = 0
