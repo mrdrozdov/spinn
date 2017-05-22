@@ -6,7 +6,6 @@
 #
 # Example:
 # sentence_label	( ( word word ) ( ( word word ) word ) )
-import numpy as np
 
 from spinn import util
 

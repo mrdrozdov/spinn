@@ -1,15 +1,8 @@
 import unittest
-import numpy as np
 
-from spinn import util
 from spinn.plain_rnn import BaseModel
 
 # PyTorch
-import torch
-import torch.nn as nn
-from torch.autograd import Variable
-import torch.nn.functional as F
-import torch.optim as optim
 
 from spinn.util.test import MockModel, default_args, get_batch, get_batch_pair
 

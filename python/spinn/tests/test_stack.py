@@ -2,8 +2,7 @@ import unittest
 import numpy as np
 import tempfile
 
-from spinn import util
-from spinn.spinn_core_model import SPINN, BaseModel
+from spinn.spinn_core_model import BaseModel
 
 import spinn.spinn_core_model
 import spinn.rl_spinn
@@ -12,8 +11,6 @@ from spinn.util.blocks import ModelTrainer
 # PyTorch
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
-import torch.nn.functional as F
 import torch.optim as optim
 
 from spinn.util.test import MockModel, default_args, get_batch, compare_models

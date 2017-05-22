@@ -2,7 +2,6 @@ import unittest
 import tempfile
 import shutil
 
-import numpy as np
 
 from spinn.util.metrics import size, MetricsWriter, MetricsReader
 

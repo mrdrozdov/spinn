@@ -7,11 +7,10 @@ import time
 import gflags
 import numpy as np
 
-from spinn import util
 from spinn.util import afs_safe_logger
 from spinn.util.data import SimpleProgressBar
-from spinn.util.blocks import the_gpu, to_gpu, get_l2_loss, flatten, debug_gradient
-from spinn.util.misc import Accumulator, MetricsLogger, EvalReporter, time_per_token
+from spinn.util.blocks import get_l2_loss, the_gpu, to_gpu
+from spinn.util.misc import Accumulator, EvalReporter
 from spinn.util.misc import recursively_set_device
 from spinn.util.metrics import MetricsWriter
 from spinn.util.logging import train_format, train_extra_format, train_stats, train_accumulate
@@ -26,12 +25,11 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
-import torch.optim as optim
 
 
 from spinn.models.base import get_data_manager, get_flags, get_batch
 from spinn.models.base import flag_defaults, init_model
-from spinn.models.base import sequential_only, get_checkpoint_path, log_path
+from spinn.models.base import get_checkpoint_path, log_path
 from spinn.models.base import load_data_and_embeddings
 
 

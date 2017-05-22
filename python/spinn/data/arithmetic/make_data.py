@@ -3,10 +3,9 @@ import gflags
 import itertools
 from tqdm import tqdm
 
-from spinn import util
 from spinn.data.util.arithmetic import ArithmeticData
 
-from spinn.data.arithmetic.base import NUMBERS, FIXED_VOCABULARY
+from spinn.data.arithmetic.base import NUMBERS
 from spinn.data.arithmetic import load_sign_data, load_simple_data
 
 import sys

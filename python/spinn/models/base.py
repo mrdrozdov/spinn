@@ -14,16 +14,9 @@ from spinn.data.boolean import load_boolean_data
 from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.snli import load_snli_data
-from spinn.util.data import SimpleProgressBar
-from spinn.util.blocks import ModelTrainer, the_gpu, to_gpu, flatten, bundle
-from spinn.util.blocks import Linear, LSTM, EncodeGRU, ReduceTreeLSTM, ReduceTreeGRU, IntraAttention
-from spinn.util.misc import Accumulator, EvalReporter, time_per_token
-from spinn.util.misc import recursively_set_device, Args
-from spinn.util.metrics import MetricsWriter
-from spinn.util.logging import train_format, train_extra_format, train_stats, train_accumulate
-from spinn.util.logging import eval_format, eval_extra_format
-from spinn.util.loss import auxiliary_loss
-import spinn.util.evalb as evalb
+from spinn.util.blocks import ModelTrainer, bundle
+from spinn.util.blocks import EncodeGRU, IntraAttention, Linear, ReduceTreeGRU, ReduceTreeLSTM
+from spinn.util.misc import Args
 from spinn.util.logparse import parse_flags
 
 import spinn.rl_spinn
@@ -34,7 +27,6 @@ import spinn.cbow
 # PyTorch
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 

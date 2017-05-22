@@ -1,7 +1,7 @@
 from collections import namedtuple
 from spinn import util
 
-from spinn.data.listops.base import NUMBERS, FIXED_VOCABULARY
+from spinn.data.listops.base import FIXED_VOCABULARY
 
 SENTENCE_PAIR_DATA = False
 OUTPUTS = range(10)

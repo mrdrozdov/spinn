@@ -1,20 +1,17 @@
 import itertools
 
 import numpy as np
-from spinn import util
 
 # PyTorch
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
-import torch.optim as optim
 
-from spinn.util.blocks import LSTMState, Embed, MLP, Linear, LSTM
-from spinn.util.blocks import reverse_tensor
-from spinn.util.blocks import bundle, unbundle, to_cpu, to_gpu, treelstm, lstm
-from spinn.util.blocks import get_h, get_c, LayerNormalization
-from spinn.util.misc import Args, Vocab, Example
+from spinn.util.blocks import Embed, Linear, MLP
+from spinn.util.blocks import bundle, lstm, to_gpu, unbundle
+from spinn.util.blocks import LayerNormalization
+from spinn.util.misc import Example, Vocab
 from spinn.util.blocks import HeKaimingInitializer
 from spinn.util.catalan import ShiftProbabilities
 

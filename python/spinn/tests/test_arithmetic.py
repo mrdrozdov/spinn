@@ -1,5 +1,4 @@
 import unittest
-import numpy as np
 from collections import deque
 
 from spinn.data.util import arithmetic

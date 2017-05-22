@@ -1,25 +1,20 @@
 import copy
 
 import numpy as np
-from spinn import util
 
 # PyTorch
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
-import torch.optim as optim
 
-from spinn.util.blocks import LSTMState, Embed, MLP
-from spinn.util.blocks import bundle, unbundle, to_cpu, to_gpu, the_gpu, treelstm, lstm
-from spinn.util.blocks import get_h, get_c
-from spinn.util.misc import Args, Vocab, Example
+from spinn.util.blocks import MLP
+from spinn.util.blocks import the_gpu, to_gpu
 from spinn.util.catalan import interpolate
 
 from spinn.spinn_core_model import BaseModel as _BaseModel
 from spinn.spinn_core_model import SPINN
 
-from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
 
 def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, context_args, composition_args):

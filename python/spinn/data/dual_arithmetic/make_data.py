@@ -2,12 +2,11 @@ import gflags
 
 import itertools
 
-from spinn import util
 from spinn.data.util.arithmetic import ArithmeticData
 
 import sys
 
-from spinn.data.dual_arithmetic.base import NUMBERS, FIXED_VOCABULARY
+from spinn.data.dual_arithmetic.base import NUMBERS
 from spinn.data.dual_arithmetic import load_eq_data, load_relational_data
 
 

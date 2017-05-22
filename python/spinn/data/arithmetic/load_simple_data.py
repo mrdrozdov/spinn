@@ -1,8 +1,7 @@
 from collections import namedtuple
 from spinn import util
 
-from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
-from spinn.data.arithmetic.base import NUMBERS, FIXED_VOCABULARY
+from spinn.data.arithmetic.base import FIXED_VOCABULARY
 
 SENTENCE_PAIR_DATA = False
 OUTPUTS = range(-10, 11)

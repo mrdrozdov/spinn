@@ -1,17 +1,8 @@
 import unittest
 
-from nose.plugins.attrib import attr
-import numpy as np
 
-from spinn import util
-from spinn.spinn_core_model import SPINN
 
 # PyTorch
-import torch
-import torch.nn as nn
-from torch.autograd import Variable
-import torch.nn.functional as F
-import torch.optim as optim
 
 from spinn.util.misc import Accumulator
 

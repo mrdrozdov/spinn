@@ -1,13 +1,10 @@
 
 import numpy as np
-from spinn import util
 
 # PyTorch
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-import torch.nn.functional as F
-import torch.optim as optim
 
 from spinn.util.blocks import Embed, to_gpu, MLP
 from spinn.util.misc import Args, Vocab

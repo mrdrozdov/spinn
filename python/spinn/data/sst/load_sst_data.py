@@ -6,9 +6,7 @@
 # Example:
 # sentence_label	( ( word word ) ( ( word word ) word ) )
 
-import numpy as np
 
-from spinn import util
 from spinn.data.sst.base import convert_unary_binary_bracketed_data
 
 SENTENCE_PAIR_DATA = False
