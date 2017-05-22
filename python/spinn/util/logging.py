@@ -79,19 +79,13 @@ def train_stats(model, optimizer, A, step):
         transition_acc=avg_trans_acc if has_transition_loss else 0.0,
         xent_cost=A.get_avg('xent_cost'), # not actual mean
         transition_cost=model.transition_loss.data[0] if has_transition_loss else 0.0,
+        total_cost=A.get_avg('total_cost'),
+        auxiliary_cost=A.get_avg('auxiliary_cost'),
         l2_cost=A.get_avg('l2_cost'), # not actual mean
         invalid=A.get_avg('invalid') if has_invalid else 0.0,
         learning_rate=optimizer.lr,
         time=time_metric,
     )
-
-    total_cost = 0.0
-    for key in ret.keys():
-        if key == 'transition_cost' and has_transition_loss and not model.optimize_transition_loss:
-            pass
-        elif 'cost' in key:
-            total_cost += ret[key]
-    ret['total_cost'] = total_cost
 
     return ret
 

@@ -336,7 +336,8 @@ def run(only_forward=False):
                 total_loss += l2_loss
             if transition_loss is not None and model.optimize_transition_loss:
                 total_loss += transition_loss
-            total_loss += auxiliary_loss(model)
+            aux_loss = auxiliary_loss(model)
+            total_loss += aux_loss
 
             # Backward pass.
             total_loss.backward()
@@ -367,6 +368,9 @@ def run(only_forward=False):
                 progress_bar.step(i=FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
                 progress_bar.finish()
 
+
+                A.add('total_cost', total_loss.data[0])
+                A.add('auxiliary_cost', aux_loss.data[0])
                 A.add('xent_cost', xent_loss.data[0])
                 A.add('l2_cost', l2_loss.data[0])
                 stats_args = train_stats(model, optimizer, A, step)
