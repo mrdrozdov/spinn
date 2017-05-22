@@ -77,7 +77,7 @@ class RLSPINN(SPINN):
                 # and the distribution from the transition_net's softmax.
                 p_temp = transition_dist[:,0]
                 p = F.softmax(transition_output).data[:,0].cpu()
-                original = torch.zeros(softmax.size()).fill_(0.5)
+                original = torch.zeros(p.size()).fill_(0.5)
                 desired = [self.shift_probabilities.prob(n_red, n_step, n_tok)
                     for n_red, n_step, n_tok in zip(self.n_reduces, self.n_steps, self.n_tokens)]
                 desired = torch.FloatTensor(desired)
