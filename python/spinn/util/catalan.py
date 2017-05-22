@@ -26,7 +26,8 @@ def interpolate(p_temp, p, original, desired):
     https://github.com/mrdrozdov/notebooks/blob/master/temperature.ipynb
     """
     i = (p_temp-original)/(p-original)
-    new_p = min(max(i * p_temp + (1-i) * desired, 0), 1)
+    new_p = i * p_temp + (1-i) * desired
+    new_p = new_p.clamp(min=0, max=1)
     return new_p
 
 
