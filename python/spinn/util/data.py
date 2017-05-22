@@ -102,7 +102,6 @@ def TokensToIDs(vocabulary, dataset, sentence_pair_data=False):
         if UNK_TOKEN in vocabulary:
             unk_id = vocabulary[UNK_TOKEN]
             for example in dataset:
-                tmp = example[key]
                 for i, token in enumerate(example[key]):
                     if token in vocabulary:
                         example[key][i] = vocabulary[token]
@@ -217,7 +216,6 @@ def MakeTrainingIterator(sources, batch_size, smart_batches=True, use_peano=True
 
     def build_batches():
         dataset_size = len(sources[0])
-        seq_length = sources[0].shape[1]
         order = range(dataset_size)
         random.shuffle(order)
         order = np.array(order)

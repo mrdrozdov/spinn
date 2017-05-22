@@ -167,8 +167,6 @@ def eval_accumulate(model, data_manager, A, batch):
     has_spinn = hasattr(model, 'spinn')
     has_transition_loss = hasattr(model, 'transition_loss') and model.transition_loss is not None
     has_invalid = has_spinn and hasattr(model.spinn, 'invalid')
-    has_policy = has_spinn and hasattr(model, 'policy_loss')
-    has_value = has_spinn and hasattr(model, 'value_loss')
 
     # Accumulate stats for transition accuracy.
     if has_transition_loss:

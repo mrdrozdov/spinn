@@ -2,10 +2,8 @@ import os
 import json
 import math
 import random
-import pprint
 import sys
 import time
-from collections import deque
 
 import gflags
 import numpy as np
@@ -57,7 +55,6 @@ def evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabula
     progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
     total_tokens = 0
-    invalid = 0
     start = time.time()
 
     model.eval()
@@ -80,9 +77,6 @@ def evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabula
         eval_accumulate(model, data_manager, A, batch)
         A.add('class_correct', pred.eq(target).sum())
         A.add('class_total', target.size(0))
-
-        # Optionally calculate transition loss/acc.
-        transition_loss = model.transition_loss if hasattr(model, 'transition_loss') else None
 
         # Update Aggregate Accuracies
         total_tokens += sum([(nt+1)/2 for nt in eval_num_transitions_batch.reshape(-1)])
@@ -402,7 +396,7 @@ def run(only_forward=False):
         logger.Log("Eval-Extra-Format: {}".format(eval_extra_str))
 
         for index, eval_set in enumerate(eval_iterators):
-            acc = evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabulary)
+            evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabulary)
     else:
         train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_iter, eval_iterators, logger, step, best_dev_error)
 

@@ -22,8 +22,6 @@ from spinn.util.test import MockModel, default_args, get_batch, compare_models
 class SPINNTestCase(unittest.TestCase):
 
     def test_save_load_model(self):
-        scalar = 11
-        other_scalar = 0
         model_to_save = MockModel(BaseModel, default_args())
         model_to_load = MockModel(BaseModel, default_args())
 
@@ -39,8 +37,7 @@ class SPINNTestCase(unittest.TestCase):
 
 
     def test_save_sup_load_rl(self):
-        scalar = 11
-        other_scalar = 0
+        pass
 
         model_to_save = MockModel(spinn.spinn_core_model.BaseModel, default_args())
         opt_to_save = optim.SGD(model_to_save.parameters(), lr=0.1)
@@ -72,7 +69,6 @@ class SPINNTestCase(unittest.TestCase):
     def test_basic_stack(self):
         model = MockModel(BaseModel, default_args())
 
-        train = False
 
         X, transitions = get_batch()
 
@@ -98,7 +94,6 @@ class SPINNTestCase(unittest.TestCase):
     def test_validate_transitions_cantskip(self):
         model = MockModel(BaseModel, default_args())
 
-        train = False
 
         # To Test:
         # 1. Cant SKIP

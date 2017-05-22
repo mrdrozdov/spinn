@@ -1,6 +1,5 @@
 import unittest
 import tempfile
-import math
 import shutil
 
 import numpy as np

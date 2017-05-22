@@ -198,7 +198,6 @@ class SPINN(nn.Module):
         _preds = preds.copy()
         _invalid = np.zeros(preds.shape, dtype=np.bool)
 
-        incorrect = 0
         cant_skip = _transitions != T_SKIP
         must_skip = _transitions == T_SKIP
 
@@ -281,7 +280,6 @@ class SPINN(nn.Module):
 
     def t_skip(self):
         """SKIP: Acts as padding and is a noop."""
-        pass
 
     def shift_phase(self, tops, trackings, stacks, idxs):
         """SHIFT: Should dequeue buffer and item to stack."""
@@ -318,7 +316,6 @@ class SPINN(nn.Module):
         for t_step in range(num_transitions):
             transitions = inp_transitions[:, t_step]
             transition_arr = list(transitions)
-            sub_batch_size = len(transition_arr)
 
             # A mask based on SKIP transitions.
             cant_skip = np.array(transitions) != T_SKIP
@@ -651,8 +648,6 @@ class BaseModel(nn.Module):
     # --- Sentence Model Specific ---
 
     def unwrap_sentence(self, sentences, transitions):
-        batch_size = sentences.shape[0]
-
         # Build Tokens
         x = sentences
 
@@ -666,15 +661,12 @@ class BaseModel(nn.Module):
         return example
 
     def wrap_sentence(self, items):
-        batch_size = len(items) / 2
         h = self.extract_h(self.wrap_items(items))
         return [h]
 
     # --- Sentence Pair Model Specific ---
 
     def unwrap_sentence_pair(self, sentences, transitions):
-        batch_size = sentences.shape[0]
-
         # Build Tokens
         x_prem = sentences[:,:,0]
         x_hyp = sentences[:,:,1]

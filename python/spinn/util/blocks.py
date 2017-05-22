@@ -1,5 +1,4 @@
 import numpy as np
-import random
 import math
 
 # PyTorch
@@ -454,7 +453,6 @@ class IntraAttention(nn.Module):
 
     def forward(self, x):
         hidden_dim = self.outp_size
-        distance_bias = self.distance_bias
         batch_size, seq_len, _ = x.size()
 
         f = self.f(x.view(batch_size * seq_len, -1)).view(batch_size, seq_len, -1)

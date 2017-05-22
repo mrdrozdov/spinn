@@ -243,8 +243,6 @@ class SNLITestCase(unittest.TestCase):
         initial_embeddings = util.LoadEmbeddingsFromText(
             vocabulary, word_embedding_dim, embedding_data_path)
 
-        EOS_TOKEN = vocabulary["."]
-
         data = util.PreprocessDataset(
             raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
@@ -272,8 +270,6 @@ class SNLITestCase(unittest.TestCase):
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
         initial_embeddings = util.LoadEmbeddingsFromText(
             vocabulary, word_embedding_dim, embedding_data_path)
-
-        EOS_TOKEN = vocabulary["."]
 
         data = util.PreprocessDataset(
             raw_data, vocabulary, seq_length, data_manager, eval_mode=True, logger=MockLogger(),

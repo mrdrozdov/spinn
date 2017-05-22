@@ -1,6 +1,3 @@
-from functools import partial
-import argparse
-import itertools
 
 import numpy as np
 from spinn import util
@@ -91,7 +88,7 @@ class BaseModel(nn.Module):
         return embeds
 
     def forward(self, sentences, transitions, y_batch=None, **kwargs):
-        batch_size = sentences.shape[0]
+        sentences.shape[0]
 
         x = self.unwrap(sentences, transitions)
         emb = self.run_embed(x)
@@ -116,7 +113,7 @@ class BaseModel(nn.Module):
     # --- Sentence Specific ---
 
     def unwrap_sentence_pair(self, sentences, transitions):
-        batch_size = sentences.shape[0]
+        sentences.shape[0]
 
         x_prem = sentences[:,:,0]
         x_hyp = sentences[:,:,1]

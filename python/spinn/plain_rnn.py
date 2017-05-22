@@ -1,6 +1,3 @@
-from functools import partial
-import argparse
-import itertools
 
 import numpy as np
 from spinn import util
@@ -136,8 +133,6 @@ class BaseModel(nn.Module):
     # --- Sentence Specific ---
 
     def unwrap_sentence_pair(self, sentences, transitions):
-        batch_size = sentences.shape[0]
-
         x_prem = sentences[:,:,0]
         x_hyp = sentences[:,:,1]
         x = np.concatenate([x_prem, x_hyp], axis=0)

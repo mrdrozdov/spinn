@@ -1,6 +1,5 @@
 import unittest
 import tempfile
-import math
 
 from nose.plugins.attrib import attr
 import numpy as np
