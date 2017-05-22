@@ -30,7 +30,7 @@ import spinn.util.evalb as evalb
 from spinn.util.logparse import parse_flags
 
 import spinn.rl_spinn
-import spinn.fat_stack
+import spinn.spinn_core_model
 import spinn.plain_rnn
 import spinn.cbow
 
@@ -389,7 +389,7 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
     elif FLAGS.model_type == "RNN":
         build_model = spinn.plain_rnn.build_model
     elif FLAGS.model_type == "SPINN":
-        build_model = spinn.fat_stack.build_model
+        build_model = spinn.spinn_core_model.build_model
     elif FLAGS.model_type == "RLSPINN":
         build_model = spinn.rl_spinn.build_model
     else:
