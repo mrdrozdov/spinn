@@ -56,6 +56,7 @@ def load_data(path):
     dataset = convert_binary_bracketed_data(path)
     return dataset, FIXED_VOCABULARY
 
+
 if __name__ == "__main__":
     # Demo:
     examples = import_binary_bracketed_data('bl-data/bl_dev.tsv')

@@ -52,7 +52,8 @@ if __name__ == '__main__':
     gflags.DEFINE_enum("data_type", "eq", ["eq", "relational"], "")
 
     # This isn't really a problem for sentence pair data.
-    gflags.DEFINE_string("exclude", None, "If not None, exclude any example that appears in this file.")
+    gflags.DEFINE_string(
+        "exclude", None, "If not None, exclude any example that appears in this file.")
 
     FLAGS(sys.argv)
 
@@ -71,7 +72,7 @@ if __name__ == '__main__':
             return "p {} h {}".format(
                 " ".join(ex["premise_tokens"]),
                 " ".join(ex["hypothesis_tokens"]),
-                )
+            )
 
         if FLAGS.data_type == "eq":
             data_manager = load_eq_data
@@ -109,8 +110,8 @@ if __name__ == '__main__':
                         continue
 
                 print "{}\t{}\t{}".format(data_type.LABELS[label],
-                    " ".join(dataset.convert_to_sexpr(seq1)),
-                    " ".join(dataset.convert_to_sexpr(seq2)),
-                    )
+                                          " ".join(dataset.convert_to_sexpr(seq1)),
+                                          " ".join(dataset.convert_to_sexpr(seq2)),
+                                          )
                 break
     print skip_counter

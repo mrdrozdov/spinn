@@ -6,6 +6,7 @@ import torch.nn as nn
 
 from spinn.util.misc import Args
 
+
 def default_args(**kwargs):
     args = {}
 
@@ -87,14 +88,14 @@ def get_batch_pair():
          [3, 2, 4, 5]],
         [[3, 1, 2, 1],
          [3, 2, 4, 5]],
-    ], dtype=np.int32).transpose((0,2,1))
+    ], dtype=np.int32).transpose((0, 2, 1))
 
     transitions = np.array([
         [[0, 0, 0, 0, 1, 1, 1],
          [0, 0, 1, 0, 0, 1, 1]],
         [[0, 0, 0, 0, 1, 1, 1],
          [0, 0, 1, 0, 0, 1, 1]],
-    ], dtype=np.int32).transpose((0,2,1))
+    ], dtype=np.int32).transpose((0, 2, 1))
 
     return X, transitions
 

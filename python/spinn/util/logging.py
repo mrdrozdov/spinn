@@ -53,8 +53,8 @@ def train_metrics(M, stats_args, step):
 
 def train_rl_metrics(M, stats_args, step):
     stats_rl_args_keys = ['policy_loss', 'value_loss',
-        'mean_adv_mean', 'mean_adv_mean_magnitude',
-        'mean_adv_var', 'mean_adv_var_magnitude']
+                          'mean_adv_mean', 'mean_adv_mean_magnitude',
+                          'mean_adv_var', 'mean_adv_var_magnitude']
     for key in stats_rl_args_keys:
         M.write(key, stats_args[key], step)
 
@@ -76,11 +76,11 @@ def train_stats(model, optimizer, A, step):
         step=step,
         class_acc=A.get_avg('class_acc'),
         transition_acc=avg_trans_acc if has_transition_loss else 0.0,
-        xent_loss=A.get_avg('xent_loss'), # not actual mean
+        xent_loss=A.get_avg('xent_loss'),  # not actual mean
         transition_loss=model.transition_loss.data[0] if has_transition_loss else 0.0,
         total_loss=A.get_avg('total_loss'),
         auxiliary_loss=A.get_avg('auxiliary_loss'),
-        l2_loss=A.get_avg('l2_loss'), # not actual mean
+        l2_loss=A.get_avg('l2_loss'),  # not actual mean
         invalid=A.get_avg('invalid') if has_invalid else 0.0,
         learning_rate=optimizer.lr,
         time=time_metric,
@@ -107,7 +107,7 @@ def train_rl_stats(model, data_manager, A, batch):
         mean_adv_var_magnitude=adv_var_magnitude.mean(),
         epsilon=model.spinn.epsilon,
         temperature=model.spinn.temperature,
-        )
+    )
 
     return ret
 

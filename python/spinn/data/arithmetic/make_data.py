@@ -50,7 +50,8 @@ if __name__ == '__main__':
     gflags.DEFINE_integer("length", 5, "")
     gflags.DEFINE_integer("limit", 100, "")
     gflags.DEFINE_boolean("balance_length", False, "")
-    gflags.DEFINE_string("exclude", None, "If not None, exclude any example that appears in this file.")
+    gflags.DEFINE_string(
+        "exclude", None, "If not None, exclude any example that appears in this file.")
     gflags.DEFINE_enum("data_type", "simple", ["simple", "sign"], "")
     FLAGS(sys.argv)
 
@@ -103,6 +104,6 @@ if __name__ == '__main__':
                     exclude_dict[check_label].add(check)
 
                 print "{}\t{}".format(data_type.LABELS[label],
-                    " ".join(dataset.convert_to_sexpr(seq)),
-                    )
+                                      " ".join(dataset.convert_to_sexpr(seq)),
+                                      )
                 break

@@ -13,7 +13,7 @@ Node = namedtuple('Node', 'tag span')
 def spans(transitions, tokens=None):
     n = (len(transitions) + 1) / 2
     stack = []
-    buf = [Node("leaf", (l, r)) for l, r in zip(range(n), range(1, n+1))]
+    buf = [Node("leaf", (l, r)) for l, r in zip(range(n), range(1, n + 1))]
     buf = list(reversed(buf))
 
     nodes = []

@@ -15,20 +15,20 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
     return model_cls(model_dim=FLAGS.model_dim,
-         word_embedding_dim=FLAGS.word_embedding_dim,
-         vocab_size=vocab_size,
-         initial_embeddings=initial_embeddings,
-         num_classes=num_classes,
-         embedding_keep_rate=FLAGS.embedding_keep_rate,
-         use_sentence_pair=use_sentence_pair,
-         use_difference_feature=FLAGS.use_difference_feature,
-         use_product_feature=FLAGS.use_product_feature,
-         classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
-         mlp_dim=FLAGS.mlp_dim,
-         num_mlp_layers=FLAGS.num_mlp_layers,
-         mlp_ln=FLAGS.mlp_ln,
-         context_args=context_args,
-        )
+                     word_embedding_dim=FLAGS.word_embedding_dim,
+                     vocab_size=vocab_size,
+                     initial_embeddings=initial_embeddings,
+                     num_classes=num_classes,
+                     embedding_keep_rate=FLAGS.embedding_keep_rate,
+                     use_sentence_pair=use_sentence_pair,
+                     use_difference_feature=FLAGS.use_difference_feature,
+                     use_product_feature=FLAGS.use_product_feature,
+                     classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
+                     mlp_dim=FLAGS.mlp_dim,
+                     num_mlp_layers=FLAGS.num_mlp_layers,
+                     mlp_ln=FLAGS.mlp_ln,
+                     context_args=context_args,
+                     )
 
 
 class BaseModel(nn.Module):
@@ -47,7 +47,7 @@ class BaseModel(nn.Module):
                  use_sentence_pair=False,
                  context_args=None,
                  **kwargs
-                ):
+                 ):
         super(BaseModel, self).__init__()
 
         self.use_sentence_pair = use_sentence_pair
@@ -67,7 +67,7 @@ class BaseModel(nn.Module):
         mlp_input_dim = model_dim * 2 if use_sentence_pair else model_dim
 
         self.mlp = MLP(mlp_input_dim, mlp_dim, num_classes,
-            num_mlp_layers, mlp_ln, classifier_dropout_rate)
+                       num_mlp_layers, mlp_ln, classifier_dropout_rate)
 
         self.encode = context_args.encoder
         self.reshape_input = context_args.reshape_input
@@ -112,8 +112,8 @@ class BaseModel(nn.Module):
     def unwrap_sentence_pair(self, sentences, transitions):
         sentences.shape[0]
 
-        x_prem = sentences[:,:,0]
-        x_hyp = sentences[:,:,1]
+        x_prem = sentences[:, :, 0]
+        x_hyp = sentences[:, :, 1]
         x = np.concatenate([x_prem, x_hyp], axis=0)
 
         return to_gpu(Variable(torch.from_numpy(x), volatile=not self.training))

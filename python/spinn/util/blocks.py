@@ -52,7 +52,9 @@ def flatten(l):
 def the_gpu():
     return the_gpu.gpu
 
+
 the_gpu.gpu = -1
+
 
 def to_cuda(var, gpu):
     if gpu >= 0:
@@ -63,6 +65,8 @@ def to_cuda(var, gpu):
 # but that messes with backpropagation. So I do it with a copy. Note that
 # cuda.get_device() actually returns the dummy device, not the current one
 # -- but F.copy will move it to the active GPU anyway (!)
+
+
 def to_gpu(var):
     return to_cuda(var, the_gpu())
 
@@ -98,6 +102,7 @@ class LSTMState:
             necessary.
 
     """
+
     def __init__(self, inpt):
         if isinstance(inpt, tuple):
             self._c, self._h = inpt
@@ -128,8 +133,10 @@ class LSTMState:
 def get_seq_h(state, hidden_dim):
     return state[:, :, hidden_dim:]
 
+
 def get_seq_c(state, hidden_dim):
     return state[:, :, :hidden_dim]
+
 
 def get_seq_state(c, h):
     return torch.cat([h, c], 2)
@@ -138,8 +145,10 @@ def get_seq_state(c, h):
 def get_h(state, hidden_dim):
     return state[:, hidden_dim:]
 
+
 def get_c(state, hidden_dim):
     return state[:, :hidden_dim]
+
 
 def get_state(c, h):
     return torch.cat([h, c], 1)
@@ -214,12 +223,12 @@ class LayerNormalization(nn.Module):
 
     def __init__(self, hidden_size, eps=1e-5):
         super(LayerNormalization, self).__init__()
-        
+
         self.eps = eps
         self.hidden_size = hidden_size
         self.a2 = nn.Parameter(torch.ones(1, hidden_size), requires_grad=True)
         self.b2 = nn.Parameter(torch.zeros(1, hidden_size), requires_grad=True)
-        
+
     def forward(self, z):
         mu = torch.mean(z)
         sigma = torch.std(z)
@@ -382,8 +391,8 @@ class GRU(nn.Module):
         self.bi = 2 if self.bidirectional else 1
         self.num_layers = num_layers
         self.rnn = nn.GRU(inp_dim, model_dim / self.bi, num_layers=num_layers,
-            batch_first=True,
-            bidirectional=self.bidirectional)
+                          batch_first=True,
+                          bidirectional=self.bidirectional)
 
     def forward(self, x, h0=None):
         bi = self.bi
@@ -396,7 +405,8 @@ class GRU(nn.Module):
 
         # Initialize state unless it is given.
         if h0 is None:
-            h0 = to_gpu(Variable(torch.zeros(num_layers * bi, batch_size, model_dim / bi), volatile=not self.training))
+            h0 = to_gpu(Variable(torch.zeros(num_layers * bi, batch_size,
+                                             model_dim / bi), volatile=not self.training))
 
         # Expects (input, h_0):
         #   input => seq_len x batch_size x model_dim
@@ -436,8 +446,8 @@ class IntraAttention(nn.Module):
 
         """
 
-        bias = torch.range(0, seq_len-1).float().unsqueeze(0).repeat(seq_len, 1)
-        diff = torch.range(0, seq_len-1).float().unsqueeze(1).expand_as(bias)
+        bias = torch.range(0, seq_len - 1).float().unsqueeze(0).repeat(seq_len, 1)
+        diff = torch.range(0, seq_len - 1).float().unsqueeze(1).expand_as(bias)
         bias = (bias - diff).abs()
         bias = bias.clamp(0, max_distance)
 
@@ -496,9 +506,9 @@ class LSTM(nn.Module):
         self.bi = 2 if self.bidirectional else 1
         self.num_layers = num_layers
         self.rnn = nn.LSTM(inp_dim, model_dim / self.bi, num_layers=num_layers,
-            batch_first=True,
-            bidirectional=self.bidirectional,
-            dropout=dropout)
+                           batch_first=True,
+                           bidirectional=self.bidirectional,
+                           dropout=dropout)
 
     def forward(self, x, h0=None, c0=None):
         bi = self.bi
@@ -511,9 +521,11 @@ class LSTM(nn.Module):
 
         # Initialize state unless it is given.
         if h0 is None:
-            h0 = to_gpu(Variable(torch.zeros(num_layers * bi, batch_size, model_dim / bi), volatile=not self.training))
+            h0 = to_gpu(Variable(torch.zeros(num_layers * bi, batch_size,
+                                             model_dim / bi), volatile=not self.training))
         if c0 is None:
-            c0 = to_gpu(Variable(torch.zeros(num_layers * bi, batch_size, model_dim / bi), volatile=not self.training))
+            c0 = to_gpu(Variable(torch.zeros(num_layers * bi, batch_size,
+                                             model_dim / bi), volatile=not self.training))
 
         # Expects (input, h_0, c_0):
         #   input => seq_len x batch_size x model_dim
@@ -549,7 +561,8 @@ class ReduceTreeLSTM(nn.Module):
             self.left_ln = LayerNormalization(size)
             self.right_ln = LayerNormalization(size)
         if tracker_size is not None and use_tracking_in_composition:
-            self.track = Linear(initializer=HeKaimingInitializer)(tracker_size, 5 * size, bias=False)
+            self.track = Linear(initializer=HeKaimingInitializer)(
+                tracker_size, 5 * size, bias=False)
             if composition_ln:
                 self.track_ln = LayerNormalization(size)
 
@@ -588,7 +601,7 @@ class ReduceTreeLSTM(nn.Module):
             lstm_in += self.right(self.right_ln(right.h))
         else:
             lstm_in = self.left(left.h)
-            lstm_in += self.right(right.h) 
+            lstm_in += self.right(right.h)
 
         if hasattr(self, 'track'):
             if self.composition_ln:
@@ -614,11 +627,13 @@ class MLP(nn.Module):
             self.ln_inp = LayerNormalization(mlp_input_dim)
 
         for i in range(num_mlp_layers):
-            setattr(self, 'l{}'.format(i), Linear(initializer=HeKaimingInitializer)(features_dim, mlp_dim))
+            setattr(self, 'l{}'.format(i), Linear(
+                initializer=HeKaimingInitializer)(features_dim, mlp_dim))
             if mlp_ln:
                 setattr(self, 'ln{}'.format(i), LayerNormalization(mlp_dim))
             features_dim = mlp_dim
-        setattr(self, 'l{}'.format(num_mlp_layers), Linear(initializer=HeKaimingInitializer)(features_dim, num_classes))
+        setattr(self, 'l{}'.format(num_mlp_layers), Linear(
+            initializer=HeKaimingInitializer)(features_dim, num_classes))
 
     def forward(self, h):
         if self.mlp_ln:
@@ -651,8 +666,8 @@ def DefaultUniformInitializer(param):
 
 def HeKaimingInitializer(param):
     fan = param.size()
-    init = np.random.normal(scale=np.sqrt(4.0/(fan[0] + fan[1])),
-                                size=fan).astype(np.float32)
+    init = np.random.normal(scale=np.sqrt(4.0 / (fan[0] + fan[1])),
+                            size=fan).astype(np.float32)
     param.data.set_(torch.from_numpy(init))
 
 
@@ -691,7 +706,7 @@ def TreeLSTMBiasInitializer(param):
 
     hidden_dim = shape[0] / 5
     init = np.zeros(shape).astype(np.float32)
-    init[hidden_dim:3*hidden_dim] = 1
+    init[hidden_dim:3 * hidden_dim] = 1
 
     param.data.set_(torch.from_numpy(init))
 
@@ -701,7 +716,7 @@ def LSTMBiasInitializer(param):
 
     hidden_dim = shape[0] / 4
     init = np.zeros(shape)
-    init[hidden_dim:2*hidden_dim] = 1
+    init[hidden_dim:2 * hidden_dim] = 1
 
     param.data.set_(torch.from_numpy(init))
 

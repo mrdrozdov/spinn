@@ -3,7 +3,7 @@
 
 
 def bracketing(ts):
-    buf = range((len(ts)+1)/2 + 1)
+    buf = range((len(ts) + 1) / 2 + 1)
     buf = list(reversed(zip(buf[:-1], buf[1:])))
     stack = []
     ret = []
@@ -13,9 +13,9 @@ def bracketing(ts):
         elif t == 1:
             R, L = stack.pop(), stack.pop()
             stack.append((L[0], R[1]))
-            if L[0] != L[1]-1:
+            if L[0] != L[1] - 1:
                 ret.append(L)
-            if R[0] != R[1]-1:
+            if R[0] != R[1] - 1:
                 ret.append(R)
     ret.append(stack[-1])
     return ret
@@ -30,8 +30,8 @@ def crossing(gold, pred):
             for g in gsplits:
                 if (g[0] < p[0] and g[1] > p[0] and g[1] < p[1]) or \
                    (g[0] > p[0] and g[0] < p[1] and g[1] > p[1]):
-                   crosses.append((g, p))
-                   break
+                    crosses.append((g, p))
+                    break
         count = len(crosses)
     except:
         crosses = []

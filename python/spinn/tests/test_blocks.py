@@ -2,7 +2,6 @@ import unittest
 import tempfile
 
 
-
 # PyTorch
 import torch
 import torch.nn as nn
@@ -51,10 +50,9 @@ class PytorchTestCase(unittest.TestCase):
         # Check value of scalars.
         assert model_to_save.scalar[0] == 11
         assert model_to_save.scalar[0] == model_to_load.scalar[0]
-        
+
         # Cleanup temporary file.
         temp.close()
-
 
     def test_custom_init(self):
 
@@ -73,7 +71,7 @@ class PytorchTestCase(unittest.TestCase):
         model_to_load.load_state_dict(torch.load(temp.name))
 
         compare_models(model_to_save, model_to_load)
-        
+
         # Cleanup temporary file.
         temp.close()
 
@@ -94,7 +92,7 @@ class PytorchTestCase(unittest.TestCase):
         model_to_load.load_state_dict(torch.load(temp.name))
 
         compare_models(model_to_save, model_to_load)
-        
+
         # Cleanup temporary file.
         temp.close()
 

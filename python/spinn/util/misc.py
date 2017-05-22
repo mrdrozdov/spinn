@@ -14,16 +14,20 @@ class GenericClass(object):
         return s.format(self.__dict__)
 
 
-class Args(GenericClass): pass
+class Args(GenericClass):
+    pass
 
 
-class EncodeArgs(GenericClass): pass
+class EncodeArgs(GenericClass):
+    pass
 
 
-class Vocab(GenericClass): pass
+class Vocab(GenericClass):
+    pass
 
 
-class Example(GenericClass): pass
+class Example(GenericClass):
+    pass
 
 
 def time_per_token(num_tokens, total_time):
@@ -70,9 +74,12 @@ class EvalReporter(object):
         self.batches = []
 
     def save_batch(self, preds, target, example_ids, output, sent1_transitions=None, sent2_transitions=None):
-        sent1_transitions = sent1_transitions if sent1_transitions is not None else [None] * len(example_ids)
-        sent2_transitions = sent2_transitions if sent2_transitions is not None else [None] * len(example_ids)
-        batch = [preds.view(-1), target.view(-1), example_ids, output, sent1_transitions, sent2_transitions]
+        sent1_transitions = sent1_transitions if sent1_transitions is not None else [
+            None] * len(example_ids)
+        sent2_transitions = sent2_transitions if sent2_transitions is not None else [
+            None] * len(example_ids)
+        batch = [preds.view(-1), target.view(-1), example_ids, output,
+                 sent1_transitions, sent2_transitions]
         self.batches.append(batch)
 
     def write_report(self, filename):

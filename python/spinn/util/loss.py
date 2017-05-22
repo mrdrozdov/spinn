@@ -1,6 +1,7 @@
 import torch
 from torch.autograd import Variable
 
+
 def auxiliary_loss(model):
 
     has_spinn = hasattr(model, 'spinn')

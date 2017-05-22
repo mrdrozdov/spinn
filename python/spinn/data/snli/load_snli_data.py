@@ -11,6 +11,7 @@ LABEL_MAP = {
     "contradiction": 2
 }
 
+
 def convert_binary_bracketing(parse, lowercase=False):
     transitions = []
     tokens = []
@@ -27,6 +28,7 @@ def convert_binary_bracketing(parse, lowercase=False):
                     tokens.append(word)
                 transitions.append(0)
     return tokens, transitions
+
 
 def load_data(path, lowercase=False, choose=lambda x: True):
     print "Loading", path
@@ -52,8 +54,10 @@ def load_data(path, lowercase=False, choose=lambda x: True):
             example["hypothesis"] = loaded_example["sentence2"]
             example["example_id"] = loaded_example.get('pairID', 'NoID')
             if loaded_example["sentence1_binary_parse"] and loaded_example["sentence2_binary_parse"]:
-                (example["premise_tokens"], example["premise_transitions"]) = convert_binary_bracketing(loaded_example["sentence1_binary_parse"], lowercase=lowercase)
-                (example["hypothesis_tokens"], example["hypothesis_transitions"]) = convert_binary_bracketing(loaded_example["sentence2_binary_parse"], lowercase=lowercase)
+                (example["premise_tokens"], example["premise_transitions"]) = convert_binary_bracketing(
+                    loaded_example["sentence1_binary_parse"], lowercase=lowercase)
+                (example["hypothesis_tokens"], example["hypothesis_transitions"]) = convert_binary_bracketing(
+                    loaded_example["sentence2_binary_parse"], lowercase=lowercase)
                 examples.append(example)
             else:
                 failed_parse += 1

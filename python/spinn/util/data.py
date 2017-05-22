@@ -47,9 +47,9 @@ def create_tree(words, transitions):
     leaves = []
     for i, t in enumerate(transitions):
         if t == 0:
-            stack.append((i+1,t))
-            leaves.append(str(i+1))
-            template += '{node[label = "%s"]; %s;}\n' % (str(buf.pop()), str(i+1))
+            stack.append((i + 1, t))
+            leaves.append(str(i + 1))
+            template += '{node[label = "%s"]; %s;}\n' % (str(buf.pop()), str(i + 1))
         else:
             right = stack.pop()
             left = stack.pop()
@@ -78,8 +78,8 @@ def TrimDataset(dataset, seq_length, eval_mode=False, sentence_pair_data=False):
     else:
         if sentence_pair_data:
             new_dataset = [example for example in dataset if
-                len(example["premise_transitions"]) <= seq_length and
-                len(example["hypothesis_transitions"]) <= seq_length]
+                           len(example["premise_transitions"]) <= seq_length and
+                           len(example["hypothesis_transitions"]) <= seq_length]
         else:
             new_dataset = [example for example in dataset if len(
                 example["transitions"]) <= seq_length]
@@ -107,10 +107,10 @@ def TokensToIDs(vocabulary, dataset, sentence_pair_data=False):
                         example[key][i] = vocabulary[token]
                     elif token.lower() in vocabulary:
                         example[key][i] = vocabulary[token.lower()]
-                        lowers += 1                        
+                        lowers += 1
                     elif token.upper() in vocabulary:
                         example[key][i] = vocabulary[token.upper()]
-                        raises += 1  
+                        raises += 1
                     else:
                         example[key][i] = unk_id
                         unks += 1
@@ -129,7 +129,7 @@ def CropAndPadExample(example, left_padding, target_length, key, symbol=0, logge
     """
     if left_padding < 0:
         raise NotImplementedError("Behavior for cropped examples is not well-defined."
-            "Please set sequence length to some sufficiently large value and turn on truncating.")
+                                  "Please set sequence length to some sufficiently large value and turn on truncating.")
         # Crop, then pad normally.
         # TODO: Track how many sentences are cropped, but don't log a message
         # for every single one.
@@ -171,6 +171,7 @@ def CropAndPad(dataset, length, logger=None, sentence_pair_data=False):
                 example, tokens_left_padding, length, tokens_key,
                 symbol=SENTENCE_PADDING_SYMBOL, logger=logger)
     return dataset
+
 
 def CropAndPadForRNN(dataset, length, logger=None, sentence_pair_data=False):
     # NOTE: This can probably be done faster in NumPy if it winds up making a
@@ -220,8 +221,8 @@ def MakeTrainingIterator(sources, batch_size, smart_batches=True, use_peano=True
         random.shuffle(order)
         order = np.array(order)
 
-        num_splits = 10 # TODO: Should we be smarter about split size?
-        order_limit = len(order) / num_splits * num_splits 
+        num_splits = 10  # TODO: Should we be smarter about split size?
+        order_limit = len(order) / num_splits * num_splits
         order = order[:order_limit]
         order_splits = np.split(order, num_splits)
         batches = []
@@ -313,7 +314,7 @@ def MakeStandardEvalIterator(sources, batch_size, limit=-1, shuffle=False, rseed
 
         batch_indices = order[start:start + batch_size]
         candidate_batch = tuple(source[batch_indices]
-                               for source in sources)
+                                for source in sources)
 
         if len(candidate_batch[0]) == batch_size:
             data_iter.append(candidate_batch)
@@ -346,7 +347,7 @@ def MakeBucketEvalIterator(sources, batch_size):
 
     # Roll examples into batches so they have similar length.
     for i in range(num_batches):
-        batch_indices = order[i * batch_size:(i+1) * batch_size]
+        batch_indices = order[i * batch_size:(i + 1) * batch_size]
         batch = tuple(source[batch_indices] for source in sources)
         batches.append(batch)
 
@@ -364,17 +365,20 @@ def MakeBucketEvalIterator(sources, batch_size):
 def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=False, logger=None,
                       sentence_pair_data=False, for_rnn=False):
     # TODO(SB): Simpler version for plain RNN.
-    dataset = TrimDataset(dataset, seq_length, eval_mode=eval_mode, sentence_pair_data=sentence_pair_data)
+    dataset = TrimDataset(dataset, seq_length, eval_mode=eval_mode,
+                          sentence_pair_data=sentence_pair_data)
     dataset = TokensToIDs(vocabulary, dataset, sentence_pair_data=sentence_pair_data)
     if for_rnn:
-        dataset = CropAndPadForRNN(dataset, seq_length, logger=logger, sentence_pair_data=sentence_pair_data)
+        dataset = CropAndPadForRNN(dataset, seq_length, logger=logger,
+                                   sentence_pair_data=sentence_pair_data)
     else:
-        dataset = CropAndPad(dataset, seq_length, logger=logger, sentence_pair_data=sentence_pair_data)
+        dataset = CropAndPad(dataset, seq_length, logger=logger,
+                             sentence_pair_data=sentence_pair_data)
 
     if sentence_pair_data:
         X = np.transpose(np.array([[example["premise_tokens"] for example in dataset],
-                      [example["hypothesis_tokens"] for example in dataset]],
-                     dtype=np.int32), (1, 2, 0))
+                                   [example["hypothesis_tokens"] for example in dataset]],
+                                  dtype=np.int32), (1, 2, 0))
         if for_rnn:
             transitions = np.zeros((len(dataset), 2, 0))
             num_transitions = np.transpose(np.array(
@@ -383,8 +387,8 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
                 dtype=np.int32), (1, 0))
         else:
             transitions = np.transpose(np.array([[example["premise_transitions"] for example in dataset],
-                                    [example["hypothesis_transitions"] for example in dataset]],
-                                   dtype=np.int32), (1, 2, 0))
+                                                 [example["hypothesis_transitions"] for example in dataset]],
+                                                dtype=np.int32), (1, 2, 0))
             num_transitions = np.transpose(np.array(
                 [[example["num_premise_transitions"] for example in dataset],
                  [example["num_hypothesis_transitions"] for example in dataset]],
@@ -466,7 +470,7 @@ def LoadEmbeddingsFromText(vocabulary, embedding_dim, path):
     values from a GloVe - format vector file.
 
     For now, values not found in the file will be set to zero."""
-    
+
     emb = np.zeros(
         (len(vocabulary), embedding_dim), dtype=np.float32)
     with open(path, 'r') as f:
@@ -487,7 +491,7 @@ def TransitionsToParse(transitions, words):
         buffer_ptr = 0
         for transition in transitions:
             if transition == 0:
-                stack.append("(P " + words[buffer_ptr] +")")
+                stack.append("(P " + words[buffer_ptr] + ")")
                 buffer_ptr += 1
             elif transition == 1:
                 r = stack.pop()
@@ -505,29 +509,33 @@ class SimpleProgressBar(object):
     def __init__(self, msg=">", bar_length=80, enabled=True):
         super(SimpleProgressBar, self).__init__()
         self.enabled = enabled
-        if not self.enabled: return
+        if not self.enabled:
+            return
 
         self.begin = time.time()
         self.bar_length = bar_length
         self.msg = msg
 
     def step(self, i, total):
-        if not self.enabled: return
+        if not self.enabled:
+            return
         sys.stdout.write('\r')
         pct = (i / float(total)) * 100
         ii = i * self.bar_length / total
         fmt = "%s [%-{}s] %d%% %ds / %ds".format(self.bar_length)
-        total_time = time.time()-self.begin
-        expected = total_time / ((i+1e-03) / float(total))
-        sys.stdout.write(fmt % (self.msg, '='*ii, pct, total_time, expected))
+        total_time = time.time() - self.begin
+        expected = total_time / ((i + 1e-03) / float(total))
+        sys.stdout.write(fmt % (self.msg, '=' * ii, pct, total_time, expected))
         sys.stdout.flush()
 
     def reset(self):
-        if not self.enabled: return
+        if not self.enabled:
+            return
         self.begin = time.time()
 
     def finish(self):
-        if not self.enabled: return
+        if not self.enabled:
+            return
         self.reset()
         sys.stdout.write('\n')
 

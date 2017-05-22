@@ -32,7 +32,6 @@ class SPINNTestCase(unittest.TestCase):
         # Cleanup temporary file.
         temp.close()
 
-
     def test_save_sup_load_rl(self):
         pass
 
@@ -54,7 +53,6 @@ class SPINNTestCase(unittest.TestCase):
         # Cleanup temporary file.
         temp.close()
 
-
     def test_init_models(self):
         MockModel(spinn.spinn_core_model.BaseModel, default_args())
         MockModel(spinn.rl_spinn.BaseModel, default_args())
@@ -62,10 +60,8 @@ class SPINNTestCase(unittest.TestCase):
         MockModel(spinn.spinn_core_model.BaseModel, default_args(use_sentence_pair=True))
         MockModel(spinn.rl_spinn.BaseModel, default_args(use_sentence_pair=True))
 
-
     def test_basic_stack(self):
         model = MockModel(BaseModel, default_args())
-
 
         X, transitions = get_batch()
 
@@ -87,10 +83,8 @@ class SPINNTestCase(unittest.TestCase):
         assert outputs[0][0].data[0] == (3 - (1 - (2 - 1)))
         assert outputs[1][0].data[0] == ((3 - 2) - (4 - 5))
 
-
     def test_validate_transitions_cantskip(self):
         model = MockModel(BaseModel, default_args())
-
 
         # To Test:
         # 1. Cant SKIP
@@ -119,11 +113,10 @@ class SPINNTestCase(unittest.TestCase):
 
         transitions = [
             2, 1, 0, 0, 0, 1
-            ]
+        ]
         preds = np.array([
             0, 0, 1, 1, 0, 1
-            ]).astype(np.int32)
-
+        ]).astype(np.int32)
 
         ret, _ = model.spinn.validate(transitions, preds, stacks, bufs, zero_padded=False)
         expected = np.array([

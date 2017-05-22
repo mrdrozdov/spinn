@@ -12,28 +12,30 @@ TEST_EMBEDDING_MATRIX = "{}/test_embedding_matrix.5d.txt".format(cdir)
 
 def test_build_vocabulary_for_ascii_embedding_file():
     types_in_data = ["and", "the", "_", "strange_and_exotic_word"]
-    core_vocabulary = {"*PADDING*":0}
-    vocabulary = util.BuildVocabularyForASCIIEmbeddingFile(TEST_EMBEDDING_MATRIX, types_in_data, core_vocabulary)
+    core_vocabulary = {"*PADDING*": 0}
+    vocabulary = util.BuildVocabularyForASCIIEmbeddingFile(
+        TEST_EMBEDDING_MATRIX, types_in_data, core_vocabulary)
 
     expected = {
-        "*PADDING*" : 0,
-        "the" : 1,
-        "and" : 2,
-        "_" : 3,
+        "*PADDING*": 0,
+        "the": 1,
+        "and": 2,
+        "_": 3,
     }
 
     assert_equal(vocabulary, expected)
 
 
 def test_load_embeddings_from_ascii():
-    vocabulary = {"strange_and_exotic_word" : 0, "the" : 1, "." : 2}
+    vocabulary = {"strange_and_exotic_word": 0, "the": 1, ".": 2}
     loaded_matrix = util.LoadEmbeddingsFromASCII(vocabulary, 5, TEST_EMBEDDING_MATRIX)
     expected = np.asarray(
         [[0, 0, 0, 0, 0],
-        [0.418, 0.24968, -0.41242, 0.1217, 0.34527],
-        [0.15164, 0.30177, -0.16763, 0.17684, 0.31719]], dtype=np.float32)
+         [0.418, 0.24968, -0.41242, 0.1217, 0.34527],
+         [0.15164, 0.30177, -0.16763, 0.17684, 0.31719]], dtype=np.float32)
 
     np.testing.assert_array_equal(loaded_matrix, expected)
+
 
 def test_crop_and_pad_example():
     def _run_asserts(seq, tgt_length, expected):
@@ -105,6 +107,7 @@ def test_crop_and_pad():
 
     dataset = util.CropAndPad(dataset, length)
     assert_equal(dataset, expected)
+
 
 if __name__ == '__main__':
     test_build_vocabulary_for_ascii_embedding_file()

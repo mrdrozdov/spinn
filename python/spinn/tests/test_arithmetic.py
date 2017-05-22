@@ -67,18 +67,20 @@ class ArithmeticTestCase(unittest.TestCase):
 
     def test_eval_prefix_seq_4(self):
         dataset = arithmetic.ArithmeticData(NUMBERS)
-        seq = deque(['+', '-', '-', '-6', '-', '-1', '-5', '+', '-', '-', '-6', '-', '-1', '-5', '0', '10', '10'])
+        seq = deque(['+', '-', '-', '-6', '-', '-1', '-5', '+', '-',
+                     '-', '-6', '-', '-1', '-5', '0', '10', '10'])
         assert dataset.eval_prefix_seq(seq) == 0
 
     def test_convert_to_sexpr_4(self):
         dataset = arithmetic.ArithmeticData(NUMBERS)
-        seq = deque(['+', '-', '-', '-6', '-', '-1', '-5', '+', '-', '-', '-6', '-', '-1', '-5', '0', '10', '10'])
+        seq = deque(['+', '-', '-', '-6', '-', '-1', '-5', '+', '-',
+                     '-', '-6', '-', '-1', '-5', '0', '10', '10'])
         expected = '( + ( ( - ( ( - ( -6 ( - ( -1 -5 ) ) ) ) ( + ( ( - ( ( - ( -6 ( - ( -1 -5 ) ) ) ) 0 ) ) 10 ) ) ) ) 10 ) )'.split(' ')
         actual = dataset.convert_to_sexpr(seq)
         assert len(expected) == len(actual)
         assert all(e == a for e, a in zip(expected, actual)), \
             "\ne: {}\na: {}".format(' '.join(expected), ' '.join(actual))
-    
+
 
 if __name__ == '__main__':
     unittest.main()

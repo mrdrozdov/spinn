@@ -24,7 +24,7 @@ def convert_unary_binary_bracketed_data(filename, keep_fn=lambda x: True, conver
 
             for index, word in enumerate(words):
                 if word[0] != "(":
-                    if word == ")":  
+                    if word == ")":
                         # Ignore unary merges
                         if words[index - 1] == ")":
                             example["transitions"].append(1)

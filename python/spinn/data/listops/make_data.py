@@ -8,7 +8,7 @@ FIRST = "[FIRST"
 LAST = "[LAST"
 END = "]"
 
-OPERATORS = [MIN, MAX, MED] # , FIRST, LAST] 
+OPERATORS = [MIN, MAX, MED]  # , FIRST, LAST]
 VALUES = range(10)
 
 VALUE_P = 0.25
@@ -17,10 +17,11 @@ MAX_DEPTH = 20
 
 DATA_POINTS = 100000
 
+
 def generate_tree(depth):
     if depth < MAX_DEPTH:
         r = random.random()
-    else: 
+    else:
         r = 1
 
     if r > VALUE_P:
@@ -39,6 +40,7 @@ def generate_tree(depth):
         t = (t, END)
     return t
 
+
 def to_string(t, parens=True):
     if isinstance(t, str):
         return t
@@ -47,6 +49,7 @@ def to_string(t, parens=True):
     else:
         if parens:
             return '( ' + to_string(t[0]) + ' ' + to_string(t[1]) + ' )'
+
 
 def to_value(t):
     if not isinstance(t, tuple):
@@ -68,6 +71,7 @@ def to_value(t):
             return int(np.median(l[1]))
     elif isinstance(l, tuple):  # We've hit an unsaturated function and an argument.
         return (l[0], l[1] + [r])
+
 
 data = set()
 while len(data) < DATA_POINTS:

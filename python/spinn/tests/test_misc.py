@@ -1,7 +1,6 @@
 import unittest
 
 
-
 # PyTorch
 
 from spinn.util.misc import Accumulator

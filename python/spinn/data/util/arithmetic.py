@@ -11,7 +11,6 @@ class ArithmeticData(object):
         self.numbers = [str(x) for x in NUMBERS]
         self.all_tokens = self.ops + self.numbers
 
-
     def eval_prefix_seq(self, seq):
         token = seq.popleft()
         if token == '+':
@@ -20,7 +19,6 @@ class ArithmeticData(object):
             return self.eval_prefix_seq(seq) - self.eval_prefix_seq(seq)
         else:
             return int(token)
-
 
     def gen_prefix_seq(self, max_len):
         length = random.randint(3, max_len)
@@ -46,7 +44,6 @@ class ArithmeticData(object):
 
         return deque(seq)
 
-
     def generate_prefix_seqs(self, max_len, min=None, max=None):
         min = self.NUMBERS[0] if min is None else min
         max = self.NUMBERS[-1] if max is None else max
@@ -54,11 +51,11 @@ class ArithmeticData(object):
             try:
                 seq = self.gen_prefix_seq(max_len)
                 result = self.eval_prefix_seq(copy.copy(seq))
-            except: pass
+            except:
+                pass
             else:
                 if result >= min and result <= max:
                     yield result, seq
-
 
     def convert_to_sexpr_helper(self, seq):
         # Runs in O(n^2) time but is correct.

@@ -22,7 +22,7 @@ class RNNTestCase(unittest.TestCase):
         assert transitions.shape == (2, 7, 2)
         outputs = model(X, transitions)
         assert outputs.size() == (2, 3)
-    
+
 
 if __name__ == '__main__':
     unittest.main()

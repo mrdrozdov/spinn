@@ -31,7 +31,7 @@ class PytorchTestCase(unittest.TestCase):
 
         for r, e in zip(table, data):
             assert r[0] == e[0] and r[1] == e[1]
-        
+
         # Cleanup temporary dir.
         shutil.rmtree(temp_dir)
 
@@ -53,7 +53,7 @@ class PytorchTestCase(unittest.TestCase):
 
         assert len(table) == 1
         assert data[1][0] == table[0][0] and data[1][1] == table[0][1]
-        
+
         # Cleanup temporary dir.
         shutil.rmtree(temp_dir)
 
@@ -75,7 +75,7 @@ class PytorchTestCase(unittest.TestCase):
 
         assert len(table) == 1
         assert data[0][0] == table[0][0] and data[0][1] == table[0][1]
-        
+
         # Cleanup temporary dir.
         shutil.rmtree(temp_dir)
 

@@ -52,15 +52,15 @@ def evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabula
 
         # Run model.
         output = model(eval_X_batch, eval_transitions_batch, eval_y_batch,
-            use_internal_parser=FLAGS.use_internal_parser,
-            validate_transitions=FLAGS.validate_transitions)
+                       use_internal_parser=FLAGS.use_internal_parser,
+                       validate_transitions=FLAGS.validate_transitions)
 
         # Normalize output.
         logits = F.log_softmax(output)
 
         # Calculate class accuracy.
         target = torch.from_numpy(eval_y_batch).long()
-        pred = logits.data.max(1)[1].cpu() # get the index of the max log-probability
+        pred = logits.data.max(1)[1].cpu()  # get the index of the max log-probability
 
         eval_accumulate(model, data_manager, A, batch)
         A.add('class_correct', pred.eq(target).sum())
@@ -70,7 +70,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabula
         model.transition_loss if hasattr(model, 'transition_loss') else None
 
         # Update Aggregate Accuracies
-        total_tokens += sum([(nt+1)/2 for nt in eval_num_transitions_batch.reshape(-1)])
+        total_tokens += sum([(nt + 1) / 2 for nt in eval_num_transitions_batch.reshape(-1)])
 
         if FLAGS.write_eval_report:
             reporter_args = [pred, target, eval_ids, output.data.cpu().numpy()]
@@ -88,7 +88,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabula
             reporter.save_batch(*reporter_args)
 
         # Print Progress
-        progress_bar.step(i+1, total=total_batches)
+        progress_bar.step(i + 1, total=total_batches)
     progress_bar.finish()
 
     end = time.time()
@@ -125,16 +125,19 @@ def run():
 
     # Get Data and Embeddings
     vocabulary, initial_embeddings, _, eval_iterators = \
-        load_data_and_embeddings(FLAGS, data_manager, logger, FLAGS.eval_data_path, FLAGS.eval_data_path)
+        load_data_and_embeddings(FLAGS, data_manager, logger,
+                                 FLAGS.eval_data_path, FLAGS.eval_data_path)
 
     # Build model.
     vocab_size = len(vocabulary)
     num_classes = len(data_manager.LABEL_MAP)
 
-    model, optimizer, trainer = init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_manager)
+    model, optimizer, trainer = init_model(
+        FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_manager)
 
     standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.load_experiment_name)
-    best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.load_experiment_name, best=True)
+    best_checkpoint_path = get_checkpoint_path(
+        FLAGS.ckpt_path, FLAGS.load_experiment_name, best=True)
 
     # Load checkpoint if available.
     if FLAGS.load_best and os.path.isfile(best_checkpoint_path):
@@ -184,6 +187,6 @@ if __name__ == '__main__':
 
     if len(FLAGS.eval_data_path.split(":")) > 1:
         raise Exception("The evaluate.py script only runs against one eval set. "
-            "Please refrain from the ':' token in --eval_data_path")
+                        "Please refrain from the ':' token in --eval_data_path")
 
     run()

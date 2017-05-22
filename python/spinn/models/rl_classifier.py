@@ -62,22 +62,22 @@ def evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabula
 
         # Run model.
         output = model(eval_X_batch, eval_transitions_batch, eval_y_batch,
-            use_internal_parser=FLAGS.use_internal_parser,
-            validate_transitions=FLAGS.validate_transitions)
+                       use_internal_parser=FLAGS.use_internal_parser,
+                       validate_transitions=FLAGS.validate_transitions)
 
         # Normalize output.
         logits = F.log_softmax(output)
 
         # Calculate class accuracy.
         target = torch.from_numpy(eval_y_batch).long()
-        pred = logits.data.max(1)[1].cpu() # get the index of the max log-probability
+        pred = logits.data.max(1)[1].cpu()  # get the index of the max log-probability
 
         eval_accumulate(model, data_manager, A, batch)
         A.add('class_correct', pred.eq(target).sum())
         A.add('class_total', target.size(0))
 
         # Update Aggregate Accuracies
-        total_tokens += sum([(nt+1)/2 for nt in eval_num_transitions_batch.reshape(-1)])
+        total_tokens += sum([(nt + 1) / 2 for nt in eval_num_transitions_batch.reshape(-1)])
 
         if FLAGS.write_eval_report:
             reporter_args = [pred, target, eval_ids, output.data.cpu().numpy()]
@@ -95,7 +95,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabula
             reporter.save_batch(*reporter_args)
 
         # Print Progress
-        progress_bar.step(i+1, total=total_batches)
+        progress_bar.step(i + 1, total=total_batches)
     progress_bar.finish()
 
     end = time.time()
@@ -134,11 +134,12 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
 
     # Build log format strings.
     model.train()
-    X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = get_batch(training_data_iter.next())
+    X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = get_batch(
+        training_data_iter.next())
     model(X_batch, transitions_batch, y_batch,
-            use_internal_parser=FLAGS.use_internal_parser,
-            validate_transitions=FLAGS.validate_transitions
-            )
+          use_internal_parser=FLAGS.use_internal_parser,
+          validate_transitions=FLAGS.validate_transitions
+          )
 
     logger.Log("")
     logger.Log("# ----- BEGIN: Log Configuration ----- #")
@@ -175,18 +176,19 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
         batch = get_batch(training_data_iter.next())
         X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = batch
 
-        total_tokens = sum([(nt+1)/2 for nt in num_transitions_batch.reshape(-1)])
+        total_tokens = sum([(nt + 1) / 2 for nt in num_transitions_batch.reshape(-1)])
 
         # Reset cached gradients.
         optimizer.zero_grad()
 
-        epsilon = FLAGS.rl_epsilon * math.exp(-step/FLAGS.rl_epsilon_decay)
+        epsilon = FLAGS.rl_epsilon * math.exp(-step / FLAGS.rl_epsilon_decay)
 
         # Epsilon Greedy w. Decay.
         model.spinn.epsilon = epsilon
 
         # Confidence Penalty for Transition Predictions.
-        temperature = math.sin(math.pi / 2 + step / float(FLAGS.rl_confidence_interval) * 2 * math.pi)
+        temperature = math.sin(math.pi / 2 + step /
+                               float(FLAGS.rl_confidence_interval) * 2 * math.pi)
         temperature = (temperature + 1) / 2
 
         if FLAGS.rl_confidence_penalty:
@@ -199,16 +201,16 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
 
         # Run model.
         output = model(X_batch, transitions_batch, y_batch,
-            use_internal_parser=FLAGS.use_internal_parser,
-            validate_transitions=FLAGS.validate_transitions
-            )
+                       use_internal_parser=FLAGS.use_internal_parser,
+                       validate_transitions=FLAGS.validate_transitions
+                       )
 
         # Normalize output.
         logits = F.log_softmax(output)
 
         # Calculate class accuracy.
         target = torch.from_numpy(y_batch).long()
-        pred = logits.data.max(1)[1].cpu() # get the index of the max log-probability
+        pred = logits.data.max(1)[1].cpu()  # get the index of the max log-probability
         class_acc = pred.eq(target).sum() / float(target.size(0))
 
         # Calculate class loss.
@@ -241,7 +243,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
 
         # Learning Rate Decay
         if FLAGS.actively_decay_learning_rate:
-            optimizer.lr = FLAGS.learning_rate * (FLAGS.learning_rate_decay_per_10k_steps ** (step / 10000.0))
+            optimizer.lr = FLAGS.learning_rate * \
+                (FLAGS.learning_rate_decay_per_10k_steps ** (step / 10000.0))
 
         # Gradient descent step.
         optimizer.step()
@@ -258,7 +261,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
         train_rl_accumulate(model, data_manager, A, batch)
 
         if step % FLAGS.statistics_interval_steps == 0:
-            progress_bar.step(i=FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
+            progress_bar.step(i=FLAGS.statistics_interval_steps,
+                              total=FLAGS.statistics_interval_steps)
             progress_bar.finish()
 
             A.add('total_loss', total_loss.data[0])
@@ -271,8 +275,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
 
             stats_rl_args = train_rl_stats(model, optimizer, A, step)
             stats_rl_args_keys = ['policy_loss', 'value_loss',
-                'mean_adv_mean', 'mean_adv_mean_magnitude',
-                'mean_adv_var', 'mean_adv_var_magnitude']
+                                  'mean_adv_mean', 'mean_adv_mean_magnitude',
+                                  'mean_adv_var', 'mean_adv_var_magnitude']
             for k in stats_rl_args_keys:
                 stats_args[k] = stats_rl_args[k]
 
@@ -281,28 +285,29 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
             train_rl_metrics(M, stats_rl_args, step)
             logger.Log(train_rl_str.format(**stats_rl_args))
 
-            # Reset the accumulator. It's not checkpointed, so we shouldn't maintain state for that long.
+            # Reset the accumulator. It's not checkpointed, so we shouldn't maintain
+            # state for that long.
             A = Accumulator(maxlen=FLAGS.deque_length)
 
         if step % FLAGS.sample_interval_steps == 0 and FLAGS.num_samples > 0:
             model.train()
             model(X_batch, transitions_batch, y_batch,
-                use_internal_parser=FLAGS.use_internal_parser,
-                validate_transitions=FLAGS.validate_transitions
-                )
+                  use_internal_parser=FLAGS.use_internal_parser,
+                  validate_transitions=FLAGS.validate_transitions
+                  )
             tr_transitions_per_example, tr_strength = model.spinn.get_transitions_per_example()
 
             model.eval()
             model(X_batch, transitions_batch, y_batch,
-                use_internal_parser=FLAGS.use_internal_parser,
-                validate_transitions=FLAGS.validate_transitions
-                )
+                  use_internal_parser=FLAGS.use_internal_parser,
+                  validate_transitions=FLAGS.validate_transitions
+                  )
             ev_transitions_per_example, ev_strength = model.spinn.get_transitions_per_example()
 
             transition_str = "Samples:"
             if model.use_sentence_pair and len(transitions_batch.shape) == 3:
                 transitions_batch = np.concatenate([
-                    transitions_batch[:,:,0], transitions_batch[:,:,1]], axis=0)
+                    transitions_batch[:, :, 0], transitions_batch[:, :, 1]], axis=0)
 
             # This could be done prior to running the batch for a tiny speed boost.
             t_idxs = range(FLAGS.num_samples)
@@ -336,7 +341,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
             logger.Log("Checkpointing.")
             trainer.save(standard_checkpoint_path, step, best_dev_error)
 
-        progress_bar.step(i=step % FLAGS.statistics_interval_steps, total=FLAGS.statistics_interval_steps)
+        progress_bar.step(i=step % FLAGS.statistics_interval_steps,
+                          total=FLAGS.statistics_interval_steps)
 
 
 def run(only_forward=False):
@@ -348,13 +354,15 @@ def run(only_forward=False):
 
     # Get Data and Embeddings
     vocabulary, initial_embeddings, training_data_iter, eval_iterators = \
-        load_data_and_embeddings(FLAGS, data_manager, logger, FLAGS.training_data_path, FLAGS.eval_data_path)
+        load_data_and_embeddings(FLAGS, data_manager, logger,
+                                 FLAGS.training_data_path, FLAGS.eval_data_path)
 
     # Build model.
     vocab_size = len(vocabulary)
     num_classes = len(data_manager.LABEL_MAP)
 
-    model, optimizer, trainer = init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_manager)
+    model, optimizer, trainer = init_model(
+        FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_manager)
 
     standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name)
     best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name, best=True)
@@ -396,7 +404,8 @@ def run(only_forward=False):
         for index, eval_set in enumerate(eval_iterators):
             evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabulary)
     else:
-        train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_iter, eval_iterators, logger, step, best_dev_error)
+        train_loop(FLAGS, data_manager, model, optimizer, trainer,
+                   training_data_iter, eval_iterators, logger, step, best_dev_error)
 
 
 if __name__ == '__main__':

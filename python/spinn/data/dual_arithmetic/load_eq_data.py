@@ -6,6 +6,7 @@ SENTENCE_PAIR_DATA = True
 OUTPUTS = [True, False]
 LABEL_MAP = {str(x): i for i, x in enumerate(OUTPUTS)}
 
+
 def load_data(path, lowercase=None):
     examples = []
     with open(path) as f:

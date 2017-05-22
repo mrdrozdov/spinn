@@ -42,12 +42,18 @@ from the sentence padding token). Transitions are padded on the left.
 snli_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_snli.jsonl")
 sst_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_sst.txt")
 boolean_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_boolean.tsv")
-embedding_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_embedding_matrix.5d.txt")
-sign_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "arithmetic", "sign5_1k.tsv")
-simple_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "arithmetic", "simple5_1k.tsv")
-eq_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "dual_arithmetic", "eq5_1k.tsv")
-relational_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "dual_arithmetic", "relational5_1k.tsv")
-listops_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "data", "listops", "test_d8.tsv")
+embedding_data_path = os.path.join(os.path.dirname(
+    os.path.realpath(__file__)), "test_embedding_matrix.5d.txt")
+sign_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                              "..", "data", "arithmetic", "sign5_1k.tsv")
+simple_data_path = os.path.join(os.path.dirname(os.path.realpath(
+    __file__)), "..", "data", "arithmetic", "simple5_1k.tsv")
+eq_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                            "..", "data", "dual_arithmetic", "eq5_1k.tsv")
+relational_data_path = os.path.join(os.path.dirname(os.path.realpath(
+    __file__)), "..", "data", "dual_arithmetic", "relational5_1k.tsv")
+listops_data_path = os.path.join(os.path.dirname(
+    os.path.realpath(__file__)), "..", "data", "listops", "test_d8.tsv")
 word_embedding_dim = 5
 
 
@@ -125,7 +131,7 @@ def s_is_left_to_right(s, EOS_TOKEN):
     # That being said, this should never happen, so return False.
     return False
 
-        
+
 class DataTestCase(unittest.TestCase):
 
     def test_vocab(self):
@@ -165,16 +171,18 @@ class SNLITestCase(unittest.TestCase):
         assert len(raw_data) == 20
 
         hyp_seq_lengths = Counter([len(x['hypothesis_transitions'])
-                        for x in raw_data])
-        assert hyp_seq_lengths == {13: 4, 15: 4, 11: 2, 17: 2, 23: 2, 5: 1, 39: 1, 9: 1, 19: 1, 7: 1, 29: 1}
+                                   for x in raw_data])
+        assert hyp_seq_lengths == {13: 4, 15: 4, 11: 2, 17: 2,
+                                   23: 2, 5: 1, 39: 1, 9: 1, 19: 1, 7: 1, 29: 1}
 
         prem_seq_lengths = Counter([len(x['premise_transitions'])
-                        for x in raw_data])
+                                    for x in raw_data])
         assert prem_seq_lengths == {35: 7, 19: 3, 33: 3, 67: 3, 53: 3, 105: 1}
 
         min_seq_lengths = Counter([min(len(x['hypothesis_transitions']), len(x['premise_transitions']))
-                        for x in raw_data])
-        assert min_seq_lengths == {13: 4, 15: 4, 11: 2, 17: 2, 19: 2, 23: 2, 35: 1, 5: 1, 7: 1, 9: 1}
+                                   for x in raw_data])
+        assert min_seq_lengths == {13: 4, 15: 4, 11: 2,
+                                   17: 2, 19: 2, 23: 2, 35: 1, 5: 1, 7: 1, 9: 1}
 
     def test_preprocess(self):
         seq_length = 25
@@ -197,7 +205,7 @@ class SNLITestCase(unittest.TestCase):
             for_rnn=for_rnn)
 
         tokens, transitions, labels, num_transitions = data[:4]
-        
+
         # Filter examples that don't have lengths <= seq_length
         assert tokens.shape == (2, seq_length, 2)
         assert transitions.shape == (2, seq_length, 2)
@@ -215,7 +223,7 @@ class SNLITestCase(unittest.TestCase):
             # The sentences should be padded on the right.
             assert not s_is_left_padded(hyp_s)
             assert not s_is_left_padded(prem_s)
-            
+
             # The num_transitions should count non-skip transitions
             assert len([x for x in hyp_t if x != T_SKIP]) == num_hyp_t
             assert len([x for x in prem_t if x != T_SKIP]) == num_prem_t
@@ -293,7 +301,8 @@ class SSTTestCase(unittest.TestCase):
         assert len(raw_data) == 30
 
         seq_lengths = Counter([len(x['transitions']) for x in raw_data])
-        assert seq_lengths == {15: 3, 53: 3, 57: 3, 59: 2, 37: 2, 47: 2, 23: 2, 45: 2, 25: 2, 65: 1, 35: 1, 49: 1, 41: 1, 11: 1, 17: 1, 67: 1, 27: 1, 63: 1}
+        assert seq_lengths == {15: 3, 53: 3, 57: 3, 59: 2, 37: 2, 47: 2, 23: 2,
+                               45: 2, 25: 2, 65: 1, 35: 1, 49: 1, 41: 1, 11: 1, 17: 1, 67: 1, 27: 1, 63: 1}
 
     def test_preprocess(self):
         seq_length = 30
@@ -328,7 +337,7 @@ class SSTTestCase(unittest.TestCase):
 
             # The sentences should be padded on the right.
             assert not s_is_left_padded(s)
-            
+
             # The num_transitions should count non-skip transitions
             assert len([x for x in ts if x != T_SKIP]) == num_t
 
@@ -411,7 +420,7 @@ class ArithmeticTestCase(unittest.TestCase):
         structure_transitions = load_simple_data.structure_transitions
         tokens = map(str, '++000')
         transitions = [0, 0, 0, 0, 1, 1, 0, 1, 1]
-        expected =    [0, 0, 0, 0, 1, 3, 0, 1, 3]
+        expected = [0, 0, 0, 0, 1, 3, 0, 1, 3]
         actual = structure_transitions(tokens, transitions)
 
         assert all(a == e for a, e in zip(actual, expected))
@@ -420,7 +429,7 @@ class ArithmeticTestCase(unittest.TestCase):
         structure_transitions = load_simple_data.structure_transitions
         tokens = map(str, '++000')
         transitions = [0, 0, 0, 1, 0, 1, 1, 0, 1]
-        expected =    [0, 0, 0, 1, 0, 3, 1, 0, 3]
+        expected = [0, 0, 0, 1, 0, 3, 1, 0, 3]
         actual = structure_transitions(tokens, transitions)
 
         assert all(a == e for a, e in zip(actual, expected))
@@ -429,7 +438,7 @@ class ArithmeticTestCase(unittest.TestCase):
         structure_transitions = load_simple_data.structure_transitions
         tokens = ['-', '-', '-1', '-', '-4', '-8', '5']
         transitions = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1]
-        expected =    [0, 0, 0, 0, 0, 0, 1, 3, 1, 3, 0, 1, 3]
+        expected = [0, 0, 0, 0, 0, 0, 1, 3, 1, 3, 0, 1, 3]
         actual = structure_transitions(tokens, transitions)
 
         assert all(a == e for a, e in zip(actual, expected))
@@ -438,7 +447,7 @@ class ArithmeticTestCase(unittest.TestCase):
         spans = load_simple_data.spans
         tokens = ['-', '-', '-1', '-', '-4', '-8', '5']
         transitions = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1]
-        expected = set([(4,6), (3,6), (2,6), (1,6), (1,7), (0,7)])
+        expected = set([(4, 6), (3, 6), (2, 6), (1, 6), (1, 7), (0, 7)])
         actual = spans(transitions, tokens)
         actual = set([el.span for el in actual if el.tag != "leaf"])
 
@@ -448,7 +457,7 @@ class ArithmeticTestCase(unittest.TestCase):
         spans = load_simple_data.spans
         tokens = ['-', '-', '-1', '-', '-4', '-8', '5']
         transitions = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1]
-        expected = set([(3,6), (1,6), (0,7)])
+        expected = set([(3, 6), (1, 6), (0, 7)])
         actual = spans(transitions, tokens)
         actual = set([el.span for el in actual if el.tag == "struct"])
 
@@ -587,7 +596,8 @@ def suite_single_seq(seq_length, for_rnn, data_manager, path, starts_with, limit
 
     for i, (s, ts, num_t) in enumerate(zip(seqs, transitions, num_transitions)):
 
-        if i > limit: break
+        if i > limit:
+            break
 
         # The sentence should begin with an operator.
         assert s[0] in starts_with, "{}: {} not in {}".format(i, s[0], starts_with)
@@ -621,7 +631,7 @@ class ListopsTestCase(unittest.TestCase):
         tokens = ['[MAX', '3', '[MAX', '1', '7', ']', ']']
         ts = '0010010101101'
         transitions = map(int, ts)
-        expected = set([(0,2), (2,4), (2,5), (2,6), (0,6), (0,7)])
+        expected = set([(0, 2), (2, 4), (2, 5), (2, 6), (0, 6), (0, 7)])
         actual = load_listops_data.spans(transitions, tokens)
         actual = set([el.span for el in actual if el.tag != "leaf"])
 
@@ -631,7 +641,7 @@ class ListopsTestCase(unittest.TestCase):
         tokens = ['[MAX', '3', '[MAX', '1', '7', ']', ']']
         ts = '0010010101101'
         transitions = map(int, ts)
-        expected = set([(2,6), (0,7)])
+        expected = set([(2, 6), (0, 7)])
         actual = load_listops_data.spans(transitions, tokens)
         actual = set([el.span for el in actual if el.tag == "struct"])
 

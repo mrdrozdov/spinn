@@ -2,6 +2,7 @@ import datetime
 import sys
 import json
 
+
 class Logger(object):
     # A logging alternative that doesn't leave logs open between writes,
     # so as to allow AFS synchronization.
@@ -36,7 +37,7 @@ class Logger(object):
                 if self.show_level:
                     f.write("%s [%i] %s\n" % (datetime_string, level, message))
                 else:
-                    f.write("%s %s\n" % (datetime_string, message))                    
+                    f.write("%s %s\n" % (datetime_string, message))
 
     def LogJSON(self, message_obj, level=INFO):
         if self.json_log_path and level >= self.min_file_level:
@@ -44,4 +45,3 @@ class Logger(object):
                 print >>f, json.dumps(message_obj)
         else:
             sys.stderr.write('WARNING: No JSON log filename.')
-
