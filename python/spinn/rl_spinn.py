@@ -15,6 +15,7 @@ from spinn.util.blocks import LSTMState, Embed, MLP
 from spinn.util.blocks import bundle, unbundle, to_cpu, to_gpu, the_gpu, treelstm, lstm
 from spinn.util.blocks import get_h, get_c
 from spinn.util.misc import Args, Vocab, Example
+from spinn.util.catalan import interpolate
 
 from spinn.fat_stack import BaseModel as _BaseModel
 from spinn.fat_stack import SPINN
@@ -69,20 +70,20 @@ class RLSPINN(SPINN):
 
     def predict_actions(self, transition_output):
         transition_dist = F.softmax(transition_output / max(self.temperature, 1e-8)).data.cpu()
-        print transition_dist
 
         if self.training:
             if self.catalan:
                 # Interpolate between the uniform random distrubition of binary trees
                 # and the distribution from the transition_net's softmax.
-                A = F.softmax(transition_output).data[:,0].cpu()
-                B = torch.zeros(A.size()).fill_(0.5)
+                softmax = F.softmax(transition_output).data[:,0].cpu()
+                original = torch.zeros(softmax.size()).fill_(0.5)
                 p = transition_dist[:,0]
-                i = (p-B)/(A-B)
-                C = [self.shift_probabilities.prob(n_red, n_step, n_tok)
+                desired = [self.shift_probabilities.prob(n_red, n_step, n_tok)
                     for n_red, n_step, n_tok in zip(self.n_reduces, self.n_steps, self.n_tokens)]
-                C = torch.FloatTensor(C).unsqueeze(1)
-                transition_dist = torch.cat([C, 1-C], 1)
+                desired = torch.FloatTensor(desired)
+                new_p = interpolate(p, softmax, original, desired)
+                new_p = new_p.unsqueeze(1)
+                transition_dist = torch.cat([new_p, 1-new_p], 1)
 
             transitions_sampled = torch.multinomial(transition_dist, 1).view(-1).numpy()
             transition_preds = transitions_sampled

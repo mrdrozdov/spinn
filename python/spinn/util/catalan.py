@@ -1,3 +1,19 @@
+def interpolate(p, softmax, original, desired):
+    """
+    interpolate(p, softmax, original, desired)
+
+    Is used to recalculate temperature in a way that high temperature
+    converges at a desired non-uniform value. This operates under the assumption
+    that a probability from a "temperature-like" equation can be represented as a
+    fraction of the equation when temperature is 1 (`softmax`), and when temperature
+    is at some other value (`original`). One simple other value to use is the point of
+    convergence, which is uniform over the inputs.
+    """
+    i = (p-original)/(softmax-original)
+    new_p = i * p + (1-i) * desired
+    return new_p
+
+
 class Catalan(object):
     def __init__(self):
         """
