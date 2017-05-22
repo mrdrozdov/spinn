@@ -278,7 +278,7 @@ class BaseModel(_BaseModel):
 
         return policy_loss
 
-    def output_hook(self, output, sentences, transitions, y_batch=None):
+    def output_hook(self, output, sentences, transitions, y_batch=None, transition_acc=None):
         if not self.training:
             return
 
@@ -286,13 +286,20 @@ class BaseModel(_BaseModel):
         target = torch.from_numpy(y_batch).long()
 
         # Get Reward.
-        rewards = self.build_reward(probs, target, rl_reward=self.rl_reward)
+        #old_rewards = self.build_reward(probs, target, rl_reward=self.rl_reward)
+        ground = np.transpose(transitions)
+        pred = np.array([m['t_preds'] for m in self.spinn.memories if 't_preds' in m])
+        correct = (ground == pred).astype(np.float32)
+        trans_acc = np.sum(correct, axis=0) / correct.shape[0]
+        rewards = torch.from_numpy(trans_acc)
+        #print old_rewards, rewards
 
         # Get Baseline.
         baseline = self.build_baseline(rewards, sentences, transitions, y_batch)
 
         # Calculate advantage.
         advantage = rewards - baseline
+        # advantage = rewards
 
         # Whiten advantage. This is also called Variance Normalization.
         if self.rl_whiten:
