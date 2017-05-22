@@ -194,6 +194,6 @@ for run_id in range(FLAGS.sweep_runs):
 
     flags += " \\\n --experiment_name " + name
 
-    command = "python2.7 -m spinn.models.reinforce " + flags
+    command = "python2.7 -m spinn.models.rl_classifier " + flags
 
     open(os.path.join(FLAGS.sweep_path, name + ".sh"), 'w').write(tpl.format(command=command))

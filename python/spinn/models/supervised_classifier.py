@@ -381,6 +381,6 @@ if __name__ == '__main__':
     flag_defaults(FLAGS)
 
     if FLAGS.model_type == "RLSPINN":
-        raise Exception("Please use reinforce.py instead of supervised_classifier.py for RLSPINN.")
+        raise Exception("Please use rl_classifier.py instead of supervised_classifier.py for RLSPINN.")
 
     run(only_forward=FLAGS.expanded_eval_only_mode)
