@@ -286,6 +286,9 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer, training_data_ite
             train_rl_metrics(M, stats_rl_args, step)
             logger.Log(train_rl_str.format(**stats_rl_args))
 
+            # Reset the accumulator. It's not checkpointed, so we shouldn't maintain state for that long.
+            A = Accumulator(maxlen=FLAGS.deque_length)
+
         if step % FLAGS.sample_interval_steps == 0 and FLAGS.num_samples > 0:
             model.train()
             model(X_batch, transitions_batch, y_batch,
