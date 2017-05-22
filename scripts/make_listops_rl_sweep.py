@@ -15,6 +15,7 @@ SWEEP_RUNS = 16
 LIN = "LIN"
 EXP = "EXP"
 BOOL = "BOOL"
+CHOICE = "CHOICE"
 SS_BASE = "SS_BASE"
 
 FLAGS = gflags.FLAGS
@@ -63,16 +64,19 @@ FIXED_PARAMETERS = {
     "num_samples": "5",
     "nolateral_tracking": "",
     "encode": "pass",
+    "norl_catalan": "",
+    "norl_wake_sleep": "",
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "rl_weight":  ("rlwt", EXP, 0.01, 1),
+    "rl_weight":  ("rlwt", EXP, 5.0, 1000.0),
     "learning_rate":      ("lr", EXP, 0.0006, 0.06),  # RNN likes higher, but below 009.
     "l2_lambda":          ("l2", EXP, 8e-7, 1e-4),
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.3, 1.0),
-    "rl_catalan": ("cata", BOOL, None, None),
-    "rl_wake_sleep": ("ws", BOOL, None, None),
+    # "rl_wake_sleep": ("ws", BOOL, None, None),
+    "rl_baseline": ("base", CHOICE, ["ema", "greedy", "value", "pass"], None),
+
 }
 
 sweep_name = "sweep_" + NAME + "_" + \
@@ -107,6 +111,8 @@ for run_id in range(SWEEP_RUNS):
             lmn = np.log(mn)
             lmx = np.log(mx)
             sample = 1 - np.exp(lmn + (lmx - lmn) * r)
+        elif t==CHOICE:
+            sample = random.choice(mn)
         else:
             sample = mn + (mx - mn) * r
 
@@ -117,12 +123,15 @@ for run_id in range(SWEEP_RUNS):
         elif isinstance(mn, float):
             val_disp = "%.2g" % sample
             params[param] = sample
-        else:
+        elif t==BOOL:
             val_disp = str(int(sample))
             if not sample:
                 params['no' + param] = ''
             else:
                 params[param] = ''
+        else:
+            val_disp = sample
+            params[param] = sample
         name += "-" + config[0] + val_disp
 
     flags = ""
