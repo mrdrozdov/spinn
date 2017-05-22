@@ -58,6 +58,7 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
          rl_entropy=FLAGS.rl_entropy,
          rl_entropy_beta=FLAGS.rl_entropy_beta,
          rl_catalan=FLAGS.rl_catalan,
+         rl_transition_acc_as_reward=FLAGS.rl_transition_acc_as_reward,
          context_args=context_args,
          composition_args=composition_args,
         )
@@ -109,6 +110,7 @@ class BaseModel(_BaseModel):
                  rl_entropy=None,
                  rl_entropy_beta=None,
                  rl_catalan=None,
+                 rl_transition_acc_as_reward=None,
                  **kwargs):
         super(BaseModel, self).__init__(**kwargs)
 
@@ -124,6 +126,7 @@ class BaseModel(_BaseModel):
         self.rl_entropy_beta = rl_entropy_beta
         self.spinn.epsilon = rl_epsilon
         self.spinn.catalan = rl_catalan
+        self.rl_transition_acc_as_reward = rl_transition_acc_as_reward
 
         if self.rl_baseline == "value":
             self.v_dim = 100
@@ -286,7 +289,14 @@ class BaseModel(_BaseModel):
         target = torch.from_numpy(y_batch).long()
 
         # Get Reward.
-        rewards = self.build_reward(probs, target, rl_reward=self.rl_reward)
+        if self.rl_transition_acc_as_reward:
+            ground = np.transpose(transitions)
+            pred = np.array([m['t_preds'] for m in self.spinn.memories if 't_preds' in m])
+            correct = (ground == pred).astype(np.float32)
+            trans_acc = np.sum(correct, axis=0) / correct.shape[0]
+            rewards = torch.from_numpy(trans_acc)
+        else:
+            rewards = self.build_reward(probs, target, rl_reward=self.rl_reward)
 
         # Get Baseline.
         baseline = self.build_baseline(rewards, sentences, transitions, y_batch)

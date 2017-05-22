@@ -632,7 +632,7 @@ class BaseModel(nn.Module):
 
         output = self.mlp(features)
 
-        self.output_hook(output, sentences, transitions, y_batch)
+        self.output_hook(output, sentences, transitions, y_batch, transition_acc=transition_acc)
 
         return output
 
