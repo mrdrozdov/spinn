@@ -200,7 +200,7 @@ def get_flags():
     gflags.DEFINE_bool("debug", False, "Set to True to disable debug_mode and type_checking.")
     gflags.DEFINE_bool("show_progress_bar", True, "Turn this off when running experiments on HPC.")
     gflags.DEFINE_string("branch_name", "", "")
-    gflags.DEFINE_integer("deque_length", None, "Max trailing examples to use for statistics.")
+    gflags.DEFINE_integer("deque_length", 100, "Max trailing examples to use when computing average training statistics.")
     gflags.DEFINE_string("sha", "", "")
     gflags.DEFINE_string("experiment_name", "", "")
     gflags.DEFINE_string("load_experiment_name", None, "")
