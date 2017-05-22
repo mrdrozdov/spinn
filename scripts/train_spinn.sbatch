@@ -17,7 +17,7 @@ echo $SLURM_JOBID - `hostname` - $SPINN_FLAGS >> ~/spinn_machine_assignments.txt
 module load python/intel/2.7.12 pytorch/0.1.12_2 protobuf/intel/3.1.0
 
 # Default model.
-MODEL="spinn.models.fat_classifier"
+MODEL="spinn.models.supervised_classifier"
 
 # Optionally override default model.
 if [ -n "$SPINNMODEL" ]; then
