@@ -6,7 +6,7 @@ from nose.plugins.attrib import attr
 import numpy as np
 
 from spinn import util
-from spinn.fat_stack import SPINN
+from spinn.spinn_core_model import SPINN
 
 # PyTorch
 import torch

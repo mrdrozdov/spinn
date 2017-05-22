@@ -3,9 +3,9 @@ import numpy as np
 import tempfile
 
 from spinn import util
-from spinn.fat_stack import SPINN, BaseModel
+from spinn.spinn_core_model import SPINN, BaseModel
 
-import spinn.fat_stack
+import spinn.spinn_core_model
 import spinn.rl_spinn
 from spinn.util.blocks import ModelTrainer
 
@@ -42,7 +42,7 @@ class SPINNTestCase(unittest.TestCase):
         scalar = 11
         other_scalar = 0
 
-        model_to_save = MockModel(spinn.fat_stack.BaseModel, default_args())
+        model_to_save = MockModel(spinn.spinn_core_model.BaseModel, default_args())
         opt_to_save = optim.SGD(model_to_save.parameters(), lr=0.1)
         trainer_to_save = ModelTrainer(model_to_save, opt_to_save)
 
@@ -62,10 +62,10 @@ class SPINNTestCase(unittest.TestCase):
 
 
     def test_init_models(self):
-        MockModel(spinn.fat_stack.BaseModel, default_args())
+        MockModel(spinn.spinn_core_model.BaseModel, default_args())
         MockModel(spinn.rl_spinn.BaseModel, default_args())
 
-        MockModel(spinn.fat_stack.BaseModel, default_args(use_sentence_pair=True))
+        MockModel(spinn.spinn_core_model.BaseModel, default_args(use_sentence_pair=True))
         MockModel(spinn.rl_spinn.BaseModel, default_args(use_sentence_pair=True))
 
 

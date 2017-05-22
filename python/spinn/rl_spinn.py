@@ -17,8 +17,8 @@ from spinn.util.blocks import get_h, get_c
 from spinn.util.misc import Args, Vocab, Example
 from spinn.util.catalan import interpolate
 
-from spinn.fat_stack import BaseModel as _BaseModel
-from spinn.fat_stack import SPINN
+from spinn.spinn_core_model import BaseModel as _BaseModel
+from spinn.spinn_core_model import SPINN
 
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
