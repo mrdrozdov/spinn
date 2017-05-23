@@ -6,9 +6,11 @@ source: https://github.com/rory/ascii_sparks/blob/master/ascii_sparks.py
 
 """
 
-parts = u' ▁▂▃▄▅▆▇▉'
+sparks = u' ▁▂▃▄▅▆▇▉'
+hex_str = '0123456789ABCDEFX'
+dec_str = '0123456789X'
 
 
-def sparks(nums):
+def sparks(nums, parts=sparks):
     fraction = max(nums) / float(len(parts) - 1)
     return ''.join(parts[int(round(x / fraction))] for x in nums)

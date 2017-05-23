@@ -63,7 +63,8 @@ class BaseModel(nn.Module):
         vocab.size = initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size
         vocab.vectors = initial_embeddings
 
-        self.embed = Embed(word_embedding_dim, vocab.size, vectors=vocab.vectors)
+        self.embed = Embed(word_embedding_dim, vocab.size,
+                           vectors=vocab.vectors)
 
         mlp_input_dim = model_dim * 2 if use_sentence_pair else model_dim
 
@@ -81,7 +82,8 @@ class BaseModel(nn.Module):
         embeds = self.reshape_input(embeds, batch_size, seq_length)
         embeds = self.encode(embeds)
         embeds = self.reshape_context(embeds, batch_size, seq_length)
-        embeds = torch.cat([b.unsqueeze(0) for b in torch.chunk(embeds, batch_size, 0)], 0)
+        embeds = torch.cat([b.unsqueeze(0)
+                            for b in torch.chunk(embeds, batch_size, 0)], 0)
 
         return embeds
 

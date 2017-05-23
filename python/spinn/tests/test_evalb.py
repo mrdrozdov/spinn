@@ -16,7 +16,8 @@ class EvalbTestCase(unittest.TestCase):
         for ts, exp in cases:
             ts = map(int, ts)
             tsplits = bracketing(ts)
-            assert all(t == e for t, e in zip(tsplits, exp)), "{} != {}".format(tsplits, exp)
+            assert all(t == e for t, e in zip(tsplits, exp)
+                       ), "{} != {}".format(tsplits, exp)
 
     def test_crossing(self):
         cases = [
@@ -28,7 +29,8 @@ class EvalbTestCase(unittest.TestCase):
         ]
         for i, (gold, pred, exp) in enumerate(cases):
             crosses, count = crossing(gold, pred)
-            assert count == exp, "{}. {} != {}. {}".format(i, count, exp, crosses)
+            assert count == exp, "{}. {} != {}. {}".format(
+                i, count, exp, crosses)
 
 
 if __name__ == '__main__':

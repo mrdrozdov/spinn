@@ -1,5 +1,8 @@
 import sys
 import os
+import json
+import math
+import random
 import time
 
 import gflags
@@ -383,7 +386,14 @@ def flag_defaults(FLAGS, load_log_flags=False):
         FLAGS.gpu = -1
 
 
-def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_manager):
+def init_model(
+        FLAGS,
+        logger,
+        initial_embeddings,
+        vocab_size,
+        num_classes,
+        data_manager,
+        logfile_header=None):
     # Choose model.
     logger.Log("Building model.")
     if FLAGS.model_type == "CBOW":
@@ -443,6 +453,10 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
     composition_args.extract_c = None
 
     if FLAGS.reduce == "treelstm":
+        assert FLAGS.model_dim % 2 == 0, 'model_dim must be an even number.'
+        if FLAGS.model_dim != FLAGS.word_embedding_dim:
+            print('If you are setting different hidden layer and word '
+                  'embedding sizes, make sure you specify an encoder')
         composition_args.wrap_items = lambda x: bundle(x)
         composition_args.extract_h = lambda x: x.h
         composition_args.extract_c = lambda x: x.c
@@ -484,7 +498,11 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
 
     # Print model size.
     logger.Log("Architecture: {}".format(model))
+    if logfile_header:
+        logfile_header.model_architecture = str(model)
     total_params = sum([reduce(lambda x, y: x * y, w.size(), 1.0) for w in model.parameters()])
     logger.Log("Total params: {}".format(total_params))
+    if logfile_header:
+        logfile_header.total_params = int(total_params)
 
     return model, optimizer, trainer

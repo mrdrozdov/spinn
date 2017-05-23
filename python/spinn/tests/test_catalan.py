@@ -57,7 +57,8 @@ class CatalanTestCase(unittest.TestCase):
 
         for r1, r2 in zip(table, target_12):
             for c1, c2 in zip(r1, r2):
-                assert almost_equal(c1, c2), "\nRet: {}\nExp: {}".format(r1, r2)
+                assert almost_equal(
+                    c1, c2), "\nRet: {}\nExp: {}".format(r1, r2)
 
 
 if __name__ == '__main__':

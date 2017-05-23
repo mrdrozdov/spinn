@@ -71,39 +71,42 @@ class MetricsLogger(object):
 
 class EvalReporter(object):
     def __init__(self):
-        self.batches = []
+        super(EvalReporter, self).__init__()
+        self.report = pb.EvaluationReport()
 
-    def save_batch(self, preds, target, example_ids, output,
-                   sent1_transitions=None, sent2_transitions=None):
-        sent1_transitions = sent1_transitions if sent1_transitions is not None else [
-            None] * len(example_ids)
-        sent2_transitions = sent2_transitions if sent2_transitions is not None else [
-            None] * len(example_ids)
-        batch = [preds.view(-1), target.view(-1), example_ids, output,
-                 sent1_transitions, sent2_transitions]
-        self.batches.append(batch)
+    def save_batch(self,
+                   preds,
+                   target,
+                   example_ids,
+                   output,
+                   sent1_transitions=None,
+                   sent2_transitions=None):
+        '''Saves a batch. Transforms the batch from column-centric information
+        (information split by columns) to row-centric (by EvalSentence).'''
 
-    def write_report(self, filename):
-        with open(filename, 'w') as f:
-            for b in self.batches:
-                for bb in zip(*b):
-                    pred, truth, eid, output, sent1_transitions, sent2_transitions = bb
-                    report_str = "{eid} {correct} {truth} {pred} {output}"
-                    if sent1_transitions is not None:
-                        report_str += " {sent1_transitions}"
-                    if sent2_transitions is not None:
-                        report_str += " {sent2_transitions}"
-                    report_str += "\n"
-                    report_dict = {
-                        "eid": eid,
-                        "correct": truth == pred,
-                        "truth": truth,
-                        "pred": pred,
-                        "output": " ".join([str(o) for o in output]),
-                        "sent1_transitions": '{}'.format("".join(str(t) for t in sent1_transitions)) if sent1_transitions is not None else None,
-                        "sent2_transitions": '{}'.format("".join(str(t) for t in sent2_transitions)) if sent2_transitions is not None else None,
-                    }
-                    f.write(report_str.format(**report_dict))
+        b = [preds.view(-1), target.view(-1), example_ids, output]
+        batch = self.report.batches.add()
+        for i, (pred, truth, eid, output) in zip(*b):
+            sent = batch.sentences.add()
+            sent.sentence_id = eid
+            sent.prediction = pred
+            sent.truth = truth
+            sent.output = list(output)
+            if sent1_transitions is not None:
+                sent.sent1_transitions = list(sent1_transitions[i])
+            if sent2_transitions is not None:
+                sent.sent2_transitions = list(sent2_transitions[i])
+
+    def write_report(self, filename, binary=False):
+        '''Commits the report to a file. Can be written as textproto or binary.
+        Binary is more space-efficient but can't be inspected manually from
+        a text editor.'''
+        if binary:
+            with open(filename, 'wb') as f:
+                f.write(self.report.SerializeToString())
+        else:
+            with open(filename, 'w') as f:
+                f.write(str(self.report))
 
 
 def recursively_set_device(inp, gpu):

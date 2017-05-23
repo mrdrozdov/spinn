@@ -13,7 +13,8 @@ def load_data(path, lowercase=None):
         for example_id, line in enumerate(f):
             line = line.strip()
             label, seq = line.split('\t')
-            tokens, transitions = util.convert_binary_bracketed_seq(seq.split(' '))
+            tokens, transitions = util.convert_binary_bracketed_seq(
+                seq.split(' '))
 
             example = {}
             example["label"] = label

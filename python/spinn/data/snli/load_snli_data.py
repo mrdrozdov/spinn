@@ -62,7 +62,8 @@ def load_data(path, lowercase=False, choose=lambda x: True):
             else:
                 failed_parse += 1
     if failed_parse > 0:
-        print("Warning: Failed to convert binary parse for {} examples.".format(failed_parse))
+        print("Warning: Failed to convert binary parse for {} examples.".format(
+            failed_parse))
     return examples, None
 
 

@@ -13,8 +13,10 @@ def load_data(path, lowercase=None):
         for pairID, line in enumerate(f):
             line = line.strip()
             label, s1, s2 = line.split('\t')
-            tokens1, transitions1 = util.convert_binary_bracketed_seq(s1.split(' '))
-            tokens2, transitions2 = util.convert_binary_bracketed_seq(s2.split(' '))
+            tokens1, transitions1 = util.convert_binary_bracketed_seq(
+                s1.split(' '))
+            tokens2, transitions2 = util.convert_binary_bracketed_seq(
+                s2.split(' '))
 
             example = {}
             example["label"] = label

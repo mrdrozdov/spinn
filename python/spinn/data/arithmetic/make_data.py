@@ -85,7 +85,8 @@ if __name__ == '__main__':
     for idx in tqdm(range(limit)):
 
         label = min(idx // label_size, len(data_type.LABELS) - 1)
-        desired_length = min(3 + 2 * ((idx % label_size) // length_size), length)
+        desired_length = min(
+            3 + 2 * ((idx % label_size) // length_size), length)
         if idx >= label_size * len(data_type.LABELS):
             desired_length = length
 

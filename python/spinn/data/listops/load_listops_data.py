@@ -52,7 +52,8 @@ def load_data(path, lowercase=None):
             if len(seq) <= 1:
                 continue
 
-            tokens, transitions = util.convert_binary_bracketed_seq(seq.split(' '))
+            tokens, transitions = util.convert_binary_bracketed_seq(
+                seq.split(' '))
 
             example = {}
             example["label"] = label

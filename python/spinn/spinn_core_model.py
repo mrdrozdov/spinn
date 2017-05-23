@@ -48,8 +48,14 @@ def build_model(data_manager, initial_embeddings, vocab_size,
 
 
 class Tracker(nn.Module):
+    '''The tracker keeps a summary of the parsing process so far. This is the
+    "tracking LSTM" as described in the paper.'''
 
     def __init__(self, size, tracker_size, lateral_tracking=True, tracking_ln=True):
+        '''Args:
+            size: input size (parser hidden state) = FLAGS.model_dim
+            tracker_size: FLAGS.tracking_lstm_hidden_dim
+            (see FLAGS for the rest)'''
         super(Tracker, self).__init__()
 
         # Initialize layers.

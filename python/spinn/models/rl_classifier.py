@@ -14,13 +14,13 @@ from spinn.util.blocks import get_l2_loss, the_gpu, to_gpu
 from spinn.util.misc import Accumulator, EvalReporter
 from spinn.util.misc import recursively_set_device
 from spinn.util.metrics import MetricsWriter
-from spinn.util.logging import train_format, train_extra_format, train_stats, train_accumulate
-from spinn.util.logging import train_rl_format, train_rl_stats, train_rl_accumulate
-from spinn.util.logging import eval_metrics, train_metrics, train_rl_metrics
-from spinn.util.logging import eval_format, eval_extra_format, eval_stats, eval_accumulate
+from spinn.util.logging import stats, train_accumulate
+from spinn.util.logging import train_rl_accumulate
+from spinn.util.logging import eval_stats, eval_accumulate
 from spinn.util.loss import auxiliary_loss
-from spinn.util.sparks import sparks
+from spinn.util.sparks import sparks, dec_str
 import spinn.util.evalb as evalb
+import spinn.util.logging_pb2 as pb
 
 # PyTorch
 import torch
@@ -31,28 +31,27 @@ import torch.nn.functional as F
 
 from spinn.models.base import get_data_manager, get_flags, get_batch
 from spinn.models.base import flag_defaults, init_model
-from spinn.models.base import get_checkpoint_path, log_path
+from spinn.models.base import sequential_only, get_checkpoint_path, log_path
 from spinn.models.base import load_data_and_embeddings
 
 
 FLAGS = gflags.FLAGS
 
 
-def evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabulary=None):
+def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=None):
     filename, dataset = eval_set
 
     A = Accumulator()
-    M = MetricsWriter(os.path.join(FLAGS.metrics_path, FLAGS.experiment_name))
+    index = len(log_entry.evaluation)
+    eval_log = log_entry.evaluation.add()
     reporter = EvalReporter()
-
-    eval_str = eval_format(model)
-    eval_extra_str = eval_extra_format(model)
 
     # Evaluate
     total_batches = len(dataset)
     progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
     total_tokens = 0
+    invalid = 0
     start = time.time()
 
     model.eval()
@@ -104,21 +103,18 @@ def evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabula
     A.add('total_tokens', total_tokens)
     A.add('total_time', total_time)
 
-    stats_args = eval_stats(model, A, step)
-    stats_args['filename'] = filename
-
-    logger.Log(eval_str.format(**stats_args))
-    logger.Log(eval_extra_str.format(**stats_args))
+    eval_stats(model, A, eval_log)
+    eval_log.filename = filename
 
     if FLAGS.write_eval_report:
-        eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".report")
+        path_fname = '{}.{}.{}.report'.format(
+            FLAGS.experiment_name, step, index)
+        eval_report_path = os.path.join(FLAGS.log_path, path_fname)
+        eval_log.report_path = eval_report_path
         reporter.write_report(eval_report_path)
 
-    eval_class_acc = stats_args['class_acc']
-    eval_trans_acc = stats_args['transition_acc']
-
-    if index == 0:
-        eval_metrics(M, stats_args, step)
+    eval_class_acc = eval_log.eval_class_accuracy
+    eval_trans_acc = eval_log.eval_transition_accuracy
 
     return eval_class_acc, eval_trans_acc
 
@@ -127,7 +123,6 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                training_data_iter, eval_iterators, logger, step, best_dev_error):
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
-    M = MetricsWriter(os.path.join(FLAGS.metrics_path, FLAGS.experiment_name))
 
     # Checkpoint paths.
     standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name)
@@ -135,32 +130,11 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
 
     # Build log format strings.
     model.train()
-    X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = get_batch(
-        training_data_iter.next())
+    X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = get_batch(training_data_iter.next())
     model(X_batch, transitions_batch, y_batch,
           use_internal_parser=FLAGS.use_internal_parser,
           validate_transitions=FLAGS.validate_transitions
           )
-
-    logger.Log("")
-    logger.Log("# ----- BEGIN: Log Configuration ----- #")
-
-    # Preview train string template.
-    train_str = train_format(model)
-    logger.Log("Train-Format: {}".format(train_str))
-    train_extra_str = train_extra_format(model)
-    logger.Log("Train-Extra-Format: {}".format(train_extra_str))
-    train_rl_str = train_rl_format(model)
-    logger.Log("Train-RL-Format: {}".format(train_rl_str))
-
-    # Preview eval string template.
-    eval_str = eval_format(model)
-    logger.Log("Eval-Format: {}".format(eval_str))
-    eval_extra_str = eval_extra_format(model)
-    logger.Log("Eval-Extra-Format: {}".format(eval_extra_str))
-
-    logger.Log("# ----- END: Log Configuration ----- #")
-    logger.Log("")
 
     # Train.
     logger.Log("Training.")
@@ -169,8 +143,11 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
     progress_bar = SimpleProgressBar(msg="Training", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(i=0, total=FLAGS.statistics_interval_steps)
 
+    log_entry = pb.SpinnEntry()
     for step in range(step, FLAGS.training_steps):
         model.train()
+        log_entry.Clear()
+        log_entry.step = step
 
         start = time.time()
 
@@ -266,31 +243,12 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                               total=FLAGS.statistics_interval_steps)
             progress_bar.finish()
 
-            A.add('total_loss', total_loss.data[0])
-            A.add('xent_loss', xent_loss.data[0])
-            A.add('auxiliary_loss', aux_loss.data[0])
-            A.add('l2_loss', l2_loss.data[0])
-            stats_args = train_stats(model, optimizer, A, step)
-
-            train_metrics(M, stats_args, step)
-
-            stats_rl_args = train_rl_stats(model, optimizer, A, step)
-            stats_rl_args_keys = ['policy_loss', 'value_loss',
-                                  'mean_adv_mean', 'mean_adv_mean_magnitude',
-                                  'mean_adv_var', 'mean_adv_var_magnitude']
-            for k in stats_rl_args_keys:
-                stats_args[k] = stats_rl_args[k]
-
-            logger.Log(train_str.format(**stats_args))
-            logger.Log(train_extra_str.format(**stats_args))
-            train_rl_metrics(M, stats_rl_args, step)
-            logger.Log(train_rl_str.format(**stats_rl_args))
-
-            # Reset the accumulator. It's not checkpointed, so we shouldn't maintain
-            # state for that long.
-            A = Accumulator(maxlen=FLAGS.deque_length)
+            A.add('xent_cost', xent_loss.data[0])
+            A.add('l2_cost', l2_loss.data[0])
+            stats(model, optimizer, A, step, log_entry)
 
         if step % FLAGS.sample_interval_steps == 0 and FLAGS.num_samples > 0:
+            should_log = True
             model.train()
             model(X_batch, transitions_batch, y_batch,
                   use_internal_parser=FLAGS.use_internal_parser,
@@ -305,7 +263,6 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                   )
             ev_transitions_per_example, ev_strength = model.spinn.get_transitions_per_example()
 
-            transition_str = "Samples:"
             if model.use_sentence_pair and len(transitions_batch.shape) == 3:
                 transitions_batch = np.concatenate([
                     transitions_batch[:, :, 0], transitions_batch[:, :, 1]], axis=0)
@@ -315,21 +272,26 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
             random.shuffle(t_idxs)
             t_idxs = sorted(t_idxs[:FLAGS.num_samples])
             for t_idx in t_idxs:
+                log = log_entry.rl_sampling.add()
                 gold = transitions_batch[t_idx]
                 pred_tr = tr_transitions_per_example[t_idx]
                 pred_ev = ev_transitions_per_example[t_idx]
-                stength_tr = sparks([1] + tr_strength[t_idx].tolist())
-                stength_ev = sparks([1] + ev_strength[t_idx].tolist())
+                strength_tr = sparks(
+                    [1] + tr_strength[t_idx].tolist(), dec_str)
+                strength_ev = sparks(
+                    [1] + ev_strength[t_idx].tolist(), dec_str)
                 _, crossing = evalb.crossing(gold, pred)
-                transition_str += "\n{}. crossing={}".format(t_idx, crossing)
-                transition_str += "\n     g{}".format("".join(map(str, gold)))
-                transition_str += "\n      {}".format(stength_tr[1:].encode('utf-8'))
-                transition_str += "\n    pt{}".format("".join(map(str, pred_tr)))
-                transition_str += "\n      {}".format(stength_ev[1:].encode('utf-8'))
-                transition_str += "\n    pe{}".format("".join(map(str, pred_ev)))
-            logger.Log(transition_str)
+
+                log.t_idx = t_idx
+                log.crossing = crossing
+                log.gold_lb = "".join(map(str, gold))
+                log.pred_tr = "".join(map(str, pred_tr))
+                log.pred_ev = "".join(map(str, pred_ev))
+                log.strg_tr = strength_tr[1:].encode('utf-8')
+                log.strg_ev = strength_ev[1:].encode('utf-8')
 
         if step > 0 and step % FLAGS.eval_interval_steps == 0:
+            should_log = True
             for index, eval_set in enumerate(eval_iterators):
                 acc, tacc = evaluate(FLAGS, model, data_manager, eval_set, index, logger, step)
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (
@@ -340,6 +302,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
             progress_bar.reset()
 
         if step > FLAGS.ckpt_step and step % FLAGS.ckpt_interval_steps == 0:
+            should_log = True
             logger.Log("Checkpointing.")
             trainer.save(standard_checkpoint_path, step, best_dev_error)
 
@@ -348,11 +311,18 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
 
 
 def run(only_forward=False):
-    logger = afs_safe_logger.Logger(log_path(FLAGS))
+    logger = afs_safe_logger.ProtoLogger(log_path(FLAGS))
+    header = pb.SpinnHeader()
 
     data_manager = get_data_manager(FLAGS.data_type)
 
-    logger.Log("Flag Values:\n" + json.dumps(FLAGS.FlagValuesDict(), indent=4, sort_keys=True))
+    logger.Log("Flag Values:\n" +
+               json.dumps(FLAGS.FlagValuesDict(), indent=4, sort_keys=True))
+    flags_dict = sorted(list(FLAGS.FlagValuesDict().items()))
+    for k, v in flags_dict:
+        flag = header.flags.add()
+        flag.key = k
+        flag.value = str(v)
 
     # Get Data and Embeddings
     vocabulary, initial_embeddings, training_data_iter, eval_iterators = \
@@ -364,7 +334,13 @@ def run(only_forward=False):
     num_classes = len(data_manager.LABEL_MAP)
 
     model, optimizer, trainer = init_model(
-        FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_manager)
+        FLAGS,
+        logger,
+        initial_embeddings,
+        vocab_size,
+        num_classes,
+        data_manager,
+        header)
 
     standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name)
     best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name, best=True)
@@ -401,14 +377,11 @@ def run(only_forward=False):
     model.apply(set_debug)
 
     # Do an evaluation-only run.
+    logger.LogHeader(header)  # Start log_entry logging.
     if only_forward:
-        eval_str = eval_format(model)
-        logger.Log("Eval-Format: {}".format(eval_str))
-        eval_extra_str = eval_extra_format(model)
-        logger.Log("Eval-Extra-Format: {}".format(eval_extra_str))
-
         for index, eval_set in enumerate(eval_iterators):
-            evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabulary)
+            acc = evaluate(FLAGS, model, data_manager,
+                           eval_set, logger, step, vocabulary)
     else:
         train_loop(FLAGS, data_manager, model, optimizer, trainer,
                    training_data_iter, eval_iterators, logger, step, best_dev_error)

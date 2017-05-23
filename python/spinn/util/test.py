@@ -35,7 +35,8 @@ def default_args(**kwargs):
     context_args = Args()
     context_args.reshape_input = lambda x, batch_size, seq_length: x
     context_args.reshape_context = lambda x, batch_size, seq_length: x
-    context_args.encoder = nn.Linear(args['word_embedding_dim'], args['model_dim'])
+    context_args.encoder = nn.Linear(
+        args['word_embedding_dim'], args['model_dim'])
     context_args.input_dim = args['model_dim']
 
     args['context_args'] = context_args
