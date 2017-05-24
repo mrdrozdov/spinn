@@ -1,6 +1,7 @@
 import numpy as np
 from collections import deque
 import os
+import logging_pb2 as pb
 
 
 class GenericClass(object):

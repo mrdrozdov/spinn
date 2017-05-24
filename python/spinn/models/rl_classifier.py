@@ -148,6 +148,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         model.train()
         log_entry.Clear()
         log_entry.step = step
+        should_log = False
 
         start = time.time()
 
@@ -293,7 +294,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         if step > 0 and step % FLAGS.eval_interval_steps == 0:
             should_log = True
             for index, eval_set in enumerate(eval_iterators):
-                acc, tacc = evaluate(FLAGS, model, data_manager, eval_set, index, logger, step)
+                acc, tacc = evaluate(FLAGS, model, data_manager, eval_set, log_entry, step)
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (
                         1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
@@ -305,6 +306,15 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
             should_log = True
             logger.Log("Checkpointing.")
             trainer.save(standard_checkpoint_path, step, best_dev_error)
+
+        log_level = afs_safe_logger.ProtoLogger.INFO
+        if not should_log and step % FLAGS.metrics_interval_steps == 0:
+            # Log to file, but not to stderr.
+            should_log = True
+            log_level = afs_safe_logger.ProtoLogger.DEBUG
+
+        if should_log:
+            logger.LogEntry(log_entry, level=log_level)
 
         progress_bar.step(i=step % FLAGS.statistics_interval_steps,
                           total=FLAGS.statistics_interval_steps)
@@ -379,9 +389,11 @@ def run(only_forward=False):
     # Do an evaluation-only run.
     logger.LogHeader(header)  # Start log_entry logging.
     if only_forward:
+        log_entry = pb.SpinnEntry()
         for index, eval_set in enumerate(eval_iterators):
+            log_entry.Clear()
             acc = evaluate(FLAGS, model, data_manager,
-                           eval_set, logger, step, vocabulary)
+                           eval_set, log_entry, step, vocabulary)
     else:
         train_loop(FLAGS, data_manager, model, optimizer, trainer,
                    training_data_iter, eval_iterators, logger, step, best_dev_error)
