@@ -6,7 +6,7 @@ LOG_DIR='.'
 # nothing catches on fire before you commit to a bigger model.
 
 # Dimensions are intentionally set as prime numbers to catch issues.
-MODEL="spinn.models.reinforce"
+MODEL="spinn.models.rl_classifier"
 FLAGS="
 --eval_seq_length 1800
 --norl_catalan 
