@@ -69,8 +69,7 @@ def to_value(t):
             return l[1][-1]
         elif l[0] == MED:
             return int(np.median(l[1]))
-    # We've hit an unsaturated function and an argument.
-    elif isinstance(l, tuple):
+    elif isinstance(l, tuple):  # We've hit an unsaturated function and an argument.
         return (l[0], l[1] + [r])
 
 
