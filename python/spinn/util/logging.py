@@ -104,14 +104,21 @@ def stats(model, optimizer, A, step, log_entry):
         log_entry.value_cost = A.get_avg('value_cost')
         total_cost += log_entry.value_cost
 
+    def get_mean(x):
+        val = x.mean()
+        if isinstance(val, float):
+            return val
+        else:
+            return float(val)
+
     if len(adv_mean) > 0:
-        log_entry.mean_adv_mean = adv_mean.mean()
+        log_entry.mean_adv_mean = get_mean(adv_mean)
     if len(adv_mean_magnitude) > 0:
-        log_entry.mean_adv_mean_magnitude = adv_mean_magnitude.mean()
+        log_entry.mean_adv_mean_magnitude = get_mean(adv_mean_magnitude)
     if len(adv_var) > 0:
-        log_entry.mean_adv_var = adv_var.mean()
+        log_entry.mean_adv_var = get_mean(adv_var)
     if len(adv_var_magnitude) > 0:
-        log_entry.mean_adv_var_magnitude = adv_var_magnitude.mean()
+        log_entry.mean_adv_var_magnitude = get_mean(adv_var_magnitude)
 
     if im.has_epsilon:
         log_entry.epsilon = model.spinn.epsilon

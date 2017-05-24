@@ -239,10 +239,12 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
 
         train_rl_accumulate(model, data_manager, A, batch)
 
-        if step % FLAGS.statistics_interval_steps == 0:
-            progress_bar.step(i=FLAGS.statistics_interval_steps,
+        if step % FLAGS.statistics_interval_steps == 0 \
+                or step % FLAGS.metrics_interval_steps == 0:
+	    if step % FLAGS.statistics_interval_steps == 0:
+                progress_bar.step(i=FLAGS.statistics_interval_steps,
                               total=FLAGS.statistics_interval_steps)
-            progress_bar.finish()
+                progress_bar.finish()
 
             A.add('xent_cost', xent_loss.data[0])
             A.add('l2_cost', l2_loss.data[0])
