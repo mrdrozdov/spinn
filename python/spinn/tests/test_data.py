@@ -3,7 +3,7 @@ import unittest
 
 import os
 from spinn import util
-from spinn.data.snli import load_snli_data
+from spinn.data.nli import load_nli_data
 from spinn.data.sst import load_sst_data
 from spinn.data.arithmetic import load_sign_data, load_simple_data
 from spinn.data.dual_arithmetic import load_eq_data
@@ -39,7 +39,7 @@ from the sentence padding token). Transitions are padded on the left.
 """
 
 
-snli_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_snli.jsonl")
+nli_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_snli.jsonl")
 sst_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_sst.txt")
 boolean_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_boolean.tsv")
 embedding_data_path = os.path.join(os.path.dirname(
@@ -135,18 +135,18 @@ def s_is_left_to_right(s, EOS_TOKEN):
 class DataTestCase(unittest.TestCase):
 
     def test_vocab(self):
-        data_manager = load_snli_data
-        raw_data, _ = data_manager.load_data(snli_data_path)
-        data_sets = [(snli_data_path, raw_data)]
+        data_manager = load_nli_data
+        raw_data, _ = data_manager.load_data(nli_data_path)
+        data_sets = [(nli_data_path, raw_data)]
         vocabulary = util.BuildVocabulary(
             raw_data, data_sets, embedding_data_path, logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
         assert len(vocabulary) == 10
 
     def test_load_embed(self):
-        data_manager = load_snli_data
-        raw_data, _ = data_manager.load_data(snli_data_path)
-        data_sets = [(snli_data_path, raw_data)]
+        data_manager = load_nli_data
+        raw_data, _ = data_manager.load_data(nli_data_path)
+        data_sets = [(nli_data_path, raw_data)]
         vocabulary = util.BuildVocabulary(
             raw_data, data_sets, embedding_data_path, logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
@@ -166,8 +166,8 @@ class DataTestCase(unittest.TestCase):
 class SNLITestCase(unittest.TestCase):
 
     def test_load(self):
-        data_manager = load_snli_data
-        raw_data, _ = data_manager.load_data(snli_data_path)
+        data_manager = load_nli_data
+        raw_data, _ = data_manager.load_data(nli_data_path)
         assert len(raw_data) == 20
 
         hyp_seq_lengths = Counter([len(x['hypothesis_transitions'])
@@ -188,9 +188,9 @@ class SNLITestCase(unittest.TestCase):
         seq_length = 25
         for_rnn = False
 
-        data_manager = load_snli_data
-        raw_data, _ = data_manager.load_data(snli_data_path)
-        data_sets = [(snli_data_path, raw_data)]
+        data_manager = load_nli_data
+        raw_data, _ = data_manager.load_data(nli_data_path)
+        data_sets = [(nli_data_path, raw_data)]
         vocabulary = util.BuildVocabulary(
             raw_data, data_sets, embedding_data_path, logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
@@ -241,9 +241,9 @@ class SNLITestCase(unittest.TestCase):
         seq_length = 150
         for_rnn = False
 
-        data_manager = load_snli_data
-        raw_data, _ = data_manager.load_data(snli_data_path)
-        data_sets = [(snli_data_path, raw_data)]
+        data_manager = load_nli_data
+        raw_data, _ = data_manager.load_data(nli_data_path)
+        data_sets = [(nli_data_path, raw_data)]
         vocabulary = util.BuildVocabulary(
             raw_data, data_sets, embedding_data_path, logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
@@ -269,9 +269,9 @@ class SNLITestCase(unittest.TestCase):
         seq_length = 150
         for_rnn = False
 
-        data_manager = load_snli_data
-        raw_data, _ = data_manager.load_data(snli_data_path)
-        data_sets = [(snli_data_path, raw_data)]
+        data_manager = load_nli_data
+        raw_data, _ = data_manager.load_data(nli_data_path)
+        data_sets = [(nli_data_path, raw_data)]
         vocabulary = util.BuildVocabulary(
             raw_data, data_sets, embedding_data_path, logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)

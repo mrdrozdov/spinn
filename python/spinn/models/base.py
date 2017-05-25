@@ -13,7 +13,7 @@ from spinn.data.dual_arithmetic import load_relational_data
 from spinn.data.boolean import load_boolean_data
 from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
-from spinn.data.snli import load_snli_data
+from spinn.data.nli import load_nli_data
 from spinn.util.blocks import ModelTrainer, bundle
 from spinn.util.blocks import EncodeGRU, IntraAttention, Linear, ReduceTreeGRU, ReduceTreeLSTM
 from spinn.util.misc import Args
@@ -77,8 +77,8 @@ def get_data_manager(data_type):
         data_manager = load_sst_data
     elif data_type == "sst-binary":
         data_manager = load_sst_binary_data
-    elif data_type == "snli":
-        data_manager = load_snli_data
+    elif data_type == "nli":
+        data_manager = load_nli_data
     elif data_type == "arithmetic":
         data_manager = load_simple_data
     elif data_type == "listops":
@@ -116,7 +116,7 @@ def load_data_and_embeddings(FLAGS, data_manager, logger, training_data_path, ev
     if FLAGS.eval_genre is not None:
         def choose_eval(x): return x.get('genre') == FLAGS.eval_genre
 
-    if FLAGS.data_type == "snli":
+    if FLAGS.data_type == "nli":
         # Load the data.
         raw_training_data, vocabulary = data_manager.load_data(
             training_data_path, FLAGS.lowercase, choose_train)
@@ -125,7 +125,7 @@ def load_data_and_embeddings(FLAGS, data_manager, logger, training_data_path, ev
         raw_training_data, vocabulary = data_manager.load_data(
             training_data_path, FLAGS.lowercase)
 
-    if FLAGS.data_type == "snli":
+    if FLAGS.data_type == "nli":
         # Load the eval data.
         raw_eval_sets = []
         raw_eval_data, _ = data_manager.load_data(eval_data_path, FLAGS.lowercase, choose_eval)
@@ -196,7 +196,7 @@ def get_flags():
     gflags.DEFINE_string("load_experiment_name", None, "")
 
     # Data types.
-    gflags.DEFINE_enum("data_type", "bl", ["bl", "sst", "sst-binary", "snli", "multinli", "arithmetic", "listops", "sign", "eq", "relational"],
+    gflags.DEFINE_enum("data_type", "bl", ["bl", "sst", "sst-binary", "nli", "arithmetic", "listops", "sign", "eq", "relational"],
                        "Which data handler and classifier to use.")
 
     # Choose Genre.
