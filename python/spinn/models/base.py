@@ -188,6 +188,7 @@ def get_flags():
     gflags.DEFINE_bool("debug", False, "Set to True to disable debug_mode and type_checking.")
     gflags.DEFINE_bool("show_progress_bar", True, "Turn this off when running experiments on HPC.")
     gflags.DEFINE_string("branch_name", "", "")
+    gflags.DEFINE_string("slurm_job_id", "", "")
     gflags.DEFINE_integer(
         "deque_length", 100, "Max trailing examples to use when computing average training statistics.")
     gflags.DEFINE_string("sha", "", "")
@@ -360,6 +361,9 @@ def flag_defaults(FLAGS, load_log_flags=False):
 
     if not FLAGS.sha:
         FLAGS.sha = os.popen('git rev-parse HEAD').read().strip()
+
+    if not FLAGS.slurm_job_id:
+        FLAGS.slurm_job_id = os.popen('echo $SLURM_JOB_ID').read().strip()
 
     if not FLAGS.load_log_path:
         FLAGS.load_log_path = FLAGS.log_path
