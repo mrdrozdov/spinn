@@ -68,5 +68,5 @@ def load_data(path, lowercase=False, choose=lambda x: True):
 
 if __name__ == "__main__":
     # Demo:
-    examples = load_data('nli-data/nli_1.0_dev.jsonl')
+    examples = load_data('snli-data/snli_1.0_dev.jsonl')
     print examples[0]
