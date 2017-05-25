@@ -9,12 +9,14 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "MNLI"
+NAME = "05_25"
 SWEEP_RUNS = 16
 
 LIN = "LIN"
 EXP = "EXP"
 SS_BASE = "SS_BASE"
+BOOL = "BOOL"
+CHOICE = "CHOICE"
 
 FLAGS = gflags.FLAGS
 
@@ -35,7 +37,7 @@ FLAGS(sys.argv)
 # Non-tunable flags that must be passed in.
 
 FIXED_PARAMETERS = {
-    "data_type":     "multinli",
+    "data_type":     "nli",
     "model_type":      "SPINN",
     "training_data_path":    FLAGS.training_data_path,
     "eval_data_path":    FLAGS.eval_data_path,
