@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Sets up a series of 10 jobs to run one after the other to get around time limits.
+# Sets up a series of jobs to run one after the other to get around time limits.
 # Optionally specify an sbatch script to use.
 
 bat=${1:-../scripts/train_spinn.sbatch}
