@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "05_25"
-SWEEP_RUNS = 16
+NAME = "05_26"
+SWEEP_RUNS = 8
 
 LIN = "LIN"
 EXP = "EXP"
@@ -20,7 +20,7 @@ CHOICE = "CHOICE"
 
 FLAGS = gflags.FLAGS
 
-gflags.DEFINE_string("training_data_path", "/home/sb6065/multinli_0.9/multinli_0.9_train.jsonl", "")
+gflags.DEFINE_string("training_data_path", "/home/sb6065/multinli_0.9/multinli_0.9_snli_1.0_train_combined.jsonl", "")
 gflags.DEFINE_string("eval_data_path", "/home/sb6065/multinli_0.9/multinli_0.9_dev_matched.jsonl", "")
 gflags.DEFINE_string("embedding_data_path", "/home/sb6065/glove/glove.840B.300d.txt", "")
 gflags.DEFINE_string("log_path", "/home/sb6065/logs/spinn", "")
@@ -51,6 +51,8 @@ FIXED_PARAMETERS = {
     "eval_seq_length":  "810",
     "eval_interval_steps": "1000",
     "statistics_interval_steps": "100",
+    "semantic_classifier_keep_rate": "1.0",
+    "embedding_keep_rate": "1.0",
     "batch_size":  "128",
     "encode": "gru",
     "encode_reverse": "",
@@ -61,9 +63,7 @@ FIXED_PARAMETERS = {
 SWEEP_PARAMETERS = {
     "learning_rate":      ("lr", EXP, 0.0006, 0.01),  # RNN likes higher, but below 009.
     "mlp_dim":      ("mld", EXP, 128, 1024),  # RNN likes higher, but below 009.
-    "l2_lambda":          ("l2", EXP, 8e-7, 2e-5),
-    "semantic_classifier_keep_rate": ("skr", LIN, 0.7, 1.0),  # NB: Keep rates may depend considerably on dims.
-    "embedding_keep_rate": ("ekr", LIN, 0.7, 1.0),
+    "l2_lambda":          ("l2", EXP, 8e-8, 8e-6),
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.5, 1.0),
     "tracking_lstm_hidden_dim": ("tdim", EXP, 8, 256),
 }
