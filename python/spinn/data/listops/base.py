@@ -10,6 +10,7 @@ FIXED_VOCABULARY.update({
     "[FIRST": len(FIXED_VOCABULARY) + 3,
     "[LAST": len(FIXED_VOCABULARY) + 4,
     "[MED": len(FIXED_VOCABULARY) + 5,
-    "]": len(FIXED_VOCABULARY) + 6
+    "[SM": len(FIXED_VOCABULARY) + 6,
+    "]": len(FIXED_VOCABULARY) + 7
 })
 assert len(set(FIXED_VOCABULARY.values())) == len(FIXED_VOCABULARY.values())

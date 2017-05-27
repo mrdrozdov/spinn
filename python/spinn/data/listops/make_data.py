@@ -6,9 +6,10 @@ MAX = "[MAX"
 MED = "[MED"
 FIRST = "[FIRST"
 LAST = "[LAST"
+SUM_MOD = "[SM"
 END = "]"
 
-OPERATORS = [MIN, MAX, MED]  # , FIRST, LAST]
+OPERATORS = [MIN, MAX, MED, SUM_MOD]  # , FIRST, LAST]
 VALUES = range(10)
 
 VALUE_P = 0.25
@@ -69,6 +70,8 @@ def to_value(t):
             return l[1][-1]
         elif l[0] == MED:
             return int(np.median(l[1]))
+        elif l[0] == SUM_MOD:
+            return (np.sum(l[1]) % 10)
     elif isinstance(l, tuple):  # We've hit an unsaturated function and an argument.
         return (l[0], l[1] + [r])
 
