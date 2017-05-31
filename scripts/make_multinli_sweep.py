@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "05_26"
-SWEEP_RUNS = 8
+NAME = "05_29_noenc_parse"
+SWEEP_RUNS = 4
 
 LIN = "LIN"
 EXP = "EXP"
@@ -38,7 +38,7 @@ FLAGS(sys.argv)
 
 FIXED_PARAMETERS = {
     "data_type":     "nli",
-    "model_type":      "SPINN",
+    "model_type":      "RNN",
     "training_data_path":    FLAGS.training_data_path,
     "eval_data_path":    FLAGS.eval_data_path,
     "embedding_data_path": FLAGS.embedding_data_path,
@@ -46,7 +46,7 @@ FIXED_PARAMETERS = {
     "metrics_path": FLAGS.log_path,
     "ckpt_path":  FLAGS.log_path,
     "word_embedding_dim":   "300",
-    "model_dim":   "600",
+    "model_dim":   "300",
     "seq_length":   "80",
     "eval_seq_length":  "810",
     "eval_interval_steps": "1000",
@@ -54,18 +54,21 @@ FIXED_PARAMETERS = {
     "semantic_classifier_keep_rate": "1.0",
     "embedding_keep_rate": "1.0",
     "batch_size":  "128",
-    "encode": "gru",
-    "encode_reverse": "",
+    "encode": "pass",
+    # "encode_reverse": "",
     "num_mlp_layers": "2",
+    "use_internal_parser": "",
+    "transition_weight": "1.0",
+
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "learning_rate":      ("lr", EXP, 0.0006, 0.01),  # RNN likes higher, but below 009.
-    "mlp_dim":      ("mld", EXP, 128, 1024),  # RNN likes higher, but below 009.
-    "l2_lambda":          ("l2", EXP, 8e-8, 8e-6),
+    "learning_rate":      ("lr", EXP, 0.00008, 0.002),  # RNN likes higher, but below 009.
+    "mlp_dim":      ("mld", EXP, 96, 512),  # RNN likes higher, but below 009.
+    "l2_lambda":          ("l2", EXP, 8e-8, 1e-5),
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.5, 1.0),
-    "tracking_lstm_hidden_dim": ("tdim", EXP, 8, 256),
+    "tracking_lstm_hidden_dim": ("tdim", EXP, 4, 128),
 }
 
 
