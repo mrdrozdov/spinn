@@ -363,7 +363,7 @@ class SPINN(nn.Module):
                     transition_inp = [tracker_h]
                     if self.tracker.lateral_tracking and self.predict_use_cell:
                         transition_inp += [tracker_c]
-                    transition_inp = torch.cat(transition_inp, 1)#.detach()
+                    transition_inp = torch.cat(transition_inp, 1)  # .detach()
                     transition_output = self.transition_net(transition_inp)
 
                 if hasattr(self, 'transition_net') and run_internal_parser:
