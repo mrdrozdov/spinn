@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "listops_05_31_64_hiwt"
+NAME = "listops_06_01_64r"
 SWEEP_RUNS = 6
 
 LIN = "LIN"
@@ -35,14 +35,14 @@ FLAGS(sys.argv)
 
 FIXED_PARAMETERS = {
     "data_type":     "listops",
-    "model_type":      "SPINN",
+    "model_type":      "RNN",
     "training_data_path":    FLAGS.training_data_path,
     "eval_data_path":    FLAGS.eval_data_path,
     "log_path": FLAGS.log_path,
     "metrics_path": FLAGS.log_path,
     "ckpt_path":  FLAGS.log_path,
-    "word_embedding_dim":   "128",
-    "model_dim":   "128",
+    "word_embedding_dim":   "64",
+    "model_dim":   "64",
     "seq_length":   "3000",
     "eval_seq_length":  "3000",
     "eval_interval_steps": "100",
