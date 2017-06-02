@@ -68,6 +68,7 @@ class Pyramid(nn.Module):
 
         self.composition_fn = SimpleTreeLSTM(model_dim / 2,
                                              composition_ln=False)
+        # TODO: Set up layer norm.
 
         mlp_input_dim = model_dim * 2 if use_sentence_pair else model_dim
 
@@ -86,10 +87,11 @@ class Pyramid(nn.Module):
 
         for layer in range(seq_len - 1, 0, -1):
             layer_state_pairs = []
+            composition_results = []
             for position in range(layer):
                 lefts = torch.squeeze(all_state_pairs[-1][position])
                 rights = torch.squeeze(all_state_pairs[-1][position + 1])
-                layer_state_pairs.append(self.composition_fn(lefts, rights))
+                composition_results.append(self.composition_fn(lefts, rights))
             all_state_pairs.append(layer_state_pairs)
 
         return all_state_pairs[-1][-1]
