@@ -266,6 +266,12 @@ def get_flags():
     gflags.DEFINE_enum("reduce", "treelstm", ["treelstm",
                                               "treegru", "tanh"], "Specify composition function.")
 
+    # Pyramid model settings
+    gflags.DEFINE_boolean("pyramid_gated", True,
+                          "Use gating in the Pyramid model.")
+    gflags.DEFINE_float("pyramid_selection_keep_rate", None,
+                        "If set, prevent this fraction of composition results from being selected.")
+
     # Encode settings.
     gflags.DEFINE_enum("encode", "projection", [
                        "pass", "projection", "gru", "attn"], "Encode embeddings with sequential context.")
