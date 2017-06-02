@@ -369,6 +369,7 @@ class SPINN(nn.Module):
                         transition_inp = torch.cat(transition_inp, 1).detach()
                     else:
                         transition_inp = torch.cat(transition_inp, 1)
+                        
                     transition_output = self.transition_net(transition_inp)
 
                 if hasattr(self, 'transition_net') and run_internal_parser:

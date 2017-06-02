@@ -23,6 +23,7 @@ import spinn.rl_spinn
 import spinn.spinn_core_model
 import spinn.plain_rnn
 import spinn.cbow
+import spinn.pyramid
 
 # PyTorch
 import torch
@@ -35,7 +36,7 @@ FLAGS = gflags.FLAGS
 
 
 def sequential_only():
-    return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW"
+    return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW" or FLAGS.model_type == "Pyramid"
 
 
 def log_path(FLAGS, load=False):
@@ -233,7 +234,7 @@ def get_flags():
                          "If set, load GloVe-formatted embeddings from here.")
 
     # Model architecture settings.
-    gflags.DEFINE_enum("model_type", "RNN", ["CBOW", "RNN", "SPINN", "RLSPINN"], "")
+    gflags.DEFINE_enum("model_type", "RNN", ["CBOW", "RNN", "SPINN", "RLSPINN", "Pyramid"], "")
     gflags.DEFINE_integer("gpu", -1, "")
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")
@@ -256,7 +257,7 @@ def get_flags():
                           "Use previous tracker state as input for new state.")
     gflags.DEFINE_boolean("use_tracking_in_composition", True,
                           "Use tracking lstm output as input for the reduce function.")
-    gflags.DEFINE_boolean("composition_ln", False,
+    gflags.DEFINE_boolean("composition_ln", True,
                           "When True, layer normalization is used in TreeLSTM composition.")
     gflags.DEFINE_boolean("predict_use_cell", True,
                           "Use cell output as feature for transition net.")
@@ -298,7 +299,7 @@ def get_flags():
     gflags.DEFINE_integer("mlp_dim", 1024, "Dimension of intermediate MLP layers.")
     gflags.DEFINE_integer("num_mlp_layers", 2, "Number of MLP layers.")
     gflags.DEFINE_boolean(
-        "mlp_ln", False, "When True, layer normalization is used between MLP layers.")
+        "mlp_ln", True, "When True, layer normalization is used between MLP layers.")
     gflags.DEFINE_float("semantic_classifier_keep_rate", 0.9,
                         "Used for dropout in the semantic task classifier.")
 
@@ -381,7 +382,7 @@ def flag_defaults(FLAGS, load_log_flags=False):
     if not FLAGS.metrics_path:
         FLAGS.metrics_path = FLAGS.log_path
 
-    if FLAGS.model_type == "CBOW" or FLAGS.model_type == "RNN":
+    if FLAGS.model_type == "CBOW" or FLAGS.model_type == "RNN" or FLAGS.model_type == "Pyramid":
         FLAGS.num_samples = 0
 
     if not torch.cuda.is_available():
@@ -399,6 +400,8 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
         build_model = spinn.spinn_core_model.build_model
     elif FLAGS.model_type == "RLSPINN":
         build_model = spinn.rl_spinn.build_model
+    elif FLAGS.model_type == "Pyramid":
+        build_model = spinn.pyramid.build_model
     else:
         raise NotImplementedError
 

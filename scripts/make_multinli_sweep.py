@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "05_26"
-SWEEP_RUNS = 8
+NAME = "06_01_parse"
+SWEEP_RUNS = 12
 
 LIN = "LIN"
 EXP = "EXP"
@@ -46,7 +46,7 @@ FIXED_PARAMETERS = {
     "metrics_path": FLAGS.log_path,
     "ckpt_path":  FLAGS.log_path,
     "word_embedding_dim":   "300",
-    "model_dim":   "600",
+    "model_dim":   "300",
     "seq_length":   "80",
     "eval_seq_length":  "810",
     "eval_interval_steps": "1000",
@@ -57,15 +57,19 @@ FIXED_PARAMETERS = {
     "encode": "gru",
     "encode_reverse": "",
     "num_mlp_layers": "2",
+    "use_internal_parser": "",
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "learning_rate":      ("lr", EXP, 0.0006, 0.01),  # RNN likes higher, but below 009.
-    "mlp_dim":      ("mld", EXP, 128, 1024),  # RNN likes higher, but below 009.
-    "l2_lambda":          ("l2", EXP, 8e-8, 8e-6),
-    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.5, 1.0),
-    "tracking_lstm_hidden_dim": ("tdim", EXP, 8, 256),
+    "learning_rate":      ("lr", EXP, 0.00008, 0.001),  # RNN likes higher, but below 009.
+    "mlp_dim":      ("mld", EXP, 128, 384),  # RNN likes higher, but below 009.
+    "l2_lambda":          ("l2", EXP, 8e-8, 1e-5),
+    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.5, 8.0),
+    "tracking_lstm_hidden_dim": ("tdim", EXP, 8, 128),
+    "semantic_classifier_keep_rate": ("skr", LIN, 0.8, 1.0),  # NB: Keep rates may depend considerably on dims.
+    "embedding_keep_rate": ("ekr", LIN, 0.8, 1.0),
+    "transition_weight": ("trw", EXP, 0.3, 3.0),
 }
 
 

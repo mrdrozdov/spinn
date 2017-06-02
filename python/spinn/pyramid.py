@@ -8,12 +8,13 @@ from torch.autograd import Variable
 
 from spinn.util.blocks import Embed, to_gpu, MLP
 from spinn.util.misc import Args, Vocab
+from spinn.util.blocks import SimpleTreeLSTM
 
 
 def build_model(data_manager, initial_embeddings, vocab_size,
                 num_classes, FLAGS, context_args, composition_args):
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
-    model_cls = RNNModel
+    model_cls = Pyramid
 
     return model_cls(model_dim=FLAGS.model_dim,
                      word_embedding_dim=FLAGS.word_embedding_dim,
@@ -32,7 +33,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      )
 
 
-class RNNModel(nn.Module):
+class Pyramid(nn.Module):
 
     def __init__(self, model_dim=None,
                  word_embedding_dim=None,
@@ -48,7 +49,7 @@ class RNNModel(nn.Module):
                  context_args=None,
                  **kwargs
                  ):
-        super(RNNModel, self).__init__()
+        super(Pyramid, self).__init__()
 
         self.use_sentence_pair = use_sentence_pair
         self.model_dim = model_dim
@@ -65,7 +66,9 @@ class RNNModel(nn.Module):
 
         self.embed = Embed(word_embedding_dim, vocab.size, vectors=vocab.vectors)
 
-        self.rnn = nn.LSTM(args.size, model_dim, num_layers=1, batch_first=True)
+        self.composition_fn = SimpleTreeLSTM(model_dim / 2,
+                                             composition_ln=False)
+        # TODO: Set up layer norm.
 
         mlp_input_dim = model_dim * 2 if use_sentence_pair else model_dim
 
@@ -76,24 +79,22 @@ class RNNModel(nn.Module):
         self.reshape_input = context_args.reshape_input
         self.reshape_context = context_args.reshape_context
 
-    def run_rnn(self, x):
+    def run_pyramid(self, x):
         batch_size, seq_len, model_dim = x.data.size()
 
-        num_layers = 1
-        bidirectional = False
-        bi = 2 if bidirectional else 1
-        h0 = Variable(to_gpu(torch.zeros(num_layers * bi, batch_size,
-                                         self.model_dim)), volatile=not self.training)
-        c0 = Variable(to_gpu(torch.zeros(num_layers * bi, batch_size,
-                                         self.model_dim)), volatile=not self.training)
+        all_state_pairs = []
+        all_state_pairs.append(torch.chunk(x, seq_len, 1))
 
-        # Expects (input, h_0):
-        #   input => batch_size x seq_len x model_dim
-        #   h_0   => (num_layers x num_directions[1,2]) x batch_size x model_dim
-        #   c_0   => (num_layers x num_directions[1,2]) x batch_size x model_dim
-        output, (hn, cn) = self.rnn(x, (h0, c0))
+        for layer in range(seq_len - 1, 0, -1):
+            layer_state_pairs = []
+            composition_results = []
+            for position in range(layer):
+                lefts = torch.squeeze(all_state_pairs[-1][position])
+                rights = torch.squeeze(all_state_pairs[-1][position + 1])
+                composition_results.append(self.composition_fn(lefts, rights))
+            all_state_pairs.append(layer_state_pairs)
 
-        return hn
+        return all_state_pairs[-1][-1]
 
     def run_embed(self, x):
         batch_size, seq_length = x.size()
@@ -112,7 +113,7 @@ class RNNModel(nn.Module):
 
         x = self.unwrap(sentences, transitions)
         emb = self.run_embed(x)
-        hh = torch.squeeze(self.run_rnn(emb))
+        hh = self.run_pyramid(emb)
         h = self.wrap(hh)
         output = self.mlp(h)
 

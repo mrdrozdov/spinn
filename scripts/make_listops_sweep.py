@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "listops_05_27"
+NAME = "listops_06_01_64r"
 SWEEP_RUNS = 6
 
 LIN = "LIN"
@@ -35,15 +35,15 @@ FLAGS(sys.argv)
 
 FIXED_PARAMETERS = {
     "data_type":     "listops",
-    "model_type":      "SPINN",
+    "model_type":      "RNN",
     "training_data_path":    FLAGS.training_data_path,
     "eval_data_path":    FLAGS.eval_data_path,
     "log_path": FLAGS.log_path,
     "metrics_path": FLAGS.log_path,
     "ckpt_path":  FLAGS.log_path,
-    "word_embedding_dim":   "32",
-    "model_dim":   "32",
-    "seq_length":   "100",
+    "word_embedding_dim":   "64",
+    "model_dim":   "64",
+    "seq_length":   "3000",
     "eval_seq_length":  "3000",
     "eval_interval_steps": "100",
     "statistics_interval_steps": "100",
@@ -62,9 +62,9 @@ FIXED_PARAMETERS = {
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "learning_rate":      ("lr", EXP, 0.001, 0.06),  # RNN likes higher, but below 009.
-    "l2_lambda":          ("l2", EXP, 1e-7, 1e-5),
-    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.5, 1.0),
+    "learning_rate":      ("lr", EXP, 0.0005, 0.009),  # RNN likes higher, but below 009.
+    "l2_lambda":          ("l2", EXP, 5e-7, 2e-5),
+    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.4, 0.9),
 #    "tracking_lstm_hidden_dim": ("tdim", EXP, 4, 16),
 #    "rl_weight":  ("rlwt", EXP, 0.000001, 0.0009),
 #    "transition_weight":  ("trwt", EXP, 0.3, 3.0),
