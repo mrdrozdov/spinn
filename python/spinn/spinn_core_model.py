@@ -44,6 +44,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      mlp_ln=FLAGS.mlp_ln,
                      context_args=context_args,
                      composition_args=composition_args,
+                     detach=FLAGS.transition_detach,
                      )
 
 
@@ -117,11 +118,12 @@ class Tracker(nn.Module):
 
 class SPINN(nn.Module):
 
-    def __init__(self, args, vocab, predict_use_cell):
+    def __init__(self, args, vocab, detach, predict_use_cell):
         super(SPINN, self).__init__()
 
         # Optional debug mode.
         self.debug = False
+        self.detach = detach
 
         self.transition_weight = args.transition_weight
 
@@ -363,7 +365,10 @@ class SPINN(nn.Module):
                     transition_inp = [tracker_h]
                     if self.tracker.lateral_tracking and self.predict_use_cell:
                         transition_inp += [tracker_c]
-                    transition_inp = torch.cat(transition_inp, 1)#.detach()
+                    if self.detach:
+                        transition_inp = torch.cat(transition_inp, 1).detach()
+                    else:
+                        transition_inp = torch.cat(transition_inp, 1)
                     transition_output = self.transition_net(transition_inp)
 
                 if hasattr(self, 'transition_net') and run_internal_parser:
@@ -520,6 +525,7 @@ class BaseModel(nn.Module):
                  classifier_keep_rate=None,
                  context_args=None,
                  composition_args=None,
+                 detach=None,
                  **kwargs
                  ):
         super(BaseModel, self).__init__()
@@ -543,7 +549,7 @@ class BaseModel(nn.Module):
         vocab.vectors = initial_embeddings
 
         # Build parsing component.
-        self.spinn = self.build_spinn(composition_args, vocab, predict_use_cell)
+        self.spinn = self.build_spinn(composition_args, vocab, detach, predict_use_cell)
 
         # Build classiifer.
         features_dim = self.get_features_dim()
@@ -583,8 +589,8 @@ class BaseModel(nn.Module):
             features = h[0]
         return features
 
-    def build_spinn(self, args, vocab, predict_use_cell):
-        return SPINN(args, vocab, predict_use_cell)
+    def build_spinn(self, args, vocab, detach, predict_use_cell):
+        return SPINN(args, vocab, detach, predict_use_cell)
 
     def run_spinn(self, example, use_internal_parser, validate_transitions=True):
         self.spinn.reset_state()
