@@ -10,5 +10,5 @@ parts = u' ▁▂▃▄▅▆▇▉'
 
 
 def sparks(nums):
-    fraction = max(nums) / float(len(parts) - 1)
+    fraction = 1. / float(len(parts) - 1)
     return ''.join(parts[int(round(x / fraction))] for x in nums)
