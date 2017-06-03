@@ -48,7 +48,8 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
 
     # Evaluate
     total_batches = len(dataset)
-    progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
+    progress_bar = SimpleProgressBar(
+        msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
     total_tokens = 0
     invalid = 0
@@ -69,14 +70,16 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
 
         # Calculate class accuracy.
         target = torch.from_numpy(eval_y_batch).long()
-        pred = logits.data.max(1)[1].cpu()  # get the index of the max log-probability
+        pred = logits.data.max(1)[
+            1].cpu()  # get the index of the max log-probability
 
         eval_accumulate(model, data_manager, A, batch)
         A.add('class_correct', pred.eq(target).sum())
         A.add('class_total', target.size(0))
 
         # Update Aggregate Accuracies
-        total_tokens += sum([(nt + 1) / 2 for nt in eval_num_transitions_batch.reshape(-1)])
+        total_tokens += sum(
+            [(nt + 1) / 2 for nt in eval_num_transitions_batch.reshape(-1)])
 
         if FLAGS.write_eval_report:
             reporter_args = [pred, target, eval_ids, output.data.cpu().numpy()]
@@ -125,12 +128,15 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
     A = Accumulator(maxlen=FLAGS.deque_length)
 
     # Checkpoint paths.
-    standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name)
-    best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name, best=True)
+    standard_checkpoint_path = get_checkpoint_path(
+        FLAGS.ckpt_path, FLAGS.experiment_name)
+    best_checkpoint_path = get_checkpoint_path(
+        FLAGS.ckpt_path, FLAGS.experiment_name, best=True)
 
     # Build log format strings.
     model.train()
-    X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = get_batch(training_data_iter.next())
+    X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = get_batch(
+        training_data_iter.next())
     model(X_batch, transitions_batch, y_batch,
           use_internal_parser=FLAGS.use_internal_parser,
           validate_transitions=FLAGS.validate_transitions
@@ -140,7 +146,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
     logger.Log("Training.")
 
     # New Training Loop
-    progress_bar = SimpleProgressBar(msg="Training", bar_length=60, enabled=FLAGS.show_progress_bar)
+    progress_bar = SimpleProgressBar(
+        msg="Training", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(i=0, total=FLAGS.statistics_interval_steps)
 
     log_entry = pb.SpinnEntry()
@@ -155,7 +162,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         batch = get_batch(training_data_iter.next())
         X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = batch
 
-        total_tokens = sum([(nt + 1) / 2 for nt in num_transitions_batch.reshape(-1)])
+        total_tokens = sum(
+            [(nt + 1) / 2 for nt in num_transitions_batch.reshape(-1)])
 
         # Reset cached gradients.
         optimizer.zero_grad()
@@ -171,7 +179,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         temperature = (temperature + 1) / 2
 
         if FLAGS.rl_confidence_penalty:
-            temp = 1 + (temperature - .5) * FLAGS.rl_confidence_penalty * epsilon
+            temp = 1 + \
+                (temperature - .5) * FLAGS.rl_confidence_penalty * epsilon
             model.spinn.temperature = max(1e-3, temp)
 
         # Soft Wake/Sleep based on temperature.
@@ -189,17 +198,21 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
 
         # Calculate class accuracy.
         target = torch.from_numpy(y_batch).long()
-        pred = logits.data.max(1)[1].cpu()  # get the index of the max log-probability
+        pred = logits.data.max(1)[
+            1].cpu()  # get the index of the max log-probability
         class_acc = pred.eq(target).sum() / float(target.size(0))
 
         # Calculate class loss.
-        xent_loss = nn.NLLLoss()(logits, to_gpu(Variable(target, volatile=False)))
+        xent_loss = nn.NLLLoss()(
+            logits, to_gpu(Variable(target, volatile=False)))
 
         # Optionally calculate transition loss.
-        transition_loss = model.transition_loss if hasattr(model, 'transition_loss') else None
+        transition_loss = model.transition_loss if hasattr(
+            model, 'transition_loss') else None
 
         # Extract L2 Cost
-        l2_loss = get_l2_loss(model, FLAGS.l2_lambda) if FLAGS.use_l2_loss else None
+        l2_loss = get_l2_loss(
+            model, FLAGS.l2_lambda) if FLAGS.use_l2_loss else None
 
         # Accumulate Total Loss Variable
         total_loss = 0.0
@@ -241,9 +254,9 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
 
         if step % FLAGS.statistics_interval_steps == 0 \
                 or step % FLAGS.metrics_interval_steps == 0:
-	    if step % FLAGS.statistics_interval_steps == 0:
+            if step % FLAGS.statistics_interval_steps == 0:
                 progress_bar.step(i=FLAGS.statistics_interval_steps,
-                              total=FLAGS.statistics_interval_steps)
+                                  total=FLAGS.statistics_interval_steps)
                 progress_bar.finish()
 
             A.add('xent_cost', xent_loss.data[0])
@@ -257,20 +270,23 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                   use_internal_parser=FLAGS.use_internal_parser,
                   validate_transitions=FLAGS.validate_transitions
                   )
-            tr_transitions_per_example, tr_strength = model.spinn.get_transitions_per_example()
+            tr_transitions_per_example, tr_strength = model.spinn.get_transitions_per_example(
+            )
 
             model.eval()
             model(X_batch, transitions_batch, y_batch,
                   use_internal_parser=FLAGS.use_internal_parser,
                   validate_transitions=FLAGS.validate_transitions
                   )
-            ev_transitions_per_example, ev_strength = model.spinn.get_transitions_per_example()
+            ev_transitions_per_example, ev_strength = model.spinn.get_transitions_per_example(
+            )
 
             if model.use_sentence_pair and len(transitions_batch.shape) == 3:
                 transitions_batch = np.concatenate([
                     transitions_batch[:, :, 0], transitions_batch[:, :, 1]], axis=0)
 
-            # This could be done prior to running the batch for a tiny speed boost.
+            # This could be done prior to running the batch for a tiny speed
+            # boost.
             t_idxs = range(FLAGS.num_samples)
             random.shuffle(t_idxs)
             t_idxs = sorted(t_idxs[:FLAGS.num_samples])
@@ -296,11 +312,13 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         if step > 0 and step % FLAGS.eval_interval_steps == 0:
             should_log = True
             for index, eval_set in enumerate(eval_iterators):
-                acc, tacc = evaluate(FLAGS, model, data_manager, eval_set, log_entry, step)
+                acc, tacc = evaluate(
+                    FLAGS, model, data_manager, eval_set, log_entry, step)
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (
                         1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
-                    logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
+                    logger.Log(
+                        "Checkpointing with new best dev accuracy of %f" % acc)
                     trainer.save(best_checkpoint_path, step, best_dev_error)
             progress_bar.reset()
 
@@ -354,8 +372,10 @@ def run(only_forward=False):
         data_manager,
         header)
 
-    standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name)
-    best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name, best=True)
+    standard_checkpoint_path = get_checkpoint_path(
+        FLAGS.ckpt_path, FLAGS.experiment_name)
+    best_checkpoint_path = get_checkpoint_path(
+        FLAGS.ckpt_path, FLAGS.experiment_name, best=True)
 
     # Load checkpoint if available.
     if FLAGS.load_best and os.path.isfile(best_checkpoint_path):
