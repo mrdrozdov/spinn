@@ -16,7 +16,7 @@ from spinn.data.dual_arithmetic import load_relational_data
 from spinn.data.boolean import load_boolean_data
 from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
-from spinn.data.snli import load_snli_data
+from spinn.data.nli import load_nli_data
 from spinn.util.blocks import ModelTrainer, bundle
 from spinn.util.blocks import EncodeGRU, IntraAttention, Linear, ReduceTreeGRU, ReduceTreeLSTM
 from spinn.util.misc import Args
@@ -26,6 +26,7 @@ import spinn.rl_spinn
 import spinn.spinn_core_model
 import spinn.plain_rnn
 import spinn.cbow
+import spinn.pyramid
 
 # PyTorch
 import torch
@@ -38,7 +39,7 @@ FLAGS = gflags.FLAGS
 
 
 def sequential_only():
-    return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW"
+    return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW" or FLAGS.model_type == "Pyramid"
 
 
 def log_path(FLAGS, load=False):
@@ -80,8 +81,8 @@ def get_data_manager(data_type):
         data_manager = load_sst_data
     elif data_type == "sst-binary":
         data_manager = load_sst_binary_data
-    elif data_type == "snli":
-        data_manager = load_snli_data
+    elif data_type == "nli":
+        data_manager = load_nli_data
     elif data_type == "arithmetic":
         data_manager = load_simple_data
     elif data_type == "listops":
@@ -119,7 +120,7 @@ def load_data_and_embeddings(FLAGS, data_manager, logger, training_data_path, ev
     if FLAGS.eval_genre is not None:
         def choose_eval(x): return x.get('genre') == FLAGS.eval_genre
 
-    if FLAGS.data_type == "snli":
+    if FLAGS.data_type == "nli":
         # Load the data.
         raw_training_data, vocabulary = data_manager.load_data(
             training_data_path, FLAGS.lowercase, choose_train)
@@ -128,7 +129,7 @@ def load_data_and_embeddings(FLAGS, data_manager, logger, training_data_path, ev
         raw_training_data, vocabulary = data_manager.load_data(
             training_data_path, FLAGS.lowercase)
 
-    if FLAGS.data_type == "snli":
+    if FLAGS.data_type == "nli":
         # Load the eval data.
         raw_eval_sets = []
         raw_eval_data, _ = data_manager.load_data(eval_data_path, FLAGS.lowercase, choose_eval)
@@ -191,6 +192,7 @@ def get_flags():
     gflags.DEFINE_bool("debug", False, "Set to True to disable debug_mode and type_checking.")
     gflags.DEFINE_bool("show_progress_bar", True, "Turn this off when running experiments on HPC.")
     gflags.DEFINE_string("branch_name", "", "")
+    gflags.DEFINE_string("slurm_job_id", "", "")
     gflags.DEFINE_integer(
         "deque_length", 100, "Max trailing examples to use when computing average training statistics.")
     gflags.DEFINE_string("sha", "", "")
@@ -198,7 +200,7 @@ def get_flags():
     gflags.DEFINE_string("load_experiment_name", None, "")
 
     # Data types.
-    gflags.DEFINE_enum("data_type", "bl", ["bl", "sst", "sst-binary", "snli", "multinli", "arithmetic", "listops", "sign", "eq", "relational"],
+    gflags.DEFINE_enum("data_type", "bl", ["bl", "sst", "sst-binary", "nli", "arithmetic", "listops", "sign", "eq", "relational"],
                        "Which data handler and classifier to use.")
 
     # Choose Genre.
@@ -235,7 +237,7 @@ def get_flags():
                          "If set, load GloVe-formatted embeddings from here.")
 
     # Model architecture settings.
-    gflags.DEFINE_enum("model_type", "RNN", ["CBOW", "RNN", "SPINN", "RLSPINN"], "")
+    gflags.DEFINE_enum("model_type", "RNN", ["CBOW", "RNN", "SPINN", "RLSPINN", "Pyramid"], "")
     gflags.DEFINE_integer("gpu", -1, "")
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")
@@ -258,7 +260,7 @@ def get_flags():
                           "Use previous tracker state as input for new state.")
     gflags.DEFINE_boolean("use_tracking_in_composition", True,
                           "Use tracking lstm output as input for the reduce function.")
-    gflags.DEFINE_boolean("composition_ln", False,
+    gflags.DEFINE_boolean("composition_ln", True,
                           "When True, layer normalization is used in TreeLSTM composition.")
     gflags.DEFINE_boolean("predict_use_cell", True,
                           "Use cell output as feature for transition net.")
@@ -266,6 +268,12 @@ def get_flags():
     # Reduce settings.
     gflags.DEFINE_enum("reduce", "treelstm", ["treelstm",
                                               "treegru", "tanh"], "Specify composition function.")
+
+    # Pyramid model settings
+    gflags.DEFINE_boolean("pyramid_gated", True,
+                          "Use gating in the Pyramid model.")
+    gflags.DEFINE_float("pyramid_selection_keep_rate", None,
+                        "If set, prevent this fraction of composition results from being selected.")
 
     # Encode settings.
     gflags.DEFINE_enum("encode", "projection", [
@@ -300,7 +308,7 @@ def get_flags():
     gflags.DEFINE_integer("mlp_dim", 1024, "Dimension of intermediate MLP layers.")
     gflags.DEFINE_integer("num_mlp_layers", 2, "Number of MLP layers.")
     gflags.DEFINE_boolean(
-        "mlp_ln", False, "When True, layer normalization is used between MLP layers.")
+        "mlp_ln", True, "When True, layer normalization is used between MLP layers.")
     gflags.DEFINE_float("semantic_classifier_keep_rate", 0.9,
                         "Used for dropout in the semantic task classifier.")
 
@@ -319,7 +327,6 @@ def get_flags():
     # Display settings.
     gflags.DEFINE_integer("statistics_interval_steps", 100,
                           "Print training set results at this interval.")
-    gflags.DEFINE_integer("metrics_interval_steps", 10, "Evaluate at this interval.")
     gflags.DEFINE_integer("eval_interval_steps", 100, "Evaluate at this interval.")
     gflags.DEFINE_integer("sample_interval_steps", None, "Sample transitions at this interval.")
     gflags.DEFINE_integer("ckpt_interval_steps", 5000,
@@ -338,6 +345,8 @@ def get_flags():
     gflags.DEFINE_boolean("eval_report_use_preds", True, "If False, use the given transitions in the report, "
                           "otherwise use predicted transitions. Note that when predicting transitions but not using them, the "
                           "reported predictions will look very odd / not valid.")
+
+    gflags.DEFINE_boolean("transition_detach", False, "Detach trnaisiton decision from backprop.")
 
 
 def flag_defaults(FLAGS, load_log_flags=False):
@@ -364,6 +373,9 @@ def flag_defaults(FLAGS, load_log_flags=False):
     if not FLAGS.sha:
         FLAGS.sha = os.popen('git rev-parse HEAD').read().strip()
 
+    if not FLAGS.slurm_job_id:
+        FLAGS.slurm_job_id = os.popen('echo $SLURM_JOB_ID').read().strip()
+
     if not FLAGS.load_log_path:
         FLAGS.load_log_path = FLAGS.log_path
 
@@ -379,7 +391,7 @@ def flag_defaults(FLAGS, load_log_flags=False):
     if not FLAGS.metrics_path:
         FLAGS.metrics_path = FLAGS.log_path
 
-    if FLAGS.model_type == "CBOW" or FLAGS.model_type == "RNN":
+    if FLAGS.model_type == "CBOW" or FLAGS.model_type == "RNN" or FLAGS.model_type == "Pyramid":
         FLAGS.num_samples = 0
 
     if not torch.cuda.is_available():
@@ -404,6 +416,8 @@ def init_model(
         build_model = spinn.spinn_core_model.build_model
     elif FLAGS.model_type == "RLSPINN":
         build_model = spinn.rl_spinn.build_model
+    elif FLAGS.model_type == "Pyramid":
+        build_model = spinn.pyramid.build_model
     else:
         raise NotImplementedError
 

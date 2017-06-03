@@ -7,7 +7,7 @@ Usage:
 $ mkdir example_trees
 $ python scripts/analyze_report_trees.py \
     --data_path ./snli_1.0/snli_1.0_dev.jsonl \
-    --report_path ./checkpoints/example-snli.report \
+    --report_path ./checkpoints/example-nli.report \
     --out_path ./example_trees
 
 """
@@ -22,7 +22,7 @@ from PIL import Image
 from tqdm import tqdm
 
 
-from spinn.data.snli import load_snli_data
+from spinn.data.nli import load_nli_data
 
 
 FLAGS = gflags.FLAGS
@@ -99,7 +99,7 @@ def build_data_dict(data):
 
 def run():
     print("Loading data...")
-    data, _ = load_snli_data.load_data(FLAGS.data_path)
+    data, _ = load_nli_data.load_data(FLAGS.data_path)
     
     print("Building data table...")
     data_table = build_data_dict(data)
@@ -123,7 +123,7 @@ def run():
 
 
 if __name__ == '__main__':
-    gflags.DEFINE_string("report_path", "./checkpoints/example-snli.report", "")
+    gflags.DEFINE_string("report_path", "./checkpoints/example-nli.report", "")
     gflags.DEFINE_string("data_path", "./snli_1.0/snli_1.0_dev.jsonl", "")
     gflags.DEFINE_string("out_path", "./example_trees", "")
 

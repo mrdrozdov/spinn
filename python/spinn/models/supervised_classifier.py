@@ -184,7 +184,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         # Run model.
         output = model(X_batch, transitions_batch, y_batch,
                        use_internal_parser=FLAGS.use_internal_parser,
-                       validate_transitions=FLAGS.validate_transitions
+                       validate_transitions=FLAGS.validate_transitions,
+                       show_sample=(step % FLAGS.sample_interval_steps == 0)
                        )
 
         # Normalize output.
@@ -285,8 +286,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                 pred_ev = ev_transitions_per_example[t_idx]
                 stength_tr = sparks([1] + tr_strength[t_idx].tolist())
                 stength_ev = sparks([1] + ev_strength[t_idx].tolist())
-                _, crossing = evalb.crossing(gold, pred)
-                transition_str += "\n{}. crossing={}".format(t_idx, crossing)
+                _, crossing = evalb.crossing(gold, pred_ev)
+                transition_str += "\n{}. crossing(pe)={}".format(t_idx, crossing)
                 transition_str += "\n     g{}".format("".join(map(str, gold)))
                 transition_str += "\n      {}".format(stength_tr[1:].encode('utf-8'))
                 transition_str += "\n    pt{}".format("".join(map(str, pred_tr)))

@@ -5,15 +5,17 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
+import torch.nn.functional as F
 
-from spinn.util.blocks import Embed, to_gpu, MLP
+from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer
 from spinn.util.misc import Args, Vocab
-
+from spinn.util.blocks import SimpleTreeLSTM
+from spinn.util.sparks import sparks
 
 def build_model(data_manager, initial_embeddings, vocab_size,
                 num_classes, FLAGS, context_args, composition_args):
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
-    model_cls = RNNModel
+    model_cls = Pyramid
 
     return model_cls(model_dim=FLAGS.model_dim,
                      word_embedding_dim=FLAGS.word_embedding_dim,
@@ -29,10 +31,12 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      num_mlp_layers=FLAGS.num_mlp_layers,
                      mlp_ln=FLAGS.mlp_ln,
                      context_args=context_args,
+                     gated=FLAGS.pyramid_gated,
+                     selection_keep_rate=FLAGS.pyramid_selection_keep_rate,
                      )
 
 
-class RNNModel(nn.Module):
+class Pyramid(nn.Module):
 
     def __init__(self, model_dim=None,
                  word_embedding_dim=None,
@@ -46,12 +50,17 @@ class RNNModel(nn.Module):
                  num_mlp_layers=None,
                  mlp_ln=None,
                  context_args=None,
+                 gated=None,
+                 selection_keep_rate=None,
+                 pyramid_selection_keep_rate=None,
                  **kwargs
                  ):
-        super(RNNModel, self).__init__()
+        super(Pyramid, self).__init__()
 
         self.use_sentence_pair = use_sentence_pair
         self.model_dim = model_dim
+        self.gated = gated
+        self.selection_keep_rate = selection_keep_rate
 
         classifier_dropout_rate = 1. - classifier_keep_rate
 
@@ -65,7 +74,11 @@ class RNNModel(nn.Module):
 
         self.embed = Embed(word_embedding_dim, vocab.size, vectors=vocab.vectors)
 
-        self.rnn = nn.LSTM(args.size, model_dim, num_layers=1, batch_first=True)
+        self.composition_fn = SimpleTreeLSTM(model_dim / 2,
+                                             composition_ln=False)
+        self.selection_fn = Linear(initializer=HeKaimingInitializer)(model_dim, 1)
+
+        # TODO: Set up layer norm.
 
         mlp_input_dim = model_dim * 2 if use_sentence_pair else model_dim
 
@@ -76,24 +89,64 @@ class RNNModel(nn.Module):
         self.reshape_input = context_args.reshape_input
         self.reshape_context = context_args.reshape_context
 
-    def run_rnn(self, x):
+    def run_pyramid(self, x, show_sample=False):
         batch_size, seq_len, model_dim = x.data.size()
 
-        num_layers = 1
-        bidirectional = False
-        bi = 2 if bidirectional else 1
-        h0 = Variable(to_gpu(torch.zeros(num_layers * bi, batch_size,
-                                         self.model_dim)), volatile=not self.training)
-        c0 = Variable(to_gpu(torch.zeros(num_layers * bi, batch_size,
-                                         self.model_dim)), volatile=not self.training)
+        all_state_pairs = []
+        all_state_pairs.append(torch.chunk(x, seq_len, 1))
 
-        # Expects (input, h_0):
-        #   input => batch_size x seq_len x model_dim
-        #   h_0   => (num_layers x num_directions[1,2]) x batch_size x model_dim
-        #   c_0   => (num_layers x num_directions[1,2]) x batch_size x model_dim
-        output, (hn, cn) = self.rnn(x, (h0, c0))
+        if show_sample:
+            print
 
-        return hn
+        for layer in range(seq_len - 1, 0, -1):
+            composition_results = []
+            selection_logits_list = []
+
+            for position in range(layer):
+                left = torch.squeeze(all_state_pairs[-1][position])
+                right = torch.squeeze(all_state_pairs[-1][position + 1])
+                composition_results.append(self.composition_fn(left, right))
+
+            if self.gated:            
+                for position in range(layer):    
+                    selection_logits_list.append(self.selection_fn(composition_results[position]))
+
+                selection_logits = torch.cat(selection_logits_list, 1)
+
+                if show_sample:
+                    selection_probs = F.softmax(selection_logits)
+                    print sparks(np.transpose(selection_probs[0,:].data.numpy()).tolist())
+
+                if self.training and self.selection_keep_rate is not None:
+                    noise = torch.bernoulli((torch.ones(1, 1) * self.selection_keep_rate).expand_as(selection_logits)) * -1000.
+                    selection_logits += Variable(noise)
+                selection_probs = F.softmax(selection_logits)
+
+                layer_state_pairs = []
+                for position in range(layer):
+                    if position < (layer - 1):
+                        copy_left = torch.sum(selection_probs[:, position + 1:], 1)
+                    else:
+                        copy_left = Variable(torch.zeros(1, 1))
+                    if position > 0:
+                        copy_right = torch.sum(selection_probs[:, :position], 1)
+                    else: 
+                        copy_right = Variable(torch.zeros(1, 1))
+                    select = selection_probs[:, position]
+
+                    left = torch.squeeze(all_state_pairs[-1][position])
+                    right = torch.squeeze(all_state_pairs[-1][position + 1])
+                    composition_result = composition_results[position]
+                    new_state_pair = copy_left.expand_as(left) * left \
+                        + copy_right.expand_as(right) * right \
+                        + select.unsqueeze(1).expand_as(composition_result) * composition_result
+                    layer_state_pairs.append(new_state_pair)
+            else:
+                layer_state_pairs = composition_results
+
+            all_state_pairs.append(layer_state_pairs)
+
+        return all_state_pairs[-1][-1]
 
     def run_embed(self, x):
         batch_size, seq_length = x.size()
@@ -106,13 +159,13 @@ class RNNModel(nn.Module):
 
         return embeds
 
-    def forward(self, sentences, transitions, y_batch=None, **kwargs):
+    def forward(self, sentences, transitions, y_batch=None, show_sample=False, **kwargs):
         # Useful when investigating dynamic batching:
         # self.seq_lengths = sentences.shape[1] - (sentences == 0).sum(1)
 
         x = self.unwrap(sentences, transitions)
         emb = self.run_embed(x)
-        hh = torch.squeeze(self.run_rnn(emb))
+        hh = self.run_pyramid(emb, show_sample)
         h = self.wrap(hh)
         output = self.mlp(h)
 

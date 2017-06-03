@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "listops_05_18"
+NAME = "listops_06_01_64r"
 SWEEP_RUNS = 6
 
 LIN = "LIN"
@@ -18,8 +18,8 @@ SS_BASE = "SS_BASE"
 
 FLAGS = gflags.FLAGS
 
-gflags.DEFINE_string("training_data_path", "spinn/data/listops/train_d20a.tsv", "")
-gflags.DEFINE_string("eval_data_path", "spinn/data/listops/test_d20a.tsv", "")
+gflags.DEFINE_string("training_data_path", "spinn/data/listops/train_d20s.tsv", "")
+gflags.DEFINE_string("eval_data_path", "spinn/data/listops/test_d20s.tsv", "")
 gflags.DEFINE_string("log_path", "/home/sb6065/logs", "")
 
 FLAGS(sys.argv)
@@ -41,9 +41,9 @@ FIXED_PARAMETERS = {
     "log_path": FLAGS.log_path,
     "metrics_path": FLAGS.log_path,
     "ckpt_path":  FLAGS.log_path,
-    "word_embedding_dim":   "16",
-    "model_dim":   "16",
-    "seq_length":   "100",
+    "word_embedding_dim":   "64",
+    "model_dim":   "64",
+    "seq_length":   "3000",
     "eval_seq_length":  "3000",
     "eval_interval_steps": "100",
     "statistics_interval_steps": "100",
@@ -56,15 +56,15 @@ FIXED_PARAMETERS = {
     "num_mlp_layers": "2",
     "use_internal_parser": "",
     "transition_weight": "0.1",
+    "semantic_classifier_keep_rate": "1.0",
+    "embedding_keep_rate": "1.0",
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "learning_rate":      ("lr", EXP, 0.0006, 0.06),  # RNN likes higher, but below 009.
-    "l2_lambda":          ("l2", EXP, 8e-7, 1e-4),
-    "semantic_classifier_keep_rate": ("skr", LIN, 0.8, 1.0),  # NB: Keep rates may depend considerably on dims.
-    "embedding_keep_rate": ("ekr", LIN, 0.8, 1.0),
-    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.5, 1.0),
+    "learning_rate":      ("lr", EXP, 0.0005, 0.009),  # RNN likes higher, but below 009.
+    "l2_lambda":          ("l2", EXP, 5e-7, 2e-5),
+    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.4, 0.9),
 #    "tracking_lstm_hidden_dim": ("tdim", EXP, 4, 16),
 #    "rl_weight":  ("rlwt", EXP, 0.000001, 0.0009),
 #    "transition_weight":  ("trwt", EXP, 0.3, 3.0),
@@ -122,5 +122,5 @@ for run_id in range(SWEEP_RUNS):
     if NYU_NON_PBS:
         print "cd spinn/python; python2.7 -m spinn.models.supervised_classifier " + flags
     else:
-        print "SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh"
+        print "SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_cpu_only.sh"
     print

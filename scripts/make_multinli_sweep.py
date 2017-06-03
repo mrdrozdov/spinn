@@ -9,21 +9,21 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "06_01_ws"
-SWEEP_RUNS = 4
+NAME = "06_01_parse"
+SWEEP_RUNS = 12
 
 LIN = "LIN"
 EXP = "EXP"
+SS_BASE = "SS_BASE"
 BOOL = "BOOL"
 CHOICE = "CHOICE"
-SS_BASE = "SS_BASE"
 
 FLAGS = gflags.FLAGS
 
-gflags.DEFINE_string("training_data_path", "spinn/data/listops/train_d20s.tsv", "")
-gflags.DEFINE_string("eval_data_path", "spinn/data/listops/test_d20s.tsv", "")
+gflags.DEFINE_string("training_data_path", "/home/sb6065/multinli_0.9/multinli_0.9_snli_1.0_train_combined.jsonl", "")
+gflags.DEFINE_string("eval_data_path", "/home/sb6065/multinli_0.9/multinli_0.9_dev_matched.jsonl", "")
+gflags.DEFINE_string("embedding_data_path", "/home/sb6065/glove/glove.840B.300d.txt", "")
 gflags.DEFINE_string("log_path", "/home/sb6065/logs/spinn", "")
-gflags.DEFINE_string("metrics_path", "/home/sb6065/logs/spinn-runs", "")
 
 FLAGS(sys.argv)
 
@@ -37,43 +37,41 @@ FLAGS(sys.argv)
 # Non-tunable flags that must be passed in.
 
 FIXED_PARAMETERS = {
-    "data_type":     "listops",
-    "model_type":      "RLSPINN",
+    "data_type":     "nli",
+    "model_type":      "SPINN",
     "training_data_path":    FLAGS.training_data_path,
     "eval_data_path":    FLAGS.eval_data_path,
+    "embedding_data_path": FLAGS.embedding_data_path,
     "log_path": FLAGS.log_path,
-    "metrics_path": FLAGS.metrics_path,
+    "metrics_path": FLAGS.log_path,
     "ckpt_path":  FLAGS.log_path,
-    "word_embedding_dim":   "128",
-    "model_dim":   "128",
-    "seq_length":   "100",
-    "eval_seq_length":  "3000",
-    "use_internal_parser": "",
-    "batch_size":  "64",
-    "nouse_tracking_in_composition": "",
-    "mlp_dim": "16",
-    "transition_weight": "1",
-    "embedding_keep_rate": "1.0",
+    "word_embedding_dim":   "300",
+    "model_dim":   "300",
+    "seq_length":   "80",
+    "eval_seq_length":  "810",
+    "eval_interval_steps": "1000",
+    "statistics_interval_steps": "100",
     "semantic_classifier_keep_rate": "1.0",
-    "rl_reward": "standard",
-    "num_samples": "1",
-    "nolateral_tracking": "",
-    "encode": "pass",
+    "embedding_keep_rate": "1.0",
+    "batch_size":  "128",
+    "encode": "gru",
+    "encode_reverse": "",
+    "num_mlp_layers": "2",
+    "use_internal_parser": "",
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "rl_weight":  ("rlwt", EXP, 1.0, 50.0),
-    "learning_rate":      ("lr", EXP, 0.001, 0.01),
-    "l2_lambda":          ("l2", EXP, 8e-7, 1e-5),
-    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.4, 1.0),
-    "rl_wake_sleep": ("ws", BOOL, None, None),
-    "rl_epsilon": ("eps", LIN, 0.05, 1.0),
-    "rl_epsilon_decay": ("epsd", EXP, 1000, 100000),
-    "rl_confidence_penalty": ("rlconf", EXP, 0.00001, 10.0),
-    "rl_confidence_interval": ("rlconfint", EXP, 10, 1000),
-    "rl_baseline": ("base", CHOICE, ['ema', 'value'], None)
+    "learning_rate":      ("lr", EXP, 0.00008, 0.001),  # RNN likes higher, but below 009.
+    "mlp_dim":      ("mld", EXP, 128, 384),  # RNN likes higher, but below 009.
+    "l2_lambda":          ("l2", EXP, 8e-8, 1e-5),
+    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.5, 8.0),
+    "tracking_lstm_hidden_dim": ("tdim", EXP, 8, 128),
+    "semantic_classifier_keep_rate": ("skr", LIN, 0.8, 1.0),  # NB: Keep rates may depend considerably on dims.
+    "embedding_keep_rate": ("ekr", LIN, 0.8, 1.0),
+    "transition_weight": ("trw", EXP, 0.3, 3.0),
 }
+
 
 sweep_name = "sweep_" + NAME + "_" + \
     FIXED_PARAMETERS["data_type"] + "_" + FIXED_PARAMETERS["model_type"]
@@ -139,7 +137,7 @@ for run_id in range(SWEEP_RUNS):
 
     flags += " --experiment_name " + name
     if NYU_NON_PBS:
-        print "cd spinn/python; python2.7 -m spinn.models.rl_classifier " + flags
+        print "cd spinn/python; python2.7 -m spinn.models.supervised_classifier " + flags
     else:
-        print "SPINNMODEL=\"spinn.models.rl_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_cpu_only.sh"
+        print "SPINNMODEL=\"spinn.models.supervised_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh"
     print
