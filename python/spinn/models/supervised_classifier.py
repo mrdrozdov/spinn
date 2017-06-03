@@ -184,7 +184,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         # Run model.
         output = model(X_batch, transitions_batch, y_batch,
                        use_internal_parser=FLAGS.use_internal_parser,
-                       validate_transitions=FLAGS.validate_transitions
+                       validate_transitions=FLAGS.validate_transitions,
+                       show_sample=(step % FLAGS.sample_interval_steps == 0)
                        )
 
         # Normalize output.

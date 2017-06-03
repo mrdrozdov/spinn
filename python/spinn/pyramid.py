@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer
 from spinn.util.misc import Args, Vocab
 from spinn.util.blocks import SimpleTreeLSTM
-
+from spinn.util.sparks import sparks
 
 def build_model(data_manager, initial_embeddings, vocab_size,
                 num_classes, FLAGS, context_args, composition_args):
@@ -89,15 +89,19 @@ class Pyramid(nn.Module):
         self.reshape_input = context_args.reshape_input
         self.reshape_context = context_args.reshape_context
 
-    def run_pyramid(self, x):
+    def run_pyramid(self, x, show_sample=False):
         batch_size, seq_len, model_dim = x.data.size()
 
         all_state_pairs = []
         all_state_pairs.append(torch.chunk(x, seq_len, 1))
 
+        if show_sample:
+            print
+
         for layer in range(seq_len - 1, 0, -1):
             composition_results = []
             selection_logits_list = []
+
             for position in range(layer):
                 left = torch.squeeze(all_state_pairs[-1][position])
                 right = torch.squeeze(all_state_pairs[-1][position + 1])
@@ -108,8 +112,10 @@ class Pyramid(nn.Module):
                     selection_logits_list.append(self.selection_fn(composition_results[position]))
 
                 selection_logits = torch.cat(selection_logits_list, 1)
-                # selection_probs = F.softmax(selection_logits)
-                # print np.transpose(selection_probs[0,:].data.int().numpy())
+
+                if show_sample:
+                    selection_probs = F.softmax(selection_logits)
+                    print sparks(np.transpose(selection_probs[0,:].data.numpy()).tolist())
 
                 if self.training and self.selection_keep_rate is not None:
                     noise = torch.bernoulli((torch.ones(1, 1) * self.selection_keep_rate).expand_as(selection_logits)) * -1000.
@@ -153,13 +159,13 @@ class Pyramid(nn.Module):
 
         return embeds
 
-    def forward(self, sentences, transitions, y_batch=None, **kwargs):
+    def forward(self, sentences, transitions, y_batch=None, show_sample=False, **kwargs):
         # Useful when investigating dynamic batching:
         # self.seq_lengths = sentences.shape[1] - (sentences == 0).sum(1)
 
         x = self.unwrap(sentences, transitions)
         emb = self.run_embed(x)
-        hh = self.run_pyramid(emb)
+        hh = self.run_pyramid(emb, show_sample)
         h = self.wrap(hh)
         output = self.mlp(h)
 
