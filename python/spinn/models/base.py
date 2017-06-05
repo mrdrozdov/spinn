@@ -327,6 +327,8 @@ def get_flags():
     # Display settings.
     gflags.DEFINE_integer("statistics_interval_steps", 100,
                           "Print training set results at this interval.")
+    gflags.DEFINE_integer("metrics_interval_steps", None,
+                          "Print training set results at this interval.")
     gflags.DEFINE_integer("eval_interval_steps", 100, "Evaluate at this interval.")
     gflags.DEFINE_integer("sample_interval_steps", None, "Sample transitions at this interval.")
     gflags.DEFINE_integer("ckpt_interval_steps", 5000,
@@ -387,6 +389,9 @@ def flag_defaults(FLAGS, load_log_flags=False):
 
     if not FLAGS.sample_interval_steps:
         FLAGS.sample_interval_steps = FLAGS.statistics_interval_steps
+
+    if not FLAGS.metrics_interval_steps:
+        FLAGS.metrics_interval_steps = FLAGS.statistics_interval_steps
 
     if not FLAGS.metrics_path:
         FLAGS.metrics_path = FLAGS.log_path
