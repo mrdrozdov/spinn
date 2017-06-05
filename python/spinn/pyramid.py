@@ -118,7 +118,7 @@ class Pyramid(nn.Module):
                     print sparks(np.transpose(selection_probs[0,:].data.numpy()).tolist())
 
                 if self.training and self.selection_keep_rate is not None:
-                    noise = torch.bernoulli((torch.ones(1, 1) * self.selection_keep_rate).expand_as(selection_logits)) * -1000.
+                    noise = torch.bernoulli((to_gpu(torch.ones(1, 1)) * self.selection_keep_rate).expand_as(selection_logits)) * -1000.
                     selection_logits += Variable(noise)
                 selection_probs = F.softmax(selection_logits)
 
@@ -127,11 +127,11 @@ class Pyramid(nn.Module):
                     if position < (layer - 1):
                         copy_left = torch.sum(selection_probs[:, position + 1:], 1)
                     else:
-                        copy_left = Variable(torch.zeros(1, 1))
+                        copy_left = to_gpu(Variable(torch.zeros(1, 1)))
                     if position > 0:
                         copy_right = torch.sum(selection_probs[:, :position], 1)
                     else: 
-                        copy_right = Variable(torch.zeros(1, 1))
+                        copy_right = to_gpu(Variable(torch.zeros(1, 1)))
                     select = selection_probs[:, position]
 
                     left = torch.squeeze(all_state_pairs[-1][position])
