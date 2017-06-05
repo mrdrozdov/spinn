@@ -115,7 +115,7 @@ class Pyramid(nn.Module):
 
                 if show_sample:
                     selection_probs = F.softmax(selection_logits)
-                    print sparks(np.transpose(selection_probs[0,:].data.numpy()).tolist())
+                    print sparks(np.transpose(selection_probs[0,:].data.cpu().numpy()).tolist())
 
                 if self.training and self.selection_keep_rate is not None:
                     noise = torch.bernoulli((to_gpu(torch.ones(1, 1)) * self.selection_keep_rate).expand_as(selection_logits)) * -1000.
