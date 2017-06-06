@@ -390,6 +390,9 @@ def flag_defaults(FLAGS, load_log_flags=False):
     if not FLAGS.sample_interval_steps:
         FLAGS.sample_interval_steps = FLAGS.statistics_interval_steps
 
+    if not FLAGS.metrics_interval_steps:
+        FLAGS.metrics_interval_steps = FLAGS.statistics_interval_steps
+
     if not FLAGS.metrics_path:
         FLAGS.metrics_path = FLAGS.log_path
 
