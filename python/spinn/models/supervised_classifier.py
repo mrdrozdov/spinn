@@ -299,11 +299,18 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
 
 
 def run(only_forward=False):
-    logger = afs_safe_logger.Logger(log_path(FLAGS))
+    logger = afs_safe_logger.ProtoLogger(log_path(FLAGS))
+    header = pb.SpinnHeader()
 
     data_manager = get_data_manager(FLAGS.data_type)
 
-    logger.Log("Flag Values:\n" + json.dumps(FLAGS.FlagValuesDict(), indent=4, sort_keys=True))
+    logger.Log("Flag Values:\n" +
+               json.dumps(FLAGS.FlagValuesDict(), indent=4, sort_keys=True))
+    flags_dict = sorted(list(FLAGS.FlagValuesDict().items()))
+    for k, v in flags_dict:
+        flag = header.flags.add()
+        flag.key = k
+        flag.value = str(v)
 
     # Get Data and Embeddings
     vocabulary, initial_embeddings, training_data_iter, eval_iterators = \
@@ -315,7 +322,7 @@ def run(only_forward=False):
     num_classes = len(data_manager.LABEL_MAP)
 
     model, optimizer, trainer = init_model(
-        FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_manager)
+        FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_manager, header)
 
     standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name)
     best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name, best=True)
@@ -352,6 +359,7 @@ def run(only_forward=False):
     model.apply(set_debug)
 
     # Do an evaluation-only run.
+    logger.LogHeader(header)  # Start log_entry logging.
     if only_forward:
         eval_str = eval_format(model)
         logger.Log("Eval-Format: {}".format(eval_str))

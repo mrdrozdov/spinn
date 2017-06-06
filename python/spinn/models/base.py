@@ -327,6 +327,8 @@ def get_flags():
     # Display settings.
     gflags.DEFINE_integer("statistics_interval_steps", 100,
                           "Print training set results at this interval.")
+    gflags.DEFINE_integer("metrics_interval_steps", 20,
+                          "Write training set results to logfile at this interval.")
     gflags.DEFINE_integer("eval_interval_steps", 100, "Evaluate at this interval.")
     gflags.DEFINE_integer("sample_interval_steps", None, "Sample transitions at this interval.")
     gflags.DEFINE_integer("ckpt_interval_steps", 5000,
