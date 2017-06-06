@@ -223,10 +223,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                                   total=FLAGS.statistics_interval_steps)
                 progress_bar.finish()
 
-            A.add('total_loss', total_loss.data[0])
-            A.add('auxiliary_loss', aux_loss.data[0])
-            A.add('xent_loss', xent_loss.data[0])
-            A.add('l2_loss', l2_loss.data[0])
+            A.add('xent_cost', xent_loss.data[0])
+            A.add('l2_cost', l2_loss.data[0])
             stats(model, optimizer, A, step, log_entry)
 
         if step % FLAGS.sample_interval_steps == 0 and FLAGS.num_samples > 0:
