@@ -13,7 +13,6 @@ from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import get_l2_loss, the_gpu, to_gpu
 from spinn.util.misc import Accumulator, EvalReporter
 from spinn.util.misc import recursively_set_device
-from spinn.util.metrics import MetricsWriter
 from spinn.util.logging import stats, train_accumulate
 from spinn.util.logging import train_rl_accumulate
 from spinn.util.logging import eval_stats, eval_accumulate
