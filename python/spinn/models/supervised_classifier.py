@@ -13,6 +13,7 @@ from spinn.util.blocks import get_l2_loss, the_gpu, to_gpu
 from spinn.util.misc import Accumulator, EvalReporter
 from spinn.util.misc import recursively_set_device
 from spinn.util.logging import stats, train_accumulate
+from spinn.util.logging import eval_stats, eval_accumulate
 from spinn.util.loss import auxiliary_loss
 from spinn.util.sparks import sparks, dec_str
 import spinn.util.evalb as evalb
@@ -108,8 +109,8 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
         eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".report")
         reporter.write_report(eval_report_path)
 
-    eval_class_acc = stats_args['class_acc']
-    eval_trans_acc = stats_args['transition_acc']
+    eval_class_acc = eval_log.eval_class_accuracy
+    eval_trans_acc = eval_log.eval_transition_accuracy
 
     return eval_class_acc, eval_trans_acc
 
