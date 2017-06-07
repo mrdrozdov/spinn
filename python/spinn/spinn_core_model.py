@@ -624,7 +624,7 @@ class BaseModel(nn.Module):
         pass
 
     def forward(self, sentences, transitions, y_batch=None,
-                use_internal_parser=False, validate_transitions=True):
+                use_internal_parser=False, validate_transitions=True, **kwargs):
         example = self.unwrap(sentences, transitions)
 
         b, l = example.tokens.size()[:2]
