@@ -352,6 +352,8 @@ def get_flags():
     gflags.DEFINE_boolean("transition_detach", False, "Detach transition decision from backprop.")
     gflags.DEFINE_boolean("evolution", False, "Use evolution to train parser.")
     gflags.DEFINE_float("es_sigma", 0.05, "Standard deviation for Gaussian noise.")
+    gflags.DEFINE_integer("es_num_episodes", 4, "Number of simultaneous episodes to run.")
+    gflags.DEFINE_integer("es_episode_length", 1000, "Length of each episode.")
 
 
 def flag_defaults(FLAGS, load_log_flags=False):
@@ -473,6 +475,9 @@ def init_model(
     composition_args.wrap_items = lambda x: torch.cat(x, 0)
     composition_args.extract_h = lambda x: x
     composition_args.extract_c = None
+
+    composition_args.detach = FLAGS.transition_detach
+    composition_args.evolution = FLAGS.evolution
 
     if FLAGS.reduce == "treelstm":
         assert FLAGS.model_dim % 2 == 0, 'model_dim must be an even number.'
