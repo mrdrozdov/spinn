@@ -123,13 +123,14 @@ def TokensToIDs(vocabulary, dataset, sentence_pair_data=False):
     return dataset
 
 
-def CropAndPadExample(example, left_padding, target_length, key, symbol=0, logger=None):
+def CropAndPadExample(example, left_padding, target_length, key, symbol=0, logger=None, allow_cropping=False):
     """
     Crop/pad a sequence value of the given dict `example`.
     """
     if left_padding < 0:
-        raise NotImplementedError("Behavior for cropped examples is not well-defined."
-                                  "Please set sequence length to some sufficiently large value and turn on truncating.")
+        if not allow_cropping:
+            raise NotImplementedError("Behavior for cropped examples is not well-defined."
+                                      "Please set sequence length to some sufficiently large value and turn on truncating.")
         # Crop, then pad normally.
         # TODO: Track how many sentences are cropped, but don't log a message
         # for every single one.
@@ -188,7 +189,7 @@ def CropAndPadForRNN(dataset, length, logger=None, sentence_pair_data=False):
             tokens_left_padding = length - num_tokens
             CropAndPadExample(
                 example, tokens_left_padding, length, tokens_key,
-                symbol=SENTENCE_PADDING_SYMBOL, logger=logger)
+                symbol=SENTENCE_PADDING_SYMBOL, logger=logger, allow_cropping=True)
     return dataset
 
 
