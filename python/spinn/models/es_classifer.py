@@ -133,22 +133,22 @@ def evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabula
 
 def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                training_data_iter, eval_iterators, logger, step, best_dev_error, perturbation_id):
-    perturbation_name = FLAGS.experiment_name + ""
+    perturbation_name = FLAGS.experiment_name + perturbation_id
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
-    M = MetricsWriter(os.path.join(FLAGS.metrics_path, FLAGS.experiment_name))
+    M = MetricsWriter(os.path.join(FLAGS.metrics_path, perturbation_name))
 
     # Checkpoint paths.
-    standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name)
-    best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name, best=True)
+    standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, perturbation_name)
+    best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, perturbation_name, best=True)
 
     # Build log format strings.
     model.train()
     X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = get_batch(
         training_data_iter.next())
     if not FLAGS.transition_detach:
-        logger.Log("Transition decision function must be detached.")
-        exit(1)
+        logger.Log("Transition decision function is going to be detached.")
+        ## SWITCH TO EVOLUTION FLAG 
     model(X_batch, transitions_batch, y_batch,
           use_internal_parser=FLAGS.use_internal_parser,
           validate_transitions=FLAGS.validate_transitions,
@@ -454,11 +454,10 @@ def run(only_forward=False):
                     for i in range(len(models)):
                         all_seeds.append(random_seed)
                     all_models += models
-                # We're going to pop off models and seeds, make sure the two lists are the right length first
                 assert len(all_seeds) == len(all_models)
 
                 #while all_models:
-                for i in range(len(all_mdoels))
+                for i in range(len(all_models))
                     #perturbed_model = all_models.pop()
                     #seed = all_seeds.pop()
                     perturbed_model = all_models[i]
