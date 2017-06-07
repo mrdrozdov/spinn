@@ -343,7 +343,12 @@ def get_flags():
                           "otherwise use predicted transitions. Note that when predicting transitions but not using them, the "
                           "reported predictions will look very odd / not valid.")
 
-    gflags.DEFINE_boolean("transition_detach", False, "Detach trnaisiton decision from backprop.")
+    # Evolution Strategy
+    gflags.DEFINE_boolean("transition_detach", False, "Detach transition decision from backprop.")
+    gflags.DEFINE_boolean("evolution", False, "Use evolution to train parser.")
+    gflags.DEFINE_float("es_sigma", 0.05, "Standard deviation for Gaussian noise.")
+    gflags.DEFINE_integer("es_num_episodes", 4, "Number of simultaneous episodes to run.")
+    gflags.DEFINE_integer("es_episode_length", 1000, "Length of each episode.")
 
 
 def flag_defaults(FLAGS, load_log_flags=False):
@@ -455,6 +460,9 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
     composition_args.wrap_items = lambda x: torch.cat(x, 0)
     composition_args.extract_h = lambda x: x
     composition_args.extract_c = None
+
+    composition_args.detach = FLAGS.transition_detach
+    composition_args.evolution = FLAGS.evolution
 
     if FLAGS.reduce == "treelstm":
         composition_args.wrap_items = lambda x: bundle(x)

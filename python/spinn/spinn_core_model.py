@@ -45,6 +45,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      context_args=context_args,
                      composition_args=composition_args,
                      detach=FLAGS.transition_detach,
+                     evolution=FLAGS.evolution,
                      )
 
 
@@ -118,12 +119,13 @@ class Tracker(nn.Module):
 
 class SPINN(nn.Module):
 
-    def __init__(self, args, vocab, detach, predict_use_cell):
+    def __init__(self, args, vocab, predict_use_cell):
         super(SPINN, self).__init__()
 
         # Optional debug mode.
         self.debug = False
-        self.detach = detach
+        self.detach = args.detach
+        self.evolution = args.evolution
 
         self.transition_weight = args.transition_weight
 
@@ -365,7 +367,7 @@ class SPINN(nn.Module):
                     transition_inp = [tracker_h]
                     if self.tracker.lateral_tracking and self.predict_use_cell:
                         transition_inp += [tracker_c]
-                    if self.detach:
+                    if self.detach or self.evolution:
                         transition_inp = torch.cat(transition_inp, 1).detach()
                     else:
                         transition_inp = torch.cat(transition_inp, 1)
@@ -527,6 +529,7 @@ class BaseModel(nn.Module):
                  context_args=None,
                  composition_args=None,
                  detach=None,
+                 evolution=None,
                  **kwargs
                  ):
         super(BaseModel, self).__init__()
@@ -550,7 +553,7 @@ class BaseModel(nn.Module):
         vocab.vectors = initial_embeddings
 
         # Build parsing component.
-        self.spinn = self.build_spinn(composition_args, vocab, detach, predict_use_cell)
+        self.spinn = self.build_spinn(composition_args, vocab, predict_use_cell)
 
         # Build classiifer.
         features_dim = self.get_features_dim()
@@ -590,8 +593,8 @@ class BaseModel(nn.Module):
             features = h[0]
         return features
 
-    def build_spinn(self, args, vocab, detach, predict_use_cell):
-        return SPINN(args, vocab, detach, predict_use_cell)
+    def build_spinn(self, args, vocab, predict_use_cell):
+        return SPINN(args, vocab, predict_use_cell)
 
     def run_spinn(self, example, use_internal_parser, validate_transitions=True):
         self.spinn.reset_state()
