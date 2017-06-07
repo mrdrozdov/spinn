@@ -337,7 +337,10 @@ def get_flags():
                           "otherwise use predicted transitions. Note that when predicting transitions but not using them, the "
                           "reported predictions will look very odd / not valid.")
 
-    gflags.DEFINE_boolean("transition_detach", False, "Detach trnaisiton decision from backprop.")
+    # Evolution Strategy
+    gflags.DEFINE_boolean("transition_detach", False, "Detach transition decision from backprop.")
+    gflags.DEFINE_boolean("evolution", False, "Use evolution to train parser.")
+    gflags.DEFINE_float("es_sigma", 0.05, "Standard deviation for Gaussian noise.")
 
 
 def flag_defaults(FLAGS, load_log_flags=False):

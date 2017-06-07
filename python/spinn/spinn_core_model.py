@@ -307,6 +307,13 @@ class SPINN(nn.Module):
     def loss_phase_hook(self):
         pass
 
+    def evolution_params(self):
+        """
+        The parameters trained by evolution strategy
+        """
+        return [(k, v) for k, v in zip(self.transition_net.state_dict().keys(), self.transition_net.state_dict().values())]
+
+
     def run(self, inp_transitions, run_internal_parser=False,
             use_internal_parser=False, validate_transitions=True):
         transition_loss = None
@@ -369,7 +376,7 @@ class SPINN(nn.Module):
                         transition_inp = torch.cat(transition_inp, 1).detach()
                     else:
                         transition_inp = torch.cat(transition_inp, 1)
-                        
+
                     transition_output = self.transition_net(transition_inp)
 
                 if hasattr(self, 'transition_net') and run_internal_parser:
@@ -705,3 +712,4 @@ class BaseModel(nn.Module):
         h_premise = self.extract_h(self.wrap_items(items[:batch_size]))
         h_hypothesis = self.extract_h(self.wrap_items(items[batch_size:]))
         return [h_premise, h_hypothesis]
+
