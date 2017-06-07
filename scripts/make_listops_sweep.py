@@ -43,8 +43,8 @@ FIXED_PARAMETERS = {
     "ckpt_path":  FLAGS.log_path,
     "word_embedding_dim":   "128",
     "model_dim":   "128",
-    "seq_length":   "3000",
-    "eval_seq_length":  "3000",
+    "seq_length":   "50",
+    "eval_seq_length":  "120",
     "eval_interval_steps": "100",
     "statistics_interval_steps": "100",
     #"use_internal_parser": "",
@@ -61,7 +61,7 @@ FIXED_PARAMETERS = {
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "learning_rate":      ("lr", EXP, 0.0001, 0.01),  # RNN likes higher, but below 009.
+    "learning_rate":      ("lr", EXP, 0.00008, 0.003),  # RNN likes higher, but below 009.
     "l2_lambda":          ("l2", EXP, 5e-7, 2e-5),
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.4, 0.9),
     "pyramid_selection_keep_rate": ("pykr", LIN, 0.4, 1.0),
