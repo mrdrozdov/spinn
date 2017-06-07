@@ -1,5 +1,8 @@
 import sys
 import os
+import json
+import math
+import random
 import time
 
 import gflags
@@ -266,6 +269,12 @@ def get_flags():
     gflags.DEFINE_enum("reduce", "treelstm", ["treelstm",
                                               "treegru", "tanh"], "Specify composition function.")
 
+    # Pyramid model settings
+    gflags.DEFINE_boolean("pyramid_gated", True,
+                          "Use gating in the Pyramid model.")
+    gflags.DEFINE_float("pyramid_selection_keep_rate", None,
+                        "If set, prevent this fraction of composition results from being selected.")
+
     # Encode settings.
     gflags.DEFINE_enum("encode", "projection", [
                        "pass", "projection", "gru", "attn"], "Encode embeddings with sequential context.")
@@ -318,6 +327,8 @@ def get_flags():
     # Display settings.
     gflags.DEFINE_integer("statistics_interval_steps", 100,
                           "Print training set results at this interval.")
+    gflags.DEFINE_integer("metrics_interval_steps", 20,
+                          "Write training set results to logfile at this interval.")
     gflags.DEFINE_integer("eval_interval_steps", 100, "Evaluate at this interval.")
     gflags.DEFINE_integer("sample_interval_steps", None, "Sample transitions at this interval.")
     gflags.DEFINE_integer("ckpt_interval_steps", 5000,
@@ -382,6 +393,9 @@ def flag_defaults(FLAGS, load_log_flags=False):
     if not FLAGS.sample_interval_steps:
         FLAGS.sample_interval_steps = FLAGS.statistics_interval_steps
 
+    if not FLAGS.metrics_interval_steps:
+        FLAGS.metrics_interval_steps = FLAGS.statistics_interval_steps
+
     if not FLAGS.metrics_path:
         FLAGS.metrics_path = FLAGS.log_path
 
@@ -392,7 +406,14 @@ def flag_defaults(FLAGS, load_log_flags=False):
         FLAGS.gpu = -1
 
 
-def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_manager):
+def init_model(
+        FLAGS,
+        logger,
+        initial_embeddings,
+        vocab_size,
+        num_classes,
+        data_manager,
+        logfile_header=None):
     # Choose model.
     logger.Log("Building model.")
     if FLAGS.model_type == "CBOW":
@@ -454,6 +475,10 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
     composition_args.extract_c = None
 
     if FLAGS.reduce == "treelstm":
+        assert FLAGS.model_dim % 2 == 0, 'model_dim must be an even number.'
+        if FLAGS.model_dim != FLAGS.word_embedding_dim:
+            print('If you are setting different hidden layer and word '
+                  'embedding sizes, make sure you specify an encoder')
         composition_args.wrap_items = lambda x: bundle(x)
         composition_args.extract_h = lambda x: x.h
         composition_args.extract_c = lambda x: x.c
@@ -495,7 +520,11 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
 
     # Print model size.
     logger.Log("Architecture: {}".format(model))
+    if logfile_header:
+        logfile_header.model_architecture = str(model)
     total_params = sum([reduce(lambda x, y: x * y, w.size(), 1.0) for w in model.parameters()])
     logger.Log("Total params: {}".format(total_params))
+    if logfile_header:
+        logfile_header.total_params = int(total_params)
 
     return model, optimizer, trainer

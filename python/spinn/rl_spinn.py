@@ -135,8 +135,8 @@ class BaseModel(_BaseModel):
 
         self.register_buffer('baseline', torch.FloatTensor([0.0]))
 
-    def build_spinn(self, args, vocab, predict_use_cell):
-        return RLSPINN(args, vocab, predict_use_cell)
+    def build_spinn(self, args, vocab, detach, predict_use_cell):
+        return RLSPINN(args, vocab, detach, predict_use_cell)
 
     def forward_hook(self, embeds, batch_size, seq_length):
         if self.rl_baseline == "value" and self.training:

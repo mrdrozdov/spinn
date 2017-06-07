@@ -59,6 +59,12 @@ If you're interested in proposing a change or fix to SPINN, please submit a Pull
 
     nosetests python/spinn/tests
 
+### Adding Logging Fields
+
+SPINN outputs metrics and statistics into a text [protocol buffer](https://developers.google.com/protocol-buffers/) format. When adding new fields to the proto file, the generated proto code needs to be updated.
+
+    bash python/build.sh
+
 ## License
 
 Copyright 2016, Stanford University
