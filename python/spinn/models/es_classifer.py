@@ -142,6 +142,22 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
     standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, perturbation_name)
     best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, perturbation_name, best=True)
 
+    # Load checkpoint if available.
+    if FLAGS.load_best and os.path.isfile(best_checkpoint_path):
+        logger.Log("Found best checkpoint, restoring.")
+        step, best_dev_error = trainer.load(best_checkpoint_path)
+        logger.Log(
+            "Resuming at step: {} with best dev accuracy: {}".format(
+                step, 1. - best_dev_error))
+    else os.path.isfile(standard_checkpoint_path):
+        logger.Log("Found checkpoint, restoring.")
+        step, best_dev_error = trainer.load(standard_checkpoint_path)
+        logger.Log(
+            "Resuming at step: {} with best dev accuracy: {}".format(
+                step, 1. - best_dev_error))
+        step = 0
+        best_dev_error = 1.0
+
     # Build log format strings.
     model.train()
     X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = get_batch(
@@ -154,30 +170,13 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
           validate_transitions=FLAGS.validate_transitions,
           transition_detach=True)
 
-    logger.Log("")
-    logger.Log("# ----- BEGIN: Log Configuration ----- #")
-
-    # Preview train string template.
-    train_str = train_format(model)
-    logger.Log("Train-Format: {}".format(train_str))
-    train_extra_str = train_extra_format(model)
-    logger.Log("Train-Extra-Format: {}".format(train_extra_str))
-
-    # Preview eval string template.
-    eval_str = eval_format(model)
-    logger.Log("Eval-Format: {}".format(eval_str))
-    eval_extra_str = eval_extra_format(model)
-    logger.Log("Eval-Extra-Format: {}".format(eval_extra_str))
-
-    logger.Log("# ----- END: Log Configuration ----- #")
-    logger.Log("")
-
     # Train.
-    logger.Log("Training.")
+    logger.Log("Training perturbation %s" % perturbation_id)
 
     # New Training Loop
     progress_bar = SimpleProgressBar(msg="Training", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(i=0, total=FLAGS.statistics_interval_steps)
+    log_entry = pb.SpinnEntry()
 
     if not FLAGS.evolution:
         num_steps = FLAGS.training_steps
@@ -389,6 +388,7 @@ def run(only_forward=False):
     model, optimizer, trainer = init_model(
         FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_manager)
 
+    """
     standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name)
     best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, FLAGS.experiment_name, best=True)
 
@@ -409,6 +409,7 @@ def run(only_forward=False):
         assert not only_forward, "Can't run an eval-only run without a checkpoint. Supply a checkpoint."
         step = 0
         best_dev_error = 1.0
+    """
 
     # GPU support.
     the_gpu.gpu = FLAGS.gpu
@@ -467,10 +468,8 @@ def run(only_forward=False):
                     processes.append(p)
                 assert len(all_seeds) == 0
 
-
     else:
-        train_loop(FLAGS, data_manager, model, optimizer, trainer,
-                   training_data_iter, eval_iterators, logger, step, best_dev_error)
+        raise Exception("Please use a different classifier, this one specifically uses Evolution Strategy to train the parser.")
 
 if __name__ == '__main__':
     get_flags()
