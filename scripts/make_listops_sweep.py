@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "listops_06_01_64r"
-SWEEP_RUNS = 6
+NAME = "listops_06_05_64p"
+SWEEP_RUNS = 8
 
 LIN = "LIN"
 EXP = "EXP"
@@ -35,36 +35,36 @@ FLAGS(sys.argv)
 
 FIXED_PARAMETERS = {
     "data_type":     "listops",
-    "model_type":      "RNN",
+    "model_type":      "Pyramid",
     "training_data_path":    FLAGS.training_data_path,
     "eval_data_path":    FLAGS.eval_data_path,
     "log_path": FLAGS.log_path,
     "metrics_path": FLAGS.log_path,
     "ckpt_path":  FLAGS.log_path,
-    "word_embedding_dim":   "64",
-    "model_dim":   "64",
+    "word_embedding_dim":   "128",
+    "model_dim":   "128",
     "seq_length":   "3000",
     "eval_seq_length":  "3000",
     "eval_interval_steps": "100",
     "statistics_interval_steps": "100",
-    "use_internal_parser": "",
+    #"use_internal_parser": "",
     "batch_size":  "64",
-    "nouse_tracking_in_composition": "",
-    "nolateral_tracking": "",
+    #"nouse_tracking_in_composition": "",
+    #"nolateral_tracking": "",
     "encode": "pass",
     "mlp_dim": "16",
     "num_mlp_layers": "2",
-    "use_internal_parser": "",
-    "transition_weight": "0.1",
+    #"transition_weight": "0.1",
     "semantic_classifier_keep_rate": "1.0",
     "embedding_keep_rate": "1.0",
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "learning_rate":      ("lr", EXP, 0.0005, 0.009),  # RNN likes higher, but below 009.
+    "learning_rate":      ("lr", EXP, 0.0001, 0.01),  # RNN likes higher, but below 009.
     "l2_lambda":          ("l2", EXP, 5e-7, 2e-5),
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.4, 0.9),
+    "pyramid_selection_keep_rate": ("pykr", LIN, 0.4, 1.0),
 #    "tracking_lstm_hidden_dim": ("tdim", EXP, 4, 16),
 #    "rl_weight":  ("rlwt", EXP, 0.000001, 0.0009),
 #    "transition_weight":  ("trwt", EXP, 0.3, 3.0),

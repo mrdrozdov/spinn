@@ -62,14 +62,14 @@ FIXED_PARAMETERS = {
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "learning_rate":      ("lr", EXP, 0.00008, 0.001),  # RNN likes higher, but below 009.
-    "mlp_dim":      ("mld", EXP, 128, 384),  # RNN likes higher, but below 009.
-    "l2_lambda":          ("l2", EXP, 8e-8, 1e-5),
-    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.5, 8.0),
-    "tracking_lstm_hidden_dim": ("tdim", EXP, 8, 128),
+    "learning_rate":      ("lr", EXP, 0.0001, 0.001),  # RNN likes higher, but below 009.
+    "mlp_dim":      ("mld", EXP, 96, 256),  # RNN likes higher, but below 009.
+    "l2_lambda":          ("l2", EXP, 1e-7, 1e-5),
+    "learning_rate_decay_per_10k_steps": ("dec", LIN, 0.5, 0.8),
+    "tracking_lstm_hidden_dim": ("tdim", EXP, 8, 64),
     "semantic_classifier_keep_rate": ("skr", LIN, 0.8, 1.0),  # NB: Keep rates may depend considerably on dims.
     "embedding_keep_rate": ("ekr", LIN, 0.8, 1.0),
-    "transition_weight": ("trw", EXP, 0.3, 3.0),
+    "transition_weight": ("trw", EXP, 0.1, 3.0),
 }
 
 

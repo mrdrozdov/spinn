@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "06_01_ws"
-SWEEP_RUNS = 4
+NAME = "06_07_ws"
+SWEEP_RUNS = 8
 
 LIN = "LIN"
 EXP = "EXP"
@@ -63,15 +63,15 @@ FIXED_PARAMETERS = {
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "rl_weight":  ("rlwt", EXP, 1.0, 50.0),
+    "rl_weight":  ("rlwt", EXP, 0.5, 5.0),
     "learning_rate":      ("lr", EXP, 0.001, 0.01),
     "l2_lambda":          ("l2", EXP, 8e-7, 1e-5),
-    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.4, 1.0),
+    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.6, 1.0),
     "rl_wake_sleep": ("ws", BOOL, None, None),
-    "rl_epsilon": ("eps", LIN, 0.05, 1.0),
-    "rl_epsilon_decay": ("epsd", EXP, 1000, 100000),
-    "rl_confidence_penalty": ("rlconf", EXP, 0.00001, 10.0),
-    "rl_confidence_interval": ("rlconfint", EXP, 10, 1000),
+    "rl_epsilon": ("eps", LIN, 0.5, 16.0),
+    "rl_epsilon_decay": ("epsd", EXP, 1000, 1000000),
+    "rl_confidence_penalty": ("rlconf", EXP, 0.000001, 1.0),
+    "rl_confidence_interval": ("rlconfint", EXP, 10, 250),
     "rl_baseline": ("base", CHOICE, ['ema', 'value'], None)
 }
 
