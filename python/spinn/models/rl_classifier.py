@@ -415,6 +415,8 @@ def run(only_forward=False):
             log_entry.Clear()
             acc = evaluate(FLAGS, model, data_manager,
                            eval_set, log_entry, step, vocabulary)
+            print(log_entry)
+            logger.LogEntry(log_entry)
     else:
         train_loop(FLAGS, data_manager, model, optimizer, trainer,
                    training_data_iter, eval_iterators, logger, step, best_dev_error)
