@@ -95,9 +95,6 @@ class Pyramid(nn.Module):
         all_state_pairs = []
         all_state_pairs.append(torch.chunk(x, seq_len, 1))
 
-        # Temp fix:
-        show_sample = False
-
         if show_sample:
             print
 
