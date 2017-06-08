@@ -360,13 +360,10 @@ def run(only_forward=False):
     # Do an evaluation-only run.
     logger.LogHeader(header)  # Start log_entry logging.
     if only_forward:
-        eval_str = eval_format(model)
-        logger.Log("Eval-Format: {}".format(eval_str))
-        eval_extra_str = eval_extra_format(model)
-        logger.Log("Eval-Extra-Format: {}".format(eval_extra_str))
-
+        log_entry = pb.SpinnEntry()
         for index, eval_set in enumerate(eval_iterators):
-            evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabulary)
+            log_entry.Clear()
+            evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary)
     else:
         train_loop(FLAGS, data_manager, model, optimizer, trainer,
                    training_data_iter, eval_iterators, logger, step, best_dev_error)
