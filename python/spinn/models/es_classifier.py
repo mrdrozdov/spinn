@@ -1,7 +1,7 @@
 """
+Classifier script to use evolution strategy to train the parser in an unsupervised manner.
 
-NOTE: Not currently usable.
-
+TODO: hard coded number of evolution iterations to perform. Impose stopping criteria?
 """
 
 
@@ -20,8 +20,8 @@ from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import get_l2_loss, the_gpu, to_gpu
 from spinn.util.misc import Accumulator, EvalReporter
 from spinn.util.misc import recursively_set_device
-from spinn.util.metrics import MetricsWriter
 """
+from spinn.util.metrics import MetricsWriter
 from spinn.util.logging import train_format, train_extra_format, train_stats, train_accumulate
 from spinn.util.logging import train_metrics, eval_metrics
 from spinn.util.logging import eval_format, eval_extra_format, eval_stats, eval_accumulate
@@ -29,7 +29,7 @@ from spinn.util.logging import eval_format, eval_extra_format, eval_stats, eval_
 from spinn.util.logging import stats, train_accumulate
 from spinn.util.logging import eval_stats, eval_accumulate
 from spinn.util.loss import auxiliary_loss
-from spinn.util.sparks import sparks
+from spinn.util.sparks import sparks, dec_str
 import spinn.util.evalb as evalb
 import spinn.util.logging_pb2 as pb
 
@@ -48,16 +48,13 @@ from spinn.models.base import load_data_and_embeddings
 
 FLAGS = gflags.FLAGS
 
-
+"""
 def evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabulary=None):
     filename, dataset = eval_set
 
     A = Accumulator()
     M = MetricsWriter(os.path.join(FLAGS.metrics_path, FLAGS.experiment_name))
     reporter = EvalReporter()
-
-    eval_str = eval_format(model)
-    eval_extra_str = eval_extra_format(model)
 
     # Evaluate
     total_batches = len(dataset)
@@ -135,14 +132,93 @@ def evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabula
         eval_metrics(M, stats_args, step)
 
     return eval_class_acc, eval_trans_acc
+"""
 
+def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=None):
+    filename, dataset = eval_set
+
+    A = Accumulator()
+    index = len(log_entry.evaluation)
+    eval_log = log_entry.evaluation.add()
+    reporter = EvalReporter()
+
+    # Evaluate
+    total_batches = len(dataset)
+    progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
+    progress_bar.step(0, total=total_batches)
+    total_tokens = 0
+    start = time.time()
+
+    model.eval()
+    for i, dataset_batch in enumerate(dataset):
+        batch = get_batch(dataset_batch)
+        eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, eval_ids = batch
+
+        # Run model.
+        output = model(eval_X_batch, eval_transitions_batch, eval_y_batch,
+                       use_internal_parser=FLAGS.use_internal_parser,
+                       validate_transitions=FLAGS.validate_transitions)
+
+        # Normalize output.
+        logits = F.log_softmax(output)
+
+        # Calculate class accuracy.
+        target = torch.from_numpy(eval_y_batch).long()
+        pred = logits.data.max(1)[1].cpu()  # get the index of the max log-probability
+
+        eval_accumulate(model, data_manager, A, batch)
+        A.add('class_correct', pred.eq(target).sum())
+        A.add('class_total', target.size(0))
+
+        # Optionally calculate transition loss/acc.
+        model.transition_loss if hasattr(model, 'transition_loss') else None
+
+        # Update Aggregate Accuracies
+        total_tokens += sum([(nt + 1) / 2 for nt in eval_num_transitions_batch.reshape(-1)])
+
+        if FLAGS.write_eval_report:
+            reporter_args = [pred, target, eval_ids, output.data.cpu().numpy()]
+            if hasattr(model, 'transition_loss'):
+                transitions_per_example, _ = model.spinn.get_transitions_per_example(
+                    style="preds" if FLAGS.eval_report_use_preds else "given")
+                if model.use_sentence_pair:
+                    batch_size = pred.size(0)
+                    sent1_transitions = transitions_per_example[:batch_size]
+                    sent2_transitions = transitions_per_example[batch_size:]
+                    reporter_args.append(sent1_transitions)
+                    reporter_args.append(sent2_transitions)
+                else:
+                    reporter_args.append(transitions_per_example)
+            reporter.save_batch(*reporter_args)
+
+        # Print Progress
+        progress_bar.step(i + 1, total=total_batches)
+    progress_bar.finish()
+
+    end = time.time()
+    total_time = end - start
+
+    A.add('total_tokens', total_tokens)
+    A.add('total_time', total_time)
+
+    eval_stats(model, A, eval_log)
+    eval_log.filename = filename
+
+    if FLAGS.write_eval_report:
+        eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".report")
+        reporter.write_report(eval_report_path)
+
+    eval_class_acc = eval_log.eval_class_accuracy
+    eval_trans_acc = eval_log.eval_transition_accuracy
+
+    return eval_class_acc, eval_trans_acc
 
 def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                training_data_iter, eval_iterators, logger, step, best_dev_error, perturbation_id):
     perturbation_name = FLAGS.experiment_name + "_p" + str(perturbation_id)
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
-    M = MetricsWriter(os.path.join(FLAGS.metrics_path, perturbation_name))
+    #M = MetricsWriter(os.path.join(FLAGS.metrics_path, perturbation_name))
 
     # Checkpoint paths.
     standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, perturbation_name)
@@ -169,12 +245,10 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
     X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = get_batch(
         training_data_iter.next())
     if not FLAGS.transition_detach:
-        logger.Log("Transition decision function is going to be detached.")
-        ## SWITCH TO EVOLUTION FLAG 
+        logger.Log("Transition decision function is being detached for evolution.")
     model(X_batch, transitions_batch, y_batch,
           use_internal_parser=FLAGS.use_internal_parser,
-          validate_transitions=FLAGS.validate_transitions,
-          transition_detach=True)
+          validate_transitions=FLAGS.validate_transitions)
 
     # Train.
     logger.Log("Training perturbation %s" % perturbation_id)
@@ -182,15 +256,13 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
     # New Training Loop
     progress_bar = SimpleProgressBar(msg="Training", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(i=0, total=FLAGS.statistics_interval_steps)
+    
     log_entry = pb.SpinnEntry()
-
-    if not FLAGS.evolution:
-        num_steps = FLAGS.training_steps
-    else:
-        num_steps = FLAGS.es_episode_length
-
-    for step in range(step, num_steps):
+    for step in range(FLAGS.es_episode_length):
         model.train()
+        log_entry.Clear()
+        log_entry.step = step
+        should_log = False
 
         start = time.time()
 
@@ -260,23 +332,19 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         A.add('total_tokens', total_tokens)
         A.add('total_time', total_time)
 
-        if step % FLAGS.statistics_interval_steps == 0:
-            progress_bar.step(i=FLAGS.statistics_interval_steps,
-                              total=FLAGS.statistics_interval_steps)
-            progress_bar.finish()
+        if step % FLAGS.statistics_interval_steps == 0 \
+                or step % FLAGS.metrics_interval_steps == 0:
+            if step % FLAGS.statistics_interval_steps == 0:
+                progress_bar.step(i=FLAGS.statistics_interval_steps,
+                                  total=FLAGS.statistics_interval_steps)
+                progress_bar.finish()
 
-            A.add('total_loss', total_loss.data[0])
-            A.add('auxiliary_loss', aux_loss.data[0])
-            A.add('xent_loss', xent_loss.data[0])
-            A.add('l2_loss', l2_loss.data[0])
-            stats_args = train_stats(model, optimizer, A, step)
-
-            train_metrics(M, stats_args, step)
-
-            logger.Log(train_str.format(**stats_args))
-            logger.Log(train_extra_str.format(**stats_args))
+            A.add('xent_cost', xent_loss.data[0])
+            A.add('l2_cost', l2_loss.data[0])
+            stats(model, optimizer, A, step, log_entry)
 
         if step % FLAGS.sample_interval_steps == 0 and FLAGS.num_samples > 0:
+            should_log = True
             model.train()
             model(X_batch, transitions_batch, y_batch,
                   use_internal_parser=FLAGS.use_internal_parser,
@@ -291,7 +359,6 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                   )
             ev_transitions_per_example, ev_strength = model.spinn.get_transitions_per_example()
 
-            transition_str = "Samples:"
             if model.use_sentence_pair and len(transitions_batch.shape) == 3:
                 transitions_batch = np.concatenate([
                     transitions_batch[:, :, 0], transitions_batch[:, :, 1]], axis=0)
@@ -301,23 +368,26 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
             random.shuffle(t_idxs)
             t_idxs = sorted(t_idxs[:FLAGS.num_samples])
             for t_idx in t_idxs:
+                log = log_entry.rl_sampling.add()
                 gold = transitions_batch[t_idx]
                 pred_tr = tr_transitions_per_example[t_idx]
                 pred_ev = ev_transitions_per_example[t_idx]
-                stength_tr = sparks([1] + tr_strength[t_idx].tolist())
-                stength_ev = sparks([1] + ev_strength[t_idx].tolist())
+                stength_tr = sparks([1] + tr_strength[t_idx].tolist(), dec_str)
+                stength_ev = sparks([1] + ev_strength[t_idx].tolist(), dec_str)
                 _, crossing = evalb.crossing(gold, pred_ev)
-                transition_str += "\n{}. crossing(pe)={}".format(t_idx, crossing)
-                transition_str += "\n     g{}".format("".join(map(str, gold)))
-                transition_str += "\n      {}".format(stength_tr[1:].encode('utf-8'))
-                transition_str += "\n    pt{}".format("".join(map(str, pred_tr)))
-                transition_str += "\n      {}".format(stength_ev[1:].encode('utf-8'))
-                transition_str += "\n    pe{}".format("".join(map(str, pred_ev)))
-            logger.Log(transition_str)
+
+                log.t_idx = t_idx
+                log.crossing = crossing
+                log.gold_lb = "".join(map(str, gold))
+                log.pred_tr = "".join(map(str, pred_tr))
+                log.pred_ev = "".join(map(str, pred_ev))
+                log.strg_tr = strength_tr[1:].encode('utf-8')
+                log.strg_ev = strength_ev[1:].encode('utf-8')
 
         if step > 0 and step % FLAGS.eval_interval_steps == 0:
+            should_log = True
             for index, eval_set in enumerate(eval_iterators):
-                acc, tacc = evaluate(FLAGS, model, data_manager, eval_set, index, logger, step)
+                acc, tacc = evaluate(FLAGS, model, data_manager, eval_set, log_entry, step)
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (
                         1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
@@ -329,12 +399,23 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
             logger.Log("Checkpointing.")
             trainer.save(standard_checkpoint_path, step, best_dev_error)
 
+        log_level = afs_safe_logger.ProtoLogger.INFO
+        if not should_log and step % FLAGS.metrics_interval_steps == 0:
+            # Log to file, but not to stderr.
+            should_log = True
+            log_level = afs_safe_logger.ProtoLogger.DEBUG
+
+        #if should_log:
+        #    logger.LogEntry(log_entry, level=log_level)
+
         progress_bar.step(i=step % FLAGS.statistics_interval_steps,
                           total=FLAGS.statistics_interval_steps)
 
 
 
-def rollout(queue, perturbed_model, perturbation_id):
+def rollout(queue, perturbed_model, FLAGS, data_manager, 
+            model, optimizer, trainer, training_data_iter, 
+            eval_iterators, logger, step, best_dev_error, perturbation_id):
     """
     Train each episode
     """
@@ -361,8 +442,7 @@ def perturb_model(model, random_seed):
         for (k, v) in pert_model.spinn.evolution_params():
             epsilon = np.random.normal(0, 1, v.size())
             v += torch.from_numpy(FLAGS.es_sigma * epsilon).float()
-            models.append(pert_model)
-
+        models.append(pert_model)
     return models
 
 def generate_seeds_and_models(chosen_model):
@@ -377,7 +457,13 @@ def run(only_forward=False):
 
     data_manager = get_data_manager(FLAGS.data_type)
 
-    logger.Log("Flag Values:\n" + json.dumps(FLAGS.FlagValuesDict(), indent=4, sort_keys=True))
+    logger.Log("Flag Values:\n" +
+               json.dumps(FLAGS.FlagValuesDict(), indent=4, sort_keys=True))
+    flags_dict = sorted(list(FLAGS.FlagValuesDict().items()))
+    for k, v in flags_dict:
+        flag = header.flags.add()
+        flag.key = k
+        flag.value = str(v)
 
     # Get Data and Embeddings
     vocabulary, initial_embeddings, training_data_iter, eval_iterators = \
@@ -459,7 +545,11 @@ def run(only_forward=False):
             evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabulary)
         """
 
-    elif FLAGS.evolution:
+    else:
+        assert not only_forward, "Can't run an eval-only run without a checkpoint. Supply a checkpoint."
+        step = 0
+        best_dev_error = 1.0
+
         chosen_models = [model]
         num_eps = 0
         total_num_frames = 0
@@ -493,7 +583,16 @@ def run(only_forward=False):
                 perturbed_model = all_models.pop()
                 seed = all_seeds.pop()
                 all_models_ids[perturbation_id] = model
-                p = mp.Process(target=rollout, args=(queue, perturbed_model, i))
+
+                queue, perturbed_model, FLAGS, data_manager, 
+                model, optimizer, trainer, training_data_iter, 
+                eval_iterators, logger, step, best_dev_error, perturbation_id
+
+                p = mp.Process(target=rollout, args=(queue, 
+                        perturbed_model, FLAGS, data_manager, 
+                        model, optimizer, trainer, training_data_iter, 
+                        eval_iterators, logger, step, 
+                        best_dev_error, perturbation_id))
                 p.start()
                 processes.append(p)
                 perturbation_id += 1
@@ -506,8 +605,6 @@ def run(only_forward=False):
 
             accuracies = [queue.get() for p in processes]
 
-    else:
-        raise Exception("Please use a different classifier, this one specifically uses Evolution Strategy to train the parser.")
 
 if __name__ == '__main__':
     get_flags()
@@ -520,5 +617,9 @@ if __name__ == '__main__':
     if FLAGS.model_type == "RLSPINN":
         raise Exception(
             "Please use rl_classifier.py instead of supervised_classifier.py for RLSPINN.")
+
+    if not FLAGS.evolution:
+        raise Exception(
+            "Please use supervised_classifier.py instead of es_classifier.py. This classifier trains the parser using evolution strategy.")
 
     run(only_forward=FLAGS.expanded_eval_only_mode)
