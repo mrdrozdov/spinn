@@ -13,7 +13,7 @@ from spinn.util.blocks import SimpleTreeLSTM
 from spinn.util.sparks import sparks
 
 def build_model(data_manager, initial_embeddings, vocab_size,
-                num_classes, FLAGS, context_args, composition_args, logger):
+                num_classes, FLAGS, context_args, composition_args, logger=None):
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
     model_cls = Pyramid
 
