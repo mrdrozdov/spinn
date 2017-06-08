@@ -323,9 +323,9 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                 _, crossing = evalb.crossing(gold, pred)
                 transition_str += "\n{}. crossing={}".format(t_idx, crossing)
                 transition_str += "\n     g{}".format("".join(map(str, gold)))
-                transition_str += "\n      {}".format(stength_tr[1:].encode('utf-8'))
+                transition_str += "\n      {}".format(stength_tr[1:])
                 transition_str += "\n    pt{}".format("".join(map(str, pred_tr)))
-                transition_str += "\n      {}".format(stength_ev[1:].encode('utf-8'))
+                transition_str += "\n      {}".format(stength_ev[1:])
                 transition_str += "\n    pe{}".format("".join(map(str, pred_ev)))
             logger.Log(transition_str)
 
