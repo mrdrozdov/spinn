@@ -29,7 +29,10 @@ class Logger(object):
     def Log(self, message, level=INFO):
         if level >= self.min_print_level:
             # Write to STDERR
-            sys.stderr.write("[%i] %s\n" % (level, message))
+            if self.show_level:
+                sys.stderr.write("[%i] %s\n" % (level, message))
+            else:
+                sys.stderr.write("%s\n" % message)
         if self.log_path and level >= self.min_file_level:
             # Write to the log file then close it
             with open(self.log_path, 'a') as f:
