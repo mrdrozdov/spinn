@@ -13,7 +13,7 @@ from spinn.util.blocks import SimpleTreeLSTM
 from spinn.util.sparks import sparks
 
 def build_model(data_manager, initial_embeddings, vocab_size,
-                num_classes, FLAGS, context_args, composition_args):
+                num_classes, FLAGS, context_args, composition_args, logger):
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
     model_cls = Pyramid
 
@@ -33,6 +33,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      context_args=context_args,
                      gated=FLAGS.pyramid_gated,
                      selection_keep_rate=FLAGS.pyramid_selection_keep_rate,
+                     logger=logger
                      )
 
 
@@ -53,6 +54,7 @@ class Pyramid(nn.Module):
                  gated=None,
                  selection_keep_rate=None,
                  pyramid_selection_keep_rate=None,
+                 logger=None,
                  **kwargs
                  ):
         super(Pyramid, self).__init__()
@@ -61,6 +63,7 @@ class Pyramid(nn.Module):
         self.model_dim = model_dim
         self.gated = gated
         self.selection_keep_rate = selection_keep_rate
+        self.logger = logger
 
         classifier_dropout_rate = 1. - classifier_keep_rate
 
@@ -96,7 +99,7 @@ class Pyramid(nn.Module):
         all_state_pairs.append(torch.chunk(x, seq_len, 1))
 
         if show_sample:
-            print
+            self.logger.Log('')
 
         for layer in range(seq_len - 1, 0, -1):
             composition_results = []
@@ -115,7 +118,7 @@ class Pyramid(nn.Module):
 
                 if show_sample:
                     selection_probs = F.softmax(selection_logits)
-                    print sparks(np.transpose(selection_probs[0,:].data.cpu().numpy()).tolist())
+                    self.logger.Log(sparks(np.transpose(selection_probs[0,:].data.cpu().numpy()).tolist()))
 
                 if self.training and self.selection_keep_rate is not None:
                     noise = torch.bernoulli((to_gpu(torch.ones(1, 1)) * self.selection_keep_rate).expand_as(selection_logits)) * -1000.

@@ -490,7 +490,7 @@ def init_model(FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_
     composition_args.composition = composition
 
     model = build_model(data_manager, initial_embeddings, vocab_size,
-                        num_classes, FLAGS, context_args, composition_args)
+                        num_classes, FLAGS, context_args, composition_args, logger)
 
     # Build optimizer.
     if FLAGS.optimizer_type == "Adam":

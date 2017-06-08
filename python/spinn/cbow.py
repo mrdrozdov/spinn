@@ -11,7 +11,7 @@ from spinn.util.misc import Args, Vocab
 
 
 def build_model(data_manager, initial_embeddings, vocab_size,
-                num_classes, FLAGS, context_args, composition_args):
+                num_classes, FLAGS, context_args, composition_args, **kwargs):
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
