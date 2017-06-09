@@ -364,6 +364,53 @@ class ModelTrainer(object):
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         return checkpoint['step'], checkpoint['best_dev_error']
 
+class ModelTrainer_ES(object):
+
+    def __init__(self, model, optimizer):
+        self.model = model
+        self.optimizer = optimizer
+
+    def save(self, filename, step, best_dev_error, episode_num):
+        if the_gpu() >= 0:
+            recursively_set_device(self.model.state_dict(), gpu=-1)
+            recursively_set_device(self.optimizer.state_dict(), gpu=-1)
+
+        # Always sends Tensors to CPU.
+        torch.save({
+            'step': step,
+            'best_dev_error': best_dev_error,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'episode_num': episode_num,
+        }, filename)
+
+        if the_gpu() >= 0:
+            recursively_set_device(self.model.state_dict(), gpu=the_gpu())
+            recursively_set_device(self.optimizer.state_dict(), gpu=the_gpu())
+
+    def load(self, filename):
+        checkpoint = torch.load(filename)
+        model_state_dict = checkpoint['model_state_dict']
+
+        # HACK: Compatability for saving supervised SPINN and loading RL SPINN.
+        if 'baseline' in self.model.state_dict().keys() and 'baseline' not in model_state_dict:
+            model_state_dict['baseline'] = torch.FloatTensor([0.0])
+
+        self.model.load_state_dict(model_state_dict)
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        return checkpoint['episode_num'], checkpoint['step'], checkpoint['best_dev_error']
+
+    def load_model(self, filename):
+        checkpoint = torch.load(filename)
+        model_state_dict = checkpoint['model_state_dict']
+
+        # HACK: Compatability for saving supervised SPINN and loading RL SPINN.
+        if 'baseline' in self.model.state_dict().keys() and 'baseline' not in model_state_dict:
+            model_state_dict['baseline'] = torch.FloatTensor([0.0])
+
+        self.model.load_state_dict(model_state_dict)
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        return checkpoint, checkpoint['episode_num'], checkpoint['step'], checkpoint['best_dev_error']
 
 class Embed(nn.Module):
     def __init__(self, size, vocab_size, vectors):
