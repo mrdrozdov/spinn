@@ -50,6 +50,7 @@ message SpinnEntry {
   optional float time_per_token_seconds = 8;
   optional float learning_rate = 9;
   optional float invalid = 10;
+  optional string model_label = 22;
 
   // RL log properties.
   optional float policy_cost = 11;
