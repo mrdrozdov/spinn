@@ -370,7 +370,7 @@ class ModelTrainer_ES(object):
         self.model = model
         self.optimizer = optimizer
 
-    def save(self, filename, step, best_dev_error, episode_num):
+    def save(self, filename, step, best_dev_error, evolution_step):
         if the_gpu() >= 0:
             recursively_set_device(self.model.state_dict(), gpu=-1)
             recursively_set_device(self.optimizer.state_dict(), gpu=-1)
@@ -381,7 +381,7 @@ class ModelTrainer_ES(object):
             'best_dev_error': best_dev_error,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
-            'episode_num': episode_num,
+            'evolution_step': evolution_step,
         }, filename)
 
         if the_gpu() >= 0:
@@ -398,7 +398,7 @@ class ModelTrainer_ES(object):
 
         self.model.load_state_dict(model_state_dict)
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        return checkpoint['episode_num'], checkpoint['step'], checkpoint['best_dev_error']
+        return checkpoint['evolution_step'], checkpoint['step'], checkpoint['best_dev_error']
 
     def load_model(self, filename):
         checkpoint = torch.load(filename)
@@ -410,7 +410,7 @@ class ModelTrainer_ES(object):
 
         self.model.load_state_dict(model_state_dict)
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        return checkpoint, checkpoint['episode_num'], checkpoint['step'], checkpoint['best_dev_error']
+        return checkpoint, checkpoint['evolution_step'], checkpoint['step'], checkpoint['best_dev_error']
 
 class Embed(nn.Module):
     def __init__(self, size, vocab_size, vectors):

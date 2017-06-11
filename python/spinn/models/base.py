@@ -17,7 +17,7 @@ from spinn.data.boolean import load_boolean_data
 from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.nli import load_nli_data
-from spinn.util.blocks import ModelTrainer, bundle
+from spinn.util.blocks import ModelTrainer, ModelTrainer_ES, bundle
 from spinn.util.blocks import EncodeGRU, IntraAttention, Linear, ReduceTreeGRU, ReduceTreeLSTM
 from spinn.util.misc import Args
 from spinn.util.logparse import parse_flags
@@ -354,7 +354,7 @@ def get_flags():
     gflags.DEFINE_float("es_sigma", 0.05, "Standard deviation for Gaussian noise.")
     gflags.DEFINE_integer("es_num_episodes", 4, "Number of simultaneous episodes to run.")
     gflags.DEFINE_integer("es_episode_length", 1000, "Length of each episode.")
-
+    gflags.DEFINE_integer("es_steps", 1000, "Number of evolution steps.")
 
 def flag_defaults(FLAGS, load_log_flags=False):
     if load_log_flags:
@@ -521,7 +521,10 @@ def init_model(
         raise NotImplementedError
 
     # Build trainer.
-    trainer = ModelTrainer(model, optimizer)
+    if FLAGS.evolution:
+        trainer = ModelTrainer_ES(model, optimizer)
+    else:
+        trainer = ModelTrainer(model, optimizer)
 
     # Print model size.
     logger.Log("Architecture: {}".format(model))
