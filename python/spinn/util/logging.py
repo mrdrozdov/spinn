@@ -170,3 +170,90 @@ def eval_stats(model, A, eval_data):
     eval_data.time_per_token_seconds = time_metric
 
     return eval_data
+
+def train_format(log_entry, extra=False, rl=False):
+    stats_str = "Step: {step}"
+
+    # Accuracy Component.
+    stats_str += " Acc: {class_acc:.5f} {transition_acc:.5f}"
+
+    # Cost Component.
+    stats_str += " Cost: {total_loss:.5f} {xent_loss:.5f} {transition_loss:.5f} {l2_loss:.5f}"
+    if log_entry.has_policy_cost:
+        stats_str += " p{policy_cost:.5f}"
+    if log_entry.has_value_cost:
+        stats_str += " v{value_cost:.5f}"
+
+    # Time Component.
+    stats_str += " Time: {time:.5f}"
+
+    # Extra Component.
+    if extra:
+        stats_str += "\nTrain Extra:"
+        stats_str += " lr{learning_rate:.7f}"
+        if log_entry.has_invalid:
+            stats_str += " inv{invalid:.3f}"
+
+    # RL Component.
+    if rl:
+        stats_str += "\nTrain RL:"
+        stats_str += " am{mean_adv_mean:.5f}"
+        stats_str += " amm{mean_adv_mean_magnitude:.5f}"
+        stats_str += " av{mean_adv_var:.5f}"
+        stats_str += " avm{mean_adv_var_magnitude:.5f}"
+        stats_str += " t{temperature:.3f}"
+        stats_str += " eps{epsilon:.7f}"
+
+    return stats_str
+
+def eval_format(log_entry, extra=False):
+    eval_str = "Step: {step} Eval acc: {class_acc:.5f} {transition_acc:.5f} {filename} Time: {time:.5f}"
+
+    if extra:
+        eval_str += "\nEval Extra:"
+        if log_entry.has_invalid:
+            eval_str += " inv{invalid:.3f}"
+
+    return eval_str
+
+def log_formatter(log_entry, extra=False, rl=False):
+    """Defines the log string to print to std error."""
+    args = {
+        'step': log_entry.step,
+        'class_acc': log_entry.class_accuracy,
+        'transition_acc': log_entry.transition_accuracy,
+        'total_loss': log_entry.total_cost,
+        'xent_loss': log_entry.cross_entropy_cost,
+        'transition_loss': log_entry.transition_cost,
+        'l2_loss': log_entry.l2_cost,
+        'policy_cost': log_entry.policy_cost,
+        'value_cost': log_entry.value_cost,
+        'time': log_entry.time_per_token_seconds,
+        'learning_rate': log_entry.learning_rate,
+        'invalid': log_entry.invalid,
+        'mean_adv_mean': log_entry.mean_adv_mean,
+        'mean_adv_mean_magnitude': log_entry.mean_adv_mean_magnitude,
+        'mean_adv_var': log_entry.mean_adv_var,
+        'mean_adv_var_magnitude': log_entry.mean_adv_var_magnitude,
+        'epsilon': log_entry.epsilon,
+        'temperature': log_entry.temperature,
+    }
+
+    log_str = train_format(log_entry, extra, rl).format(**args)
+    if log_entry.has_evaluation:
+        eval_args = {
+            'step': log_entry.step,
+            'class_acc': log_entry.evaluation.eval_class_accuracy,
+            'transition_acc': log_entry.evaluation.eval_transition_accuracy,
+            'filename': log_entry.evaluation.filename,
+            'time': log_entry.evaluation.time_per_token_seconds,
+        }
+        log_str += '\n' + eval_format(log_entry, extra, rl).format(**args)
+
+    return log_str
+
+def create_log_formatter(extra, rl):
+    def fmt(log_entry):
+        return log_formatter(log_entry, extra, rl)
+    return fmt
+
