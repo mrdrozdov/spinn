@@ -206,12 +206,12 @@ def train_format(log_entry, extra=False, rl=False):
 
     return stats_str
 
-def eval_format(log_entry, extra=False):
+def eval_format(evaluation, extra=False):
     eval_str = "Step: {step} Eval acc: {class_acc:.5f} {transition_acc:.5f} {filename} Time: {time:.5f}"
 
     if extra:
         eval_str += "\nEval Extra:"
-        if log_entry.evaluation.HasField('invalid'):
+        if evaluation.HasField('invalid'):
             eval_str += " inv{invalid:.3f}"
 
     return eval_str
@@ -250,7 +250,7 @@ def log_formatter(log_entry, extra=False, rl=False):
                 'time': evaluation.time_per_token_seconds,
                 'invalid': evaluation.invalid,
             }
-            log_str += '\n' + eval_format(log_entry, extra).format(**eval_args)
+            log_str += '\n' + eval_format(evaluation, extra).format(**eval_args)
 
     return log_str
 
