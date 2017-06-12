@@ -67,8 +67,7 @@ class Pyramid(nn.Module):
         self.use_sentence_pair = use_sentence_pair
         self.model_dim = model_dim
         self.gated = gated
-        self.test_temperature_mulitplier = to_gpu(Variable(
-            torch.FloatTensor([test_temperature_mulitplier])))
+        self.test_temperature_mulitplier = test_temperature_mulitplier
         self.trainable_temperature = trainable_temperature
         self.selection_keep_rate = selection_keep_rate
         self.logger = logger
@@ -140,7 +139,7 @@ class Pyramid(nn.Module):
 
                 if not self.training:
                     selection_logits = selection_logits / \
-                        self.test_temperature_mulitplier.expand_as(selection_logits)
+                        self.test_temperature_mulitplier
 
                 if show_sample:
                     selection_probs = F.softmax(selection_logits)
