@@ -2,6 +2,7 @@ import datetime
 import sys
 import json
 import logging_pb2 as pb
+import re
 
 
 def default_formatter(log_entry):
@@ -87,8 +88,8 @@ class ProtoLogger(object):
             msg_str = str(self.root)
             msg_fmt =  self.print_formatter(message)
             datetime_string = datetime.datetime.now().strftime(
-                "%y-%m-%d %H:%M:%S")
-            msg_line = "%s [%i] %s\n" % (datetime_string, level, msg_fmt)
+                "%y-%m-%d %H:%M:%S ")
+            msg_line = re.sub('^', datetime_string, msg_fmt, flags=re.MULTILINE) + '\n'
             if level >= self.min_print_level:  # Write to stderr
                 sys.stderr.write(msg_line)
             if not self.write_proto:
