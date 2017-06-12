@@ -67,8 +67,8 @@ class Pyramid(nn.Module):
         self.use_sentence_pair = use_sentence_pair
         self.model_dim = model_dim
         self.gated = gated
-        self.test_temperature_mulitplier = Variable(
-            torch.FloatTensor([test_temperature_mulitplier]))
+        self.test_temperature_mulitplier = to_gpu(Variable(
+            torch.FloatTensor([test_temperature_mulitplier])))
         self.trainable_temperature = trainable_temperature
         self.selection_keep_rate = selection_keep_rate
         self.logger = logger
