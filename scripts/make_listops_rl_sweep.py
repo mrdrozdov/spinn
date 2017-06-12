@@ -60,7 +60,7 @@ FIXED_PARAMETERS = {
     "nolateral_tracking": "",
     "encode": "pass",
     "rl_baseline": "value",
-    "norl_wake_sweep": "",
+    "norl_wake_sleep": "",
 }
 
 # Tunable parameters.

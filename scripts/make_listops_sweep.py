@@ -9,11 +9,13 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "listops_06_05_64p"
+NAME = "listops_06_12_64p"
 SWEEP_RUNS = 8
 
 LIN = "LIN"
 EXP = "EXP"
+BOOL = "BOOL"
+CHOICE = "CHOICE"
 SS_BASE = "SS_BASE"
 
 FLAGS = gflags.FLAGS
@@ -61,10 +63,12 @@ FIXED_PARAMETERS = {
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "learning_rate":      ("lr", EXP, 0.0003, 0.003),  # RNN likes higher, but below 009.
+    "learning_rate":      ("lr", EXP, 0.0001, 0.001),  # RNN likes higher, but below 009.
     "l2_lambda":          ("l2", EXP, 8e-7, 2e-5),
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.4, 0.9),
-    "pyramid_selection_keep_rate": ("pykr", LIN, 0.4, 1.0),
+    "pyramid_selection_keep_rate": ("pykr", LIN, 0.8, 1.0),
+    "pyramid_test_time_temperature_multiplier": ("tttm", EXP, 0.0001, 1.0),
+    "pyramid_trainable_temperature": ("tt", BOOL, None, None),
 #    "tracking_lstm_hidden_dim": ("tdim", EXP, 4, 16),
 #    "rl_weight":  ("rlwt", EXP, 0.000001, 0.0009),
 #    "transition_weight":  ("trwt", EXP, 0.3, 3.0),
@@ -85,6 +89,8 @@ for run_id in range(SWEEP_RUNS):
     name = sweep_name + "_" + str(run_id)
 
     params.update(FIXED_PARAMETERS)
+    # Any param appearing in both sets will be overwritten by the sweep value.
+
     for param in SWEEP_PARAMETERS:
         config = SWEEP_PARAMETERS[param]
         t = config[1]
@@ -96,31 +102,43 @@ for run_id in range(SWEEP_RUNS):
             lmn = np.log(mn)
             lmx = np.log(mx)
             sample = np.exp(lmn + (lmx - lmn) * r)
+        elif t == BOOL:
+            sample = r > 0.5
         elif t==SS_BASE:
             lmn = np.log(mn)
             lmx = np.log(mx)
             sample = 1 - np.exp(lmn + (lmx - lmn) * r)
+        elif t==CHOICE:
+            sample = random.choice(mn)
         else:
             sample = mn + (mx - mn) * r
 
         if isinstance(mn, int):
             sample = int(round(sample, 0))
             val_disp = str(sample)
-        else: 
+            params[param] = sample
+        elif isinstance(mn, float):
             val_disp = "%.2g" % sample
-
-        params[param] = sample
+            params[param] = sample
+        elif t==BOOL:
+            val_disp = str(int(sample))
+            if not sample:
+                params['no' + param] = ''
+            else:
+                params[param] = ''
+        else:
+            val_disp = sample
+            params[param] = sample
         name += "-" + config[0] + val_disp
 
     flags = ""
     for param in params:
         value = params[param]
-        val_str = ""
         flags += " --" + param + " " + str(value)
 
     flags += " --experiment_name " + name
     if NYU_NON_PBS:
         print "cd spinn/python; python2.7 -m spinn.models.supervised_classifier " + flags
     else:
-        print "SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_cpu_only.sh"
+        print "SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh"
     print
