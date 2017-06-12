@@ -179,9 +179,9 @@ def train_format(log_entry, extra=False, rl=False):
 
     # Cost Component.
     stats_str += " Cost: {total_loss:.5f} {xent_loss:.5f} {transition_loss:.5f} {l2_loss:.5f}"
-    if log_entry.has_policy_cost:
+    if log_entry.HasField('policy_cost'):
         stats_str += " p{policy_cost:.5f}"
-    if log_entry.has_value_cost:
+    if log_entry.HasField('value_cost'):
         stats_str += " v{value_cost:.5f}"
 
     # Time Component.
@@ -191,7 +191,7 @@ def train_format(log_entry, extra=False, rl=False):
     if extra:
         stats_str += "\nTrain Extra:"
         stats_str += " lr{learning_rate:.7f}"
-        if log_entry.has_invalid:
+        if log_entry.HasField('invalid'):
             stats_str += " inv{invalid:.3f}"
 
     # RL Component.
@@ -211,7 +211,7 @@ def eval_format(log_entry, extra=False):
 
     if extra:
         eval_str += "\nEval Extra:"
-        if log_entry.has_invalid:
+        if log_entry.HasField('invalid'): # TODO(cipta): this is probably wrong.
             eval_str += " inv{invalid:.3f}"
 
     return eval_str
@@ -240,15 +240,16 @@ def log_formatter(log_entry, extra=False, rl=False):
     }
 
     log_str = train_format(log_entry, extra, rl).format(**args)
-    if log_entry.has_evaluation:
-        eval_args = {
-            'step': log_entry.step,
-            'class_acc': log_entry.evaluation.eval_class_accuracy,
-            'transition_acc': log_entry.evaluation.eval_transition_accuracy,
-            'filename': log_entry.evaluation.filename,
-            'time': log_entry.evaluation.time_per_token_seconds,
-        }
-        log_str += '\n' + eval_format(log_entry, extra, rl).format(**args)
+    if len(log_entry.evaluation) > 0:
+        for evaluation in log_entry.evaluation:
+            eval_args = {
+                'step': log_entry.step,
+                'class_acc': evaluation.eval_class_accuracy,
+                'transition_acc': evaluation.eval_transition_accuracy,
+                'filename': evaluation.filename,
+                'time': evaluation.time_per_token_seconds,
+            }
+            log_str += '\n' + eval_format(log_entry, extra).format(**eval_args)
 
     return log_str
 
