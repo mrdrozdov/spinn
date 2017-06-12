@@ -27,6 +27,7 @@ message EvalData {
   optional string filename = 4;
   optional float time_per_token_seconds = 5;
   optional string report_path = 6;
+  optional int32 invalid = 7;
 }
 
 message RLSamplingStats {

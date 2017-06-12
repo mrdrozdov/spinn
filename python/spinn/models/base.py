@@ -212,7 +212,7 @@ def get_flags():
     # Where to store checkpoints
     gflags.DEFINE_string("log_path", "./logs", "A directory in which to write logs.")
     gflags.DEFINE_string("load_log_path", None, "A directory in which to write logs.")
-    gflags.DEFINE_boolean("proto_logging", True, "Write logs in a protocol buffer format.")
+    gflags.DEFINE_boolean("write_proto_to_log", True, "Write logs in a protocol buffer format.")
     gflags.DEFINE_string("ckpt_path", None, "Where to save/load checkpoints. Can be either "
                          "a filename or a directory. In the latter case, the experiment name serves as the "
                          "base for the filename.")

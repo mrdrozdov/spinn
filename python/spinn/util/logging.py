@@ -161,10 +161,10 @@ def eval_stats(model, A, eval_data):
         all_truth = np.array(flatten(A.get('truth')))
         avg_trans_acc = (all_preds == all_truth).sum() / \
             float(all_truth.shape[0])
-        eval_data.eval_class_accuracy = class_acc
+        eval_data.eval_transition_accuracy = avg_trans_acc
 
     if im.has_invalid:
-        eval_data.eval_transition_accuracy = A.get_avg('invalid')
+        eval_data.invalid = A.get_avg('invalid')
 
     time_metric = time_per_token(A.get('total_tokens'), A.get('total_time'))
     eval_data.time_per_token_seconds = time_metric
@@ -211,7 +211,7 @@ def eval_format(log_entry, extra=False):
 
     if extra:
         eval_str += "\nEval Extra:"
-        if log_entry.HasField('invalid'): # TODO(cipta): this is probably wrong.
+        if log_entry.evaluation.HasField('invalid'):
             eval_str += " inv{invalid:.3f}"
 
     return eval_str
@@ -248,6 +248,7 @@ def log_formatter(log_entry, extra=False, rl=False):
                 'transition_acc': evaluation.eval_transition_accuracy,
                 'filename': evaluation.filename,
                 'time': evaluation.time_per_token_seconds,
+                'invalid': evaluation.invalid,
             }
             log_str += '\n' + eval_format(log_entry, extra).format(**eval_args)
 
