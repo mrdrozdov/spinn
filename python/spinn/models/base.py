@@ -30,6 +30,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from functools import reduce
 
 
 FLAGS = gflags.FLAGS
@@ -271,6 +272,10 @@ def get_flags():
                           "Use gating in the Pyramid model.")
     gflags.DEFINE_float("pyramid_selection_keep_rate", None,
                         "If set, prevent this fraction of composition results from being selected.")
+    gflags.DEFINE_boolean("pyramid_trainable_temperature", None,
+                          "If set, add a scalar trained temperature parameter.")
+    gflags.DEFINE_float("pyramid_test_time_temperature_multiplier", 1.0,
+                        "If set, multiply the temperature by this constant at test time.")
 
     # Encode settings.
     gflags.DEFINE_enum("encode", "projection", [

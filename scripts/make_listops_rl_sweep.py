@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "06_09_ws_alt"
+NAME = "06_12_cp"
 SWEEP_RUNS = 8
 
 LIN = "LIN"
@@ -60,6 +60,7 @@ FIXED_PARAMETERS = {
     "nolateral_tracking": "",
     "encode": "pass",
     "rl_baseline": "value",
+    "norl_wake_sweep": "",
 }
 
 # Tunable parameters.
@@ -68,11 +69,10 @@ SWEEP_PARAMETERS = {
     "learning_rate":      ("lr", EXP, 0.002, 0.02),
     "l2_lambda":          ("l2", EXP, 8e-7, 1e-5),
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.7, 1.0),
-    "rl_wake_sleep": ("ws", BOOL, None, None),
-    "rl_epsilon": ("eps", LIN, 0.5, 16.0),
+    "rl_epsilon": ("eps", LIN, 0.1, 1.0),
     "rl_epsilon_decay": ("epsd", EXP, 1000, 1000000),
-    "rl_confidence_penalty": ("rlconf", EXP, 0.000001, 1.0),
-    "rl_confidence_interval": ("rlconfint", EXP, 10, 250),
+    "rl_confidence_penalty": ("rlconf", EXP, 0.00001, 0.01),
+    "rl_confidence_interval": ("rlconfint", EXP, 10, 100),
 }
 
 sweep_name = "sweep_" + NAME + "_" + \

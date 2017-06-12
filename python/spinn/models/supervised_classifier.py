@@ -36,7 +36,8 @@ from spinn.models.base import load_data_and_embeddings
 FLAGS = gflags.FLAGS
 
 
-def evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabulary=None):
+def evaluate(FLAGS, model, data_manager, eval_set, index,
+             logger, step, vocabulary=None, show_sample=False):
     filename, dataset = eval_set
 
     A = Accumulator()
@@ -61,7 +62,9 @@ def evaluate(FLAGS, model, data_manager, eval_set, index, logger, step, vocabula
         # Run model.
         output = model(eval_X_batch, eval_transitions_batch, eval_y_batch,
                        use_internal_parser=FLAGS.use_internal_parser,
-                       validate_transitions=FLAGS.validate_transitions)
+                       validate_transitions=FLAGS.validate_transitions,
+                       show_sample=show_sample)
+        show_sample = False  # Only show one sample, regardless of the number of batches.
 
         # Normalize output.
         logits = F.log_softmax(output)
@@ -184,8 +187,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         # Run model.
         output = model(X_batch, transitions_batch, y_batch,
                        use_internal_parser=FLAGS.use_internal_parser,
-                       validate_transitions=FLAGS.validate_transitions,
-                       show_sample=(step % FLAGS.sample_interval_steps == 0)
+                       validate_transitions=FLAGS.validate_transitions
                        )
 
         # Normalize output.
@@ -297,7 +299,10 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
 
         if step > 0 and step % FLAGS.eval_interval_steps == 0:
             for index, eval_set in enumerate(eval_iterators):
-                acc, tacc = evaluate(FLAGS, model, data_manager, eval_set, index, logger, step)
+                acc, tacc = evaluate(
+                    FLAGS, model, data_manager, eval_set, index, logger, step, show_sample=(
+                        step %
+                        FLAGS.sample_interval_steps == 0))
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (
                         1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
