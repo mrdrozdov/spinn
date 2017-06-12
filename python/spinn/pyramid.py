@@ -7,7 +7,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 
-from spinn.util.blocks import Embed, to_gpu, to_cpu, MLP, Linear, HeKaimingInitializer
+from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer
 from spinn.util.misc import Args, Vocab
 from spinn.util.blocks import SimpleTreeLSTM
 from spinn.util.sparks import sparks
@@ -111,7 +111,7 @@ class Pyramid(nn.Module):
         if show_sample:
             self.logger.Log('')
             if self.trainable_temperature:
-                self.logger.Log('Temp: ' + str(to_cpu(self.temperature.data).numpy()[0][0]))
+                self.logger.Log('Temp: ' + str(self.temperature.data.cpu().numpy()[0][0]))
 
         for layer in range(seq_len - 1, 0, -1):
             composition_results = []
