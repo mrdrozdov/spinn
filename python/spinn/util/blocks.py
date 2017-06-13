@@ -400,17 +400,6 @@ class ModelTrainer_ES(object):
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         return checkpoint['evolution_step'], checkpoint['step'], checkpoint['best_dev_error']
 
-    def load_model(self, filename):
-        checkpoint = torch.load(filename)
-        model_state_dict = checkpoint['model_state_dict']
-
-        # HACK: Compatability for saving supervised SPINN and loading RL SPINN.
-        if 'baseline' in self.model.state_dict().keys() and 'baseline' not in model_state_dict:
-            model_state_dict['baseline'] = torch.FloatTensor([0.0])
-
-        self.model.load_state_dict(model_state_dict)
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        return checkpoint, checkpoint['evolution_step'], checkpoint['step'], checkpoint['best_dev_error']
 
 class Embed(nn.Module):
     def __init__(self, size, vocab_size, vectors):
