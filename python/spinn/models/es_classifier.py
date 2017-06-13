@@ -4,7 +4,9 @@ NOTE: Work in progress.
 Classifier script to use evolution strategy to train the parser in an unsupervised manner.
 
 TODO: 
-    Impose stopping criteria?
+    - Fix only forward pass.
+    - Write mirrored sampling: commented out bits in generate_seeds_and_models lays groundwork.
+    - Impose stopping criteria?
 """
 
 
@@ -155,7 +157,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
     for step in range(FLAGS.es_episode_length):
         true_step += 1
         model.train()
-        #log_entry.Clear()
+        log_entry.Clear()
         log_entry.step = true_step
         log_entry.model_label = perturbation_name
         should_log = False
@@ -329,30 +331,38 @@ def rollout(queue, perturbed_model, FLAGS, data_manager,
 
     queue.put((ev_step, true_step, perturbation_id, best_dev_error))
 
+
 def perturb_model(model, random_seed):
     models = []
     np.random.seed(random_seed)
     for i in range(FLAGS.es_num_episodes):
         pert_model = model
+        #anti_model = model
         pert_model.load_state_dict(model.state_dict()) # Is this redundant?
+        #anti_model.load_state_dict(model.state_dict())
+        #for (k, v), (anti_k, anti_v) in zip(pert_model.es_params(), anti_model.es_params()):
         for (k, v) in pert_model.spinn.evolution_params():
             epsilon = np.random.normal(0, 1, v.size())
             v += torch.from_numpy(FLAGS.es_sigma * epsilon).float()
+            #anti_v += torch.from_numpy(FLAGS.es_sigma * -epsilon).float()
         models.append(pert_model)
+        #models.append(anti_model)
     return models
 
-#def generate_seeds_and_models(chosen_model):
-def generate_seeds_and_models(trainer, model, root_id):
+
+def generate_seeds_and_models(trainer, model, root_id, base=False):
     """
     Restore best checkpoint of the model and get pertirb the model.
     """
-    root_name = FLAGS.experiment_name + "_p" + str(root_id)
-    root_path = os.path.join(FLAGS.ckpt_path, root_name + ".ckpt_best")
-    ev_step, true_step, dev_error = trainer.load(root_path)
+    if not base:
+        root_name = FLAGS.experiment_name + "_p" + str(root_id)
+        root_path = os.path.join(FLAGS.ckpt_path, root_name + ".ckpt_best")
+        ev_step, true_step, dev_error = trainer.load(root_path)
     np.random.seed()
     random_seed = np.random.randint(2**20)
     models = perturb_model(model, random_seed)
     return random_seed, models
+
 
 def get_pert_names(best=False):
     if best:
@@ -361,6 +371,7 @@ def get_pert_names(best=False):
         exp_names = glob.glob1(FLAGS.ckpt_path, FLAGS.experiment_name + "*.ckpt")
     
     return exp_names
+
 
 def restore(logger, trainer, queue, FLAGS, name, path):
     """
@@ -371,11 +382,12 @@ def restore(logger, trainer, queue, FLAGS, name, path):
     ev_step, true_step, dev_error = trainer.load(path)
     queue.put((ev_step, true_step, perturbation_id, dev_error))
 
+"""
 def evaluate_perturbation(logger, trainer, queue, FLAGS, name, path):
     perturbation_id = name[-1]
     ev_step, true_step, dev_error = trainer.load(path)
     queue.put((ev_step, true_step, perturbation_id, dev_error))
-
+"""
 
 def run(only_forward=False):
     logger = afs_safe_logger.ProtoLogger(log_path(FLAGS))
@@ -459,7 +471,7 @@ def run(only_forward=False):
             p_model = p_checkpoint[2]
             true_step = p_checkpoint[1]
             for index, eval_set in enumerate(eval_iterators):
-                #log_entry.Clear()
+                log_entry.Clear()
                 evaluate(FLAGS, p_model, data_manager, eval_set, log_entry, true_step, vocabulary)
                 print(log_entry)
                 logger.LogEntry(log_entry)
@@ -483,13 +495,17 @@ def run(only_forward=False):
             reload_ev_step = results[0][0] + 1 # the next evolution step
 
         else:
-            chosen_models = [model]
+            id_ = "B"
+            chosen_models = [(reload_ev_step, true_step, id_,  best_dev_error)]
+            base = True # This is the "base" model
+            results = []
 
         for ev_step in range(reload_ev_step, FLAGS.es_steps):
+            logger.Log("Evolution step: %i" % ev_step)
 
             # Choose root models for next generation using dev-set accuracy
-            print "EV_step:", reload_ev_step
             if len(results) != 0 :
+                base = False
                 chosen_models = []
                 acc_order = [i[0] for i in sorted(enumerate(results), key=lambda x:x[1][3], reverse=True)]
                 for i in range(FLAGS.es_num_episodes):
@@ -506,7 +522,7 @@ def run(only_forward=False):
             all_dev_errs = []
             for chosen_model in chosen_models:
                 perturbation_id = chosen_model[2]
-                random_seed, models = generate_seeds_and_models(trainer, model, perturbation_id)
+                random_seed, models = generate_seeds_and_models(trainer, model, perturbation_id, base=base)
                 for i in range(len(models)):
                     all_seeds.append(random_seed)
                     all_steps.append(chosen_model[1])
