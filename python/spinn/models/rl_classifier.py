@@ -13,7 +13,7 @@ from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import get_l2_loss, the_gpu, to_gpu
 from spinn.util.misc import Accumulator, EvalReporter
 from spinn.util.misc import recursively_set_device
-from spinn.util.logging import stats, train_accumulate
+from spinn.util.logging import stats, train_accumulate, create_log_formatter
 from spinn.util.logging import train_rl_accumulate
 from spinn.util.logging import eval_stats, eval_accumulate
 from spinn.util.loss import auxiliary_loss
@@ -51,7 +51,6 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
         msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
     total_tokens = 0
-    invalid = 0
     start = time.time()
 
     model.eval()
@@ -340,7 +339,9 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
 
 
 def run(only_forward=False):
-    logger = afs_safe_logger.ProtoLogger(log_path(FLAGS))
+    logger = afs_safe_logger.ProtoLogger(log_path(FLAGS),
+            print_formatter=create_log_formatter(True, True),
+            write_proto=FLAGS.write_proto_to_log)
     header = pb.SpinnHeader()
 
     data_manager = get_data_manager(FLAGS.data_type)
