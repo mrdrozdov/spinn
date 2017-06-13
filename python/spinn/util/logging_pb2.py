@@ -18,7 +18,8 @@ _sym_db = _symbol_database.Default()
 DESCRIPTOR = _descriptor.FileDescriptor(
   name='spinn/util/logging.proto',
   package='logging',
-  serialized_pb=_b('\n\x18spinn/util/logging.proto\x12\x07logging\"V\n\x08SpinnLog\x12$\n\x06header\x18\x01 \x01(\x0b\x32\x14.logging.SpinnHeader\x12$\n\x07\x65ntries\x18\x02 \x03(\x0b\x32\x13.logging.SpinnEntry\"\xcf\x01\n\x0bSpinnHeader\x12\x14\n\x0ctotal_params\x18\x01 \x01(\x05\x12\x1a\n\x12model_architecture\x18\x02 \x01(\t\x12\x16\n\x0e\x65val_filenames\x18\x03 \x03(\t\x12\x33\n\x05\x66lags\x18\x64 \x03(\x0b\x32$.logging.SpinnHeader.CommandLineFlag\x12\x12\n\nextra_logs\x18\x65 \x03(\t\x1a-\n\x0f\x43ommandLineFlag\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t\"\x90\x01\n\x08\x45valData\x12\x1b\n\x13\x65val_class_accuracy\x18\x02 \x01(\x02\x12 \n\x18\x65val_transition_accuracy\x18\x03 \x01(\x02\x12\x10\n\x08\x66ilename\x18\x04 \x01(\t\x12\x1e\n\x16time_per_token_seconds\x18\x05 \x01(\x02\x12\x13\n\x0breport_path\x18\x06 \x01(\t\"\x87\x01\n\x0fRLSamplingStats\x12\r\n\x05t_idx\x18\x01 \x01(\x05\x12\x10\n\x08\x63rossing\x18\x02 \x01(\x02\x12\x0f\n\x07gold_lb\x18\x03 \x01(\t\x12\x0f\n\x07pred_tr\x18\x04 \x01(\t\x12\x0f\n\x07pred_ev\x18\x05 \x01(\t\x12\x0f\n\x07strg_tr\x18\x06 \x01(\t\x12\x0f\n\x07strg_ev\x18\x07 \x01(\t\"\x98\x04\n\nSpinnEntry\x12\x0c\n\x04step\x18\x01 \x01(\x05\x12\x16\n\x0e\x63lass_accuracy\x18\x02 \x01(\x02\x12\x1b\n\x13transition_accuracy\x18\x03 \x01(\x02\x12\x12\n\ntotal_cost\x18\x04 \x01(\x02\x12\x1a\n\x12\x63ross_entropy_cost\x18\x05 \x01(\x02\x12\x17\n\x0ftransition_cost\x18\x06 \x01(\x02\x12\x0f\n\x07l2_cost\x18\x07 \x01(\x02\x12\x1e\n\x16time_per_token_seconds\x18\x08 \x01(\x02\x12\x15\n\rlearning_rate\x18\t \x01(\x02\x12\x0f\n\x07invalid\x18\n \x01(\x02\x12\x13\n\x0bpolicy_cost\x18\x0b \x01(\x02\x12\x12\n\nvalue_cost\x18\x0c \x01(\x02\x12\x15\n\rmean_adv_mean\x18\r \x01(\x02\x12\x1f\n\x17mean_adv_mean_magnitude\x18\x0e \x01(\x02\x12\x14\n\x0cmean_adv_var\x18\x0f \x01(\x02\x12\x1e\n\x16mean_adv_var_magnitude\x18\x10 \x01(\x02\x12\x0f\n\x07\x65psilon\x18\x11 \x01(\x02\x12\x13\n\x0btemperature\x18\x12 \x01(\x02\x12%\n\nevaluation\x18\x13 \x03(\x0b\x32\x11.logging.EvalData\x12-\n\x0brl_sampling\x18\x14 \x03(\x0b\x32\x18.logging.RLSamplingStats\x12\x12\n\ncheckpoint\x18\x15 \x01(\t\"\x8c\x01\n\x0c\x45valSentence\x12\x13\n\x0bsentence_id\x18\x01 \x01(\x05\x12\x12\n\nprediction\x18\x02 \x01(\x05\x12\r\n\x05truth\x18\x03 \x01(\x05\x12\x0e\n\x06output\x18\x04 \x03(\x02\x12\x19\n\x11sent1_transitions\x18\x05 \x03(\x05\x12\x19\n\x11sent2_transitions\x18\x06 \x03(\x05\"5\n\tEvalBatch\x12(\n\tsentences\x18\x01 \x03(\x0b\x32\x15.logging.EvalSentence\"7\n\x10\x45valuationReport\x12#\n\x07\x62\x61tches\x18\x01 \x03(\x0b\x32\x12.logging.EvalBatch')
+  syntax='proto2',
+  serialized_pb=_b('\n\x18spinn/util/logging.proto\x12\x07logging\"V\n\x08SpinnLog\x12$\n\x06header\x18\x01 \x01(\x0b\x32\x14.logging.SpinnHeader\x12$\n\x07\x65ntries\x18\x02 \x03(\x0b\x32\x13.logging.SpinnEntry\"\xcf\x01\n\x0bSpinnHeader\x12\x14\n\x0ctotal_params\x18\x01 \x01(\x05\x12\x1a\n\x12model_architecture\x18\x02 \x01(\t\x12\x16\n\x0e\x65val_filenames\x18\x03 \x03(\t\x12\x33\n\x05\x66lags\x18\x64 \x03(\x0b\x32$.logging.SpinnHeader.CommandLineFlag\x12\x12\n\nextra_logs\x18\x65 \x03(\t\x1a-\n\x0f\x43ommandLineFlag\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t\"\xa1\x01\n\x08\x45valData\x12\x1b\n\x13\x65val_class_accuracy\x18\x02 \x01(\x02\x12 \n\x18\x65val_transition_accuracy\x18\x03 \x01(\x02\x12\x10\n\x08\x66ilename\x18\x04 \x01(\t\x12\x1e\n\x16time_per_token_seconds\x18\x05 \x01(\x02\x12\x13\n\x0breport_path\x18\x06 \x01(\t\x12\x0f\n\x07invalid\x18\x07 \x01(\x02\"\x87\x01\n\x0fRLSamplingStats\x12\r\n\x05t_idx\x18\x01 \x01(\x05\x12\x10\n\x08\x63rossing\x18\x02 \x01(\x02\x12\x0f\n\x07gold_lb\x18\x03 \x01(\t\x12\x0f\n\x07pred_tr\x18\x04 \x01(\t\x12\x0f\n\x07pred_ev\x18\x05 \x01(\t\x12\x0f\n\x07strg_tr\x18\x06 \x01(\t\x12\x0f\n\x07strg_ev\x18\x07 \x01(\t\"\xad\x04\n\nSpinnEntry\x12\x0c\n\x04step\x18\x01 \x01(\x05\x12\x16\n\x0e\x63lass_accuracy\x18\x02 \x01(\x02\x12\x1b\n\x13transition_accuracy\x18\x03 \x01(\x02\x12\x12\n\ntotal_cost\x18\x04 \x01(\x02\x12\x1a\n\x12\x63ross_entropy_cost\x18\x05 \x01(\x02\x12\x17\n\x0ftransition_cost\x18\x06 \x01(\x02\x12\x0f\n\x07l2_cost\x18\x07 \x01(\x02\x12\x1e\n\x16time_per_token_seconds\x18\x08 \x01(\x02\x12\x15\n\rlearning_rate\x18\t \x01(\x02\x12\x0f\n\x07invalid\x18\n \x01(\x02\x12\x13\n\x0bmodel_label\x18\x16 \x01(\t\x12\x13\n\x0bpolicy_cost\x18\x0b \x01(\x02\x12\x12\n\nvalue_cost\x18\x0c \x01(\x02\x12\x15\n\rmean_adv_mean\x18\r \x01(\x02\x12\x1f\n\x17mean_adv_mean_magnitude\x18\x0e \x01(\x02\x12\x14\n\x0cmean_adv_var\x18\x0f \x01(\x02\x12\x1e\n\x16mean_adv_var_magnitude\x18\x10 \x01(\x02\x12\x0f\n\x07\x65psilon\x18\x11 \x01(\x02\x12\x13\n\x0btemperature\x18\x12 \x01(\x02\x12%\n\nevaluation\x18\x13 \x03(\x0b\x32\x11.logging.EvalData\x12-\n\x0brl_sampling\x18\x14 \x03(\x0b\x32\x18.logging.RLSamplingStats\x12\x12\n\ncheckpoint\x18\x15 \x01(\t\"\x8c\x01\n\x0c\x45valSentence\x12\x13\n\x0bsentence_id\x18\x01 \x01(\x05\x12\x12\n\nprediction\x18\x02 \x01(\x05\x12\r\n\x05truth\x18\x03 \x01(\x05\x12\x0e\n\x06output\x18\x04 \x03(\x02\x12\x19\n\x11sent1_transitions\x18\x05 \x03(\x05\x12\x19\n\x11sent2_transitions\x18\x06 \x03(\x05\"5\n\tEvalBatch\x12(\n\tsentences\x18\x01 \x03(\x0b\x32\x15.logging.EvalSentence\"7\n\x10\x45valuationReport\x12#\n\x07\x62\x61tches\x18\x01 \x03(\x0b\x32\x12.logging.EvalBatch')
 )
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
@@ -54,6 +55,7 @@ _SPINNLOG = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto2',
   extension_ranges=[],
   oneofs=[
   ],
@@ -91,6 +93,7 @@ _SPINNHEADER_COMMANDLINEFLAG = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto2',
   extension_ranges=[],
   oneofs=[
   ],
@@ -148,6 +151,7 @@ _SPINNHEADER = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto2',
   extension_ranges=[],
   oneofs=[
   ],
@@ -166,14 +170,14 @@ _EVALDATA = _descriptor.Descriptor(
     _descriptor.FieldDescriptor(
       name='eval_class_accuracy', full_name='logging.EvalData.eval_class_accuracy', index=0,
       number=2, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
       name='eval_transition_accuracy', full_name='logging.EvalData.eval_transition_accuracy', index=1,
       number=3, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
@@ -187,7 +191,7 @@ _EVALDATA = _descriptor.Descriptor(
     _descriptor.FieldDescriptor(
       name='time_per_token_seconds', full_name='logging.EvalData.time_per_token_seconds', index=3,
       number=5, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
@@ -195,6 +199,13 @@ _EVALDATA = _descriptor.Descriptor(
       name='report_path', full_name='logging.EvalData.report_path', index=4,
       number=6, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='invalid', full_name='logging.EvalData.invalid', index=5,
+      number=7, type=2, cpp_type=6, label=1,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
@@ -206,11 +217,12 @@ _EVALDATA = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto2',
   extension_ranges=[],
   oneofs=[
   ],
   serialized_start=336,
-  serialized_end=480,
+  serialized_end=497,
 )
 
 
@@ -231,7 +243,7 @@ _RLSAMPLINGSTATS = _descriptor.Descriptor(
     _descriptor.FieldDescriptor(
       name='crossing', full_name='logging.RLSamplingStats.crossing', index=1,
       number=2, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
@@ -278,11 +290,12 @@ _RLSAMPLINGSTATS = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto2',
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=483,
-  serialized_end=618,
+  serialized_start=500,
+  serialized_end=635,
 )
 
 
@@ -303,138 +316,145 @@ _SPINNENTRY = _descriptor.Descriptor(
     _descriptor.FieldDescriptor(
       name='class_accuracy', full_name='logging.SpinnEntry.class_accuracy', index=1,
       number=2, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
       name='transition_accuracy', full_name='logging.SpinnEntry.transition_accuracy', index=2,
       number=3, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
       name='total_cost', full_name='logging.SpinnEntry.total_cost', index=3,
       number=4, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
       name='cross_entropy_cost', full_name='logging.SpinnEntry.cross_entropy_cost', index=4,
       number=5, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
       name='transition_cost', full_name='logging.SpinnEntry.transition_cost', index=5,
       number=6, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
       name='l2_cost', full_name='logging.SpinnEntry.l2_cost', index=6,
       number=7, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
       name='time_per_token_seconds', full_name='logging.SpinnEntry.time_per_token_seconds', index=7,
       number=8, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
       name='learning_rate', full_name='logging.SpinnEntry.learning_rate', index=8,
       number=9, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
       name='invalid', full_name='logging.SpinnEntry.invalid', index=9,
       number=10, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='policy_cost', full_name='logging.SpinnEntry.policy_cost', index=10,
+      name='model_label', full_name='logging.SpinnEntry.model_label', index=10,
+      number=22, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='policy_cost', full_name='logging.SpinnEntry.policy_cost', index=11,
       number=11, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='value_cost', full_name='logging.SpinnEntry.value_cost', index=11,
+      name='value_cost', full_name='logging.SpinnEntry.value_cost', index=12,
       number=12, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='mean_adv_mean', full_name='logging.SpinnEntry.mean_adv_mean', index=12,
+      name='mean_adv_mean', full_name='logging.SpinnEntry.mean_adv_mean', index=13,
       number=13, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='mean_adv_mean_magnitude', full_name='logging.SpinnEntry.mean_adv_mean_magnitude', index=13,
+      name='mean_adv_mean_magnitude', full_name='logging.SpinnEntry.mean_adv_mean_magnitude', index=14,
       number=14, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='mean_adv_var', full_name='logging.SpinnEntry.mean_adv_var', index=14,
+      name='mean_adv_var', full_name='logging.SpinnEntry.mean_adv_var', index=15,
       number=15, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='mean_adv_var_magnitude', full_name='logging.SpinnEntry.mean_adv_var_magnitude', index=15,
+      name='mean_adv_var_magnitude', full_name='logging.SpinnEntry.mean_adv_var_magnitude', index=16,
       number=16, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='epsilon', full_name='logging.SpinnEntry.epsilon', index=16,
+      name='epsilon', full_name='logging.SpinnEntry.epsilon', index=17,
       number=17, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='temperature', full_name='logging.SpinnEntry.temperature', index=17,
+      name='temperature', full_name='logging.SpinnEntry.temperature', index=18,
       number=18, type=2, cpp_type=6, label=1,
-      has_default_value=False, default_value=0,
+      has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='evaluation', full_name='logging.SpinnEntry.evaluation', index=18,
+      name='evaluation', full_name='logging.SpinnEntry.evaluation', index=19,
       number=19, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='rl_sampling', full_name='logging.SpinnEntry.rl_sampling', index=19,
+      name='rl_sampling', full_name='logging.SpinnEntry.rl_sampling', index=20,
       number=20, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='checkpoint', full_name='logging.SpinnEntry.checkpoint', index=20,
+      name='checkpoint', full_name='logging.SpinnEntry.checkpoint', index=21,
       number=21, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
@@ -448,11 +468,12 @@ _SPINNENTRY = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto2',
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=621,
-  serialized_end=1157,
+  serialized_start=638,
+  serialized_end=1195,
 )
 
 
@@ -513,11 +534,12 @@ _EVALSENTENCE = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto2',
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1160,
-  serialized_end=1300,
+  serialized_start=1198,
+  serialized_end=1338,
 )
 
 
@@ -543,11 +565,12 @@ _EVALBATCH = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto2',
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1302,
-  serialized_end=1355,
+  serialized_start=1340,
+  serialized_end=1393,
 )
 
 
@@ -573,11 +596,12 @@ _EVALUATIONREPORT = _descriptor.Descriptor(
   ],
   options=None,
   is_extendable=False,
+  syntax='proto2',
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1357,
-  serialized_end=1412,
+  serialized_start=1395,
+  serialized_end=1450,
 )
 
 _SPINNLOG.fields_by_name['header'].message_type = _SPINNHEADER
