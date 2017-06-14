@@ -53,9 +53,6 @@ class ProtoLogger(object):
         self.write_proto = write_proto
         if self.print_formatter is None:
             self.print_formatter = default_formatter
-        with open(self.log_path, 'w') as f:
-            # Truncate the file.
-            pass
 
     def LogHeader(self, header):
         if self.root is not None:
@@ -65,7 +62,6 @@ class ProtoLogger(object):
 
         # Store the header.
         if self.log_path and self.write_proto:
-            # Truncate the log for the first run.
             with open(self.log_path, 'a') as f:
                 f.write(str(self.root))
         self.root.Clear()
