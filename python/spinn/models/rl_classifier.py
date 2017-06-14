@@ -394,6 +394,8 @@ def run(only_forward=False):
         assert not only_forward, "Can't run an eval-only run without a checkpoint. Supply a checkpoint."
         step = 0
         best_dev_error = 1.0
+    header.start_step = step
+    header.start_time = int(time.time())
 
     # GPU support.
     the_gpu.gpu = FLAGS.gpu

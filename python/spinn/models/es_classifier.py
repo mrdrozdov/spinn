@@ -432,6 +432,9 @@ def run(only_forward=False):
         true_step = 0
         best_dev_error = 1.0
         reload_ev_step = 0
+    header.start_step = step
+    header.start_time = int(time.time())
+    header.model_label = perturbation_name
 
     # GPU support.
     the_gpu.gpu = FLAGS.gpu
