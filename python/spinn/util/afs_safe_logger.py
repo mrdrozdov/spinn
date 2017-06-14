@@ -61,7 +61,7 @@ class ProtoLogger(object):
         if self.root is not None:
             raise Exception('Root object already logged!')
         self.root = pb.SpinnLog()
-        self.root.header.MergeFrom(header)
+        self.root.header.add().MergeFrom(header)
 
         # Store the header.
         if self.log_path and self.write_proto:

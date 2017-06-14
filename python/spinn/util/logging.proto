@@ -4,7 +4,9 @@ syntax = "proto2";
 package logging;
 
 message SpinnLog {
-  optional SpinnHeader header = 1;
+  // Headers are written once every time the program is started.
+  // Other runs can append into the same log file.
+  repeated SpinnHeader header = 1;
   repeated SpinnEntry entries = 2;
 }
 
@@ -12,6 +14,9 @@ message SpinnHeader {
   optional int32 total_params = 1;
   optional string model_architecture = 2;
   repeated string eval_filenames = 3;
+  optional int32 start_step = 4;
+  optional int64 start_time = 5; // result of time.time() before first step
+  repeated string model_label = 6; // if multiple runs print to the same file.
 
   message CommandLineFlag {
     optional string key = 1;
@@ -51,7 +56,7 @@ message SpinnEntry {
   optional float time_per_token_seconds = 8;
   optional float learning_rate = 9;
   optional float invalid = 10;
-  optional string model_label = 22;
+  optional string model_label = 22; // If multiple logs print to the same file.
 
   // RL log properties.
   optional float policy_cost = 11;

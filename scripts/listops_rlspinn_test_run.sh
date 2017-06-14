@@ -41,7 +41,6 @@ FLAGS="
 --word_embedding_dim 8
 --use_internal_parser 
 --ckpt_path .
---nowrite_proto_to_log
 --transition_weight 1
 --eval_data_path spinn/data/listops/test_d20.tsv
 --experiment_name listops_rlspinn_test_run"
