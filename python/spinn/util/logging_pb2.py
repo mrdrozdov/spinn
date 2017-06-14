@@ -19,8 +19,9 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='spinn/util/logging.proto',
   package='logging',
   syntax='proto2',
-  serialized_pb=_b('\n\x18spinn/util/logging.proto\x12\x07logging\"V\n\x08SpinnLog\x12$\n\x06header\x18\x01 \x01(\x0b\x32\x14.logging.SpinnHeader\x12$\n\x07\x65ntries\x18\x02 \x03(\x0b\x32\x13.logging.SpinnEntry\"\xcf\x01\n\x0bSpinnHeader\x12\x14\n\x0ctotal_params\x18\x01 \x01(\x05\x12\x1a\n\x12model_architecture\x18\x02 \x01(\t\x12\x16\n\x0e\x65val_filenames\x18\x03 \x03(\t\x12\x33\n\x05\x66lags\x18\x64 \x03(\x0b\x32$.logging.SpinnHeader.CommandLineFlag\x12\x12\n\nextra_logs\x18\x65 \x03(\t\x1a-\n\x0f\x43ommandLineFlag\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t\"\xa1\x01\n\x08\x45valData\x12\x1b\n\x13\x65val_class_accuracy\x18\x02 \x01(\x02\x12 \n\x18\x65val_transition_accuracy\x18\x03 \x01(\x02\x12\x10\n\x08\x66ilename\x18\x04 \x01(\t\x12\x1e\n\x16time_per_token_seconds\x18\x05 \x01(\x02\x12\x13\n\x0breport_path\x18\x06 \x01(\t\x12\x0f\n\x07invalid\x18\x07 \x01(\x02\"\x87\x01\n\x0fRLSamplingStats\x12\r\n\x05t_idx\x18\x01 \x01(\x05\x12\x10\n\x08\x63rossing\x18\x02 \x01(\x02\x12\x0f\n\x07gold_lb\x18\x03 \x01(\t\x12\x0f\n\x07pred_tr\x18\x04 \x01(\t\x12\x0f\n\x07pred_ev\x18\x05 \x01(\t\x12\x0f\n\x07strg_tr\x18\x06 \x01(\t\x12\x0f\n\x07strg_ev\x18\x07 \x01(\t\"\xad\x04\n\nSpinnEntry\x12\x0c\n\x04step\x18\x01 \x01(\x05\x12\x16\n\x0e\x63lass_accuracy\x18\x02 \x01(\x02\x12\x1b\n\x13transition_accuracy\x18\x03 \x01(\x02\x12\x12\n\ntotal_cost\x18\x04 \x01(\x02\x12\x1a\n\x12\x63ross_entropy_cost\x18\x05 \x01(\x02\x12\x17\n\x0ftransition_cost\x18\x06 \x01(\x02\x12\x0f\n\x07l2_cost\x18\x07 \x01(\x02\x12\x1e\n\x16time_per_token_seconds\x18\x08 \x01(\x02\x12\x15\n\rlearning_rate\x18\t \x01(\x02\x12\x0f\n\x07invalid\x18\n \x01(\x02\x12\x13\n\x0bmodel_label\x18\x16 \x01(\t\x12\x13\n\x0bpolicy_cost\x18\x0b \x01(\x02\x12\x12\n\nvalue_cost\x18\x0c \x01(\x02\x12\x15\n\rmean_adv_mean\x18\r \x01(\x02\x12\x1f\n\x17mean_adv_mean_magnitude\x18\x0e \x01(\x02\x12\x14\n\x0cmean_adv_var\x18\x0f \x01(\x02\x12\x1e\n\x16mean_adv_var_magnitude\x18\x10 \x01(\x02\x12\x0f\n\x07\x65psilon\x18\x11 \x01(\x02\x12\x13\n\x0btemperature\x18\x12 \x01(\x02\x12%\n\nevaluation\x18\x13 \x03(\x0b\x32\x11.logging.EvalData\x12-\n\x0brl_sampling\x18\x14 \x03(\x0b\x32\x18.logging.RLSamplingStats\x12\x12\n\ncheckpoint\x18\x15 \x01(\t\"\x8c\x01\n\x0c\x45valSentence\x12\x13\n\x0bsentence_id\x18\x01 \x01(\x05\x12\x12\n\nprediction\x18\x02 \x01(\x05\x12\r\n\x05truth\x18\x03 \x01(\x05\x12\x0e\n\x06output\x18\x04 \x03(\x02\x12\x19\n\x11sent1_transitions\x18\x05 \x03(\x05\x12\x19\n\x11sent2_transitions\x18\x06 \x03(\x05\"5\n\tEvalBatch\x12(\n\tsentences\x18\x01 \x03(\x0b\x32\x15.logging.EvalSentence\"7\n\x10\x45valuationReport\x12#\n\x07\x62\x61tches\x18\x01 \x03(\x0b\x32\x12.logging.EvalBatch')
+  serialized_pb=_b('\n\x18spinn/util/logging.proto\x12\x07logging\"V\n\x08SpinnLog\x12$\n\x06header\x18\x01 \x03(\x0b\x32\x14.logging.SpinnHeader\x12$\n\x07\x65ntries\x18\x02 \x03(\x0b\x32\x13.logging.SpinnEntry\"\x8c\x02\n\x0bSpinnHeader\x12\x14\n\x0ctotal_params\x18\x01 \x01(\x05\x12\x1a\n\x12model_architecture\x18\x02 \x01(\t\x12\x16\n\x0e\x65val_filenames\x18\x03 \x03(\t\x12\x12\n\nstart_step\x18\x04 \x01(\x05\x12\x12\n\nstart_time\x18\x05 \x01(\x03\x12\x13\n\x0bmodel_label\x18\x06 \x03(\t\x12\x33\n\x05\x66lags\x18\x64 \x03(\x0b\x32$.logging.SpinnHeader.CommandLineFlag\x12\x12\n\nextra_logs\x18\x65 \x03(\t\x1a-\n\x0f\x43ommandLineFlag\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t\"\xa1\x01\n\x08\x45valData\x12\x1b\n\x13\x65val_class_accuracy\x18\x02 \x01(\x02\x12 \n\x18\x65val_transition_accuracy\x18\x03 \x01(\x02\x12\x10\n\x08\x66ilename\x18\x04 \x01(\t\x12\x1e\n\x16time_per_token_seconds\x18\x05 \x01(\x02\x12\x13\n\x0breport_path\x18\x06 \x01(\t\x12\x0f\n\x07invalid\x18\x07 \x01(\x02\"\x87\x01\n\x0fRLSamplingStats\x12\r\n\x05t_idx\x18\x01 \x01(\x05\x12\x10\n\x08\x63rossing\x18\x02 \x01(\x02\x12\x0f\n\x07gold_lb\x18\x03 \x01(\t\x12\x0f\n\x07pred_tr\x18\x04 \x01(\t\x12\x0f\n\x07pred_ev\x18\x05 \x01(\t\x12\x0f\n\x07strg_tr\x18\x06 \x01(\t\x12\x0f\n\x07strg_ev\x18\x07 \x01(\t\"\xad\x04\n\nSpinnEntry\x12\x0c\n\x04step\x18\x01 \x01(\x05\x12\x16\n\x0e\x63lass_accuracy\x18\x02 \x01(\x02\x12\x1b\n\x13transition_accuracy\x18\x03 \x01(\x02\x12\x12\n\ntotal_cost\x18\x04 \x01(\x02\x12\x1a\n\x12\x63ross_entropy_cost\x18\x05 \x01(\x02\x12\x17\n\x0ftransition_cost\x18\x06 \x01(\x02\x12\x0f\n\x07l2_cost\x18\x07 \x01(\x02\x12\x1e\n\x16time_per_token_seconds\x18\x08 \x01(\x02\x12\x15\n\rlearning_rate\x18\t \x01(\x02\x12\x0f\n\x07invalid\x18\n \x01(\x02\x12\x13\n\x0bmodel_label\x18\x16 \x01(\t\x12\x13\n\x0bpolicy_cost\x18\x0b \x01(\x02\x12\x12\n\nvalue_cost\x18\x0c \x01(\x02\x12\x15\n\rmean_adv_mean\x18\r \x01(\x02\x12\x1f\n\x17mean_adv_mean_magnitude\x18\x0e \x01(\x02\x12\x14\n\x0cmean_adv_var\x18\x0f \x01(\x02\x12\x1e\n\x16mean_adv_var_magnitude\x18\x10 \x01(\x02\x12\x0f\n\x07\x65psilon\x18\x11 \x01(\x02\x12\x13\n\x0btemperature\x18\x12 \x01(\x02\x12%\n\nevaluation\x18\x13 \x03(\x0b\x32\x11.logging.EvalData\x12-\n\x0brl_sampling\x18\x14 \x03(\x0b\x32\x18.logging.RLSamplingStats\x12\x12\n\ncheckpoint\x18\x15 \x01(\t\"\x8c\x01\n\x0c\x45valSentence\x12\x13\n\x0bsentence_id\x18\x01 \x01(\x05\x12\x12\n\nprediction\x18\x02 \x01(\x05\x12\r\n\x05truth\x18\x03 \x01(\x05\x12\x0e\n\x06output\x18\x04 \x03(\x02\x12\x19\n\x11sent1_transitions\x18\x05 \x03(\x05\x12\x19\n\x11sent2_transitions\x18\x06 \x03(\x05\"5\n\tEvalBatch\x12(\n\tsentences\x18\x01 \x03(\x0b\x32\x15.logging.EvalSentence\"7\n\x10\x45valuationReport\x12#\n\x07\x62\x61tches\x18\x01 \x03(\x0b\x32\x12.logging.EvalBatch')
 )
+_sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
 
@@ -34,8 +35,8 @@ _SPINNLOG = _descriptor.Descriptor(
   fields=[
     _descriptor.FieldDescriptor(
       name='header', full_name='logging.SpinnLog.header', index=0,
-      number=1, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
+      number=1, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
@@ -96,8 +97,8 @@ _SPINNHEADER_COMMANDLINEFLAG = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=288,
-  serialized_end=333,
+  serialized_start=349,
+  serialized_end=394,
 )
 
 _SPINNHEADER = _descriptor.Descriptor(
@@ -129,14 +130,35 @@ _SPINNHEADER = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='flags', full_name='logging.SpinnHeader.flags', index=3,
+      name='start_step', full_name='logging.SpinnHeader.start_step', index=3,
+      number=4, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='start_time', full_name='logging.SpinnHeader.start_time', index=4,
+      number=5, type=3, cpp_type=2, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='model_label', full_name='logging.SpinnHeader.model_label', index=5,
+      number=6, type=9, cpp_type=9, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      options=None),
+    _descriptor.FieldDescriptor(
+      name='flags', full_name='logging.SpinnHeader.flags', index=6,
       number=100, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       options=None),
     _descriptor.FieldDescriptor(
-      name='extra_logs', full_name='logging.SpinnHeader.extra_logs', index=4,
+      name='extra_logs', full_name='logging.SpinnHeader.extra_logs', index=7,
       number=101, type=9, cpp_type=9, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
@@ -155,7 +177,7 @@ _SPINNHEADER = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=126,
-  serialized_end=333,
+  serialized_end=394,
 )
 
 
@@ -220,8 +242,8 @@ _EVALDATA = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=336,
-  serialized_end=497,
+  serialized_start=397,
+  serialized_end=558,
 )
 
 
@@ -293,8 +315,8 @@ _RLSAMPLINGSTATS = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=500,
-  serialized_end=635,
+  serialized_start=561,
+  serialized_end=696,
 )
 
 
@@ -471,8 +493,8 @@ _SPINNENTRY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=638,
-  serialized_end=1195,
+  serialized_start=699,
+  serialized_end=1256,
 )
 
 
@@ -537,8 +559,8 @@ _EVALSENTENCE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1198,
-  serialized_end=1338,
+  serialized_start=1259,
+  serialized_end=1399,
 )
 
 
@@ -568,8 +590,8 @@ _EVALBATCH = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1340,
-  serialized_end=1393,
+  serialized_start=1401,
+  serialized_end=1454,
 )
 
 
@@ -599,8 +621,8 @@ _EVALUATIONREPORT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1395,
-  serialized_end=1450,
+  serialized_start=1456,
+  serialized_end=1511,
 )
 
 _SPINNLOG.fields_by_name['header'].message_type = _SPINNHEADER
@@ -619,7 +641,6 @@ DESCRIPTOR.message_types_by_name['SpinnEntry'] = _SPINNENTRY
 DESCRIPTOR.message_types_by_name['EvalSentence'] = _EVALSENTENCE
 DESCRIPTOR.message_types_by_name['EvalBatch'] = _EVALBATCH
 DESCRIPTOR.message_types_by_name['EvaluationReport'] = _EVALUATIONREPORT
-_sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 SpinnLog = _reflection.GeneratedProtocolMessageType('SpinnLog', (_message.Message,), dict(
   DESCRIPTOR = _SPINNLOG,
