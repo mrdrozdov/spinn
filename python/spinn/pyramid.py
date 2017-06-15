@@ -35,7 +35,6 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      gated=FLAGS.pyramid_gated,
                      trainable_temperature=FLAGS.pyramid_trainable_temperature,
                      test_temperature_mulitplier=FLAGS.pyramid_test_time_temperature_multiplier,
-                     selection_keep_rate=FLAGS.pyramid_selection_keep_rate,
                      logger=logger
                      )
 
@@ -57,8 +56,6 @@ class Pyramid(nn.Module):
                  gated=None,
                  trainable_temperature=None,
                  test_temperature_mulitplier=None,
-                 selection_keep_rate=None,
-                 pyramid_selection_keep_rate=None,
                  logger=None,
                  **kwargs
                  ):
@@ -69,7 +66,6 @@ class Pyramid(nn.Module):
         self.gated = gated
         self.test_temperature_mulitplier = test_temperature_mulitplier
         self.trainable_temperature = trainable_temperature
-        self.selection_keep_rate = selection_keep_rate
         self.logger = logger
 
         classifier_dropout_rate = 1. - classifier_keep_rate
@@ -127,11 +123,6 @@ class Pyramid(nn.Module):
                     selection_logits_list.append(self.selection_fn(composition_results[position]))
 
                 selection_logits = torch.cat(selection_logits_list, 1)
-
-                if self.training and self.selection_keep_rate is not None:
-                    noise = torch.bernoulli(
-                        (to_gpu(torch.ones(1, 1)) * self.selection_keep_rate).expand_as(selection_logits)) * -1000.
-                    selection_logits += Variable(noise)
 
                 if self.trainable_temperature:
                     selection_logits = selection_logits / \

@@ -270,8 +270,6 @@ def get_flags():
     # Pyramid model settings
     gflags.DEFINE_boolean("pyramid_gated", True,
                           "Use gating in the Pyramid model.")
-    gflags.DEFINE_float("pyramid_selection_keep_rate", None,
-                        "If set, prevent this fraction of composition results from being selected.")
     gflags.DEFINE_boolean("pyramid_trainable_temperature", None,
                           "If set, add a scalar trained temperature parameter.")
     gflags.DEFINE_float("pyramid_test_time_temperature_multiplier", 1.0,
