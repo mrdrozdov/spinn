@@ -7,7 +7,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 
-from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer
+from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer, gumbel_sample
 from spinn.util.misc import Args, Vocab
 from spinn.util.blocks import SimpleTreeLSTM
 from spinn.util.sparks import sparks
@@ -35,7 +35,8 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      gated=FLAGS.pyramid_gated,
                      trainable_temperature=FLAGS.pyramid_trainable_temperature,
                      test_temperature_mulitplier=FLAGS.pyramid_test_time_temperature_multiplier,
-                     logger=logger
+                     logger=logger,
+                     gumbel=FLAGS.pyramid_gumbel,
                      )
 
 
@@ -57,6 +58,7 @@ class Pyramid(nn.Module):
                  trainable_temperature=None,
                  test_temperature_mulitplier=None,
                  logger=None,
+                 gumbel=None,
                  **kwargs
                  ):
         super(Pyramid, self).__init__()
@@ -67,6 +69,7 @@ class Pyramid(nn.Module):
         self.test_temperature_mulitplier = test_temperature_mulitplier
         self.trainable_temperature = trainable_temperature
         self.logger = logger
+        self.gumbel = gumbel
 
         classifier_dropout_rate = 1. - classifier_keep_rate
 
@@ -125,19 +128,26 @@ class Pyramid(nn.Module):
                 selection_logits = torch.cat(selection_logits_list, 1)
 
                 if self.trainable_temperature:
-                    selection_logits = selection_logits / \
-                        self.temperature.expand_as(selection_logits)
+                    local_temperature = self.temperature
+                else:
+                    local_temperature = 1.0
 
-                if not self.training:
-                    selection_logits = selection_logits / \
+                if self.training:
+                    if self.gumbel:
+                        selection_probs = gumbel_sample(selection_logits, local_temperature)
+                    else:
+                        # Plain softmax
+                        selection_logits = selection_logits / local_temperature
+                        selection_probs = F.softmax(selection_logits)
+                else:
+                    # Soft-ish argmax
+                    local_temperature = local_temperature / \
                         self.test_temperature_mulitplier
+                    selection_probs = F.softmax(selection_logits)
 
                 if show_sample:
-                    selection_probs = F.softmax(selection_logits)
                     self.logger.Log(
                         sparks(np.transpose(selection_probs[0, :].data.cpu().numpy()).tolist()))
-
-                selection_probs = F.softmax(selection_logits)
 
                 layer_state_pairs = []
                 for position in range(layer):

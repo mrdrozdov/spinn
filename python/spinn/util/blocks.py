@@ -10,6 +10,16 @@ import torch.nn.functional as F
 from spinn.util.misc import recursively_set_device
 
 
+def gumbel_sample(input, temperature=1.0):
+    noise = torch.rand(input.size())
+    noise.add_(1e-9).log_().neg_()
+    noise.add_(1e-9).log_().neg_()
+    noise = Variable(noise)
+    x = (input + noise) / temperature
+    x = F.softmax(x.view(input.size(0), -1))
+    return x.view_as(input)
+
+
 def debug_gradient(model, losses):
     model.zero_grad()
 

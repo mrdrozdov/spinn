@@ -227,7 +227,7 @@ def get_flags():
     gflags.DEFINE_boolean("smart_batching", True, "Organize batches using sequence length.")
     gflags.DEFINE_boolean("use_peano", True, "A mind-blowing sorting key.")
     gflags.DEFINE_integer("eval_data_limit", -1,
-                          "Truncate evaluation set. -1 indicates no truncation.")
+                          "Truncate evaluation set to this many batches. -1 indicates no truncation.")
     gflags.DEFINE_boolean("bucket_eval", True, "Bucket evaluation data for speed improvement.")
     gflags.DEFINE_boolean("shuffle_eval", False, "Shuffle evaluation data.")
     gflags.DEFINE_integer("shuffle_eval_seed", 123, "Seed shuffling of eval data.")
@@ -268,6 +268,8 @@ def get_flags():
                                               "treegru", "tanh"], "Specify composition function.")
 
     # Pyramid model settings
+    gflags.DEFINE_boolean("pyramid_gumbel", True,
+                          "Use gumbel softmax in the Pyramid model gating.")
     gflags.DEFINE_boolean("pyramid_gated", True,
                           "Use gating in the Pyramid model.")
     gflags.DEFINE_boolean("pyramid_trainable_temperature", None,
