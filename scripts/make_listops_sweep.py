@@ -59,7 +59,6 @@ FIXED_PARAMETERS = {
     #"transition_weight": "0.1",
     "semantic_classifier_keep_rate": "1.0",
     "embedding_keep_rate": "1.0",
-    "pyramid_selection_keep_rate": "1.0",
 }
 
 # Tunable parameters.
@@ -69,6 +68,8 @@ SWEEP_PARAMETERS = {
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.4, 0.8),
     "pyramid_test_time_temperature_multiplier": ("tttm", EXP, 0.0001, 0.1),
     "pyramid_trainable_temperature": ("tt", BOOL, None, None),
+    "pyramid_gumbel": ("pg", BOOL, None, None),
+    "pyramid_temperature_decay_per_10k_steps": ("tdec", EXP, 0.25, 1.0),
 #    "tracking_lstm_hidden_dim": ("tdim", EXP, 4, 16),
 #    "rl_weight":  ("rlwt", EXP, 0.000001, 0.0009),
 #    "transition_weight":  ("trwt", EXP, 0.3, 3.0),
