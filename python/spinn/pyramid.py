@@ -101,7 +101,7 @@ class Pyramid(nn.Module):
         self.reshape_input = context_args.reshape_input
         self.reshape_context = context_args.reshape_context
 
-    def run_pyramid(self, x, show_sample=False):
+    def run_pyramid(self, x, show_sample=False, temperature_multiplier=1.0):
         batch_size, seq_len, model_dim = x.data.size()
 
         all_state_pairs = []
@@ -111,6 +111,13 @@ class Pyramid(nn.Module):
             self.logger.Log('')
             if self.trainable_temperature:
                 self.logger.Log('Temp: ' + str(self.temperature.data.cpu().numpy()[0][0]))
+
+        temperature = temperature_multiplier
+        if self.trainable_temperature:
+            temperature *= self.temperature
+        if not self.training:
+            temperature *= \
+                self.test_temperature_mulitplier
 
         for layer in range(seq_len - 1, 0, -1):
             composition_results = []
@@ -127,24 +134,17 @@ class Pyramid(nn.Module):
 
                 selection_logits = torch.cat(selection_logits_list, 1)
 
-                if self.trainable_temperature:
-                    local_temperature = self.temperature
-                else:
-                    local_temperature = 1.0
+                local_temperature = temperature
+                if type(local_temperature) is not float:
+                    local_temperature = local_temperature.expand_as(selection_logits)
 
-                if self.training:
-                    if self.gumbel:
-                        selection_probs = gumbel_sample(selection_logits, local_temperature)
-                    else:
-                        # Plain softmax
-                        selection_logits = selection_logits / local_temperature
-                        selection_probs = F.softmax(selection_logits)
+                if self.training and self.gumbel:
+                    selection_probs = gumbel_sample(selection_logits, local_temperature)
                 else:
-                    # Soft-ish argmax
-                    local_temperature = local_temperature / \
-                        self.test_temperature_mulitplier
+                    # Plain softmax
+                    selection_logits = selection_logits / local_temperature
                     selection_probs = F.softmax(selection_logits)
-
+ 
                 if show_sample:
                     self.logger.Log(
                         sparks(np.transpose(selection_probs[0, :].data.cpu().numpy()).tolist()))
@@ -186,13 +186,13 @@ class Pyramid(nn.Module):
 
         return embeds
 
-    def forward(self, sentences, transitions, y_batch=None, show_sample=False, **kwargs):
+    def forward(self, sentences, transitions, y_batch=None, show_sample=False, pyramid_temperature_multiplier=1.0, **kwargs):
         # Useful when investigating dynamic batching:
         # self.seq_lengths = sentences.shape[1] - (sentences == 0).sum(1)
 
         x = self.unwrap(sentences, transitions)
         emb = self.run_embed(x)
-        hh = self.run_pyramid(emb, show_sample)
+        hh = self.run_pyramid(emb, show_sample, temperature_multiplier=pyramid_temperature_multiplier)
         h = self.wrap(hh)
         output = self.mlp(h)
 
