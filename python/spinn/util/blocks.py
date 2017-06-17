@@ -11,7 +11,7 @@ from spinn.util.misc import recursively_set_device
 
 EULER = 0.57721566490153286060651209008240243104215933593992
 
-def gumbel_sample(input, temperature=1.0, avg=True, N=10000):
+def gumbel_sample(input, temperature=1.0, avg=False, N=10000):
     
     # more accurate version of gumbel estimator as described in https://arxiv.org/abs/1706.04161
     # averages N gumbel distributions and subtracts out Euler's constant
