@@ -25,6 +25,8 @@ from spinn.models.base import get_checkpoint_path, log_path
 from spinn.models.base import load_data_and_embeddings
 
 
+# TODO: Where is this file used? May be safe to deprecate/delete.
+
 FLAGS = gflags.FLAGS
 
 

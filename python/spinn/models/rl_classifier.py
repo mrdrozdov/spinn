@@ -298,7 +298,6 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                 strength_ev = sparks(
                     [1] + ev_strength[t_idx].tolist(), dec_str)
                 _, crossing = evalb.crossing(gold, pred)
-
                 log.t_idx = t_idx
                 log.crossing = crossing
                 log.gold_lb = "".join(map(str, gold))

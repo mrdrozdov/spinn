@@ -33,6 +33,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from functools import reduce
 
 
 FLAGS = gflags.FLAGS
@@ -230,7 +231,7 @@ def get_flags():
     gflags.DEFINE_boolean("smart_batching", True, "Organize batches using sequence length.")
     gflags.DEFINE_boolean("use_peano", True, "A mind-blowing sorting key.")
     gflags.DEFINE_integer("eval_data_limit", -1,
-                          "Truncate evaluation set. -1 indicates no truncation.")
+                          "Truncate evaluation set to this many batches. -1 indicates no truncation.")
     gflags.DEFINE_boolean("bucket_eval", True, "Bucket evaluation data for speed improvement.")
     gflags.DEFINE_boolean("shuffle_eval", False, "Shuffle evaluation data.")
     gflags.DEFINE_integer("shuffle_eval_seed", 123, "Seed shuffling of eval data.")
@@ -271,10 +272,16 @@ def get_flags():
                                               "treegru", "tanh"], "Specify composition function.")
 
     # Pyramid model settings
+    gflags.DEFINE_boolean("pyramid_gumbel", True,
+                          "Use gumbel softmax in the Pyramid model gating.")
     gflags.DEFINE_boolean("pyramid_gated", True,
                           "Use gating in the Pyramid model.")
-    gflags.DEFINE_float("pyramid_selection_keep_rate", None,
-                        "If set, prevent this fraction of composition results from being selected.")
+    gflags.DEFINE_boolean("pyramid_trainable_temperature", None,
+                          "If set, add a scalar trained temperature parameter.")
+    gflags.DEFINE_float("pyramid_test_time_temperature_multiplier", 1.0,
+                        "If set, multiply the temperature by this constant at test time.")
+    gflags.DEFINE_float("pyramid_temperature_decay_per_10k_steps", 0.5, "Ideal for use with Gumbel.")
+
 
     # Encode settings.
     gflags.DEFINE_enum("encode", "projection", [
@@ -356,6 +363,7 @@ def get_flags():
     gflags.DEFINE_integer("es_num_episodes", 4, "Number of simultaneous episodes to run.")
     gflags.DEFINE_integer("es_episode_length", 1000, "Length of each episode.")
     gflags.DEFINE_integer("es_steps", 1000, "Number of evolution steps.")
+    
 
 def flag_defaults(FLAGS, load_log_flags=False):
     if load_log_flags:
@@ -510,7 +518,7 @@ def init_model(
     composition_args.composition = composition
 
     model = build_model(data_manager, initial_embeddings, vocab_size,
-                        num_classes, FLAGS, context_args, composition_args)
+                        num_classes, FLAGS, context_args, composition_args, logger=logger)
 
     # Build optimizer.
     if FLAGS.optimizer_type == "Adam":

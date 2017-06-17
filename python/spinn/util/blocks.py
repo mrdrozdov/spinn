@@ -9,6 +9,29 @@ import torch.nn.functional as F
 
 from spinn.util.misc import recursively_set_device
 
+EULER = 0.57721566490153286060651209008240243104215933593992
+
+def gumbel_sample(input, temperature=1.0, avg=False, N=10000):
+    
+    # more accurate version of gumbel estimator as described in https://arxiv.org/abs/1706.04161
+    # averages N gumbel distributions and subtracts out Euler's constant
+    if avg:
+        noise = torch.rand([input.size()[-1]*N])
+        noise.add_(1e-9).log_().neg_()
+        noise.add_(1e-9).log_().neg_()
+        noise.add_(-EULER)
+        noise = Variable(noise.view(N, input.size(-1)))
+        x = (input.expand_as(noise)+noise)
+        x = torch.mean(x, 0) / temperature
+    else:
+        noise = torch.rand(input.size())
+        noise.add_(1e-9).log_().neg_()
+        noise.add_(1e-9).log_().neg_()
+        noise = Variable(noise)
+        x = (input + noise) / temperature
+    x = F.softmax(x.view(input.size(0), -1))
+    return x.view_as(input)
+
 
 def debug_gradient(model, losses):
     model.zero_grad()

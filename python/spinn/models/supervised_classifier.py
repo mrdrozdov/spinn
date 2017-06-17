@@ -35,7 +35,7 @@ from spinn.models.base import load_data_and_embeddings
 FLAGS = gflags.FLAGS
 
 
-def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=None):
+def evaluate(FLAGS, model, data_manager, eval_set, log_entry, logger, step, vocabulary=None, show_sample=False):
     filename, dataset = eval_set
 
     A = Accumulator()
@@ -50,6 +50,11 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
     total_tokens = 0
     start = time.time()
 
+    if FLAGS.model_type == "Pyramid":
+        pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (step / 10000.0)
+    else:
+        pyramid_temperature_multiplier = None
+
     model.eval()
     for i, dataset_batch in enumerate(dataset):
         batch = get_batch(dataset_batch)
@@ -58,7 +63,10 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
         # Run model.
         output = model(eval_X_batch, eval_transitions_batch, eval_y_batch,
                        use_internal_parser=FLAGS.use_internal_parser,
-                       validate_transitions=FLAGS.validate_transitions)
+                       validate_transitions=FLAGS.validate_transitions,
+                       pyramid_temperature_multiplier=pyramid_temperature_multiplier,
+                       show_sample=show_sample)
+        show_sample = False  # Only show one sample, regardless of the number of batches.
 
         # Normalize output.
         logits = F.log_softmax(output)
@@ -130,7 +138,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         training_data_iter.next())
     model(X_batch, transitions_batch, y_batch,
           use_internal_parser=FLAGS.use_internal_parser,
-          validate_transitions=FLAGS.validate_transitions
+          validate_transitions=FLAGS.validate_transitions,
+          pyramid_temperature_multiplier=1.0
           )
 
     # Train.
@@ -157,11 +166,16 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         # Reset cached gradients.
         optimizer.zero_grad()
 
+        if FLAGS.model_type == "Pyramid":
+            pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (step / 10000.0)
+        else:
+            pyramid_temperature_multiplier = None
+
         # Run model.
         output = model(X_batch, transitions_batch, y_batch,
                        use_internal_parser=FLAGS.use_internal_parser,
                        validate_transitions=FLAGS.validate_transitions,
-                       show_sample=(step % FLAGS.sample_interval_steps == 0)
+                       pyramid_temperature_multiplier=pyramid_temperature_multiplier
                        )
 
         # Normalize output.
@@ -232,14 +246,16 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
             model.train()
             model(X_batch, transitions_batch, y_batch,
                   use_internal_parser=FLAGS.use_internal_parser,
-                  validate_transitions=FLAGS.validate_transitions
+                  validate_transitions=FLAGS.validate_transitions,
+                  pyramid_temperature_multiplier=pyramid_temperature_multiplier
                   )
             tr_transitions_per_example, tr_strength = model.spinn.get_transitions_per_example()
 
             model.eval()
             model(X_batch, transitions_batch, y_batch,
                   use_internal_parser=FLAGS.use_internal_parser,
-                  validate_transitions=FLAGS.validate_transitions
+                  validate_transitions=FLAGS.validate_transitions,
+                  pyramid_temperature_multiplier=pyramid_temperature_multiplier
                   )
             ev_transitions_per_example, ev_strength = model.spinn.get_transitions_per_example()
 
@@ -259,7 +275,6 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                 stength_tr = sparks([1] + tr_strength[t_idx].tolist(), dec_str)
                 stength_ev = sparks([1] + ev_strength[t_idx].tolist(), dec_str)
                 _, crossing = evalb.crossing(gold, pred_ev)
-
                 log.t_idx = t_idx
                 log.crossing = crossing
                 log.gold_lb = "".join(map(str, gold))
@@ -268,10 +283,14 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                 log.strg_tr = strength_tr[1:].encode('utf-8')
                 log.strg_ev = strength_ev[1:].encode('utf-8')
 
+
         if step > 0 and step % FLAGS.eval_interval_steps == 0:
             should_log = True
             for index, eval_set in enumerate(eval_iterators):
-                acc, tacc = evaluate(FLAGS, model, data_manager, eval_set, log_entry, step)
+                acc, tacc = evaluate(FLAGS, model, data_manager, eval_set, log_entry, logger, step,
+                    show_sample=(
+                        step %
+                        FLAGS.sample_interval_steps == 0))
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (
                         1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
