@@ -126,6 +126,7 @@ class BaseModel(_BaseModel):
         self.rl_transition_acc_as_reward = rl_transition_acc_as_reward
 
         if self.rl_baseline == "value":
+            # TODO: Flag-ify constants. 1024D MLP likely too big.
             self.v_dim = 100
             self.v_rnn = nn.LSTM(self.input_dim, self.v_dim,
                                  num_layers=1, batch_first=True)

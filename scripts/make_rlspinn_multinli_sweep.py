@@ -61,7 +61,7 @@ FIXED_PARAMETERS = {
     "transition_weight": "1.0",
     "rl_reward": "standard",
     "num_samples": "1",
-    "rl_baseline": "value",
+    "rl_baseline": "ema",
     "norl_wake_sleep": "",
 }
 
