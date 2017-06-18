@@ -67,10 +67,8 @@ class ProtoLogger(object):
         self.root.Clear()
 
     def Log(self, message, level=INFO):
-        if level < self.min_print_level:
-            return
-        msg_str = "%s\n" % message
-        sys.stderr.write(msg_str)
+        if level >= self.min_print_level:
+            sys.stderr.write("%s\n" % message)
         if self.log_path and not self.write_proto:
             with open(self.log_path, 'a') as f:
                 datetime_string = datetime.datetime.now().strftime(
@@ -84,14 +82,14 @@ class ProtoLogger(object):
         try:
             msg_str = str(self.root)
             msg_fmt =  self.print_formatter(message)
-            datetime_string = datetime.datetime.now().strftime(
-                "%y-%m-%d %H:%M:%S ")
-            msg_line = re.sub('^', datetime_string, msg_fmt, flags=re.MULTILINE) + '\n'
             if level >= self.min_print_level:
-                sys.stderr.write(msg_line)
-            if not self.write_proto:
-                msg_str = msg_line
+                sys.stderr.write(msg_fmt)
             if self.log_path:  # Write to the log file then close it
+                datetime_string = datetime.datetime.now().strftime(
+                    "%y-%m-%d %H:%M:%S ")
+                msg_line = re.sub('^', datetime_string, msg_fmt, flags=re.MULTILINE) + '\n'
+                if not self.write_proto:
+                    msg_str = msg_line
                 with open(self.log_path, 'a') as f:
                     f.write(msg_str)
         finally:
