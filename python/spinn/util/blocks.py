@@ -628,7 +628,7 @@ class ReduceTreeLSTM(nn.Module):
             self.track = Linear(initializer=HeKaimingInitializer)(
                 tracker_size, 5 * size, bias=False)
             if composition_ln:
-                self.track_ln = LayerNormalization(size)
+                self.track_ln = LayerNormalization(tracker_size)
 
     def forward(self, left_in, right_in, tracking=None):
         """Perform batched TreeLSTM composition.

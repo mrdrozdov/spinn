@@ -547,6 +547,8 @@ class BaseModel(nn.Module):
                  ):
         super(BaseModel, self).__init__()
 
+        assert not (use_tracking_in_composition and not lateral_tracking), "Lateral tracking must be on to use tracking in composition."
+
         self.use_sentence_pair = use_sentence_pair
         self.use_difference_feature = use_difference_feature
         self.use_product_feature = use_product_feature
