@@ -29,9 +29,9 @@ class ProtoLogger(object):
             self,
             log_path=None,
             json_log_path=None,
-            min_print_level=1,
             print_formatter=None,
-            write_proto=True):
+            write_proto=True,
+            min_print_level=1):
         # root: The parent log message to store in file (SpinnLog).
         #   The message must contain only "header" and "entries" as submessages.
         #   Fill out the header when creating the logger.
@@ -48,11 +48,11 @@ class ProtoLogger(object):
         self.root = None
         self.log_path = log_path
         self.json_log_path = json_log_path
-        self.min_print_level = min_print_level
         self.print_formatter = print_formatter
         self.write_proto = write_proto
         if self.print_formatter is None:
             self.print_formatter = default_formatter
+        self.min_print_level = min_print_level
 
     def LogHeader(self, header):
         if self.root is not None:
@@ -69,12 +69,13 @@ class ProtoLogger(object):
     def Log(self, message, level=INFO):
         if level < self.min_print_level:
             return
-        # Write to STDERR
-        msg_str = "[%i] %s\n" % (level, message)
+        msg_str = "%s\n" % message
         sys.stderr.write(msg_str)
         if self.log_path and not self.write_proto:
             with open(self.log_path, 'a') as f:
-                f.write(msg_str)
+                datetime_string = datetime.datetime.now().strftime(
+                    "%y-%m-%d %H:%M:%S")
+                f.write("%s %s\n" % (datetime_string, message))
 
     def LogEntry(self, message, level=INFO):
         if self.root is None:
@@ -86,7 +87,7 @@ class ProtoLogger(object):
             datetime_string = datetime.datetime.now().strftime(
                 "%y-%m-%d %H:%M:%S ")
             msg_line = re.sub('^', datetime_string, msg_fmt, flags=re.MULTILINE) + '\n'
-            if level >= self.min_print_level:  # Write to stderr
+            if level >= self.min_print_level:
                 sys.stderr.write(msg_line)
             if not self.write_proto:
                 msg_str = msg_line
