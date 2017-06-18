@@ -16,7 +16,7 @@ def gumbel_sample(input, temperature=1.0, avg=False, N=10000):
     # more accurate version of gumbel estimator as described in https://arxiv.org/abs/1706.04161
     # averages N gumbel distributions and subtracts out Euler's constant
     if avg:
-        noise = torch.rand([input.size()[-1]*N])
+        noise = to_gpu(torch.rand([input.size()[-1]*N]))
         noise.add_(1e-9).log_().neg_()
         noise.add_(1e-9).log_().neg_()
         noise.add_(-EULER)
@@ -24,7 +24,7 @@ def gumbel_sample(input, temperature=1.0, avg=False, N=10000):
         x = (input.expand_as(noise)+noise)
         x = torch.mean(x, 0) / temperature
     else:
-        noise = torch.rand(input.size())
+        noise = to_gpu(torch.rand(input.size()))
         noise.add_(1e-9).log_().neg_()
         noise.add_(1e-9).log_().neg_()
         noise = Variable(noise)
