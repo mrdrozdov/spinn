@@ -127,11 +127,14 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
     return eval_class_acc, eval_trans_acc
 
 def train_loop(FLAGS, data_manager, model, optimizer, trainer,
-               training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step):
+               training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header):
     perturbation_name = FLAGS.experiment_name + "_p" + str(perturbation_id)
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
-    #M = MetricsWriter(os.path.join(FLAGS.metrics_path, perturbation_name))
+    
+    header.start_step = true_step
+    header.start_time = int(time.time())
+    #header.model_label = perturbation_name
 
     # Checkpoint paths.
     standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, perturbation_name)
@@ -313,7 +316,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
 
 def rollout(queue, perturbed_model, FLAGS, data_manager, 
             model, optimizer, trainer, training_data_iter, 
-            eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step):
+            eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header):
     """
     Train each episode 
     """
@@ -322,7 +325,7 @@ def rollout(queue, perturbed_model, FLAGS, data_manager,
     best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, perturbation_name, best=True)
 
     train_loop(FLAGS, data_manager, perturbed_model, optimizer, 
-        trainer, training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step)
+        trainer, training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header)
 
     # Once the episode ends, restore best checkpoint
     logger.Log("Restoring best checkpoint to run final evaluation of episode.")
@@ -432,9 +435,9 @@ def run(only_forward=False):
         true_step = 0
         best_dev_error = 1.0
         reload_ev_step = 0
-    header.start_step = step
-    header.start_time = int(time.time())
-    header.model_label = perturbation_name
+    #header.start_step = step
+    #header.start_time = int(time.time())
+    #header.model_label = perturbation_name
 
     # GPU support.
     the_gpu.gpu = FLAGS.gpu
@@ -543,7 +546,7 @@ def run(only_forward=False):
                         perturbed_model, FLAGS, data_manager, 
                         model, optimizer, trainer, training_data_iter, 
                         eval_iterators, logger, true_step, 
-                        best_dev_error, perturbation_id, ev_step))
+                        best_dev_error, perturbation_id, ev_step, header))
                 p.start()
                 processes.append(p)
                 perturbation_id += 1
