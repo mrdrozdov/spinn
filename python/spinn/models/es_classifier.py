@@ -127,8 +127,9 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
     return eval_class_acc, eval_trans_acc
 
 def train_loop(FLAGS, data_manager, model, optimizer, trainer,
-               training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header):
+               training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id):
     perturbation_name = FLAGS.experiment_name + "_p" + str(perturbation_id)
+    root_name = FLAGS.experiment_name + "_p" + str(root_id)
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
     
@@ -163,6 +164,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         log_entry.Clear()
         log_entry.step = true_step
         log_entry.model_label = perturbation_name
+        log_entry.root_label = root_name
         should_log = False
 
         start = time.time()
@@ -316,7 +318,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
 
 def rollout(queue, perturbed_model, FLAGS, data_manager, 
             model, optimizer, trainer, training_data_iter, 
-            eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header):
+            eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id):
     """
     Train each episode 
     """
@@ -325,7 +327,7 @@ def rollout(queue, perturbed_model, FLAGS, data_manager,
     best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, perturbation_name, best=True)
 
     train_loop(FLAGS, data_manager, perturbed_model, optimizer, 
-        trainer, training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header)
+        trainer, training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id)
 
     # Once the episode ends, restore best checkpoint
     logger.Log("Restoring best checkpoint to run final evaluation of episode.")
@@ -523,9 +525,7 @@ def run(only_forward=False):
             results = []
             processes = []
             queue = mp.Queue()
-            all_seeds, all_models = [], []
-            all_steps = []
-            all_dev_errs = []
+            all_seeds, all_models, all_roots, all_steps, all_dev_errs = ([] for i in range(5))
             for chosen_model in chosen_models:
                 perturbation_id = chosen_model[2]
                 random_seed, models = generate_seeds_and_models(trainer, model, perturbation_id, base=base)
@@ -533,6 +533,7 @@ def run(only_forward=False):
                     all_seeds.append(random_seed)
                     all_steps.append(chosen_model[1])
                     all_dev_errs.append(chosen_model[3])
+                    all_roots.append(perturbation_id)
                 all_models += models
             assert len(all_seeds) == len(all_models)
             assert len(all_steps) == len(all_seeds)
@@ -542,11 +543,12 @@ def run(only_forward=False):
                 perturbed_model = all_models.pop()
                 true_step = all_steps.pop()
                 best_dev_error = all_dev_errs.pop()
+                root_id = all_roots.pop()
                 p = mp.Process(target=rollout, args=(queue, 
                         perturbed_model, FLAGS, data_manager, 
                         model, optimizer, trainer, training_data_iter, 
                         eval_iterators, logger, true_step, 
-                        best_dev_error, perturbation_id, ev_step, header))
+                        best_dev_error, perturbation_id, ev_step, header, root_id))
                 p.start()
                 processes.append(p)
                 perturbation_id += 1
