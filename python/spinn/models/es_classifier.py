@@ -16,6 +16,7 @@ import random
 import sys
 import time
 import glob
+import re
 
 import gflags
 import numpy as np
@@ -25,7 +26,7 @@ from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import get_l2_loss, the_gpu, to_gpu
 from spinn.util.misc import Accumulator, EvalReporter
 from spinn.util.misc import recursively_set_device
-from spinn.util.logging import stats, train_accumulate
+from spinn.util.logging import stats, train_accumulate, create_log_formatter
 from spinn.util.logging import eval_stats, eval_accumulate
 from spinn.util.loss import auxiliary_loss
 from spinn.util.sparks import sparks, dec_str
@@ -131,7 +132,6 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
     perturbation_name = FLAGS.experiment_name + "_p" + str(perturbation_id)
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
-    #M = MetricsWriter(os.path.join(FLAGS.metrics_path, perturbation_name))
 
     # Checkpoint paths.
     standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, perturbation_name)
@@ -377,7 +377,7 @@ def restore(logger, trainer, queue, FLAGS, name, path):
     """
     Restore models 
     """
-    perturbation_id = name[-1]
+    perturbation_id = re.findall('p(\d+)', name)[0]
     logger.Log("Restoring best checkpoint of perturbed model %s." % perturbation_id)
     ev_step, true_step, dev_error = trainer.load(path)
     queue.put((ev_step, true_step, perturbation_id, dev_error))
@@ -390,8 +390,11 @@ def evaluate_perturbation(logger, trainer, queue, FLAGS, name, path):
 """
 
 def run(only_forward=False):
-    logger = afs_safe_logger.ProtoLogger(log_path(FLAGS))
+    logger = afs_safe_logger.ProtoLogger(log_path(FLAGS),
+            print_formatter=create_log_formatter(True, False),
+            write_proto=FLAGS.write_proto_to_log)
     header = pb.SpinnHeader()
+    header.start_time = int(time.time())
 
     data_manager = get_data_manager(FLAGS.data_type)
 
@@ -432,9 +435,9 @@ def run(only_forward=False):
         true_step = 0
         best_dev_error = 1.0
         reload_ev_step = 0
-    header.start_step = step
-    header.start_time = int(time.time())
-    header.model_label = perturbation_name
+    #header.start_step = true_step
+    #header.start_time = int(time.time())
+    #header.model_label = perturbation_name
 
     # GPU support.
     the_gpu.gpu = FLAGS.gpu
