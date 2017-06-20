@@ -514,7 +514,7 @@ def run(only_forward=False):
                 base = False
                 chosen_models = []
                 acc_order = [i[0] for i in sorted(enumerate(results), key=lambda x:x[1][3], reverse=True)]
-                for i in range(FLAGS.es_num_episodes):
+                for i in range(FLAGS.es_num_roots):
                     id_ = acc_order[i]
                     logger.Log("Picking model %s to perturb for next evolution step." % results[id_][2])
                     chosen_models.append(results[id_])
@@ -557,9 +557,9 @@ def run(only_forward=False):
 
             # Check to ensure the correct number of models where trained and saved
             if ev_step == 0:
-                assert len(results) == FLAGS.es_num_episodes
+                assert len(results) == FLAGS.es_num_roots
             else:
-                assert len(results) == FLAGS.es_num_episodes**2
+                assert len(results) == FLAGS.es_num_episodes * FLAGS.es_num_roots
 
 
 if __name__ == '__main__':
