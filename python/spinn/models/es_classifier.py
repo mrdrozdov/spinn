@@ -559,7 +559,7 @@ def run(only_forward=False):
 
             # Check to ensure the correct number of models where trained and saved
             if ev_step == 0:
-                assert len(results) == FLAGS.es_num_roots
+                assert len(results) == FLAGS.es_num_episodes
             else:
                 assert len(results) == FLAGS.es_num_episodes * FLAGS.es_num_roots
 
