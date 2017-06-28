@@ -43,6 +43,7 @@ FLAGS="
 --ckpt_path .
 --transition_weight 1
 --eval_data_path spinn/data/listops/test_d20.tsv
+--write_proto_to_log
 --experiment_name listops_rlspinn_test_run"
 
 # Run from the 'python' directory.
