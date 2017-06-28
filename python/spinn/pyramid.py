@@ -129,7 +129,7 @@ class Pyramid(nn.Module):
 
             new_words = []
             for position in range(len(words) - 1): # destination position
-                left = words[position])
+                left = words[position]
                 right = words[position + 1]
 
                 # If merge at 4, positions 0-3 is copy left, 5-... is copy right
