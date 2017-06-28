@@ -109,44 +109,56 @@ class Pyramid(nn.Module):
         #     ++ : 4,5 -> X
         # 0123X678
 
+        # This is supposed to be done for evaluation only, so I'm not
+        # going to even bother with variables.
         words = torch.chunk(x, seq_len, 1) # A list of word vectors
-        words = [torch.squeeze(word) for word in words]
+        words = [torch.squeeze(word).data for word in words]
+
+        # Used in phase 2.
+        copy_left_buffer = torch.zeros(batch_size, model_dim)
+        copy_right_buffer = torch.zeros(batch_size, model_dim)
+        merge_buffer = torch.zeros(batch_size, model_dim)
 
         while len(words) > 1:
-            #print(len(words))
-            composition_results = []
-            selection_logits_list = []
+            print(len(words))
+            composition_results = [] # Variable
+            selection_logits_list = [] # Variable
 
+            # Phase 1 - evaluate all possible mergers
             for position in range(len(words) - 1):
-                left = words[position]
-                right = words[position + 1]
+                left = Variable(words[position])
+                right = Variable(words[position + 1])
                 composed = self.composition_fn(left, right)
                 selection_score = self.selection_fn(composed)
                 composition_results.append(composed)
                 selection_logits_list.append(selection_score)
 
             selection_logits = torch.cat(selection_logits_list, 1) # B x L
-            merge_points = Variable(selection_logits.data.max(1)[1]) # B
+            merge_points = selection_logits.data.max(1)[1] # B
 
+            # Phase 2 - apply mergers
             new_words = []
             for position in range(len(words) - 1): # destination position
                 left = words[position]
                 right = words[position + 1]
 
                 # If merge at 4, positions 0-3 is copy left, 5-... is copy right
-                is_copy_left = Variable(merge_points.data.gt(position).float())
-                is_copy_right = Variable(merge_points.data.lt(position).float())
+                is_copy_left = merge_points.gt(position).float()
+                is_copy_right = merge_points.lt(position).float()
                 is_merged = (1 - is_copy_left) * (1 - is_copy_right)
 
-                next_level_word = \
-                        is_copy_left.expand_as(left) * left + \
-                        is_copy_right.expand_as(right) * right + \
-                        is_merged.expand_as(left) * composition_results[position]
-                new_words.append(next_level_word)
+                # Expression equivalent to:
+                #         is_copy_left.expand_as(left) * left + \
+                #         is_copy_right.expand_as(right) * right + \
+                #         is_merged.expand_as(left) * composition_results[position]
+                copy_left_buffer.fill_(0.0).add_(left).mul_(is_copy_left.expand_as(left))
+                copy_right_buffer.fill_(0.0).add_(right).mul_(is_copy_right.expand_as(left))
+                merge_buffer.fill_(0.0).add_(composition_results[position].data).mul_(is_merged.expand_as(left))
+                words[position].fill_(0.0).add_(copy_left_buffer).add_(copy_right_buffer).add_(merge_buffer)
 
-            words = new_words
+            words.pop()
 
-        return words[0]
+        return Variable(words[0])
 
     def run_pyramid(self, x, show_sample=False, temperature_multiplier=1.0):
         batch_size, seq_len, model_dim = x.data.size()
