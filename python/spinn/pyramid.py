@@ -101,6 +101,52 @@ class Pyramid(nn.Module):
         self.reshape_input = context_args.reshape_input
         self.reshape_context = context_args.reshape_context
 
+    def run_hard_pyramid(self, x):
+        batch_size, seq_len, model_dim = x.data.size()
+        # If we "merge left", that means words before the merge point stay put.
+        # Example:
+        # 012345678
+        #     ++ : 4,5 -> X
+        # 0123X678
+
+        words = torch.chunk(x, seq_len, 1) # A list of word vectors
+        words = [torch.squeeze(word) for word in words]
+
+        while len(words) > 1:
+            composition_results = []
+            selection_logits_list = []
+
+            for position in range(len(words) - 1):
+                left = words[position]
+                right = words[position + 1]
+                composed = self.composition_fn(left, right)
+                selection_score = self.selection_fn(composition_results[position])
+                composition_results.append(composed)
+                selection_logits_list.append(selection_score)
+
+            selection_logits = torch.cat(selection_logits_list, 1) # B x L
+            merge_points = Variable(selection_logits.data.max(1)[1]) # B
+
+            new_words = []
+            for position in range(len(words) - 1): # destination position
+                left = words[position])
+                right = words[position + 1]
+
+                # If merge at 4, positions 0-3 is copy left, 5-... is copy right
+                is_copy_left = Variable(merge_points.data.gt(position).float())
+                is_copy_right = Variable(merge_points.data.lt(position).float())
+                is_merged = (1 - is_copy_left) * (1 - is_copy_right)
+
+                next_level_word = \
+                        is_copy_left.expand_as(left) * left + \
+                        is_copy_right.expand_as(right) * right + \
+                        is_merged.expand_as(left) * composition_results[position]
+                new_words.append(next_level_word)
+
+            words = new_words
+
+        return words[0]
+
     def run_pyramid(self, x, show_sample=False, temperature_multiplier=1.0):
         batch_size, seq_len, model_dim = x.data.size()
 
@@ -192,7 +238,10 @@ class Pyramid(nn.Module):
 
         x = self.unwrap(sentences, transitions)
         emb = self.run_embed(x)
-        hh = self.run_pyramid(emb, show_sample, temperature_multiplier=pyramid_temperature_multiplier)
+        if pyramid_temperature_multiplier == 0.0:
+            hh = self.run_hard_pyramid(emb, show_sample, temperature_multiplier=pyramid_temperature_multiplier)
+        else:
+            hh = self.run_pyramid(emb, show_sample, temperature_multiplier=pyramid_temperature_multiplier)
         h = self.wrap(hh)
         output = self.mlp(h)
 
