@@ -113,6 +113,7 @@ class Pyramid(nn.Module):
         words = [torch.squeeze(word) for word in words]
 
         while len(words) > 1:
+            #print(len(words))
             composition_results = []
             selection_logits_list = []
 
@@ -120,7 +121,7 @@ class Pyramid(nn.Module):
                 left = words[position]
                 right = words[position + 1]
                 composed = self.composition_fn(left, right)
-                selection_score = self.selection_fn(composition_results[position])
+                selection_score = self.selection_fn(composed)
                 composition_results.append(composed)
                 selection_logits_list.append(selection_score)
 
@@ -238,8 +239,8 @@ class Pyramid(nn.Module):
 
         x = self.unwrap(sentences, transitions)
         emb = self.run_embed(x)
-        if pyramid_temperature_multiplier == 0.0:
-            hh = self.run_hard_pyramid(emb, show_sample, temperature_multiplier=pyramid_temperature_multiplier)
+        if not self.training:
+            hh = self.run_hard_pyramid(emb)
         else:
             hh = self.run_pyramid(emb, show_sample, temperature_multiplier=pyramid_temperature_multiplier)
         h = self.wrap(hh)

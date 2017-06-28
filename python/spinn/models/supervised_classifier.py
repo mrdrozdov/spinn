@@ -284,7 +284,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                 log.strg_ev = strength_ev[1:].encode('utf-8')
 
 
-        if step > 0 and step % FLAGS.eval_interval_steps == 0:
+        if step % FLAGS.eval_interval_steps == 0:
             should_log = True
             for index, eval_set in enumerate(eval_iterators):
                 acc, tacc = evaluate(FLAGS, model, data_manager, eval_set, log_entry, logger, step,
