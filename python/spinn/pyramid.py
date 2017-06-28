@@ -108,11 +108,16 @@ class Pyramid(nn.Module):
         # 012345678
         #     ++ : 4,5 -> X
         # 0123X678
+        #   ++   : 2,3 -> Y
+        # 01YX678
 
         # This is supposed to be done for evaluation only, so I'm not
         # going to even bother with variables.
         words = torch.chunk(x, seq_len, 1) # A list of word vectors
         words = [torch.squeeze(word).data for word in words]
+
+        # Used in phase 1.
+        composition_buffers = [torch.zeros(batch_size, model_dim) for w in words]
 
         # Used in phase 2.
         copy_left_buffer = torch.zeros(batch_size, model_dim)
@@ -121,8 +126,8 @@ class Pyramid(nn.Module):
 
         while len(words) > 1:
             print(len(words))
-            composition_results = [] # Variable
-            selection_logits_list = [] # Variable
+            composition_results = composition_buffers[:(len(words) - 1)]
+            selection_logits_list = [] # Tensors (not Variable), Bx1 each
 
             # Phase 1 - evaluate all possible mergers
             for position in range(len(words) - 1):
@@ -130,11 +135,12 @@ class Pyramid(nn.Module):
                 right = Variable(words[position + 1])
                 composed = self.composition_fn(left, right)
                 selection_score = self.selection_fn(composed)
-                composition_results.append(composed)
-                selection_logits_list.append(selection_score)
+                composition_results[position].copy_(composed.data)
+                selection_logits_list.append(selection_score.data)
 
+            # Find the highest scoring position to merge.
             selection_logits = torch.cat(selection_logits_list, 1) # B x L
-            merge_points = selection_logits.data.max(1)[1] # B
+            merge_points = selection_logits.max(1)[1] # B
 
             # Phase 2 - apply mergers
             new_words = []
@@ -151,10 +157,10 @@ class Pyramid(nn.Module):
                 #         is_copy_left.expand_as(left) * left + \
                 #         is_copy_right.expand_as(right) * right + \
                 #         is_merged.expand_as(left) * composition_results[position]
-                copy_left_buffer.fill_(0.0).add_(left).mul_(is_copy_left.expand_as(left))
-                copy_right_buffer.fill_(0.0).add_(right).mul_(is_copy_right.expand_as(left))
-                merge_buffer.fill_(0.0).add_(composition_results[position].data).mul_(is_merged.expand_as(left))
-                words[position].fill_(0.0).add_(copy_left_buffer).add_(copy_right_buffer).add_(merge_buffer)
+                copy_left_buffer.copy_(left).mul_(is_copy_left.expand_as(left))
+                copy_right_buffer.copy_(right).mul_(is_copy_right.expand_as(left))
+                merge_buffer.copy_(composition_results[position]).mul_(is_merged.expand_as(left))
+                words[position].copy_(copy_left_buffer).add_(copy_right_buffer).add_(merge_buffer)
 
             words.pop()
 
