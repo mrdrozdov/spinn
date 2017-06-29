@@ -270,8 +270,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                 gold = transitions_batch[t_idx]
                 pred_tr = tr_transitions_per_example[t_idx]
                 pred_ev = ev_transitions_per_example[t_idx]
-                stength_tr = sparks([1] + tr_strength[t_idx].tolist(), dec_str)
-                stength_ev = sparks([1] + ev_strength[t_idx].tolist(), dec_str)
+                strength_tr = sparks([1] + tr_strength[t_idx].tolist(), dec_str)
+                strength_ev = sparks([1] + ev_strength[t_idx].tolist(), dec_str)
                 _, crossing = evalb.crossing(gold, pred_ev)
 
                 log.t_idx = t_idx
