@@ -16,7 +16,6 @@ import random
 import sys
 import time
 import glob
-import re
 
 import gflags
 import numpy as np
@@ -26,7 +25,7 @@ from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import get_l2_loss, the_gpu, to_gpu
 from spinn.util.misc import Accumulator, EvalReporter
 from spinn.util.misc import recursively_set_device
-from spinn.util.logging import stats, train_accumulate, create_log_formatter
+from spinn.util.logging import stats, train_accumulate
 from spinn.util.logging import eval_stats, eval_accumulate
 from spinn.util.loss import auxiliary_loss
 from spinn.util.sparks import sparks, dec_str
@@ -128,10 +127,15 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
     return eval_class_acc, eval_trans_acc
 
 def train_loop(FLAGS, data_manager, model, optimizer, trainer,
-               training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step):
+               training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id):
     perturbation_name = FLAGS.experiment_name + "_p" + str(perturbation_id)
+    root_name = FLAGS.experiment_name + "_p" + str(root_id)
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
+    
+    header.start_step = true_step
+    header.start_time = int(time.time())
+    #header.model_label = perturbation_name
 
     # Checkpoint paths.
     standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, perturbation_name)
@@ -160,6 +164,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         log_entry.Clear()
         log_entry.step = true_step
         log_entry.model_label = perturbation_name
+        log_entry.root_label = root_name
         should_log = False
 
         start = time.time()
@@ -270,8 +275,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                 gold = transitions_batch[t_idx]
                 pred_tr = tr_transitions_per_example[t_idx]
                 pred_ev = ev_transitions_per_example[t_idx]
-                stength_tr = sparks([1] + tr_strength[t_idx].tolist(), dec_str)
-                stength_ev = sparks([1] + ev_strength[t_idx].tolist(), dec_str)
+                strength_tr = sparks([1] + tr_strength[t_idx].tolist(), dec_str)
+                strength_ev = sparks([1] + ev_strength[t_idx].tolist(), dec_str)
                 _, crossing = evalb.crossing(gold, pred_ev)
 
                 log.t_idx = t_idx
@@ -313,7 +318,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
 
 def rollout(queue, perturbed_model, FLAGS, data_manager, 
             model, optimizer, trainer, training_data_iter, 
-            eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step):
+            eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id):
     """
     Train each episode 
     """
@@ -322,7 +327,7 @@ def rollout(queue, perturbed_model, FLAGS, data_manager,
     best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, perturbation_name, best=True)
 
     train_loop(FLAGS, data_manager, perturbed_model, optimizer, 
-        trainer, training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step)
+        trainer, training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id)
 
     # Once the episode ends, restore best checkpoint
     logger.Log("Restoring best checkpoint to run final evaluation of episode.")
@@ -377,7 +382,7 @@ def restore(logger, trainer, queue, FLAGS, name, path):
     """
     Restore models 
     """
-    perturbation_id = re.findall('p(\d+)', name)[0]
+    perturbation_id = name[-1]
     logger.Log("Restoring best checkpoint of perturbed model %s." % perturbation_id)
     ev_step, true_step, dev_error = trainer.load(path)
     queue.put((ev_step, true_step, perturbation_id, dev_error))
@@ -390,11 +395,8 @@ def evaluate_perturbation(logger, trainer, queue, FLAGS, name, path):
 """
 
 def run(only_forward=False):
-    logger = afs_safe_logger.ProtoLogger(log_path(FLAGS),
-            print_formatter=create_log_formatter(True, False),
-            write_proto=FLAGS.write_proto_to_log)
+    logger = afs_safe_logger.ProtoLogger(log_path(FLAGS))
     header = pb.SpinnHeader()
-    header.start_time = int(time.time())
 
     data_manager = get_data_manager(FLAGS.data_type)
 
@@ -435,7 +437,7 @@ def run(only_forward=False):
         true_step = 0
         best_dev_error = 1.0
         reload_ev_step = 0
-    #header.start_step = true_step
+    #header.start_step = step
     #header.start_time = int(time.time())
     #header.model_label = perturbation_name
 
@@ -514,7 +516,7 @@ def run(only_forward=False):
                 base = False
                 chosen_models = []
                 acc_order = [i[0] for i in sorted(enumerate(results), key=lambda x:x[1][3], reverse=True)]
-                for i in range(FLAGS.es_num_episodes):
+                for i in range(FLAGS.es_num_roots):
                     id_ = acc_order[i]
                     logger.Log("Picking model %s to perturb for next evolution step." % results[id_][2])
                     chosen_models.append(results[id_])
@@ -523,9 +525,7 @@ def run(only_forward=False):
             results = []
             processes = []
             queue = mp.Queue()
-            all_seeds, all_models = [], []
-            all_steps = []
-            all_dev_errs = []
+            all_seeds, all_models, all_roots, all_steps, all_dev_errs = ([] for i in range(5))
             for chosen_model in chosen_models:
                 perturbation_id = chosen_model[2]
                 random_seed, models = generate_seeds_and_models(trainer, model, perturbation_id, base=base)
@@ -533,6 +533,7 @@ def run(only_forward=False):
                     all_seeds.append(random_seed)
                     all_steps.append(chosen_model[1])
                     all_dev_errs.append(chosen_model[3])
+                    all_roots.append(perturbation_id)
                 all_models += models
             assert len(all_seeds) == len(all_models)
             assert len(all_steps) == len(all_seeds)
@@ -542,11 +543,12 @@ def run(only_forward=False):
                 perturbed_model = all_models.pop()
                 true_step = all_steps.pop()
                 best_dev_error = all_dev_errs.pop()
+                root_id = all_roots.pop()
                 p = mp.Process(target=rollout, args=(queue, 
                         perturbed_model, FLAGS, data_manager, 
                         model, optimizer, trainer, training_data_iter, 
                         eval_iterators, logger, true_step, 
-                        best_dev_error, perturbation_id, ev_step))
+                        best_dev_error, perturbation_id, ev_step, header, root_id))
                 p.start()
                 processes.append(p)
                 perturbation_id += 1
@@ -559,7 +561,7 @@ def run(only_forward=False):
             if ev_step == 0:
                 assert len(results) == FLAGS.es_num_episodes
             else:
-                assert len(results) == FLAGS.es_num_episodes**2
+                assert len(results) == FLAGS.es_num_episodes * FLAGS.es_num_roots
 
 
 if __name__ == '__main__':

@@ -57,7 +57,8 @@ message SpinnEntry {
   optional float learning_rate = 9;
   optional float invalid = 10;
   optional string model_label = 22; // If multiple logs print to the same file.
-
+  optional string root_label = 23;
+  
   // RL log properties.
   optional float policy_cost = 11;
   optional float value_cost = 12;
