@@ -215,21 +215,21 @@ class Pyramid(nn.Module):
 
     # --- Sample printing ---
 
-    def prettyprint_sample_helper(self, tree):
+    def prettyprint_sample(self, tree):
         if isinstance(tree, tuple):
-            return '( ' + self.prettyprint_sample_helper(tree[0]) + \
-                ' ' + self.prettyprint_sample_helper(tree[1]) + ' )'
+            return '( ' + self.prettyprint_sample(tree[0]) + \
+                ' ' + self.prettyprint_sample(tree[1]) + ' )'
         else:
             return tree
 
-    def prettyprint_sample(self, x, vocabulary):
+    def get_sample(self, x, vocabulary):
         if not self.inverted_vocabulary:
             self.inverted_vocabulary = dict([(vocabulary[key], key) for key in vocabulary])
         token_sequence = [self.inverted_vocabulary[token] for token in x[0, :]]
         for merge in self.get_sample_merge_sequence():
             token_sequence[merge] = (token_sequence[merge], token_sequence[merge + 1])
             del token_sequence[merge + 1]
-        return self.prettyprint_sample_helper(token_sequence[0])
+        return token_sequence[0]
 
     def get_sample_merge_sequence(self):
         return self.merge_sequence_memory

@@ -70,7 +70,8 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
                        show_sample=show_sample)
 
         if show_sample and FLAGS.model_type == "Pyramid":
-            logger.Log(model.prettyprint_sample(eval_X_batch, vocabulary))
+            sample = model.get_sample(eval_X_batch, vocabulary)
+            logger.Log(model.prettyprint_sample(sample))
         show_sample = False  # Only show one sample, regardless of the number of batches.
 
         # Normalize output.
