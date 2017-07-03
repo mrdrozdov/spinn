@@ -108,6 +108,7 @@ class Pyramid(nn.Module):
         all_state_pairs.append(torch.chunk(x, seq_len, 1))
 
         if show_sample:
+            parse_seq = range(len(x))
             self.logger.Log('')
             if self.trainable_temperature:
                 self.logger.Log('Temp: ' + str(self.temperature.data.cpu().numpy()[0][0]))
@@ -148,6 +149,8 @@ class Pyramid(nn.Module):
                 if show_sample:
                     self.logger.Log(
                         sparks(np.transpose(selection_probs[0, :].data.cpu().numpy()).tolist()))
+                    merge_index = np.argmax(selection_probs[0, :].data.cpu().numpy())
+                    # parse_seq[merge_index]
 
                 layer_state_pairs = []
                 for position in range(layer):
