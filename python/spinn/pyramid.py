@@ -101,17 +101,24 @@ class Pyramid(nn.Module):
         self.reshape_input = context_args.reshape_input
         self.reshape_context = context_args.reshape_context
 
-    def run_pyramid(self, x, show_sample=False, temperature_multiplier=1.0):
+        # For sample printing
+        self.merge_sequence_memory = None
+        self.inverted_vocabulary = None
+
+    def run_pyramid(self, x, show_sample=False, indices=None, temperature_multiplier=1.0):
         batch_size, seq_len, model_dim = x.data.size()
 
         all_state_pairs = []
         all_state_pairs.append(torch.chunk(x, seq_len, 1))
 
         if show_sample:
-            parse_seq = range(len(x))
-            self.logger.Log('')
-            if self.trainable_temperature:
-                self.logger.Log('Temp: ' + str(self.temperature.data.cpu().numpy()[0][0]))
+            self.merge_sequence_memory = []
+            # parse_seq = range(seq_len)
+            # self.logger.Log('')
+            # if self.trainable_temperature:
+            #     self.logger.Log('Temp: ' + str(self.temperature.data.cpu().numpy()[0][0]))
+        else:
+            self.merge_sequence_memory = None
 
         temperature = temperature_multiplier
         if self.trainable_temperature:
@@ -147,10 +154,10 @@ class Pyramid(nn.Module):
                     selection_probs = F.softmax(selection_logits)
  
                 if show_sample:
-                    self.logger.Log(
-                        sparks(np.transpose(selection_probs[0, :].data.cpu().numpy()).tolist()))
+                    # self.logger.Log(
+                    #     sparks(np.transpose(selection_probs[0, :].data.cpu().numpy()).tolist()))
                     merge_index = np.argmax(selection_probs[0, :].data.cpu().numpy())
-                    # parse_seq[merge_index]
+                    self.merge_sequence_memory.append(merge_index)
 
                 layer_state_pairs = []
                 for position in range(layer):
@@ -195,11 +202,31 @@ class Pyramid(nn.Module):
 
         x = self.unwrap(sentences, transitions)
         emb = self.run_embed(x)
-        hh = self.run_pyramid(emb, show_sample, temperature_multiplier=pyramid_temperature_multiplier)
+        hh = self.run_pyramid(emb, show_sample, temperature_multiplier=pyramid_temperature_multiplier, indices=x)
         h = self.wrap(hh)
         output = self.mlp(h)
 
         return output
+
+    # --- Sample printing ---
+
+    def prettyprint_sample_helper(self, tree):
+        if isinstance(tree, tuple):
+            return '( ' + self.prettyprint_sample_helper(tree[0]) + ' ' + self.prettyprint_sample_helper(tree[1]) + ' )'
+        else:
+            return tree 
+
+    def prettyprint_sample(self, x, vocabulary): 
+        if not self.inverted_vocabulary:
+            self.inverted_vocabulary = dict([(vocabulary[key], key) for key in vocabulary])
+        token_sequence = [self.inverted_vocabulary[token] for token in x[0, :]]
+        for merge in self.get_sample_merge_sequence():
+            token_sequence[merge] = (token_sequence[merge], token_sequence[merge + 1])
+            del token_sequence[merge + 1]
+        return self.prettyprint_sample_helper(token_sequence[0])
+
+    def get_sample_merge_sequence(self):
+        return self.merge_sequence_memory
 
     # --- Sentence Style Switches ---
 

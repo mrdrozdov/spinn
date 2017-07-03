@@ -66,6 +66,9 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, logger, step, voca
                        validate_transitions=FLAGS.validate_transitions,
                        pyramid_temperature_multiplier=pyramid_temperature_multiplier,
                        show_sample=show_sample)
+
+        if show_sample and FLAGS.model_type == "Pyramid":
+            logger.Log(model.prettyprint_sample(eval_X_batch, vocabulary))
         show_sample = False  # Only show one sample, regardless of the number of batches.
 
         # Normalize output.
@@ -124,7 +127,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, logger, step, voca
 
 
 def train_loop(FLAGS, data_manager, model, optimizer, trainer,
-               training_data_iter, eval_iterators, logger, step, best_dev_error):
+               training_data_iter, eval_iterators, logger, step, best_dev_error, vocabulary):
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
 
@@ -290,7 +293,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                 acc, tacc = evaluate(FLAGS, model, data_manager, eval_set, log_entry, logger, step,
                     show_sample=(
                         step %
-                        FLAGS.sample_interval_steps == 0))
+                        FLAGS.sample_interval_steps == 0), vocabulary=vocabulary)
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (
                         1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
@@ -391,7 +394,7 @@ def run(only_forward=False):
             logger.LogEntry(log_entry)
     else:
         train_loop(FLAGS, data_manager, model, optimizer, trainer,
-                   training_data_iter, eval_iterators, logger, step, best_dev_error)
+                   training_data_iter, eval_iterators, logger, step, best_dev_error, vocabulary)
 
 
 if __name__ == '__main__':
