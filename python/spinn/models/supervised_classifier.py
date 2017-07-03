@@ -35,7 +35,8 @@ from spinn.models.base import load_data_and_embeddings
 FLAGS = gflags.FLAGS
 
 
-def evaluate(FLAGS, model, data_manager, eval_set, log_entry, logger, step, vocabulary=None, show_sample=False):
+def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
+             logger, step, vocabulary=None, show_sample=False):
     filename, dataset = eval_set
 
     A = Accumulator()
@@ -51,7 +52,8 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, logger, step, voca
     start = time.time()
 
     if FLAGS.model_type == "Pyramid":
-        pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (step / 10000.0)
+        pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (
+            step / 10000.0)
     else:
         pyramid_temperature_multiplier = None
 
@@ -170,7 +172,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         optimizer.zero_grad()
 
         if FLAGS.model_type == "Pyramid":
-            pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (step / 10000.0)
+            pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (
+                step / 10000.0)
         else:
             pyramid_temperature_multiplier = None
 
@@ -286,14 +289,13 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                 log.strg_tr = strength_tr[1:].encode('utf-8')
                 log.strg_ev = strength_ev[1:].encode('utf-8')
 
-
         if step > 0 and step % FLAGS.eval_interval_steps == 0:
             should_log = True
             for index, eval_set in enumerate(eval_iterators):
                 acc, tacc = evaluate(FLAGS, model, data_manager, eval_set, log_entry, logger, step,
-                    show_sample=(
-                        step %
-                        FLAGS.sample_interval_steps == 0), vocabulary=vocabulary)
+                                     show_sample=(
+                                         step %
+                                         FLAGS.sample_interval_steps == 0), vocabulary=vocabulary)
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (
                         1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
@@ -321,8 +323,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
 
 def run(only_forward=False):
     logger = afs_safe_logger.ProtoLogger(log_path(FLAGS),
-            print_formatter=create_log_formatter(True, False),
-            write_proto=FLAGS.write_proto_to_log)
+                                         print_formatter=create_log_formatter(True, False),
+                                         write_proto=FLAGS.write_proto_to_log)
     header = pb.SpinnHeader()
 
     data_manager = get_data_manager(FLAGS.data_type)

@@ -81,7 +81,7 @@ class ProtoLogger(object):
         self.root.entries.add().MergeFrom(message)
         try:
             msg_str = str(self.root)
-            msg_fmt =  self.print_formatter(message)
+            msg_fmt = self.print_formatter(message)
             if level >= self.min_print_level:
                 sys.stderr.write(msg_fmt)
             if self.log_path:  # Write to the log file then close it

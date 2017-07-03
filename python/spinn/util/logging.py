@@ -171,6 +171,7 @@ def eval_stats(model, A, eval_data):
 
     return eval_data
 
+
 def train_format(log_entry, extra=False, rl=False):
     stats_str = "Step: {step}"
 
@@ -206,6 +207,7 @@ def train_format(log_entry, extra=False, rl=False):
 
     return stats_str
 
+
 def eval_format(evaluation, extra=False):
     eval_str = "Step: {step} Eval acc: {class_acc:.5f} {transition_acc:.5f} {filename} Time: {time:.5f}"
 
@@ -215,6 +217,7 @@ def eval_format(evaluation, extra=False):
             eval_str += " inv{invalid:.3f}"
 
     return eval_str
+
 
 def log_formatter(log_entry, extra=False, rl=False):
     """Defines the log string to print to std error."""
@@ -254,8 +257,8 @@ def log_formatter(log_entry, extra=False, rl=False):
 
     return log_str
 
+
 def create_log_formatter(extra, rl):
     def fmt(log_entry):
         return log_formatter(log_entry, extra, rl)
     return fmt
-

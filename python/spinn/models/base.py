@@ -280,8 +280,8 @@ def get_flags():
                           "If set, add a scalar trained temperature parameter.")
     gflags.DEFINE_float("pyramid_test_time_temperature_multiplier", 1.0,
                         "If set, multiply the temperature by this constant at test time.")
-    gflags.DEFINE_float("pyramid_temperature_decay_per_10k_steps", 0.5, "Ideal for use with Gumbel.")
-
+    gflags.DEFINE_float("pyramid_temperature_decay_per_10k_steps",
+                        0.5, "Ideal for use with Gumbel.")
 
     # Encode settings.
     gflags.DEFINE_enum("encode", "projection", [

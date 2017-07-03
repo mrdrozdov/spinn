@@ -143,7 +143,7 @@ class Pyramid(nn.Module):
                 selection_logits = torch.cat(selection_logits_list, 1)
 
                 local_temperature = temperature
-                if type(local_temperature) is not float:
+                if not isinstance(local_temperature, float):
                     local_temperature = local_temperature.expand_as(selection_logits)
 
                 if self.training and self.gumbel:
@@ -152,7 +152,7 @@ class Pyramid(nn.Module):
                     # Plain softmax
                     selection_logits = selection_logits / local_temperature
                     selection_probs = F.softmax(selection_logits)
- 
+
                 if show_sample:
                     # self.logger.Log(
                     #     sparks(np.transpose(selection_probs[0, :].data.cpu().numpy()).tolist()))
@@ -196,13 +196,18 @@ class Pyramid(nn.Module):
 
         return embeds
 
-    def forward(self, sentences, transitions, y_batch=None, show_sample=False, pyramid_temperature_multiplier=1.0, **kwargs):
+    def forward(self, sentences, transitions, y_batch=None, show_sample=False,
+                pyramid_temperature_multiplier=1.0, **kwargs):
         # Useful when investigating dynamic batching:
         # self.seq_lengths = sentences.shape[1] - (sentences == 0).sum(1)
 
         x = self.unwrap(sentences, transitions)
         emb = self.run_embed(x)
-        hh = self.run_pyramid(emb, show_sample, temperature_multiplier=pyramid_temperature_multiplier, indices=x)
+        hh = self.run_pyramid(
+            emb,
+            show_sample,
+            temperature_multiplier=pyramid_temperature_multiplier,
+            indices=x)
         h = self.wrap(hh)
         output = self.mlp(h)
 
@@ -212,11 +217,12 @@ class Pyramid(nn.Module):
 
     def prettyprint_sample_helper(self, tree):
         if isinstance(tree, tuple):
-            return '( ' + self.prettyprint_sample_helper(tree[0]) + ' ' + self.prettyprint_sample_helper(tree[1]) + ' )'
+            return '( ' + self.prettyprint_sample_helper(tree[0]) + \
+                ' ' + self.prettyprint_sample_helper(tree[1]) + ' )'
         else:
-            return tree 
+            return tree
 
-    def prettyprint_sample(self, x, vocabulary): 
+    def prettyprint_sample(self, x, vocabulary):
         if not self.inverted_vocabulary:
             self.inverted_vocabulary = dict([(vocabulary[key], key) for key in vocabulary])
         token_sequence = [self.inverted_vocabulary[token] for token in x[0, :]]
