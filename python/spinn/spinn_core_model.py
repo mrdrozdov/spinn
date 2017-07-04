@@ -319,8 +319,8 @@ class SPINN(nn.Module):
         """
         The parameters trained by evolution strategy
         """
-        return [(k, v) for k, v in zip(self.transition_net.state_dict().keys(), self.transition_net.state_dict().values())]
-
+        return [(k, v) for k, v in zip(self.transition_net.state_dict().keys(),
+                                       self.transition_net.state_dict().values())]
 
     def run(self, inp_transitions, run_internal_parser=False,
             use_internal_parser=False, validate_transitions=True):
@@ -547,7 +547,8 @@ class BaseModel(nn.Module):
                  ):
         super(BaseModel, self).__init__()
 
-        assert not (use_tracking_in_composition and not lateral_tracking), "Lateral tracking must be on to use tracking in composition."
+        assert not (
+            use_tracking_in_composition and not lateral_tracking), "Lateral tracking must be on to use tracking in composition."
 
         self.use_sentence_pair = use_sentence_pair
         self.use_difference_feature = use_difference_feature
@@ -723,4 +724,3 @@ class BaseModel(nn.Module):
         h_premise = self.extract_h(self.wrap_items(items[:batch_size]))
         h_hypothesis = self.extract_h(self.wrap_items(items[batch_size:]))
         return [h_premise, h_hypothesis]
-

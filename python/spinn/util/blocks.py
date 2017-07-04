@@ -8,20 +8,22 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 
 from spinn.util.misc import recursively_set_device
+from functools import reduce
 
 EULER = 0.57721566490153286060651209008240243104215933593992
 
+
 def gumbel_sample(input, temperature=1.0, avg=False, N=10000):
-    
+
     # more accurate version of gumbel estimator as described in https://arxiv.org/abs/1706.04161
     # averages N gumbel distributions and subtracts out Euler's constant
     if avg:
-        noise = to_gpu(torch.rand([input.size()[-1]*N]))
+        noise = to_gpu(torch.rand([input.size()[-1] * N]))
         noise.add_(1e-9).log_().neg_()
         noise.add_(1e-9).log_().neg_()
         noise.add_(-EULER)
         noise = Variable(noise.view(N, input.size(-1)))
-        x = (input.expand_as(noise)+noise)
+        x = (input.expand_as(noise) + noise)
         x = torch.mean(x, 0) / temperature
     else:
         noise = to_gpu(torch.rand(input.size()))
@@ -386,6 +388,7 @@ class ModelTrainer(object):
         self.model.load_state_dict(model_state_dict)
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         return checkpoint['step'], checkpoint['best_dev_error']
+
 
 class ModelTrainer_ES(object):
 

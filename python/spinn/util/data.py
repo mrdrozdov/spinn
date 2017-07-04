@@ -123,7 +123,8 @@ def TokensToIDs(vocabulary, dataset, sentence_pair_data=False):
     return dataset
 
 
-def CropAndPadExample(example, left_padding, target_length, key, symbol=0, logger=None, allow_cropping=False):
+def CropAndPadExample(example, left_padding, target_length, key,
+                      symbol=0, logger=None, allow_cropping=False):
     """
     Crop/pad a sequence value of the given dict `example`.
     """

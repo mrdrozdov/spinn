@@ -1,9 +1,9 @@
 """
-NOTE: Work in progress. 
+NOTE: Work in progress.
 
 Classifier script to use evolution strategy to train the parser in an unsupervised manner.
 
-TODO: 
+TODO:
     - Fix only forward pass.
     - Write mirrored sampling: commented out bits in generate_seeds_and_models lays groundwork.
     - Impose stopping criteria?
@@ -46,6 +46,7 @@ from spinn.models.base import load_data_and_embeddings
 
 
 FLAGS = gflags.FLAGS
+
 
 def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=None):
     filename, dataset = eval_set
@@ -126,13 +127,14 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
 
     return eval_class_acc, eval_trans_acc
 
+
 def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id):
     perturbation_name = FLAGS.experiment_name + "_p" + str(perturbation_id)
     root_name = FLAGS.experiment_name + "_p" + str(root_id)
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
-    
+
     header.start_step = true_step
     header.start_time = int(time.time())
     #header.model_label = perturbation_name
@@ -156,7 +158,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
     # New Training Loop
     progress_bar = SimpleProgressBar(msg="Training", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(i=0, total=FLAGS.statistics_interval_steps)
-    
+
     log_entry = pb.SpinnEntry()
     for step in range(FLAGS.es_episode_length):
         true_step += 1
@@ -315,24 +317,23 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                           total=FLAGS.statistics_interval_steps)
 
 
-
-def rollout(queue, perturbed_model, FLAGS, data_manager, 
-            model, optimizer, trainer, training_data_iter, 
+def rollout(queue, perturbed_model, FLAGS, data_manager,
+            model, optimizer, trainer, training_data_iter,
             eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id):
     """
-    Train each episode 
+    Train each episode
     """
     perturbation_name = FLAGS.experiment_name + "_p" + str(perturbation_id)
     logger.Log("Model name is %s" % perturbation_name)
     best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, perturbation_name, best=True)
 
-    train_loop(FLAGS, data_manager, perturbed_model, optimizer, 
-        trainer, training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id)
+    train_loop(FLAGS, data_manager, perturbed_model, optimizer,
+               trainer, training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id)
 
     # Once the episode ends, restore best checkpoint
     logger.Log("Restoring best checkpoint to run final evaluation of episode.")
     ev_step, true_step, best_dev_error = trainer.load(best_checkpoint_path)
-    logger.Log("Best dev accuracy of model: Step %i, %f" % (true_step, 1. -best_dev_error))
+    logger.Log("Best dev accuracy of model: Step %i, %f" % (true_step, 1. - best_dev_error))
 
     queue.put((ev_step, true_step, perturbation_id, best_dev_error))
 
@@ -343,15 +344,15 @@ def perturb_model(model, random_seed):
     for i in range(FLAGS.es_num_episodes):
         pert_model = model
         #anti_model = model
-        pert_model.load_state_dict(model.state_dict()) # Is this redundant?
-        #anti_model.load_state_dict(model.state_dict())
-        #for (k, v), (anti_k, anti_v) in zip(pert_model.es_params(), anti_model.es_params()):
+        pert_model.load_state_dict(model.state_dict())  # Is this redundant?
+        # anti_model.load_state_dict(model.state_dict())
+        # for (k, v), (anti_k, anti_v) in zip(pert_model.es_params(), anti_model.es_params()):
         for (k, v) in pert_model.spinn.evolution_params():
             epsilon = np.random.normal(0, 1, v.size())
             v += torch.from_numpy(FLAGS.es_sigma * epsilon).float()
             #anti_v += torch.from_numpy(FLAGS.es_sigma * -epsilon).float()
         models.append(pert_model)
-        #models.append(anti_model)
+        # models.append(anti_model)
     return models
 
 
@@ -372,20 +373,21 @@ def generate_seeds_and_models(trainer, model, root_id, base=False):
 def get_pert_names(best=False):
     if best:
         exp_names = glob.glob1(FLAGS.ckpt_path, FLAGS.experiment_name + "*.ckpt_best")
-    else: 
+    else:
         exp_names = glob.glob1(FLAGS.ckpt_path, FLAGS.experiment_name + "*.ckpt")
-    
+
     return exp_names
 
 
 def restore(logger, trainer, queue, FLAGS, name, path):
     """
-    Restore models 
+    Restore models
     """
     perturbation_id = name[-1]
     logger.Log("Restoring best checkpoint of perturbed model %s." % perturbation_id)
     ev_step, true_step, dev_error = trainer.load(path)
     queue.put((ev_step, true_step, perturbation_id, dev_error))
+
 
 """
 def evaluate_perturbation(logger, trainer, queue, FLAGS, name, path):
@@ -393,6 +395,7 @@ def evaluate_perturbation(logger, trainer, queue, FLAGS, name, path):
     ev_step, true_step, dev_error = trainer.load(path)
     queue.put((ev_step, true_step, perturbation_id, dev_error))
 """
+
 
 def run(only_forward=False):
     logger = afs_safe_logger.ProtoLogger(log_path(FLAGS))
@@ -424,7 +427,7 @@ def run(only_forward=False):
     perturbation_name = FLAGS.experiment_name + "_p" + '0'
     best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, perturbation_name, best=True)
     standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, perturbation_name, best=False)
-    
+
     ckpt_names = []
     if os.path.isfile(best_checkpoint_path):
         logger.Log("Found best checkpoints, they will be restored.")
@@ -454,7 +457,7 @@ def run(only_forward=False):
         self.debug = FLAGS.debug
     model.apply(set_debug)
 
-    logger.LogHeader(header) # Start log_entry logging.
+    logger.LogHeader(header)  # Start log_entry logging.
 
     # Do an evaluation-only run.
     if only_forward:
@@ -467,11 +470,19 @@ def run(only_forward=False):
             pert_name = ckpt_names.pop()
             path = os.path.join(FLAGS.ckpt_path, pert_name)
             name = pert_name.replace('.ckpt_best', '')
-            p_restore = mp.Process(target=restore, args=(logger, trainer, restore_queue, FLAGS, name, path))
+            p_restore = mp.Process(
+                target=restore,
+                args=(
+                    logger,
+                    trainer,
+                    restore_queue,
+                    FLAGS,
+                    name,
+                    path))
             p_restore.start()
             processes_restore.append(p_restore)
         assert len(ckpt_names) == 0
-        results  = [restore_queue.get() for p in processes_restore]
+        results = [restore_queue.get() for p in processes_restore]
         reload_ev_step = results[0][0]
 
         while all_models:
@@ -485,7 +496,7 @@ def run(only_forward=False):
                 logger.LogEntry(log_entry)
 
     else:
-        # Restore model, i.e. perturbation spawns, from best checkpoint, if it exists, or standard checkpoint. 
+        # Restore model, i.e. perturbation spawns, from best checkpoint, if it exists, or standard checkpoint.
         # Get dev-set accuracies so we can select which models to use for the next evolution step.
         if len(ckpt_names) != 0:
             logger.Log("Restoring models from best or standard checkpoints")
@@ -495,30 +506,44 @@ def run(only_forward=False):
                 pert_name = ckpt_names.pop()
                 path = os.path.join(FLAGS.ckpt_path, pert_name)
                 name = pert_name.replace('.ckpt_best', '')
-                p_restore = mp.Process(target=restore, args=(logger, trainer, restore_queue, FLAGS, name, path))
+                p_restore = mp.Process(
+                    target=restore,
+                    args=(
+                        logger,
+                        trainer,
+                        restore_queue,
+                        FLAGS,
+                        name,
+                        path))
                 p_restore.start()
                 processes_restore.append(p_restore)
             assert len(ckpt_names) == 0
-            results  = [restore_queue.get() for p in processes_restore]
-            reload_ev_step = results[0][0] + 1 # the next evolution step
+            results = [restore_queue.get() for p in processes_restore]
+            reload_ev_step = results[0][0] + 1  # the next evolution step
 
         else:
             id_ = "B"
-            chosen_models = [(reload_ev_step, true_step, id_,  best_dev_error)]
-            base = True # This is the "base" model
+            chosen_models = [(reload_ev_step, true_step, id_, best_dev_error)]
+            base = True  # This is the "base" model
             results = []
 
         for ev_step in range(reload_ev_step, FLAGS.es_steps):
             logger.Log("Evolution step: %i" % ev_step)
 
             # Choose root models for next generation using dev-set accuracy
-            if len(results) != 0 :
+            if len(results) != 0:
                 base = False
                 chosen_models = []
-                acc_order = [i[0] for i in sorted(enumerate(results), key=lambda x:x[1][3], reverse=True)]
+                acc_order = [
+                    i[0] for i in sorted(
+                        enumerate(results),
+                        key=lambda x:x[1][3],
+                        reverse=True)]
                 for i in range(FLAGS.es_num_roots):
                     id_ = acc_order[i]
-                    logger.Log("Picking model %s to perturb for next evolution step." % results[id_][2])
+                    logger.Log(
+                        "Picking model %s to perturb for next evolution step." %
+                        results[id_][2])
                     chosen_models.append(results[id_])
 
             # Flush results from previous generatrion
@@ -528,7 +553,8 @@ def run(only_forward=False):
             all_seeds, all_models, all_roots, all_steps, all_dev_errs = ([] for i in range(5))
             for chosen_model in chosen_models:
                 perturbation_id = chosen_model[2]
-                random_seed, models = generate_seeds_and_models(trainer, model, perturbation_id, base=base)
+                random_seed, models = generate_seeds_and_models(
+                    trainer, model, perturbation_id, base=base)
                 for i in range(len(models)):
                     all_seeds.append(random_seed)
                     all_steps.append(chosen_model[1])
@@ -544,17 +570,17 @@ def run(only_forward=False):
                 true_step = all_steps.pop()
                 best_dev_error = all_dev_errs.pop()
                 root_id = all_roots.pop()
-                p = mp.Process(target=rollout, args=(queue, 
-                        perturbed_model, FLAGS, data_manager, 
-                        model, optimizer, trainer, training_data_iter, 
-                        eval_iterators, logger, true_step, 
-                        best_dev_error, perturbation_id, ev_step, header, root_id))
+                p = mp.Process(target=rollout, args=(queue,
+                                                     perturbed_model, FLAGS, data_manager,
+                                                     model, optimizer, trainer, training_data_iter,
+                                                     eval_iterators, logger, true_step,
+                                                     best_dev_error, perturbation_id, ev_step, header, root_id))
                 p.start()
                 processes.append(p)
                 perturbation_id += 1
             assert len(all_models) == 0, "All models where not trained!"
 
-            # Run processes in queue and 
+            # Run processes in queue and
             results = [queue.get() for p in processes]
 
             # Check to ensure the correct number of models where trained and saved

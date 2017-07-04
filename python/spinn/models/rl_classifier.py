@@ -339,8 +339,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
 
 def run(only_forward=False):
     logger = afs_safe_logger.ProtoLogger(log_path(FLAGS),
-            print_formatter=create_log_formatter(True, True),
-            write_proto=FLAGS.write_proto_to_log)
+                                         print_formatter=create_log_formatter(True, True),
+                                         write_proto=FLAGS.write_proto_to_log)
     header = pb.SpinnHeader()
 
     data_manager = get_data_manager(FLAGS.data_type)

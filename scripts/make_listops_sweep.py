@@ -59,6 +59,8 @@ FIXED_PARAMETERS = {
     #"transition_weight": "0.1",
     "semantic_classifier_keep_rate": "1.0",
     "embedding_keep_rate": "1.0",
+    "pyramid_gumbel": "",
+    "sample_interval_steps": "5000",
 }
 
 # Tunable parameters.
@@ -66,9 +68,8 @@ SWEEP_PARAMETERS = {
     "learning_rate":      ("lr", EXP, 0.0001, 0.001),  # RNN likes higher, but below 009.
     "l2_lambda":          ("l2", EXP, 8e-7, 2e-5),
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.4, 0.8),
-    "pyramid_test_time_temperature_multiplier": ("tttm", EXP, 0.0001, 0.1),
+    "pyramid_test_time_temperature_multiplier": ("tttm", EXP, 0.0001, 1.0),
     "pyramid_trainable_temperature": ("tt", BOOL, None, None),
-    "pyramid_gumbel": ("pg", BOOL, None, None),
     "pyramid_temperature_decay_per_10k_steps": ("tdec", EXP, 0.25, 1.0),
 #    "tracking_lstm_hidden_dim": ("tdim", EXP, 4, 16),
 #    "rl_weight":  ("rlwt", EXP, 0.000001, 0.0009),

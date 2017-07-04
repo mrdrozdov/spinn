@@ -101,6 +101,10 @@ class Pyramid(nn.Module):
         self.reshape_input = context_args.reshape_input
         self.reshape_context = context_args.reshape_context
 
+        # For sample printing
+        self.merge_sequence_memory = None
+        self.inverted_vocabulary = None
+
     def run_hard_pyramid(self, x):
         batch_size, seq_len, model_dim = x.data.size()
         # If we "merge left", that means words before the merge point stay put.
@@ -113,7 +117,7 @@ class Pyramid(nn.Module):
 
         # This is supposed to be done for evaluation only, so I'm not
         # going to even bother with variables.
-        words = torch.chunk(x, seq_len, 1) # A list of word vectors
+        words = torch.chunk(x, seq_len, 1)  # A list of word vectors
         words = [torch.squeeze(word).data for word in words]
 
         # Used in phase 1.
@@ -127,7 +131,7 @@ class Pyramid(nn.Module):
         while len(words) > 1:
             print(len(words))
             composition_results = composition_buffers[:(len(words) - 1)]
-            selection_logits_list = [] # Tensors (not Variable), Bx1 each
+            selection_logits_list = []  # Tensors (not Variable), Bx1 each
 
             # Phase 1 - evaluate all possible mergers
             for position in range(len(words) - 1):
@@ -139,12 +143,12 @@ class Pyramid(nn.Module):
                 selection_logits_list.append(selection_score.data)
 
             # Find the highest scoring position to merge.
-            selection_logits = torch.cat(selection_logits_list, 1) # B x L
-            merge_points = selection_logits.max(1)[1] # B
+            selection_logits = torch.cat(selection_logits_list, 1)  # B x L
+            merge_points = selection_logits.max(1)[1]  # B
 
             # Phase 2 - apply mergers
             new_words = []
-            for position in range(len(words) - 1): # destination position
+            for position in range(len(words) - 1):  # destination position
                 left = words[position]
                 right = words[position + 1]
 
@@ -166,16 +170,20 @@ class Pyramid(nn.Module):
 
         return Variable(words[0])
 
-    def run_pyramid(self, x, show_sample=False, temperature_multiplier=1.0):
+    def run_pyramid(self, x, show_sample=False, indices=None, temperature_multiplier=1.0):
         batch_size, seq_len, model_dim = x.data.size()
 
         all_state_pairs = []
         all_state_pairs.append(torch.chunk(x, seq_len, 1))
 
         if show_sample:
-            self.logger.Log('')
-            if self.trainable_temperature:
-                self.logger.Log('Temp: ' + str(self.temperature.data.cpu().numpy()[0][0]))
+            self.merge_sequence_memory = []
+            # parse_seq = range(seq_len)
+            # self.logger.Log('')
+            # if self.trainable_temperature:
+            #     self.logger.Log('Temp: ' + str(self.temperature.data.cpu().numpy()[0][0]))
+        else:
+            self.merge_sequence_memory = None
 
         temperature = temperature_multiplier
         if self.trainable_temperature:
@@ -200,7 +208,7 @@ class Pyramid(nn.Module):
                 selection_logits = torch.cat(selection_logits_list, 1)
 
                 local_temperature = temperature
-                if type(local_temperature) is not float:
+                if not isinstance(local_temperature, float):
                     local_temperature = local_temperature.expand_as(selection_logits)
 
                 if self.training and self.gumbel:
@@ -209,10 +217,12 @@ class Pyramid(nn.Module):
                     # Plain softmax
                     selection_logits = selection_logits / local_temperature
                     selection_probs = F.softmax(selection_logits)
- 
+
                 if show_sample:
-                    self.logger.Log(
-                        sparks(np.transpose(selection_probs[0, :].data.cpu().numpy()).tolist()))
+                    # self.logger.Log(
+                    #     sparks(np.transpose(selection_probs[0, :].data.cpu().numpy()).tolist()))
+                    merge_index = np.argmax(selection_probs[0, :].data.cpu().numpy())
+                    self.merge_sequence_memory.append(merge_index)
 
                 layer_state_pairs = []
                 for position in range(layer):
@@ -251,20 +261,48 @@ class Pyramid(nn.Module):
 
         return embeds
 
-    def forward(self, sentences, transitions, y_batch=None, show_sample=False, pyramid_temperature_multiplier=1.0, **kwargs):
+    def forward(self, sentences, transitions, y_batch=None, show_sample=False,
+                pyramid_temperature_multiplier=1.0, **kwargs):
         # Useful when investigating dynamic batching:
         # self.seq_lengths = sentences.shape[1] - (sentences == 0).sum(1)
 
         x = self.unwrap(sentences, transitions)
         emb = self.run_embed(x)
+
         if not self.training:
-            hh = self.run_hard_pyramid(emb)
+            hh = self.run_hard_pyramid(emb)  # TODO: Set up sample printing
         else:
-            hh = self.run_pyramid(emb, show_sample, temperature_multiplier=pyramid_temperature_multiplier)
+            hh = self.run_pyramid(
+                emb,
+                show_sample,
+                temperature_multiplier=pyramid_temperature_multiplier,
+                indices=x)
+
         h = self.wrap(hh)
         output = self.mlp(h)
 
         return output
+
+    # --- Sample printing ---
+
+    def prettyprint_sample(self, tree):
+        if isinstance(tree, tuple):
+            return '( ' + self.prettyprint_sample(tree[0]) + \
+                ' ' + self.prettyprint_sample(tree[1]) + ' )'
+        else:
+            return tree
+
+    def get_sample(self, x, vocabulary):
+        if not self.inverted_vocabulary:
+            self.inverted_vocabulary = dict([(vocabulary[key], key) for key in vocabulary])
+        token_sequence = [self.inverted_vocabulary[token] for token in x[0, :]]
+        for merge in self.get_sample_merge_sequence():
+            token_sequence[merge] = (token_sequence[merge], token_sequence[merge + 1])
+            del token_sequence[merge + 1]
+        return token_sequence[0]
+
+    def get_sample_merge_sequence(self):
+        return self.merge_sequence_memory
 
     # --- Sentence Style Switches ---
 
