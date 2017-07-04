@@ -129,7 +129,6 @@ class Pyramid(nn.Module):
         merge_buffer = torch.zeros(batch_size, model_dim)
 
         while len(words) > 1:
-            print(len(words))
             composition_results = composition_buffers[:(len(words) - 1)]
             selection_logits_list = []  # Tensors (not Variable), Bx1 each
 
