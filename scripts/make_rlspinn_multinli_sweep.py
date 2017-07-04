@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "06_18_sm_bidir"
+NAME = "07_03_sm_bidir"
 SWEEP_RUNS = 20
 
 LIN = "LIN"
@@ -24,7 +24,7 @@ FLAGS = gflags.FLAGS
 gflags.DEFINE_string("training_data_path", "/home/sb6065/multinli_0.9/multinli_0.9_snli_1.0_train_combined.jsonl", "")
 gflags.DEFINE_string("eval_data_path", "/home/sb6065/multinli_0.9/multinli_0.9_dev_matched.jsonl", "")
 gflags.DEFINE_string("embedding_data_path", "/home/sb6065/glove/glove.840B.300d.txt", "")
-gflags.DEFINE_string("log_path", "/home/sb6065/logs/spinn", "")
+gflags.DEFINE_string("log_path", "/scratch/sb6065/logs/spinn", "")
 
 FLAGS(sys.argv)
 
@@ -53,7 +53,7 @@ FIXED_PARAMETERS = {
     "eval_interval_steps": "100",
     "statistics_interval_steps": "100",
     "batch_size":  "32",
-    "encode": "projection",
+    "encode": "gru",
     "encode_bidirectional": "",
     "num_mlp_layers": "2",
     "use_internal_parser": "",
@@ -63,12 +63,13 @@ FIXED_PARAMETERS = {
     "num_samples": "1",
     "rl_baseline": "ema",
     "norl_wake_sleep": "",
+    "write_proto_to_log": "",
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "learning_rate":      ("lr", EXP, 0.0001, 0.01),  # RNN likes higher, but below 009.
-    "rl_weight":  ("rlwt", EXP, 0.5, 5.0),
+    "learning_rate":      ("lr", EXP, 0.00003, 0.01),  # RNN likes higher, but below 009.
+    "rl_weight":  ("rlwt", EXP, 1.0, 5.0),
     "l2_lambda":          ("l2", EXP, 1e-7, 1e-5),
     "learning_rate_decay_per_10k_steps": ("dec", LIN, 0.5, 1.0),
     "tracking_lstm_hidden_dim": ("tdim", EXP, 8, 64),
