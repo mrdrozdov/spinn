@@ -274,8 +274,6 @@ def get_flags():
     # Pyramid model settings
     gflags.DEFINE_boolean("pyramid_gumbel", True,
                           "Use gumbel softmax in the Pyramid model gating.")
-    gflags.DEFINE_boolean("pyramid_gated", True,
-                          "Use gating in the Pyramid model.")
     gflags.DEFINE_boolean("pyramid_trainable_temperature", None,
                           "If set, add a scalar trained temperature parameter.")
     gflags.DEFINE_float("pyramid_test_time_temperature_multiplier", 1.0,

@@ -32,7 +32,6 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      num_mlp_layers=FLAGS.num_mlp_layers,
                      mlp_ln=FLAGS.mlp_ln,
                      context_args=context_args,
-                     gated=FLAGS.pyramid_gated,
                      trainable_temperature=FLAGS.pyramid_trainable_temperature,
                      test_temperature_mulitplier=FLAGS.pyramid_test_time_temperature_multiplier,
                      selection_dim=FLAGS.pyramid_selection_dim,
@@ -55,7 +54,6 @@ class Pyramid(nn.Module):
                  num_mlp_layers=None,
                  mlp_ln=None,
                  context_args=None,
-                 gated=None,
                  trainable_temperature=None,
                  test_temperature_mulitplier=None,
                  selection_dim=None,
@@ -67,7 +65,6 @@ class Pyramid(nn.Module):
 
         self.use_sentence_pair = use_sentence_pair
         self.model_dim = model_dim
-        self.gated = gated
         self.test_temperature_mulitplier = test_temperature_mulitplier
         self.trainable_temperature = trainable_temperature
         self.logger = logger
@@ -139,54 +136,49 @@ class Pyramid(nn.Module):
                 left = torch.squeeze(all_state_pairs[-1][position])
                 right = torch.squeeze(all_state_pairs[-1][position + 1])
                 composition_results.append(self.composition_fn(left, right))
-                if self.gated:
-                    selection_input = torch.cat([left, right], 1)
-                    selection_hidden = F.tanh(self.selection_fn_1(selection_input))
-                    selection_logit = self.selection_fn_2(selection_hidden)
-                    selection_logits_list.append(selection_logit)
+                selection_input = torch.cat([left, right], 1)
+                selection_hidden = F.tanh(self.selection_fn_1(selection_input))
+                selection_logit = self.selection_fn_2(selection_hidden)
+                selection_logits_list.append(selection_logit)
 
-            if self.gated:
-                selection_logits = torch.cat(selection_logits_list, 1)
+            selection_logits = torch.cat(selection_logits_list, 1)
 
-                local_temperature = temperature
-                if not isinstance(local_temperature, float):
-                    local_temperature = local_temperature.expand_as(selection_logits)
+            local_temperature = temperature
+            if not isinstance(local_temperature, float):
+                local_temperature = local_temperature.expand_as(selection_logits)
 
-                if self.training and self.gumbel:
-                    selection_probs = gumbel_sample(selection_logits, local_temperature)
-                else:
-                    # Plain softmax
-                    selection_logits = selection_logits / local_temperature
-                    selection_probs = F.softmax(selection_logits)
-
-                if show_sample:
-                    # self.logger.Log(
-                    #     sparks(np.transpose(selection_probs[0, :].data.cpu().numpy()).tolist()))
-                    merge_index = np.argmax(selection_probs[0, :].data.cpu().numpy())
-                    self.merge_sequence_memory.append(merge_index)
-
-                layer_state_pairs = []
-                for position in range(layer):
-                    if position < (layer - 1):
-                        copy_left = torch.sum(selection_probs[:, position + 1:], 1)
-                    else:
-                        copy_left = to_gpu(Variable(torch.zeros(1, 1)))
-                    if position > 0:
-                        copy_right = torch.sum(selection_probs[:, :position], 1)
-                    else:
-                        copy_right = to_gpu(Variable(torch.zeros(1, 1)))
-                    select = selection_probs[:, position]
-
-                    left = torch.squeeze(all_state_pairs[-1][position])
-                    right = torch.squeeze(all_state_pairs[-1][position + 1])
-                    composition_result = composition_results[position]
-                    new_state_pair = copy_left.expand_as(left) * left \
-                        + copy_right.expand_as(right) * right \
-                        + select.unsqueeze(1).expand_as(composition_result) * composition_result
-                    layer_state_pairs.append(new_state_pair)
+            if self.training and self.gumbel:
+                selection_probs = gumbel_sample(selection_logits, local_temperature)
             else:
-                layer_state_pairs = composition_results
+                # Plain softmax
+                selection_logits = selection_logits / local_temperature
+                selection_probs = F.softmax(selection_logits)
 
+            if show_sample:
+                # self.logger.Log(
+                #     sparks(np.transpose(selection_probs[0, :].data.cpu().numpy()).tolist()))
+                merge_index = np.argmax(selection_probs[0, :].data.cpu().numpy())
+                self.merge_sequence_memory.append(merge_index)
+
+            layer_state_pairs = []
+            for position in range(layer):
+                if position < (layer - 1):
+                    copy_left = torch.sum(selection_probs[:, position + 1:], 1)
+                else:
+                    copy_left = to_gpu(Variable(torch.zeros(1, 1)))
+                if position > 0:
+                    copy_right = torch.sum(selection_probs[:, :position], 1)
+                else:
+                    copy_right = to_gpu(Variable(torch.zeros(1, 1)))
+                select = selection_probs[:, position]
+
+                left = torch.squeeze(all_state_pairs[-1][position])
+                right = torch.squeeze(all_state_pairs[-1][position + 1])
+                composition_result = composition_results[position]
+                new_state_pair = copy_left.expand_as(left) * left \
+                    + copy_right.expand_as(right) * right \
+                    + select.unsqueeze(1).expand_as(composition_result) * composition_result
+                layer_state_pairs.append(new_state_pair)
             all_state_pairs.append(layer_state_pairs)
 
         return all_state_pairs[-1][-1]
