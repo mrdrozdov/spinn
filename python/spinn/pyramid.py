@@ -106,69 +106,86 @@ class Pyramid(nn.Module):
         self.merge_sequence_memory = None
         self.inverted_vocabulary = None
 
-    def run_hard_pyramid(self, x):
+    def run_hard_pyramid(self, x, show_sample=False):
         batch_size, seq_len, model_dim = x.data.size()
-        # If we "merge left", that means words before the merge point stay put.
-        # Example:
-        # 012345678
-        #     ++ : 4,5 -> X
-        # 0123X678
-        #   ++   : 2,3 -> Y
-        # 01YX678
 
-        # This is supposed to be done for evaluation only, so I'm not
-        # going to even bother with variables.
-        words = torch.chunk(x, seq_len, 1)  # A list of word vectors
-        words = [torch.squeeze(word).data for word in words]
+        state_pairs = torch.chunk(x, seq_len, 1)
+        unbatched_state_pairs = [[] for _ in range(batch_size)]
+        for i in range(seq_len):
+            unbatched_step = torch.chunk(state_pairs[i], batch_size, 0)
+            for b in range(batch_size):
+                unbatched_state_pairs[b].append(unbatched_step[b])
 
-        # Used in phase 1.
-        composition_buffers = [torch.zeros(batch_size, model_dim) for w in words]
+        if show_sample:
+            self.merge_sequence_memory = []
+        else:
+            self.merge_sequence_memory = None
 
-        # Used in phase 2.
-        copy_left_buffer = torch.zeros(batch_size, model_dim)
-        copy_right_buffer = torch.zeros(batch_size, model_dim)
-        merge_buffer = torch.zeros(batch_size, model_dim)
+        # Most activations won't change between steps, so this can be preserved.
+        unbatched_selection_logits_list = [[] for _ in range(batch_size)]
+        for position in range(seq_len - 1):
+            left = torch.squeeze(
+                torch.cat([unbatched_state_pairs[b][position] for b in range(batch_size)], 0))
+            right = torch.squeeze(
+                torch.cat([unbatched_state_pairs[b][position + 1] for b in range(batch_size)], 0))
+            selection_input = torch.cat([left, right], 1)
+            selection_hidden = F.tanh(self.selection_fn_1(selection_input))
+            selection_logit = self.selection_fn_2(selection_hidden)
+            split_selection_logit = torch.chunk(selection_logit, batch_size, 0)
+            for b in range(batch_size):
+                unbatched_selection_logits_list[b].append(split_selection_logit[b])
 
-        while len(words) > 1:
-            composition_results = composition_buffers[:(len(words) - 1)]
-            selection_logits_list = []  # Tensors (not Variable), Bx1 each
+        for layer in range(seq_len - 1, 0, -1):
+            selection_logits_list = [
+                np.concatenate([unbatched_selection_logits_list[b][i].data.cpu().numpy() 
+                                for i in range(layer)], axis=1) 
+                for b in range(batch_size)]
+            selection_logits = np.concatenate(selection_logits_list, axis=0)
+            merge_indices = np.argmax(selection_logits, axis=1)
 
-            # Phase 1 - evaluate all possible mergers
-            for position in range(len(words) - 1):
-                left = Variable(words[position])
-                right = Variable(words[position + 1])
-                composed = self.composition_fn(left, right)
-                selection_score = self.selection_fn(composed)
-                composition_results[position].copy_(composed.data)
-                selection_logits_list.append(selection_score.data)
+            if show_sample:
+                self.merge_sequence_memory.append(merge_indices[0])
 
-            # Find the highest scoring position to merge.
-            selection_logits = torch.cat(selection_logits_list, 1)  # B x L
-            merge_points = selection_logits.max(1)[1]  # B
+            # Collect inputs to merge
+            lefts = [unbatched_state_pairs[b][merge_indices[b]] for b in range(batch_size)]
+            rights = [unbatched_state_pairs[b][merge_indices[b] + 1] for b in range(batch_size)]
 
-            # Phase 2 - apply mergers
-            new_words = []
-            for position in range(len(words) - 1):  # destination position
-                left = words[position]
-                right = words[position + 1]
+            # Run the merge
+            left = torch.squeeze(torch.cat(lefts, 0))
+            right = torch.squeeze(torch.cat(rights, 0))
 
-                # If merge at 4, positions 0-3 is copy left, 5-... is copy right
-                is_copy_left = merge_points.gt(position).float()
-                is_copy_right = merge_points.lt(position).float()
-                is_merged = (1 - is_copy_left) * (1 - is_copy_right)
+            composition_result = torch.unsqueeze(self.composition_fn(left, right), 1)
 
-                # Expression equivalent to:
-                #         is_copy_left.expand_as(left) * left + \
-                #         is_copy_right.expand_as(right) * right + \
-                #         is_merged.expand_as(left) * composition_results[position]
-                copy_left_buffer.copy_(left).mul_(is_copy_left.expand_as(left))
-                copy_right_buffer.copy_(right).mul_(is_copy_right.expand_as(left))
-                merge_buffer.copy_(composition_results[position]).mul_(is_merged.expand_as(left))
-                words[position].copy_(copy_left_buffer).add_(copy_right_buffer).add_(merge_buffer)
+            # Unpack and apply
+            composition_result_list = torch.chunk(composition_result, batch_size, 0)
+            for b in range(batch_size):
+                unbatched_state_pairs[b][merge_indices[b]] = composition_result_list[b]
+                del unbatched_state_pairs[b][merge_indices[b] + 1]
 
-            words.pop()
+            # Recompute invalidated selection logits in one big batch
+            # This is organized this way as the amount that needs to recompute depends
+            # on the number of merges that were at the edge of the pyramid structure.
+            if layer > 1:
+                to_recompute = []
+                for b in range(batch_size):
+                    del unbatched_selection_logits_list[b][merge_indices[b]]
+                    if merge_indices[b] > 0:
+                        to_recompute.append((b, merge_indices[b] - 1))
+                    if merge_indices[b] < len(unbatched_selection_logits_list[b]):
+                        to_recompute.append((b, merge_indices[b]))
+                left = torch.squeeze(
+                    torch.cat([unbatched_state_pairs[index_pair[0]][index_pair[1]] for index_pair in to_recompute], 0))
+                right = torch.squeeze(
+                    torch.cat([unbatched_state_pairs[index_pair[0]][index_pair[1] + 1] for index_pair in to_recompute], 0))
+                selection_input = torch.cat([left, right], 1)
+                selection_hidden = F.tanh(self.selection_fn_1(selection_input))
+                selection_logit = self.selection_fn_2(selection_hidden)
+                split_selection_logit = torch.chunk(selection_logit, len(to_recompute), 0)
+                for i in range(len(to_recompute)):
+                    index_pair = to_recompute[i]
+                    unbatched_selection_logits_list[index_pair[0]][index_pair[1]] = split_selection_logit[i]
 
-        return Variable(words[0])
+        return torch.squeeze(torch.cat([unbatched_state_pairs[b][0] for b in range(batch_size)], 0))
 
     def run_pyramid(self, x, show_sample=False, indices=None, temperature_multiplier=1.0):
         batch_size, seq_len, model_dim = x.data.size()
@@ -178,10 +195,6 @@ class Pyramid(nn.Module):
 
         if show_sample:
             self.merge_sequence_memory = []
-            # parse_seq = range(seq_len)
-            # self.logger.Log('')
-            # if self.trainable_temperature:
-            #     self.logger.Log('Temp: ' + str(self.temperature.data.cpu().numpy()[0][0]))
         else:
             self.merge_sequence_memory = None
 
@@ -266,14 +279,11 @@ class Pyramid(nn.Module):
         x = self.unwrap(sentences, transitions)
         emb = self.run_embed(x)
 
-        if not self.training:
-            hh = self.run_hard_pyramid(emb)  # TODO: Set up sample printing
+        if self.test_temperature_mulitplier == 0.0 and not self.training:
+            hh = self.run_hard_pyramid(emb, show_sample)
         else:
-            hh = self.run_pyramid(
-                emb,
-                show_sample,
-                temperature_multiplier=pyramid_temperature_multiplier,
-                indices=x)
+            hh = self.run_pyramid(emb, show_sample,
+                temperature_multiplier=pyramid_temperature_multiplier)
 
         h = self.wrap(hh)
         output = self.mlp(h)
