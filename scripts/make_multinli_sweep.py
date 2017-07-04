@@ -23,7 +23,7 @@ FLAGS = gflags.FLAGS
 gflags.DEFINE_string("training_data_path", "/home/sb6065/multinli_0.9/multinli_0.9_snli_1.0_train_combined.jsonl", "")
 gflags.DEFINE_string("eval_data_path", "/home/sb6065/multinli_0.9/multinli_0.9_dev_matched.jsonl", "")
 gflags.DEFINE_string("embedding_data_path", "/home/sb6065/glove/glove.840B.300d.txt", "")
-gflags.DEFINE_string("log_path", "/home/sb6065/logs/spinn", "")
+gflags.DEFINE_string("log_path", "/scratch/sb6065/logs/spinn", "")
 
 FLAGS(sys.argv)
 
