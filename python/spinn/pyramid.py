@@ -35,6 +35,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      gated=FLAGS.pyramid_gated,
                      trainable_temperature=FLAGS.pyramid_trainable_temperature,
                      test_temperature_mulitplier=FLAGS.pyramid_test_time_temperature_multiplier,
+                     selection_dim=FLAGS.pyramid_selection_dim,
                      logger=logger,
                      gumbel=FLAGS.pyramid_gumbel,
                      )
@@ -57,6 +58,7 @@ class Pyramid(nn.Module):
                  gated=None,
                  trainable_temperature=None,
                  test_temperature_mulitplier=None,
+                 selection_dim=None,
                  logger=None,
                  gumbel=None,
                  **kwargs
@@ -70,6 +72,7 @@ class Pyramid(nn.Module):
         self.trainable_temperature = trainable_temperature
         self.logger = logger
         self.gumbel = gumbel
+        self.selection_dim = selection_dim
 
         classifier_dropout_rate = 1. - classifier_keep_rate
 
@@ -85,7 +88,8 @@ class Pyramid(nn.Module):
 
         self.composition_fn = SimpleTreeLSTM(model_dim / 2,
                                              composition_ln=False)
-        self.selection_fn = Linear(initializer=HeKaimingInitializer)(model_dim, 1)
+        self.selection_fn_1 = Linear(initializer=HeKaimingInitializer)(2 * model_dim, selection_dim)
+        self.selection_fn_2 = Linear(initializer=HeKaimingInitializer)(selection_dim, 1)
 
         # TODO: Set up layer norm.
 
@@ -135,11 +139,13 @@ class Pyramid(nn.Module):
                 left = torch.squeeze(all_state_pairs[-1][position])
                 right = torch.squeeze(all_state_pairs[-1][position + 1])
                 composition_results.append(self.composition_fn(left, right))
+                if self.gated:
+                    selection_input = torch.cat([left, right], 1)
+                    selection_hidden = F.tanh(self.selection_fn_1(selection_input))
+                    selection_logit = self.selection_fn_2(selection_hidden)
+                    selection_logits_list.append(selection_logit)
 
             if self.gated:
-                for position in range(layer):
-                    selection_logits_list.append(self.selection_fn(composition_results[position]))
-
                 selection_logits = torch.cat(selection_logits_list, 1)
 
                 local_temperature = temperature

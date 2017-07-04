@@ -282,6 +282,8 @@ def get_flags():
                         "If set, multiply the temperature by this constant at test time.")
     gflags.DEFINE_float("pyramid_temperature_decay_per_10k_steps",
                         0.5, "Ideal for use with Gumbel.")
+    gflags.DEFINE_integer("pyramid_selection_dim",
+                          20, "Hidden state size for the scoring function.")
 
     # Encode settings.
     gflags.DEFINE_enum("encode", "projection", [
