@@ -277,7 +277,7 @@ def get_flags():
     gflags.DEFINE_boolean("pyramid_trainable_temperature", None,
                           "If set, add a scalar trained temperature parameter.")
     gflags.DEFINE_float("pyramid_test_time_temperature_multiplier", 1.0,
-                        "If set, multiply the temperature by this constant at test time.")
+                        "If in (0, 1), multiply the temperature by this constant at test time. If exactly 0.0, use the efficient hard max variant of the model at tent time.")
     gflags.DEFINE_float("pyramid_temperature_decay_per_10k_steps",
                         0.5, "Ideal for use with Gumbel.")
     gflags.DEFINE_integer("pyramid_selection_dim",

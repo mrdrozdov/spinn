@@ -392,7 +392,7 @@ def run(only_forward=False):
         log_entry = pb.SpinnEntry()
         for index, eval_set in enumerate(eval_iterators):
             log_entry.Clear()
-            evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary)
+            evaluate(FLAGS, model, data_manager, eval_set, log_entry, logger, step, vocabulary)
             print(log_entry)
             logger.LogEntry(log_entry)
     else:
