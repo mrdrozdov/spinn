@@ -34,7 +34,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      composition_ln=FLAGS.composition_ln,
                      context_args=context_args,
                      trainable_temperature=FLAGS.pyramid_trainable_temperature,
-                     test_temperature_mulitplier=FLAGS.pyramid_test_time_temperature_multiplier,
+                     test_temperature_multiplier=FLAGS.pyramid_test_time_temperature_multiplier,
                      selection_dim=FLAGS.pyramid_selection_dim,
                      logger=logger,
                      gumbel=FLAGS.pyramid_gumbel,
@@ -67,7 +67,7 @@ class Pyramid(nn.Module):
 
         self.use_sentence_pair = use_sentence_pair
         self.model_dim = model_dim
-        self.test_temperature_mulitplier = test_temperature_multiplier
+        self.test_temperature_multiplier = test_temperature_multiplier
         self.trainable_temperature = trainable_temperature
         self.logger = logger
         self.gumbel = gumbel
@@ -207,7 +207,7 @@ class Pyramid(nn.Module):
             temperature *= self.temperature
         if not self.training:
             temperature *= \
-                self.test_temperature_mulitplier
+                self.test_temperature_multiplier
 
         for layer in range(seq_len - 1, 0, -1):
             composition_results = []
@@ -280,7 +280,7 @@ class Pyramid(nn.Module):
         x = self.unwrap(sentences, transitions)
         emb = self.run_embed(x)
 
-        if self.test_temperature_mulitplier == 0.0 and not self.training:
+        if self.test_temperature_multiplier == 0.0 and not self.training:
             hh = self.run_hard_pyramid(emb, show_sample)
         else:
             hh = self.run_pyramid(emb, show_sample,
