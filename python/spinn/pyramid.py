@@ -133,11 +133,11 @@ class Pyramid(nn.Module):
             selection_logit = self.selection_fn_2(selection_hidden)
             split_selection_logit = torch.chunk(selection_logit, batch_size, 0)
             for b in range(batch_size):
-                unbatched_selection_logits_list[b].append(split_selection_logit[b])
+                unbatched_selection_logits_list[b].append(split_selection_logit[b].data.cpu().numpy())
 
         for layer in range(seq_len - 1, 0, -1):
             selection_logits_list = [
-                np.concatenate([unbatched_selection_logits_list[b][i].data.cpu().numpy()
+                np.concatenate([unbatched_selection_logits_list[b][i]
                                 for i in range(layer)], axis=1)
                 for b in range(batch_size)]
             selection_logits = np.concatenate(selection_logits_list, axis=0)
@@ -183,8 +183,8 @@ class Pyramid(nn.Module):
                 split_selection_logit = torch.chunk(selection_logit, len(to_recompute), 0)
                 for i in range(len(to_recompute)):
                     index_pair = to_recompute[i]
-                    unbatched_selection_logits_list[index_pair[0]
-                                                    ][index_pair[1]] = split_selection_logit[i]
+                    unbatched_selection_logits_list[index_pair[0]][index_pair[1]] = \
+                        split_selection_logit[i].data.cpu().numpy()
 
         return torch.squeeze(torch.cat([unbatched_state_pairs[b][0] for b in range(batch_size)], 0))
 
