@@ -56,6 +56,8 @@ def default_args(**kwargs):
     composition_args.extract_c = None
     composition_args.composition = Reduce()
     composition_args.tracking_ln = False
+    composition_args.detach = False
+    composition_args.evolution = False
 
     args['composition_args'] = composition_args
 
