@@ -20,6 +20,8 @@ def default_args(**kwargs):
     args['num_mlp_layers'] = 2
     args['num_classes'] = 3
     args['use_sentence_pair'] = False
+    args['selection_dim'] = 1
+    args['gumbel'] = False
 
     initial_embeddings = np.arange(args['vocab_size']).repeat(
         args['word_embedding_dim']).reshape(
