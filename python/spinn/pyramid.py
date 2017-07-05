@@ -89,6 +89,11 @@ class Pyramid(nn.Module):
                                              composition_ln=composition_ln)
         self.selection_fn_1 = Linear(initializer=HeKaimingInitializer)(2 * model_dim, selection_dim)
         self.selection_fn_2 = Linear(initializer=HeKaimingInitializer)(selection_dim, 1)
+        def selection_fn(selection_input):
+            selection_hidden = F.tanh(self.selection_fn_1(selection_input))
+            return self.selection_fn_2(selection_hidden)
+
+        self.selection_fn = selection_fn
 
         mlp_input_dim = model_dim * 2 if use_sentence_pair else model_dim
 
@@ -129,8 +134,7 @@ class Pyramid(nn.Module):
             right = torch.squeeze(
                 torch.cat([unbatched_state_pairs[b][position + 1] for b in range(batch_size)], 0))
             selection_input = torch.cat([left, right], 1)
-            selection_hidden = F.tanh(self.selection_fn_1(selection_input))
-            selection_logit = self.selection_fn_2(selection_hidden)
+            selection_logit = self.selection_fn(selection_input)
             split_selection_logit = torch.chunk(selection_logit, batch_size, 0)
             for b in range(batch_size):
                 unbatched_selection_logits_list[b].append(split_selection_logit[b].data.cpu().numpy())
@@ -178,8 +182,7 @@ class Pyramid(nn.Module):
                 right = torch.squeeze(
                     torch.cat([unbatched_state_pairs[index_pair[0]][index_pair[1] + 1] for index_pair in to_recompute], 0))
                 selection_input = torch.cat([left, right], 1)
-                selection_hidden = F.tanh(self.selection_fn_1(selection_input))
-                selection_logit = self.selection_fn_2(selection_hidden)
+                selection_logit = self.selection_fn(selection_input)
                 split_selection_logit = torch.chunk(selection_logit, len(to_recompute), 0)
                 for i in range(len(to_recompute)):
                     index_pair = to_recompute[i]
@@ -215,8 +218,7 @@ class Pyramid(nn.Module):
                 right = torch.squeeze(all_state_pairs[-1][position + 1])
                 composition_results.append(self.composition_fn(left, right))
                 selection_input = torch.cat([left, right], 1)
-                selection_hidden = F.tanh(self.selection_fn_1(selection_input))
-                selection_logit = self.selection_fn_2(selection_hidden)
+                selection_logit = self.selection_fn(selection_input)
                 selection_logits_list.append(selection_logit)
 
             selection_logits = torch.cat(selection_logits_list, 1)
