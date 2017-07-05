@@ -31,6 +31,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      mlp_dim=FLAGS.mlp_dim,
                      num_mlp_layers=FLAGS.num_mlp_layers,
                      mlp_ln=FLAGS.mlp_ln,
+                     composition_ln=FLAGS.composition_ln,
                      context_args=context_args,
                      trainable_temperature=FLAGS.pyramid_trainable_temperature,
                      test_temperature_mulitplier=FLAGS.pyramid_test_time_temperature_multiplier,
@@ -53,6 +54,7 @@ class Pyramid(nn.Module):
                  mlp_dim=None,
                  num_mlp_layers=None,
                  mlp_ln=None,
+                 composition_ln=None,
                  context_args=None,
                  trainable_temperature=None,
                  test_temperature_mulitplier=None,
@@ -84,11 +86,9 @@ class Pyramid(nn.Module):
         self.embed = Embed(word_embedding_dim, vocab.size, vectors=vocab.vectors)
 
         self.composition_fn = SimpleTreeLSTM(model_dim / 2,
-                                             composition_ln=False)
+                                             composition_ln=composition_ln)
         self.selection_fn_1 = Linear(initializer=HeKaimingInitializer)(2 * model_dim, selection_dim)
         self.selection_fn_2 = Linear(initializer=HeKaimingInitializer)(selection_dim, 1)
-
-        # TODO: Set up layer norm.
 
         mlp_input_dim = model_dim * 2 if use_sentence_pair else model_dim
 
@@ -121,7 +121,7 @@ class Pyramid(nn.Module):
         else:
             self.merge_sequence_memory = None
 
-        # Most activations won't change between steps, so this can be preserved.
+        # Most activations won't change between steps, so this can be preserved and updated only when needed.
         unbatched_selection_logits_list = [[] for _ in range(batch_size)]
         for position in range(seq_len - 1):
             left = torch.squeeze(
@@ -162,7 +162,7 @@ class Pyramid(nn.Module):
                 unbatched_state_pairs[b][merge_indices[b]] = composition_result_list[b]
                 del unbatched_state_pairs[b][merge_indices[b] + 1]
 
-            # Recompute invalidated selection logits in one big batch
+            # Recompute invalidated selection logits in one big batch:
             # This is organized this way as the amount that needs to recompute depends
             # on the number of merges that were at the edge of the pyramid structure.
             if layer > 1:
@@ -233,8 +233,6 @@ class Pyramid(nn.Module):
                 selection_probs = F.softmax(selection_logits)
 
             if show_sample:
-                # self.logger.Log(
-                #     sparks(np.transpose(selection_probs[0, :].data.cpu().numpy()).tolist()))
                 merge_index = np.argmax(selection_probs[0, :].data.cpu().numpy())
                 self.merge_sequence_memory.append(merge_index)
 
