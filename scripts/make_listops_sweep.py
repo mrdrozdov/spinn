@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "listops_06_15_64p"
+NAME = "listops_07_05_64p"
 SWEEP_RUNS = 8
 
 LIN = "LIN"
@@ -22,7 +22,7 @@ FLAGS = gflags.FLAGS
 
 gflags.DEFINE_string("training_data_path", "spinn/data/listops/train_d20s.tsv", "")
 gflags.DEFINE_string("eval_data_path", "spinn/data/listops/test_d20s.tsv", "")
-gflags.DEFINE_string("log_path", "/home/sb6065/logs", "")
+gflags.DEFINE_string("log_path", "/scratch/sb6065/logs", "")
 
 FLAGS(sys.argv)
 
@@ -46,8 +46,8 @@ FIXED_PARAMETERS = {
     "word_embedding_dim":   "128",
     "model_dim":   "128",
     "seq_length":   "50",
-    "eval_seq_length":  "80",
-    "eval_interval_steps": "100",
+    "eval_seq_length":  "1000",
+    "eval_interval_steps": "1000",
     "statistics_interval_steps": "100",
     #"use_internal_parser": "",
     "batch_size":  "64",
@@ -61,6 +61,7 @@ FIXED_PARAMETERS = {
     "embedding_keep_rate": "1.0",
     "pyramid_gumbel": "",
     "sample_interval_steps": "5000",
+    "pyramid_test_time_temperature_multiplier": "0.0",
 }
 
 # Tunable parameters.
@@ -68,7 +69,6 @@ SWEEP_PARAMETERS = {
     "learning_rate":      ("lr", EXP, 0.0001, 0.001),  # RNN likes higher, but below 009.
     "l2_lambda":          ("l2", EXP, 8e-7, 2e-5),
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.4, 0.8),
-    "pyramid_test_time_temperature_multiplier": ("tttm", EXP, 0.0001, 1.0),
     "pyramid_trainable_temperature": ("tt", BOOL, None, None),
     "pyramid_temperature_decay_per_10k_steps": ("tdec", EXP, 0.25, 1.0),
 #    "tracking_lstm_hidden_dim": ("tdim", EXP, 4, 16),
