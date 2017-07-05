@@ -39,6 +39,8 @@ class BaseModel(nn.Module):
                  word_embedding_dim=None,
                  vocab_size=None,
                  initial_embeddings=None,
+                 use_difference_feature=None,
+                 use_product_feature=None,
                  num_classes=None,
                  embedding_keep_rate=None,
                  classifier_keep_rate=None,
@@ -52,6 +54,9 @@ class BaseModel(nn.Module):
         super(BaseModel, self).__init__()
 
         self.use_sentence_pair = use_sentence_pair
+        self.use_difference_feature = use_difference_feature
+        self.use_product_feature = use_product_feature
+
         self.model_dim = model_dim
 
         classifier_dropout_rate = 1. - classifier_keep_rate
@@ -65,7 +70,7 @@ class BaseModel(nn.Module):
 
         self.embed = Embed(word_embedding_dim, vocab.size, vectors=vocab.vectors)
 
-        mlp_input_dim = model_dim * 2 if use_sentence_pair else model_dim
+        mlp_input_dim = self.get_features_dim()
 
         self.mlp = MLP(mlp_input_dim, mlp_dim, num_classes,
                        num_mlp_layers, mlp_ln, classifier_dropout_rate)
@@ -92,9 +97,31 @@ class BaseModel(nn.Module):
         emb = self.run_embed(x)
         hh = torch.squeeze(torch.sum(emb, 1))
         h = self.wrap(hh)
-        output = self.mlp(h)
+        output = self.mlp(self.build_features(h))
 
         return output
+
+    def get_features_dim(self):
+        features_dim = self.model_dim * 2 if self.use_sentence_pair else self.model_dim
+        if self.use_sentence_pair:
+            if self.use_difference_feature:
+                features_dim += self.model_dim
+            if self.use_product_feature:
+                features_dim += self.model_dim
+        return features_dim
+
+    def build_features(self, h):
+        if self.use_sentence_pair:
+            h_prem, h_hyp = h
+            features = [h_prem, h_hyp]
+            if self.use_difference_feature:
+                features.append(h_prem - h_hyp)
+            if self.use_product_feature:
+                features.append(h_prem * h_hyp)
+            features = torch.cat(features, 1)
+        else:
+            features = h
+        return features
 
     # --- Sentence Style Switches ---
 
@@ -121,7 +148,7 @@ class BaseModel(nn.Module):
 
     def wrap_sentence_pair(self, hh):
         batch_size = hh.size(0) / 2
-        h = torch.cat([hh[:batch_size], hh[batch_size:]], 1)
+        h = ([hh[:batch_size], hh[batch_size:]])
         return h
 
     # --- Sentence Pair Specific ---

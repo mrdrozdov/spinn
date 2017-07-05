@@ -46,6 +46,8 @@ class Pyramid(nn.Module):
     def __init__(self, model_dim=None,
                  word_embedding_dim=None,
                  vocab_size=None,
+                 use_product_feature=None,
+                 use_difference_feature=None,
                  initial_embeddings=None,
                  num_classes=None,
                  embedding_keep_rate=None,
@@ -66,6 +68,8 @@ class Pyramid(nn.Module):
         super(Pyramid, self).__init__()
 
         self.use_sentence_pair = use_sentence_pair
+        self.use_difference_feature = use_difference_feature
+        self.use_product_feature = use_product_feature
         self.model_dim = model_dim
         self.test_temperature_multiplier = test_temperature_multiplier
         self.trainable_temperature = trainable_temperature
@@ -90,10 +94,9 @@ class Pyramid(nn.Module):
         def selection_fn(selection_input):
             selection_hidden = F.tanh(self.selection_fn_1(selection_input))
             return self.selection_fn_2(selection_hidden)
-
         self.selection_fn = selection_fn
 
-        mlp_input_dim = model_dim * 2 if use_sentence_pair else model_dim
+        mlp_input_dim = self.get_features_dim()
 
         self.mlp = MLP(mlp_input_dim, mlp_dim, num_classes,
                        num_mlp_layers, mlp_ln, self.classifier_dropout_rate)
@@ -189,7 +192,7 @@ class Pyramid(nn.Module):
                     unbatched_selection_logits_list[index_pair[0]][index_pair[1]] = \
                         split_selection_logit[i].data.cpu().numpy()
 
-        return torch.squeeze(torch.cat([unbatched_state_pairs[b][0] for b in range(batch_size)], 0))
+        return torch.squeeze(torch.cat([unbatched_state_pairs[b][0][:, self.model_dim/2:] for b in range(batch_size)], 0))
 
     def run_pyramid(self, x, show_sample=False, indices=None, temperature_multiplier=1.0):
         batch_size, seq_len, model_dim = x.data.size()
@@ -259,7 +262,7 @@ class Pyramid(nn.Module):
                 layer_state_pairs.append(new_state_pair)
             all_state_pairs.append(layer_state_pairs)
 
-        return all_state_pairs[-1][-1]
+        return all_state_pairs[-1][-1][:, self.model_dim / 2:]
 
     def run_embed(self, x):
         batch_size, seq_length = x.size()
@@ -288,9 +291,31 @@ class Pyramid(nn.Module):
                                   temperature_multiplier=pyramid_temperature_multiplier)
 
         h = self.wrap(hh)
-        output = self.mlp(h)
+        output = self.mlp(self.build_features(h))
 
         return output
+
+    def get_features_dim(self):
+        features_dim = self.model_dim if self.use_sentence_pair else self.model_dim / 2
+        if self.use_sentence_pair:
+            if self.use_difference_feature:
+                features_dim += self.model_dim / 2
+            if self.use_product_feature:
+                features_dim += self.model_dim / 2
+        return features_dim
+
+    def build_features(self, h):
+        if self.use_sentence_pair:
+            h_prem, h_hyp = h
+            features = [h_prem, h_hyp]
+            if self.use_difference_feature:
+                features.append(h_prem - h_hyp)
+            if self.use_product_feature:
+                features.append(h_prem * h_hyp)
+            features = torch.cat(features, 1)
+        else:
+            features = h
+        return features
 
     # --- Sample printing ---
 
@@ -336,7 +361,7 @@ class Pyramid(nn.Module):
 
     def wrap_sentence_pair(self, hh):
         batch_size = hh.size(0) / 2
-        h = torch.cat([hh[:batch_size], hh[batch_size:]], 1)
+        h = ([hh[:batch_size], hh[batch_size:]])
         return h
 
     # --- Sentence Pair Specific ---
