@@ -218,6 +218,11 @@ def eval_format(evaluation, extra=False):
 
     return eval_str
 
+def sample_format(entry):
+    sample_str = "t_idx: {t_idx} crossing: {crossing} gold_lb:{gold_lb} pred_tr: {pred_tr} pred_ev: {pred_ev} strg_tr: {strg_tr} strg_ev: {strg_ev}"
+
+    return sample_str
+
 
 def log_formatter(log_entry, extra=False, rl=False):
     """Defines the log string to print to std error."""
@@ -254,6 +259,19 @@ def log_formatter(log_entry, extra=False, rl=False):
                 'invalid': evaluation.invalid,
             }
             log_str += '\n' + eval_format(evaluation, extra).format(**eval_args)
+    if len(log_entry.rl_sampling) > 0:
+        #log_str += "\n" + sample_format(log_entry.rl_sampling)
+        for sample in log_entry.rl_sampling:
+            sample_args = {
+                't_idx': sample.t_idx,
+                'crossing': sample.crossing,
+                'gold_lb': sample.gold_lb,
+                'pred_tr': sample.pred_tr,
+                'pred_ev': sample.pred_ev,
+                'strg_tr': sample.strg_tr,
+                'strg_ev': sample.strg_ev,
+            }
+            log_str += "\n" + sample_format(sample).format(**sample_args)
 
     return log_str
 

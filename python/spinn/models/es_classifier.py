@@ -25,7 +25,7 @@ from spinn.util.data import SimpleProgressBar
 from spinn.util.blocks import get_l2_loss, the_gpu, to_gpu
 from spinn.util.misc import Accumulator, EvalReporter
 from spinn.util.misc import recursively_set_device
-from spinn.util.logging import stats, train_accumulate
+from spinn.util.logging import stats, train_accumulate, create_log_formatter
 from spinn.util.logging import eval_stats, eval_accumulate
 from spinn.util.loss import auxiliary_loss
 from spinn.util.sparks import sparks, dec_str
@@ -398,7 +398,10 @@ def evaluate_perturbation(logger, trainer, queue, FLAGS, name, path):
 
 
 def run(only_forward=False):
-    logger = afs_safe_logger.ProtoLogger(log_path(FLAGS))
+    #logger = afs_safe_logger.ProtoLogger(log_path(FLAGS))
+    logger = afs_safe_logger.ProtoLogger(log_path(FLAGS),
+                                         print_formatter=create_log_formatter(True, False),
+                                         write_proto=FLAGS.write_proto_to_log)
     header = pb.SpinnHeader()
 
     data_manager = get_data_manager(FLAGS.data_type)
