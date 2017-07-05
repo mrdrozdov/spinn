@@ -144,7 +144,7 @@ class Pyramid(nn.Module):
             merge_indices = np.argmax(selection_logits, axis=1)
 
             if show_sample:
-                self.merge_sequence_memory.append(merge_indices[0])
+                self.merge_sequence_memory.append(merge_indices[8])
 
             # Collect inputs to merge
             lefts = [unbatched_state_pairs[b][merge_indices[b]] for b in range(batch_size)]
@@ -233,7 +233,7 @@ class Pyramid(nn.Module):
                 selection_probs = F.softmax(selection_logits)
 
             if show_sample:
-                merge_index = np.argmax(selection_probs[0, :].data.cpu().numpy())
+                merge_index = np.argmax(selection_probs[8, :].data.cpu().numpy())
                 self.merge_sequence_memory.append(merge_index)
 
             layer_state_pairs = []
@@ -301,7 +301,7 @@ class Pyramid(nn.Module):
     def get_sample(self, x, vocabulary):
         if not self.inverted_vocabulary:
             self.inverted_vocabulary = dict([(vocabulary[key], key) for key in vocabulary])
-        token_sequence = [self.inverted_vocabulary[token] for token in x[0, :]]
+        token_sequence = [self.inverted_vocabulary[token] for token in x[8, :]]
         for merge in self.get_sample_merge_sequence():
             token_sequence[merge] = (token_sequence[merge], token_sequence[merge + 1])
             del token_sequence[merge + 1]
