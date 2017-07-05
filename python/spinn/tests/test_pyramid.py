@@ -58,7 +58,7 @@ class SPINNTestCase(unittest.TestCase):
 
         MockModel(spinn.pyramid.Pyramid, default_args(use_sentence_pair=True))
 
-    def test_basic_stack(self):
+    def test_training(self):
         model = MockModel(Pyramid, default_args())
 
         X, transitions = get_batch()
@@ -69,11 +69,10 @@ class SPINNTestCase(unittest.TestCase):
 
         class mlp(nn.Module):
             def forward(self, x):
-                print x
                 return x
 
         def selection_fn(selection_input):
-            return Variable(torch.rand(1, 1))  # Compose in random order
+            return Variable(torch.rand(selection_input.data.size()[0], 1))  # Compose in random order
 
         class Reduce(nn.Module):
             def forward(self, lefts, rights):
@@ -85,6 +84,74 @@ class SPINNTestCase(unittest.TestCase):
         model.mlp = mlp()
 
         outputs = model(X, transitions, pyramid_temperature_multiplier=0.0000001)
+
+        assert outputs[0][0].data[0] == (3 + 1 + 2 + 1)
+        assert outputs[1][0].data[0] == (3 + 2 + 4 + 5)
+
+
+    def test_soft_eval(self):
+        args = default_args()
+        args['test_temperature_multiplier'] = 0.0000001
+        model = MockModel(Pyramid, args)
+
+        X, transitions = get_batch()
+
+        class Projection(nn.Module):
+            def forward(self, x):
+                return x[:, :default_args()['model_dim']]
+
+        class mlp(nn.Module):
+            def forward(self, x):
+                return x
+
+        def selection_fn(selection_input):
+            return Variable(torch.rand(selection_input.data.size()[0], 1))  # Compose in random order
+
+        class Reduce(nn.Module):
+            def forward(self, lefts, rights):
+                return lefts + rights
+
+        model.encode = Projection()
+        model.composition_fn = Reduce()
+        model.selection_fn = selection_fn
+        model.mlp = mlp()
+
+        model.eval()
+        outputs = model(X, transitions)
+
+        assert outputs[0][0].data[0] == (3 + 1 + 2 + 1)
+        assert outputs[1][0].data[0] == (3 + 2 + 4 + 5)
+
+
+    def test_hard_eval(self):
+        args = default_args()
+        args['test_temperature_multiplier'] = 0.0
+        model = MockModel(Pyramid, args)
+
+        X, transitions = get_batch()
+
+        class Projection(nn.Module):
+            def forward(self, x):
+                return x[:, :default_args()['model_dim']]
+
+        class mlp(nn.Module):
+            def forward(self, x):
+                return x
+
+        def selection_fn(selection_input):
+            return Variable(torch.rand(selection_input.data.size()[0], 1))  # Compose in random order
+
+        class Reduce(nn.Module):
+            def forward(self, lefts, rights):
+                return lefts + rights
+
+        model.encode = Projection()
+        model.composition_fn = Reduce()
+        model.selection_fn = selection_fn
+        model.mlp = mlp()
+
+        model.eval()
+        outputs = model(X, transitions)
 
         assert outputs[0][0].data[0] == (3 + 1 + 2 + 1)
         assert outputs[1][0].data[0] == (3 + 2 + 4 + 5)

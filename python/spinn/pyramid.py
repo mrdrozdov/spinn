@@ -57,7 +57,7 @@ class Pyramid(nn.Module):
                  composition_ln=None,
                  context_args=None,
                  trainable_temperature=None,
-                 test_temperature_mulitplier=None,
+                 test_temperature_multiplier=None,
                  selection_dim=None,
                  logger=None,
                  gumbel=None,
@@ -67,7 +67,7 @@ class Pyramid(nn.Module):
 
         self.use_sentence_pair = use_sentence_pair
         self.model_dim = model_dim
-        self.test_temperature_mulitplier = test_temperature_mulitplier
+        self.test_temperature_mulitplier = test_temperature_multiplier
         self.trainable_temperature = trainable_temperature
         self.logger = logger
         self.gumbel = gumbel
