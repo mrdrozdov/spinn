@@ -89,6 +89,7 @@ class Pyramid(nn.Module):
                                              composition_ln=composition_ln)
         self.selection_fn_1 = Linear(initializer=HeKaimingInitializer)(2 * model_dim, selection_dim)
         self.selection_fn_2 = Linear(initializer=HeKaimingInitializer)(selection_dim, 1)
+
         def selection_fn(selection_input):
             selection_hidden = F.tanh(self.selection_fn_1(selection_input))
             return self.selection_fn_2(selection_hidden)
@@ -126,7 +127,8 @@ class Pyramid(nn.Module):
         else:
             self.merge_sequence_memory = None
 
-        # Most activations won't change between steps, so this can be preserved and updated only when needed.
+        # Most activations won't change between steps, so this can be preserved
+        # and updated only when needed.
         unbatched_selection_logits_list = [[] for _ in range(batch_size)]
         for position in range(seq_len - 1):
             left = torch.squeeze(
@@ -137,7 +139,8 @@ class Pyramid(nn.Module):
             selection_logit = self.selection_fn(selection_input)
             split_selection_logit = torch.chunk(selection_logit, batch_size, 0)
             for b in range(batch_size):
-                unbatched_selection_logits_list[b].append(split_selection_logit[b].data.cpu().numpy())
+                unbatched_selection_logits_list[b].append(
+                    split_selection_logit[b].data.cpu().numpy())
 
         for layer in range(seq_len - 1, 0, -1):
             selection_logits_list = [
