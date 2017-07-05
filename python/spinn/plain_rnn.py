@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
+import torch.nn.functional as F
 
 from spinn.util.blocks import Embed, to_gpu, MLP
 from spinn.util.misc import Args, Vocab
@@ -54,10 +55,10 @@ class RNNModel(nn.Module):
         self.model_dim = model_dim
 
         classifier_dropout_rate = 1. - classifier_keep_rate
+        self.embedding_dropout_rate = 1. - embedding_keep_rate
 
         args = Args()
         args.size = model_dim
-        args.input_dropout_rate = 1. - embedding_keep_rate
 
         vocab = Vocab()
         vocab.size = initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size
@@ -103,6 +104,7 @@ class RNNModel(nn.Module):
         embeds = self.encode(embeds)
         embeds = self.reshape_context(embeds, batch_size, seq_length)
         embeds = torch.cat([b.unsqueeze(0) for b in torch.chunk(embeds, batch_size, 0)], 0)
+        embeds = F.dropout(embeds, self.embedding_dropout_rate, training=self.training)
 
         return embeds
 
