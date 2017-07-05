@@ -72,7 +72,8 @@ class SPINNTestCase(unittest.TestCase):
                 return x
 
         def selection_fn(selection_input):
-            return Variable(torch.rand(selection_input.data.size()[0], 1))  # Compose in random order
+            # Compose in random order
+            return Variable(torch.rand(selection_input.data.size()[0], 1))
 
         class Reduce(nn.Module):
             def forward(self, lefts, rights):
@@ -87,7 +88,6 @@ class SPINNTestCase(unittest.TestCase):
 
         assert outputs[0][0].data[0] == (3 + 1 + 2 + 1)
         assert outputs[1][0].data[0] == (3 + 2 + 4 + 5)
-
 
     def test_soft_eval(self):
         args = default_args()
@@ -105,7 +105,8 @@ class SPINNTestCase(unittest.TestCase):
                 return x
 
         def selection_fn(selection_input):
-            return Variable(torch.rand(selection_input.data.size()[0], 1))  # Compose in random order
+            # Compose in random order
+            return Variable(torch.rand(selection_input.data.size()[0], 1))
 
         class Reduce(nn.Module):
             def forward(self, lefts, rights):
@@ -121,7 +122,6 @@ class SPINNTestCase(unittest.TestCase):
 
         assert outputs[0][0].data[0] == (3 + 1 + 2 + 1)
         assert outputs[1][0].data[0] == (3 + 2 + 4 + 5)
-
 
     def test_hard_eval(self):
         args = default_args()
@@ -139,7 +139,8 @@ class SPINNTestCase(unittest.TestCase):
                 return x
 
         def selection_fn(selection_input):
-            return Variable(torch.rand(selection_input.data.size()[0], 1))  # Compose in random order
+            # Compose in random order
+            return Variable(torch.rand(selection_input.data.size()[0], 1))
 
         class Reduce(nn.Module):
             def forward(self, lefts, rights):
@@ -155,6 +156,7 @@ class SPINNTestCase(unittest.TestCase):
 
         assert outputs[0][0].data[0] == (3 + 1 + 2 + 1)
         assert outputs[1][0].data[0] == (3 + 2 + 4 + 5)
+
 
 if __name__ == '__main__':
     unittest.main()

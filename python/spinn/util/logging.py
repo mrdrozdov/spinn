@@ -218,6 +218,7 @@ def eval_format(evaluation, extra=False):
 
     return eval_str
 
+
 def sample_format(entry):
     sample_str = "t_idx: {t_idx} crossing: {crossing} gold_lb:{gold_lb} pred_tr: {pred_tr} pred_ev: {pred_ev} strg_tr: {strg_tr} strg_ev: {strg_ev}"
 
