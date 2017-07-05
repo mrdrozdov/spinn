@@ -14,7 +14,7 @@ from spinn.util.sparks import sparks
 
 
 def build_model(data_manager, initial_embeddings, vocab_size,
-                num_classes, FLAGS, context_args, composition_args, logger=None):
+                num_classes, FLAGS, context_args, composition_args, **kwargs):
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
     model_cls = Pyramid
 
@@ -36,7 +36,6 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      trainable_temperature=FLAGS.pyramid_trainable_temperature,
                      test_temperature_multiplier=FLAGS.pyramid_test_time_temperature_multiplier,
                      selection_dim=FLAGS.pyramid_selection_dim,
-                     logger=logger,
                      gumbel=FLAGS.pyramid_gumbel,
                      )
 
@@ -61,7 +60,6 @@ class Pyramid(nn.Module):
                  trainable_temperature=None,
                  test_temperature_multiplier=None,
                  selection_dim=None,
-                 logger=None,
                  gumbel=None,
                  **kwargs
                  ):
@@ -73,7 +71,6 @@ class Pyramid(nn.Module):
         self.model_dim = model_dim
         self.test_temperature_multiplier = test_temperature_multiplier
         self.trainable_temperature = trainable_temperature
-        self.logger = logger
         self.gumbel = gumbel
         self.selection_dim = selection_dim
 
