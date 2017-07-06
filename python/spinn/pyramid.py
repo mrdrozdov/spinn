@@ -85,7 +85,7 @@ class Pyramid(nn.Module):
 
         self.composition_fn = SimpleTreeLSTM(model_dim / 2,
                                              composition_ln=composition_ln)
-        self.selection_fn_1 = Linear(initializer=HeKaimingInitializer)(2 * model_dim, selection_dim)
+        self.selection_fn_1 = Linear(initializer=HeKaimingInitializer)(model_dim, selection_dim)
         self.selection_fn_2 = Linear(initializer=HeKaimingInitializer)(selection_dim, 1)
 
         def selection_fn(selection_input):
@@ -130,9 +130,9 @@ class Pyramid(nn.Module):
         unbatched_selection_logits_list = [[] for _ in range(batch_size)]
         for position in range(seq_len - 1):
             left = torch.squeeze(
-                torch.cat([unbatched_state_pairs[b][position] for b in range(batch_size)], 0))
+                torch.cat([unbatched_state_pairs[b][position][:, :, self.model_dim / 2:] for b in range(batch_size)], 0))
             right = torch.squeeze(
-                torch.cat([unbatched_state_pairs[b][position + 1] for b in range(batch_size)], 0))
+                torch.cat([unbatched_state_pairs[b][position + 1][:, :, self.model_dim / 2:] for b in range(batch_size)], 0))
             selection_input = torch.cat([left, right], 1)
             selection_logit = self.selection_fn(selection_input)
             split_selection_logit = torch.chunk(selection_logit, batch_size, 0)
@@ -179,9 +179,9 @@ class Pyramid(nn.Module):
                     if merge_indices[b] < len(unbatched_selection_logits_list[b]):
                         to_recompute.append((b, merge_indices[b]))
                 left = torch.squeeze(
-                    torch.cat([unbatched_state_pairs[index_pair[0]][index_pair[1]] for index_pair in to_recompute], 0))
+                    torch.cat([unbatched_state_pairs[index_pair[0]][index_pair[1]][:, :, self.model_dim / 2:] for index_pair in to_recompute], 0))
                 right = torch.squeeze(
-                    torch.cat([unbatched_state_pairs[index_pair[0]][index_pair[1] + 1] for index_pair in to_recompute], 0))
+                    torch.cat([unbatched_state_pairs[index_pair[0]][index_pair[1] + 1][:, :, self.model_dim / 2:] for index_pair in to_recompute], 0))
                 selection_input = torch.cat([left, right], 1)
                 selection_logit = self.selection_fn(selection_input)
                 split_selection_logit = torch.chunk(selection_logit, len(to_recompute), 0)
@@ -218,13 +218,13 @@ class Pyramid(nn.Module):
 
         for layer in range(seq_len - 1, 0, -1):
             composition_results = []
-            selection_logits_list = []
+            selection_logits_list = [] 
 
             for position in range(layer):
                 left = torch.squeeze(all_state_pairs[-1][position])
                 right = torch.squeeze(all_state_pairs[-1][position + 1])
                 composition_results.append(self.composition_fn(left, right))
-                selection_input = torch.cat([left, right], 1)
+                selection_input = torch.cat([left[:, self.model_dim / 2:], right[:, self.model_dim / 2:]], 1)
                 selection_logit = self.selection_fn(selection_input)
                 selection_logits_list.append(selection_logit)
 
