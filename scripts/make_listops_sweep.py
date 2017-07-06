@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "listops_07_05_64pb"
+NAME = "listops_07_06_64p"
 SWEEP_RUNS = 12
 
 LIN = "LIN"
@@ -47,7 +47,7 @@ FIXED_PARAMETERS = {
     "model_dim":   "128",
     "seq_length":   "50",
     "eval_seq_length":  "1500",
-    "eval_interval_steps": "2500",
+    "eval_interval_steps": "1000",
     "statistics_interval_steps": "100",
     "metrics_interval_steps": "100",
     #"use_internal_parser": "",
@@ -60,13 +60,13 @@ FIXED_PARAMETERS = {
     #"transition_weight": "0.1",
     "semantic_classifier_keep_rate": "1.0",
     "embedding_keep_rate": "1.0",
-    "sample_interval_steps": "2500",
+    "sample_interval_steps": "1000",
     "pyramid_test_time_temperature_multiplier": "0.0",
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "learning_rate":      ("lr", EXP, 0.0001, 0.001),  # RNN likes higher, but below 009.
+    "learning_rate":      ("lr", EXP, 0.0001, 0.01),  # RNN likes higher, but below 009.
     "l2_lambda":          ("l2", EXP, 8e-7, 2e-5),
     "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.4, 0.8),
     "pyramid_trainable_temperature": ("tt", BOOL, None, None),
