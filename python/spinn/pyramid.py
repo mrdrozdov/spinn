@@ -189,7 +189,7 @@ class Pyramid(nn.Module):
                     unbatched_selection_logits_list[index_pair[0]][index_pair[1]] = \
                         split_selection_logit[i].data.cpu().numpy()
 
-        return torch.squeeze(torch.cat([unbatched_state_pairs[b][0][:, self.model_dim/2:] for b in range(batch_size)], 0))
+        return torch.squeeze(torch.cat([unbatched_state_pairs[b][0][:, :, self.model_dim / 2:] for b in range(batch_size)], 0))
 
     def run_pyramid(self, x, show_sample=False, indices=None, temperature_multiplier=1.0):
         batch_size, seq_len, model_dim = x.data.size()
