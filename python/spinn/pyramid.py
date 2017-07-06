@@ -105,9 +105,10 @@ class Pyramid(nn.Module):
         self.reshape_input = context_args.reshape_input
         self.reshape_context = context_args.reshape_context
 
-        # For sample printing
+        # For sample printing and logging
         self.merge_sequence_memory = None
         self.inverted_vocabulary = None
+        self.temperature_to_display = 0.0
 
     def run_hard_pyramid(self, x, show_sample=False):
         batch_size, seq_len, model_dim = x.data.size()
@@ -208,6 +209,7 @@ class Pyramid(nn.Module):
         if not self.training:
             temperature *= \
                 self.test_temperature_multiplier
+        self.temperature_to_display = float(temperature.data.cpu().numpy())
 
         for layer in range(seq_len - 1, 0, -1):
             composition_results = []
