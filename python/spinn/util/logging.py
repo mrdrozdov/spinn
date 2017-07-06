@@ -24,7 +24,7 @@ class InspectModel(object):
         self.has_epsilon = self.has_spinn and hasattr(model.spinn, "epsilon")
         self.has_spinn_temperature = self.has_spinn and hasattr(
             model.spinn, "temperature")
-        self.has_temperature = hasattr(model, "temperature_to_display")
+        self.has_pyramid_temperature = hasattr(model, "temperature_to_display")
 
 
 def inspect(model):
@@ -125,7 +125,7 @@ def stats(model, optimizer, A, step, log_entry):
         log_entry.epsilon = model.spinn.epsilon
     if im.has_spinn_temperature:
         log_entry.temperature = model.spinn.temperature
-    if im.has_temperature:
+    if im.has_pyramid_temperature:
         log_entry.temperature = model.temperature_to_display
 
     log_entry.total_cost = total_cost
@@ -207,7 +207,7 @@ def train_format(log_entry, extra=False, rl=False):
         stats_str += " avm{mean_adv_var_magnitude:.5f}"
         stats_str += " t{temperature:.3f}"
         stats_str += " eps{epsilon:.7f}"
-    elif hasattr(log_entry, "temperature"):
+    elseif hasattr(log_entry, "temperature"):
         stats_str += " t{temperature:.3f}"
 
     return stats_str

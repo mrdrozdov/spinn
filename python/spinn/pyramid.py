@@ -209,7 +209,11 @@ class Pyramid(nn.Module):
         if not self.training:
             temperature *= \
                 self.test_temperature_multiplier
-        self.temperature_to_display = float(temperature.data.cpu().numpy())
+
+        if not isinstance(local_temperature, float):        
+            self.temperature_to_display = float(temperature.data.cpu().numpy())
+        else:
+            self.temperature_to_display = temperature
 
         for layer in range(seq_len - 1, 0, -1):
             composition_results = []
