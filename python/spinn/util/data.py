@@ -27,68 +27,37 @@ SENTENCE_PADDING_SYMBOL = 0
 CORE_VOCABULARY = {PADDING_TOKEN: 0,
                    UNK_TOKEN: 1}
 
-# Allowed number of transition types : currently PUSH : 0 and MERGE : 1
+# Allowed number of transition types for the SPINN model: currently SHIFT : 0 and REDUCE : 1
 NUM_TRANSITION_TYPES = 2
 
 
-def create_tree(words, transitions):
-    template_start = """
-    digraph G {
-        nodesep=0.4; //was 0.8
-        ranksep=0.5;
-    """
-    template_end = """
-    }
-    """
-    template = ""
-    template += template_start
-    buf = list(reversed(words))
-    stack = []
-    leaves = []
-    for i, t in enumerate(transitions):
-        if t == 0:
-            stack.append((i + 1, t))
-            leaves.append(str(i + 1))
-            template += '{node[label = "%s"]; %s;}\n' % (str(buf.pop()), str(i + 1))
-        else:
-            right = stack.pop()
-            left = stack.pop()
-            top = i + 1
-            stack.append((top, (left, right)))
-            template += "{} -> {};\n".format(top, left[0])
-            template += "{} -> {};\n".format(top, right[0])
-    template += "{rank=same; %s}" % ("; ".join(leaves))
-    template += template_end
-    return stack, template
-
-
-def print_tree(sentence, transitions, output_file):
-    return None
-
-    # _, tree = create_tree(sentence, transitions)
-    # graphs = pydot.graph_from_dot_data(tree)
-    # open(output_file, 'wb').write(graphs[0].create_jpeg())
-    # return graphs[0]
-
-
-def TrimDataset(dataset, seq_length, eval_mode=False, sentence_pair_data=False, logger=None):
+def TrimDataset(dataset, seq_length, eval_mode=False,
+                sentence_pair_data=False, logger=None, allow_cropping=False):
     """Avoid using excessively long training examples."""
 
-    if eval_mode:
-        return dataset
-    else:
-        discarded = 0
-        if sentence_pair_data:
-            new_dataset = [example for example in dataset if
+    if sentence_pair_data:
+        trimmed_dataset = [example for example in dataset if
                            len(example["premise_transitions"]) <= seq_length and
                            len(example["hypothesis_transitions"]) <= seq_length]
+    else:
+        trimmed_dataset = [example for example in dataset if
+                           len(example["transitions"]) <= seq_length]
+
+    diff = len(dataset) - len(trimmed_dataset)
+    if eval_mode:
+        assert allow_cropping or diff == 0, "allow_eval_cropping is false but there are over-length eval examples."
+        if logger and diff > 0:
+            logger.Log("Warning: Cropping " + str(diff) + " over-length eval examples.")
+        return dataset
+    else:
+        if allow_cropping:
+            if logger and diff > 0:
+                logger.Log("Cropping " + str(diff) + " over-length training examples.")
+            return dataset
         else:
-            new_dataset = [example for example in dataset if len(
-                example["transitions"]) <= seq_length]
-        if logger:
-            discarded = len(dataset) - len(new_dataset)
-            logger.Log("Discarding " + str(discarded) + " over-length examples.")
-        return new_dataset
+            if logger and diff > 0:
+                logger.Log("Discarding " + str(diff) + " over-length training examples.")
+            return trimmed_dataset
 
 
 def TokensToIDs(vocabulary, dataset, sentence_pair_data=False):
@@ -135,11 +104,9 @@ def CropAndPadExample(example, left_padding, target_length, key,
     """
     if left_padding < 0:
         if not allow_cropping:
-            raise NotImplementedError("Behavior for cropped examples is not well-defined."
-                                      "Please set sequence length to some sufficiently large value and turn on truncating.")
+            raise NotImplementedError("Cropping not allowed. "
+                                      "Please set seq_length and eval_seq_length to some sufficiently large value or (for non-SPINN models) use --allow_cropping and --allow_eval_cropping..")
         # Crop, then pad normally.
-        # TODO: Track how many sentences are cropped, but don't log a message
-        # for every single one.
         example[key] = example[key][-left_padding:]
         left_padding = 0
     right_padding = target_length - (left_padding + len(example[key]))
@@ -147,7 +114,7 @@ def CropAndPadExample(example, left_padding, target_length, key,
         example[key] + ([symbol] * right_padding)
 
 
-def CropAndPad(dataset, length, logger=None, sentence_pair_data=False):
+def CropAndPadForSPINN(dataset, length, logger=None, sentence_pair_data=False):
     # NOTE: This can probably be done faster in NumPy if it winds up making a
     # difference.
     # Always make sure that the transitions are aligned at the left edge, so
@@ -180,7 +147,8 @@ def CropAndPad(dataset, length, logger=None, sentence_pair_data=False):
     return dataset
 
 
-def CropAndPadForRNN(dataset, length, logger=None, sentence_pair_data=False, discard_long_training_examples=False):
+def CropAndPadSimple(dataset, length, logger=None, sentence_pair_data=False,
+                     discard_long_training_examples=False, allow_cropping=True):
     # NOTE: This can probably be done faster in NumPy if it winds up making a
     # difference.
     if sentence_pair_data:
@@ -193,20 +161,18 @@ def CropAndPadForRNN(dataset, length, logger=None, sentence_pair_data=False, dis
         for tokens_key in keys:
             num_tokens = len(example[tokens_key])
             tokens_left_padding = length - num_tokens
-            if tokens_left_padding < 0:
-                dataset.remove(example)
             CropAndPadExample(
                 example, tokens_left_padding, length, tokens_key,
-                symbol=SENTENCE_PADDING_SYMBOL, logger=logger, allow_cropping=True)
+                symbol=SENTENCE_PADDING_SYMBOL, logger=logger, allow_cropping=allow_cropping)
     return dataset
 
 
-def merge(x, y):
+def Merge(x, y):
     return ''.join([a for t in zip(x, y) for a in t])
 
 
-def peano(x, y):
-    interim = ''.join(merge(format(x, '08b'), format(y, '08b')))
+def Peano(x, y):
+    interim = ''.join(Merge(format(x, '08b'), format(y, '08b')))
     return int(interim, base=2)
 
 
@@ -217,7 +183,7 @@ def MakeTrainingIterator(sources, batch_size, smart_batches=True, use_peano=True
     def get_key(num_transitions):
         if use_peano and sentence_pair_data:
             prem_len, hyp_len = num_transitions
-            key = peano(prem_len, hyp_len)
+            key = Peano(prem_len, hyp_len)
             return key
         else:
             if not isinstance(num_transitions, list):
@@ -340,7 +306,7 @@ def MakeBucketEvalIterator(sources, batch_size):
 
     def sentence_pair_key(num_transitions):
         sent1_len, sent2_len = num_transitions
-        return peano(sent1_len, sent2_len)
+        return Peano(sent1_len, sent2_len)
 
     dataset_size = len(sources[0])
 
@@ -372,22 +338,22 @@ def MakeBucketEvalIterator(sources, batch_size):
 
 
 def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=False, logger=None,
-                      sentence_pair_data=False, for_rnn=False):
+                      sentence_pair_data=False, simple=False, allow_cropping=False):
     dataset = TrimDataset(dataset, seq_length, eval_mode=eval_mode,
-                          sentence_pair_data=sentence_pair_data, logger=logger)
+                          sentence_pair_data=sentence_pair_data, logger=logger, allow_cropping=allow_cropping)
     dataset = TokensToIDs(vocabulary, dataset, sentence_pair_data=sentence_pair_data)
-    if for_rnn:
-        dataset = CropAndPadForRNN(dataset, seq_length, logger=logger,
-                                   sentence_pair_data=sentence_pair_data)
+    if simple:
+        dataset = CropAndPadSimple(dataset, seq_length, logger=logger,
+                                   sentence_pair_data=sentence_pair_data, allow_cropping=allow_cropping)
     else:
-        dataset = CropAndPad(dataset, seq_length, logger=logger,
-                             sentence_pair_data=sentence_pair_data)
+        dataset = CropAndPadForSPINN(dataset, seq_length, logger=logger,
+                                     sentence_pair_data=sentence_pair_data, allow_cropping=allow_cropping)
 
     if sentence_pair_data:
         X = np.transpose(np.array([[example["premise_tokens"] for example in dataset],
                                    [example["hypothesis_tokens"] for example in dataset]],
                                   dtype=np.int32), (1, 2, 0))
-        if for_rnn:
+        if simple:
             transitions = np.zeros((len(dataset), 2, 0))
             num_transitions = np.transpose(np.array(
                 [[len(np.array(example["premise_tokens"]).nonzero()[0]) for example in dataset],
@@ -404,7 +370,7 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
     else:
         X = np.array([example["tokens"] for example in dataset],
                      dtype=np.int32)
-        if for_rnn:
+        if simple:
             transitions = np.zeros((len(dataset), 0))
             num_transitions = np.array(
                 [len(np.array(example["tokens"]).nonzero()[0]) for example in dataset],
@@ -429,6 +395,7 @@ def BuildVocabulary(raw_training_data, raw_eval_sets, embedding_path,
                     logger=None, sentence_pair_data=False):
     # Find the set of words that occur in the data.
     logger.Log("Constructing vocabulary...")
+
     types_in_data = set()
     for dataset in [raw_training_data] + [eval_dataset[1] for eval_dataset in raw_eval_sets]:
         if sentence_pair_data:
@@ -441,15 +408,11 @@ def BuildVocabulary(raw_training_data, raw_eval_sets, embedding_path,
                                                                 for example in dataset]))
     logger.Log("Found " + str(len(types_in_data)) + " word types.")
 
-    if embedding_path is None:
-        logger.Log(
-            "Warning: Open-vocabulary models require pretrained vectors. Running with empty vocabulary.")
-        vocabulary = CORE_VOCABULARY
-    else:
-        # Build a vocabulary of words in the data for which we have an
-        # embedding.
-        vocabulary = BuildVocabularyForTextEmbeddingFile(
-            embedding_path, types_in_data, CORE_VOCABULARY)
+    # Build a vocabulary of words in the data for which we have an
+    # embedding.
+    assert embedding_path is not None, "Open-vocabulary models require pretrained vectors. Running with empty vocabulary."
+    vocabulary = BuildVocabularyForTextEmbeddingFile(
+        embedding_path, types_in_data, CORE_VOCABULARY)
 
     return vocabulary
 
@@ -459,7 +422,7 @@ def BuildVocabularyForTextEmbeddingFile(path, types_in_data, core_vocabulary):
     extract a working vocabulary of words that occur both in the data and
     in the vector file."""
 
-    # TODO(SB): Report on *which* words are skipped. See if any are common.
+    # TODO: Report on *which* words are skipped. See if any are common.
 
     vocabulary = {}
     vocabulary.update(core_vocabulary)
@@ -492,23 +455,6 @@ def LoadEmbeddingsFromText(vocabulary, embedding_dim, path):
             if word in vocabulary:
                 emb[vocabulary[word], :] = [float(e) for e in spl[1:embedding_dim + 1]]
     return emb
-
-
-def TransitionsToParse(transitions, words):
-    if transitions is not None:
-        stack = ["(P *ZEROS*)"] * (len(transitions) + 1)
-        buffer_ptr = 0
-        for transition in transitions:
-            if transition == 0:
-                stack.append("(P " + words[buffer_ptr] + ")")
-                buffer_ptr += 1
-            elif transition == 1:
-                r = stack.pop()
-                l = stack.pop()
-                stack.append("(M " + l + " " + r + ")")
-        return stack.pop()
-    else:
-        return " ".join(words)
 
 
 class SimpleProgressBar(object):
@@ -549,7 +495,7 @@ class SimpleProgressBar(object):
         sys.stdout.write('\n')
 
 
-def convert_binary_bracketed_seq(seq):
+def ConvertBinaryBracketedSeq(seq):
     tokens, transitions = [], []
     for item in seq:
         if item != "(":

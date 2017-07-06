@@ -158,7 +158,7 @@ class DataTestCase(unittest.TestCase):
         given = "( 0 ( ( 1 2 ) 3 ) ) )"
         expected_tokens = [str(x) for x in range(4)]
         expected_transitions = [0, 0, 0, 1, 0, 1, 1]
-        tokens, transitions = util.convert_binary_bracketed_seq(given.split(' '))
+        tokens, transitions = util.ConvertBinaryBracketedSeq(given.split(' '))
         assert all(t == e for t, e in zip(tokens, expected_tokens))
         assert all(t == e for t, e in zip(transitions, expected_transitions))
 

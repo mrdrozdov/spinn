@@ -165,7 +165,7 @@ def load_data_and_embeddings(FLAGS, data_manager, logger, training_data_path, ev
     training_data = util.PreprocessDataset(
         raw_training_data, vocabulary, FLAGS.seq_length, data_manager, eval_mode=False, logger=logger,
         sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-        for_rnn=sequential_only())
+        simple=sequential_only(), allow_cropping=FLAGS.allow_cropping)
     training_data_iter = util.MakeTrainingIterator(
         training_data, FLAGS.batch_size, FLAGS.smart_batching, FLAGS.use_peano,
         sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
@@ -179,7 +179,8 @@ def load_data_and_embeddings(FLAGS, data_manager, logger, training_data_path, ev
             FLAGS.eval_seq_length if FLAGS.eval_seq_length is not None else FLAGS.seq_length,
             data_manager, eval_mode=True, logger=logger,
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-            for_rnn=sequential_only())
+            simple=sequential_only(),
+            allow_cropping=FLAGS.allow_eval_cropping)
         eval_it = util.MakeEvalIterator(eval_data,
                                         FLAGS.batch_size, FLAGS.eval_data_limit, bucket_eval=FLAGS.bucket_eval,
                                         shuffle=FLAGS.shuffle_eval, rseed=FLAGS.shuffle_eval_seed)
@@ -192,11 +193,11 @@ def get_flags():
     # Debug settings.
     gflags.DEFINE_bool("debug", False, "Set to True to disable debug_mode and type_checking.")
     gflags.DEFINE_bool("show_progress_bar", True, "Turn this off when running experiments on HPC.")
-    gflags.DEFINE_string("branch_name", "", "")
-    gflags.DEFINE_string("slurm_job_id", "", "")
+    gflags.DEFINE_string("git_branch_name", "", "Set automatically.")
+    gflags.DEFINE_string("slurm_job_id", "", "Set automatically.")
     gflags.DEFINE_integer(
         "deque_length", 100, "Max trailing examples to use when computing average training statistics.")
-    gflags.DEFINE_string("sha", "", "")
+    gflags.DEFINE_string("git_sha", "", "Set automatically.")
     gflags.DEFINE_string("experiment_name", "", "")
     gflags.DEFINE_string("load_experiment_name", None, "")
 
@@ -227,7 +228,15 @@ def get_flags():
                          "using ':' tokens. The first file should be the dev set, and is used for determining "
                          "when to save the early stopping 'best' checkpoints.")
     gflags.DEFINE_integer("seq_length", 200, "")
+    gflags.DEFINE_boolean(
+        "allow_cropping",
+        False,
+        "Trim overly long training examples to fit. If not set, skip them.")
     gflags.DEFINE_integer("eval_seq_length", None, "")
+    gflags.DEFINE_boolean(
+        "allow_eval_cropping",
+        False,
+        "Trim overly long evaluation examples to fit. If not set, crash on overly long examples.")
     gflags.DEFINE_boolean("smart_batching", True, "Organize batches using sequence length.")
     gflags.DEFINE_boolean("use_peano", True, "A mind-blowing sorting key.")
     gflags.DEFINE_integer("eval_data_limit", -1,
@@ -384,11 +393,11 @@ def flag_defaults(FLAGS, load_log_flags=False):
             timestamp,
         )
 
-    if not FLAGS.branch_name:
-        FLAGS.branch_name = os.popen('git rev-parse --abbrev-ref HEAD').read().strip()
+    if not FLAGS.git_branch_name:
+        FLAGS.git_branch_name = os.popen('git rev-parse --abbrev-ref HEAD').read().strip()
 
-    if not FLAGS.sha:
-        FLAGS.sha = os.popen('git rev-parse HEAD').read().strip()
+    if not FLAGS.git_sha:
+        FLAGS.git_sha = os.popen('git rev-parse HEAD').read().strip()
 
     if not FLAGS.slurm_job_id:
         FLAGS.slurm_job_id = os.popen('echo $SLURM_JOB_ID').read().strip()
