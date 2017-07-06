@@ -210,7 +210,7 @@ class Pyramid(nn.Module):
             temperature *= \
                 self.test_temperature_multiplier
 
-        if not isinstance(local_temperature, float):        
+        if not isinstance(temperature, float):        
             self.temperature_to_display = float(temperature.data.cpu().numpy())
         else:
             self.temperature_to_display = temperature

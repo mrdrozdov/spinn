@@ -207,7 +207,7 @@ def train_format(log_entry, extra=False, rl=False):
         stats_str += " avm{mean_adv_var_magnitude:.5f}"
         stats_str += " t{temperature:.3f}"
         stats_str += " eps{epsilon:.7f}"
-    elseif hasattr(log_entry, "temperature"):
+    elif hasattr(log_entry, "temperature"):
         stats_str += " t{temperature:.3f}"
 
     return stats_str
