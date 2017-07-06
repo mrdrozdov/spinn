@@ -71,11 +71,13 @@ def print_tree(sentence, transitions, output_file):
     # return graphs[0]
 
 
-def TrimDataset(dataset, seq_length, eval_mode=False, sentence_pair_data=False):
+def TrimDataset(dataset, seq_length, eval_mode=False, sentence_pair_data=False, logger=None):
     """Avoid using excessively long training examples."""
+
     if eval_mode:
         return dataset
     else:
+        discarded = 0
         if sentence_pair_data:
             new_dataset = [example for example in dataset if
                            len(example["premise_transitions"]) <= seq_length and
@@ -83,6 +85,9 @@ def TrimDataset(dataset, seq_length, eval_mode=False, sentence_pair_data=False):
         else:
             new_dataset = [example for example in dataset if len(
                 example["transitions"]) <= seq_length]
+        if logger:
+            discarded = len(dataset) - len(new_dataset)
+            logger.Log("Discarding " + str(discarded) + " over-length examples.")
         return new_dataset
 
 
@@ -175,7 +180,7 @@ def CropAndPad(dataset, length, logger=None, sentence_pair_data=False):
     return dataset
 
 
-def CropAndPadForRNN(dataset, length, logger=None, sentence_pair_data=False):
+def CropAndPadForRNN(dataset, length, logger=None, sentence_pair_data=False, discard_long_training_examples=False):
     # NOTE: This can probably be done faster in NumPy if it winds up making a
     # difference.
     if sentence_pair_data:
@@ -188,6 +193,8 @@ def CropAndPadForRNN(dataset, length, logger=None, sentence_pair_data=False):
         for tokens_key in keys:
             num_tokens = len(example[tokens_key])
             tokens_left_padding = length - num_tokens
+            if tokens_left_padding < 0:
+                dataset.remove(example)
             CropAndPadExample(
                 example, tokens_left_padding, length, tokens_key,
                 symbol=SENTENCE_PADDING_SYMBOL, logger=logger, allow_cropping=True)
@@ -299,7 +306,7 @@ def MakeStandardEvalIterator(sources, batch_size, limit=-1, shuffle=False, rseed
     # TODO(SB): Pad out the last few examples in the eval set if they don't
     # form a batch.
 
-    print "WARNING: May be discarding eval examples."
+    print "Warning: May be discarding eval examples at batch ends."
 
     dataset_size = limit if limit >= 0 else len(sources[0])
     order = range(dataset_size)
@@ -366,9 +373,8 @@ def MakeBucketEvalIterator(sources, batch_size):
 
 def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=False, logger=None,
                       sentence_pair_data=False, for_rnn=False):
-    # TODO(SB): Simpler version for plain RNN.
     dataset = TrimDataset(dataset, seq_length, eval_mode=eval_mode,
-                          sentence_pair_data=sentence_pair_data)
+                          sentence_pair_data=sentence_pair_data, logger=logger)
     dataset = TokensToIDs(vocabulary, dataset, sentence_pair_data=sentence_pair_data)
     if for_rnn:
         dataset = CropAndPadForRNN(dataset, seq_length, logger=logger,
