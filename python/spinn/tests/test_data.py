@@ -186,7 +186,7 @@ class SNLITestCase(unittest.TestCase):
 
     def test_preprocess(self):
         seq_length = 25
-        for_rnn = False
+        simple = False
 
         data_manager = load_nli_data
         raw_data, _ = data_manager.load_data(nli_data_path)
@@ -202,7 +202,7 @@ class SNLITestCase(unittest.TestCase):
         data = util.PreprocessDataset(
             raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-            for_rnn=for_rnn)
+            simple=simple)
 
         tokens, transitions, labels, num_transitions = data[:4]
 
@@ -239,7 +239,7 @@ class SNLITestCase(unittest.TestCase):
     def test_valid_transitions_train(self):
         # TODO: Check on shorter length.
         seq_length = 150
-        for_rnn = False
+        simple = False
 
         data_manager = load_nli_data
         raw_data, _ = data_manager.load_data(nli_data_path)
@@ -253,7 +253,7 @@ class SNLITestCase(unittest.TestCase):
         data = util.PreprocessDataset(
             raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-            for_rnn=for_rnn)
+            simple=simple)
 
         tokens, transitions, labels, num_transitions = data[:4]
 
@@ -267,7 +267,7 @@ class SNLITestCase(unittest.TestCase):
     def test_valid_transitions_eval(self):
         # TODO: Check on shorter length.
         seq_length = 150
-        for_rnn = False
+        simple = False
 
         data_manager = load_nli_data
         raw_data, _ = data_manager.load_data(nli_data_path)
@@ -281,7 +281,7 @@ class SNLITestCase(unittest.TestCase):
         data = util.PreprocessDataset(
             raw_data, vocabulary, seq_length, data_manager, eval_mode=True, logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-            for_rnn=for_rnn)
+            simple=simple)
 
         tokens, transitions, labels, num_transitions = data[:4]
 
@@ -306,7 +306,7 @@ class SSTTestCase(unittest.TestCase):
 
     def test_preprocess(self):
         seq_length = 30
-        for_rnn = False
+        simple = False
 
         data_manager = load_sst_data
         raw_data, _ = data_manager.load_data(sst_data_path)
@@ -322,7 +322,7 @@ class SSTTestCase(unittest.TestCase):
         data = util.PreprocessDataset(
             raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-            for_rnn=for_rnn)
+            simple=simple)
 
         tokens, transitions, labels, num_transitions = data[:4]
 
@@ -352,7 +352,7 @@ class ArithmeticTestCase(unittest.TestCase):
 
     def test_preprocess_sign(self):
         seq_length = 10
-        for_rnn = False
+        simple = False
 
         data_manager = load_sign_data
         raw_data, vocabulary = data_manager.load_data(sign_data_path)
@@ -362,7 +362,7 @@ class ArithmeticTestCase(unittest.TestCase):
         data = util.PreprocessDataset(
             raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-            for_rnn=for_rnn)
+            simple=simple)
 
         seqs, transitions, labels, num_transitions = data[:4]
 
@@ -385,7 +385,7 @@ class ArithmeticTestCase(unittest.TestCase):
 
     def test_preprocess_simple(self):
         seq_length = 10
-        for_rnn = False
+        simple = False
 
         data_manager = load_simple_data
         raw_data, vocabulary = data_manager.load_data(simple_data_path)
@@ -395,7 +395,7 @@ class ArithmeticTestCase(unittest.TestCase):
         data = util.PreprocessDataset(
             raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-            for_rnn=for_rnn)
+            simple=simple)
 
         seqs, transitions, labels, num_transitions = data[:4]
 
@@ -468,7 +468,7 @@ class DualArithmeticTestCase(unittest.TestCase):
 
     def test_preprocess_eq(self):
         seq_length = 10
-        for_rnn = False
+        simple = False
 
         data_manager = load_eq_data
         raw_data, vocabulary = data_manager.load_data(eq_data_path)
@@ -478,7 +478,7 @@ class DualArithmeticTestCase(unittest.TestCase):
         data = util.PreprocessDataset(
             raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-            for_rnn=for_rnn)
+            simple=simple)
 
         seqs, transitions, labels, num_transitions = data[:4]
 
@@ -502,7 +502,7 @@ class DualArithmeticTestCase(unittest.TestCase):
 
     def test_preprocess_relational(self):
         seq_length = 10
-        for_rnn = False
+        simple = False
 
         data_manager = load_relational_data
         raw_data, vocabulary = data_manager.load_data(relational_data_path)
@@ -512,7 +512,7 @@ class DualArithmeticTestCase(unittest.TestCase):
         data = util.PreprocessDataset(
             raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-            for_rnn=for_rnn)
+            simple=simple)
 
         seqs, transitions, labels, num_transitions = data[:4]
 
@@ -548,7 +548,7 @@ class BooleanTestCase(unittest.TestCase):
 
     def test_preprocess(self):
         seq_length = 24
-        for_rnn = False
+        simple = False
 
         data_manager = load_boolean_data
         raw_data, vocabulary = data_manager.load_data(boolean_data_path)
@@ -558,7 +558,7 @@ class BooleanTestCase(unittest.TestCase):
         data = util.PreprocessDataset(
             raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-            for_rnn=for_rnn)
+            simple=simple)
 
         tokens, transitions, labels, num_transitions = data[:4]
 
@@ -584,13 +584,13 @@ class BooleanTestCase(unittest.TestCase):
             assert t_is_left_padded(ts)
 
 
-def suite_single_seq(seq_length, for_rnn, data_manager, path, starts_with, limit=100):
+def suite_single_seq(seq_length, simple, data_manager, path, starts_with, limit=100):
     raw_data, vocabulary = data_manager.load_data(path)
 
     data = util.PreprocessDataset(
         raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
         sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-        for_rnn=for_rnn)
+        simple=simple)
 
     seqs, transitions, labels, num_transitions = data[:4]
 
@@ -619,13 +619,13 @@ class ListopsTestCase(unittest.TestCase):
 
     def test_preprocess(self):
         seq_length = 100
-        for_rnn = False
+        simple = False
         data_manager = load_listops_data
         path = listops_data_path
         starts_with = ['[MIN', '[MAX', '[FIRST', '[LAST']
         starts_with = [listops_base.FIXED_VOCABULARY[k] for k in starts_with]
 
-        suite_single_seq(seq_length, for_rnn, data_manager, path, starts_with)
+        suite_single_seq(seq_length, simple, data_manager, path, starts_with)
 
     def test_spans(self):
         tokens = ['[MAX', '3', '[MAX', '1', '7', ']', ']']
