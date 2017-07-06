@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
+import torch.nn.functional as F
 
 from spinn.util.blocks import Embed, to_gpu, MLP
 from spinn.util.misc import Args, Vocab
@@ -37,6 +38,8 @@ class RNNModel(nn.Module):
     def __init__(self, model_dim=None,
                  word_embedding_dim=None,
                  vocab_size=None,
+                 use_product_feature=None,
+                 use_difference_feature=None,
                  initial_embeddings=None,
                  num_classes=None,
                  embedding_keep_rate=None,
@@ -51,13 +54,16 @@ class RNNModel(nn.Module):
         super(RNNModel, self).__init__()
 
         self.use_sentence_pair = use_sentence_pair
+        self.use_difference_feature = use_difference_feature
+        self.use_product_feature = use_product_feature
+
         self.model_dim = model_dim
 
         classifier_dropout_rate = 1. - classifier_keep_rate
+        self.embedding_dropout_rate = 1. - embedding_keep_rate
 
         args = Args()
         args.size = model_dim
-        args.input_dropout_rate = 1. - embedding_keep_rate
 
         vocab = Vocab()
         vocab.size = initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size
@@ -67,7 +73,7 @@ class RNNModel(nn.Module):
 
         self.rnn = nn.LSTM(args.size, model_dim, num_layers=1, batch_first=True)
 
-        mlp_input_dim = model_dim * 2 if use_sentence_pair else model_dim
+        mlp_input_dim = self.get_features_dim()
 
         self.mlp = MLP(mlp_input_dim, mlp_dim, num_classes,
                        num_mlp_layers, mlp_ln, classifier_dropout_rate)
@@ -103,6 +109,7 @@ class RNNModel(nn.Module):
         embeds = self.encode(embeds)
         embeds = self.reshape_context(embeds, batch_size, seq_length)
         embeds = torch.cat([b.unsqueeze(0) for b in torch.chunk(embeds, batch_size, 0)], 0)
+        embeds = F.dropout(embeds, self.embedding_dropout_rate, training=self.training)
 
         return embeds
 
@@ -114,9 +121,31 @@ class RNNModel(nn.Module):
         emb = self.run_embed(x)
         hh = torch.squeeze(self.run_rnn(emb))
         h = self.wrap(hh)
-        output = self.mlp(h)
+        output = self.mlp(self.build_features(h))
 
         return output
+
+    def get_features_dim(self):
+        features_dim = self.model_dim * 2 if self.use_sentence_pair else self.model_dim
+        if self.use_sentence_pair:
+            if self.use_difference_feature:
+                features_dim += self.model_dim
+            if self.use_product_feature:
+                features_dim += self.model_dim
+        return features_dim
+
+    def build_features(self, h):
+        if self.use_sentence_pair:
+            h_prem, h_hyp = h
+            features = [h_prem, h_hyp]
+            if self.use_difference_feature:
+                features.append(h_prem - h_hyp)
+            if self.use_product_feature:
+                features.append(h_prem * h_hyp)
+            features = torch.cat(features, 1)
+        else:
+            features = h
+        return features
 
     # --- Sentence Style Switches ---
 
@@ -141,7 +170,7 @@ class RNNModel(nn.Module):
 
     def wrap_sentence_pair(self, hh):
         batch_size = hh.size(0) / 2
-        h = torch.cat([hh[:batch_size], hh[batch_size:]], 1)
+        h = ([hh[:batch_size], hh[batch_size:]])
         return h
 
     # --- Sentence Pair Specific ---

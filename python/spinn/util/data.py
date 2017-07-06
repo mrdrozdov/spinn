@@ -13,7 +13,7 @@ from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 # With loaded embedding matrix, the padding vector will be initialized to zero
 # and will not be trained. Hopefully this isn't a problem. It seems better than
 # random initialization...
-PADDING_TOKEN = "*PADDING*"
+PADDING_TOKEN = "_PAD"
 
 # Temporary hack: Map UNK to "_" when loading pretrained embedding matrices:
 # it's a common token that is pretrained, but shouldn't look like any content words.
