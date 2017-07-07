@@ -89,13 +89,16 @@ with open(args.log_path_spinn) as f:
   s = 0
   for line in f:
     start = re.search("entries", line)
+    start_ev = re.search("evaluation", line)
     check = re.search("step", line)
+    end = re.search("invalid", line)
     
     # Skip header
-    if start:
-      s += 1
+    if start or start_ev:
+      s = True
 
-    if s > 0:
+    #if s > 0:
+    if s:
       for val in d:
         cur = re.search(str(val), line)
         ev = re.search("eval", line)
@@ -116,6 +119,9 @@ with open(args.log_path_spinn) as f:
       if check and (len(d["step"]) != len(d[sample_columns[0]])):
         for val in sample_columns:
           d[val] += "-"
+
+      if end:
+        s = False
 
 
 """
