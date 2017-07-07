@@ -5,7 +5,6 @@
 #SBATCH -c2
 #SBATCH --mem=8000
 #SBATCH -t24:00:00
-#SBATCH --qos=mhealth
 
 # Log what we're running and where.
 echo $SLURM_JOBID - `hostname` - $SPINN_FLAGS >> ~/spinn_machine_assignments.txt
