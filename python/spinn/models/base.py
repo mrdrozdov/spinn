@@ -289,6 +289,8 @@ def get_flags():
                         "If in (0, 1), multiply the temperature by this constant at test time. If exactly 0.0, use the efficient hard max variant of the model at tent time.")
     gflags.DEFINE_float("pyramid_temperature_decay_per_10k_steps",
                         0.5, "Ideal for use with Gumbel.")
+    gflags.DEFINE_float("pyramid_temperature_cycle_length",
+                        0.0, "For wake-sleep-style experiments. 0.0 disables this feature.")
     gflags.DEFINE_integer("pyramid_selection_dim",
                           20, "Hidden state size for the scoring function.")
 

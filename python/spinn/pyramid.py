@@ -170,6 +170,7 @@ class Pyramid(nn.Module):
             # Recompute invalidated selection logits in one big batch:
             # This is organized this way as the amount that needs to recompute depends
             # on the number of merges that were at the edge of the pyramid structure.
+            # TODO: Simplify by using this same code to compute the initial logits.
             if layer > 1:
                 to_recompute = []
                 for b in range(batch_size):

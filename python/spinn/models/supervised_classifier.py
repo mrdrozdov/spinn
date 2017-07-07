@@ -3,6 +3,7 @@ import json
 import random
 import sys
 import time
+import math
 
 import gflags
 import numpy as np
@@ -54,6 +55,9 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
     if FLAGS.model_type == "Pyramid":
         pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (
             step / 10000.0)
+        if FLAGS.pyramid_temperature_cycle_length > 0.0:
+            min_temp = 1e-5
+            pyramid_temperature_multiplier *= (math.cos((step) / FLAGS.pyramid_temperature_cycle_length) + 1 + min_temp) / 2
     else:
         pyramid_temperature_multiplier = None
 
@@ -175,6 +179,9 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         if FLAGS.model_type == "Pyramid":
             pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (
                 step / 10000.0)
+            if FLAGS.pyramid_temperature_cycle_length > 0.0:
+                min_temp = 1e-5
+                pyramid_temperature_multiplier *= (math.cos((step) / FLAGS.pyramid_temperature_cycle_length) + 1 + min_temp) / 2
         else:
             pyramid_temperature_multiplier = None
 
