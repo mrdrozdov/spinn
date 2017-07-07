@@ -110,6 +110,15 @@ class EvalReporter(object):
                 f.write(str(self.report))
 
 
+def PrintParamStatistics(name, param):
+    data = param.data.cpu().numpy()
+    print name,
+    print "Mean:", np.mean(data),
+    print "Std:", np.std(data),
+    print "Min:", np.min(data),
+    print "Max:", np.max(data)
+
+
 def recursively_set_device(inp, gpu):
     if hasattr(inp, 'keys'):
         for k in inp.keys():
