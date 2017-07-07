@@ -4,7 +4,7 @@
 
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
-#SBATCH --mem=12000
+#SBATCH --mem=16000
 #SBATCH -t24:00:00
 
 #PRINCE PRINCE_GPU_COMPUTE_MODE=default
