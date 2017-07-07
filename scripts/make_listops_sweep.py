@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "listops_07_06_64p"
-SWEEP_RUNS = 12
+NAME = "listops_07_06_64c"
+SWEEP_RUNS = 32
 
 LIN = "LIN"
 EXP = "EXP"
@@ -45,37 +45,32 @@ FIXED_PARAMETERS = {
     "ckpt_path":  FLAGS.log_path,
     "word_embedding_dim":   "128",
     "model_dim":   "128",
-    "seq_length":   "50",
-    "eval_seq_length":  "1500",
+    "eval_seq_length":  "3200",
     "eval_interval_steps": "1000",
     "statistics_interval_steps": "100",
     "metrics_interval_steps": "100",
-    #"use_internal_parser": "",
     "batch_size":  "64",
-    #"nouse_tracking_in_composition": "",
-    #"nolateral_tracking": "",
     "encode": "pass",
     "mlp_dim": "16",
     "num_mlp_layers": "2",
-    #"transition_weight": "0.1",
     "semantic_classifier_keep_rate": "1.0",
     "embedding_keep_rate": "1.0",
     "sample_interval_steps": "1000",
     "pyramid_test_time_temperature_multiplier": "0.0",
+    "pyramid_gumbel": "",
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
+    "seq_length":      ("seq", LIN, 40, 120),  # RNN likes higher, but below 009.
+    "clipping_max_value":      ("gc", EXP, 0.1, 100),  # RNN likes higher, but below 009.
     "learning_rate":      ("lr", EXP, 0.0001, 0.01),  # RNN likes higher, but below 009.
-    "l2_lambda":          ("l2", EXP, 8e-7, 2e-5),
-    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.4, 0.8),
+    "l2_lambda":          ("l2", EXP, 4e-7, 8e-4),
+    "learning_rate_decay_per_10k_steps": ("dc", EXP, 0.4, 1.0),
     "pyramid_trainable_temperature": ("tt", BOOL, None, None),
-    "pyramid_temperature_decay_per_10k_steps": ("tdec", EXP, 0.33, 1.0),
-    "pyramid_gumbel": ("pg", BOOL, None, None),
+    "pyramid_temperature_decay_per_10k_steps": ("tdc", EXP, 0.2, 1.0),
+    "pyramid_selection_dim": ("sd", EXP, 2, 128),
     "composition_ln": ("ln", BOOL, None, None),    
-#    "tracking_lstm_hidden_dim": ("tdim", EXP, 4, 16),
-#    "rl_weight":  ("rlwt", EXP, 0.000001, 0.0009),
-#    "transition_weight":  ("trwt", EXP, 0.3, 3.0),
 }
 
 sweep_name = "sweep_" + NAME + "_" + \
@@ -144,5 +139,5 @@ for run_id in range(SWEEP_RUNS):
     if NYU_NON_PBS:
         print "cd spinn/python; python2.7 -m spinn.models.supervised_classifier " + flags
     else:
-        print "SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh"
+        print "SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_cpu_only.sh"
     print
