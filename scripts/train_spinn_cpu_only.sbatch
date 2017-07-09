@@ -3,7 +3,7 @@
 # Generic job script for all experiments.
 
 #SBATCH -c2
-#SBATCH --mem=8000
+#SBATCH --mem=16000
 #SBATCH -t24:00:00
 
 # Log what we're running and where.
