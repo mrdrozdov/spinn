@@ -247,6 +247,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
             A.add('xent_cost', xent_loss.data[0])
             A.add('l2_cost', l2_loss.data[0])
             stats(model, optimizer, A, true_step, log_entry)
+            should_log = True
 
         if true_step % FLAGS.sample_interval_steps == 0 and FLAGS.num_samples > 0:
             should_log = True

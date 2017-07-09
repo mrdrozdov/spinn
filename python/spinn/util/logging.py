@@ -227,7 +227,7 @@ def eval_format(evaluation, extra=False):
 def sample_format(entry):
     sample_str = "t_idx: {t_idx} \n \
                     crossing: {crossing} \n \
-                    gold_lb:{gold_lb} \n \
+                    gold_lb: {gold_lb} \n \
                     pred_tr: {pred_tr} \n \
                     strg_tr: {strg_tr} \n \
                     strg_ev: {strg_ev} \n"
