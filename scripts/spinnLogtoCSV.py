@@ -91,14 +91,13 @@ with open(args.log_path_spinn) as f:
     start = re.search("entries", line)
     start_ev = re.search("evaluation", line)
     start_sample = re.search("rl_sampling", line)
-    check = re.search("step", line)
     end = re.search("invalid", line)
     end_sample = re.search("strg_ev", line)
     
     # Skip header
     if start or start_ev or start_sample:
       s = True
-      
+
     if s:
       for val in d:
         cur = re.search(str(val), line)
@@ -112,18 +111,27 @@ with open(args.log_path_spinn) as f:
           d[val] += re.findall(':(.*)', line)
 
       # Make evaluation columns the same length
-      if check and (len(d["step"]) != len(d[ev_columns[0]])):
-        for val in ev_columns:
-          d[val] += "-"
+    if start and (len(d["step"]) != len(d[ev_columns[0]])):
+      for val in ev_columns:
+        d[val] += "-"
 
-      # Make sample columns the same length
-      if check and (len(d["step"]) != len(d[sample_columns[0]])):
-        for val in sample_columns:
-          d[val] += "-"
+    # Make sample columns the same length
+    if start and (len(d["step"]) != len(d[sample_columns[0]])):
+      for val in sample_columns:
+        d[val] += "-"
 
-      if end or end_sample:
-        s = False
+    if end or end_sample:
+      s = False
 
+
+if (len(d["step"]) != len(d[ev_columns[0]])):
+  for val in ev_columns:
+    d[val] += "-"
+
+# Make sample columns the same length
+if (len(d["step"]) != len(d[sample_columns[0]])):
+  for val in sample_columns:
+    d[val] += "-"
 
 """
 Convert to dataframe and save as csv
