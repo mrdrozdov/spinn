@@ -7,6 +7,8 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 
+from tuner_utils.yellowfin import YFOptimizer
+
 from spinn.util.misc import recursively_set_device
 from functools import reduce
 
@@ -361,21 +363,28 @@ class ModelTrainer(object):
         self.optimizer = optimizer
 
     def save(self, filename, step, best_dev_error):
+        if not isinstance(self.optimizer, YFOptimizer):
+            optimizer_state_dict = self.optimizer.state_dict()
+        else:
+            optimizer_state_dict = None
+
         if the_gpu() >= 0:
             recursively_set_device(self.model.state_dict(), gpu=-1)
-            recursively_set_device(self.optimizer.state_dict(), gpu=-1)
+            if not isinstance(self.optimizer, YFOptimizer):
+                recursively_set_device(self.optimizer.state_dict(), gpu=-1)
 
         # Always sends Tensors to CPU.
         torch.save({
             'step': step,
             'best_dev_error': best_dev_error,
             'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
+            'optimizer_state_dict': optimizer_state_dict,
         }, filename)
 
         if the_gpu() >= 0:
             recursively_set_device(self.model.state_dict(), gpu=the_gpu())
-            recursively_set_device(self.optimizer.state_dict(), gpu=the_gpu())
+            if not isinstance(self.optimizer, YFOptimizer):
+                recursively_set_device(self.optimizer.state_dict(), gpu=the_gpu())
 
     def load(self, filename):
         checkpoint = torch.load(filename)
@@ -386,7 +395,8 @@ class ModelTrainer(object):
             model_state_dict['baseline'] = torch.FloatTensor([0.0])
 
         self.model.load_state_dict(model_state_dict)
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        if not isinstance(self.optimizer, YFOptimizer):
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         return checkpoint['step'], checkpoint['best_dev_error']
 
 
