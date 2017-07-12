@@ -28,6 +28,8 @@ import spinn.plain_rnn
 import spinn.cbow
 import spinn.pyramid
 
+from tuner_utils.yellowfin import YFOptimizer
+
 # PyTorch
 import torch
 import torch.nn as nn
@@ -332,7 +334,7 @@ def get_flags():
                         "Used for dropout in the semantic task classifier.")
 
     # Optimization settings.
-    gflags.DEFINE_enum("optimizer_type", "Adam", ["Adam", "RMSprop"], "")
+    gflags.DEFINE_enum("optimizer_type", "Adam", ["Adam", "RMSprop", "YellowFin"], "")
     gflags.DEFINE_integer("training_steps", 500000, "Stop training after this point.")
     gflags.DEFINE_integer("batch_size", 32, "SGD minibatch size.")
     gflags.DEFINE_float("learning_rate", 0.001, "Used in optimizer.")
@@ -538,6 +540,8 @@ def init_model(
                                betas=(0.9, 0.999), eps=1e-08)
     elif FLAGS.optimizer_type == "RMSprop":
         optimizer = optim.RMSprop(model.parameters(), lr=FLAGS.learning_rate, eps=1e-08)
+    elif FLAGS.optimizer_type == "YellowFin":
+        optimizer = YFOptimizer(model.parameters(), lr=FLAGS.learning_rate)
     else:
         raise NotImplementedError
 

@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "listops_07_07_64cy"
-SWEEP_RUNS = 20
+NAME = "listops_07_10_64cy"
+SWEEP_RUNS = 12
 
 LIN = "LIN"
 EXP = "EXP"
@@ -43,8 +43,8 @@ FIXED_PARAMETERS = {
     "log_path": FLAGS.log_path,
     "metrics_path": FLAGS.log_path,
     "ckpt_path":  FLAGS.log_path,
-    "word_embedding_dim":   "128",
-    "model_dim":   "128",
+    "word_embedding_dim":   "256",
+    "model_dim":   "256",
     "eval_seq_length":  "3200",
     "eval_interval_steps": "1000",
     "statistics_interval_steps": "100",
@@ -64,9 +64,9 @@ FIXED_PARAMETERS = {
 # Tunable parameters.
 SWEEP_PARAMETERS = {
     "seq_length":      ("seq", LIN, 40, 120),  # RNN likes higher, but below 009.
-    "learning_rate":      ("lr", EXP, 0.0001, 0.01),  # RNN likes higher, but below 009.
-    "l2_lambda":          ("l2", EXP, 4e-7, 8e-4),
-    "learning_rate_decay_per_10k_steps": ("dc", EXP, 0.4, 1.0),
+    "learning_rate":      ("lr", EXP, 0.00005, 0.005),  # RNN likes higher, but below 009.
+    "l2_lambda":          ("l2", EXP, 8e-7, 1e-3),
+    "learning_rate_decay_per_10k_steps": ("dc", LIN, 0.3, 1.0),
     "pyramid_trainable_temperature": ("tt", BOOL, None, None),
     "pyramid_temperature_decay_per_10k_steps": ("tdc", EXP, 0.2, 1.0),
     "pyramid_selection_dim": ("sd", EXP, 2, 64),
