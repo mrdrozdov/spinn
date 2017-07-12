@@ -454,7 +454,8 @@ def run(only_forward=False):
         model.cuda()
     else:
         model.cpu()
-    recursively_set_device(optimizer.state_dict(), FLAGS.gpu)
+    if FLAGS.optimizer_type != "YellowFin":
+        recursively_set_device(optimizer.state_dict(), FLAGS.gpu)
 
     # Debug
     def set_debug(self):

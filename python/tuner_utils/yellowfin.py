@@ -43,6 +43,7 @@ class YFOptimizer(object):
 
     # for decaying learning rate and etc.
     self._lr_factor = 1.0
+    self.state_dict = None
     pass
 
 

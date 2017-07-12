@@ -542,6 +542,7 @@ def init_model(
         optimizer = optim.RMSprop(model.parameters(), lr=FLAGS.learning_rate, eps=1e-08)
     elif FLAGS.optimizer_type == "YellowFin":
         optimizer = YFOptimizer(model.parameters(), lr=FLAGS.learning_rate)
+        logger.Log("Warning: Using YellowFin draft release. Optimizer state may not save/restore properly.")
     else:
         raise NotImplementedError
 
