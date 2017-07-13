@@ -44,6 +44,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
     index = len(log_entry.evaluation)
     eval_log = log_entry.evaluation.add()
     reporter = EvalReporter()
+    sample_str = None
 
     # Evaluate
     total_batches = len(dataset)
@@ -75,7 +76,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
 
         if show_sample and FLAGS.model_type == "Pyramid":
             sample = model.get_sample(eval_X_batch, vocabulary)
-            logger.Log(model.prettyprint_sample(sample))
+            sample_str = model.prettyprint_sample(sample)
         show_sample = False  # Only show one sample, regardless of the number of batches.
 
         # Normalize output.
@@ -113,6 +114,8 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
         # Print Progress
         progress_bar.step(i + 1, total=total_batches)
     progress_bar.finish()
+    if sample_str is not None:
+        logger.Log('Sample: ' + sample_str)
 
     end = time.time()
     total_time = end - start

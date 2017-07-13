@@ -83,8 +83,6 @@ def stats(model, optimizer, A, step, log_entry):
     log_entry.l2_cost = A.get_avg('l2_cost')  # not actual mean
     if not isinstance(optimizer, YFOptimizer):
         log_entry.learning_rate = optimizer.lr
-    else:
-        log_entry.learning_rate = -0.0
     log_entry.time_per_token_seconds = time_metric
 
     total_cost = log_entry.l2_cost + log_entry.cross_entropy_cost
@@ -183,47 +181,49 @@ def train_format(log_entry, extra=False, rl=False):
     stats_str = "Step: {step}"
 
     # Accuracy Component.
-    stats_str += " Acc: {class_acc:.5f} {transition_acc:.5f}"
+    stats_str += " Acc: cl {class_acc:.5f} tr {transition_acc:.5f}"
 
     # Cost Component.
-    stats_str += " Cost: {total_loss:.5f} {xent_loss:.5f} {transition_loss:.5f} {l2_loss:.5f}"
+    stats_str += " Cost: to {total_loss:.5f} xe {xent_loss:.5f} tr {transition_loss:.5f} reg {l2_loss:.5f}"
     if log_entry.HasField('policy_cost'):
-        stats_str += " p{policy_cost:.5f}"
+        stats_str += " po {policy_cost:.5f}"
     if log_entry.HasField('value_cost'):
-        stats_str += " v{value_cost:.5f}"
+        stats_str += " va {value_cost:.5f}"
 
     # Time Component.
     stats_str += " Time: {time:.5f}"
 
     # Extra Component.
-    if extra:
+    if extra and log_entry.HasField('learning_rate') or log_entry.HasField('invalid'):
         stats_str += "\nTrain Extra:"
-        stats_str += " lr{learning_rate:.7f}"
+        if log_entry.HasField('learning_rate'):
+            stats_str += " lr{learning_rate:.7f}"
         if log_entry.HasField('invalid'):
             stats_str += " inv{invalid:.3f}"
 
     # RL Component.
     if rl:
         stats_str += "\nTrain RL:"
-        stats_str += " am{mean_adv_mean:.5f}"
-        stats_str += " amm{mean_adv_mean_magnitude:.5f}"
-        stats_str += " av{mean_adv_var:.5f}"
-        stats_str += " avm{mean_adv_var_magnitude:.5f}"
-        stats_str += " t{temperature:.3f}"
-        stats_str += " eps{epsilon:.7f}"
+        stats_str += " am {mean_adv_mean:.5f}"
+        stats_str += " amm {mean_adv_mean_magnitude:.5f}"
+        stats_str += " av {mean_adv_var:.5f}"
+        stats_str += " avm {mean_adv_var_magnitude:.5f}"
+        stats_str += " t {temperature:.3f}"
+        stats_str += " eps {epsilon:.7f}"
     elif hasattr(log_entry, "temperature"):
-        stats_str += " t{temperature:.3f}"
+        stats_str += "Gumbel:"
+        stats_str += " t {temperature:.3f}"
 
     return stats_str
 
 
 def eval_format(evaluation, extra=False):
-    eval_str = "Step: {step} Eval acc: {class_acc:.5f} {transition_acc:.5f} {filename} Time: {time:.5f}"
+    eval_str = "Step: {step} Eval acc: cl {class_acc:.5f} tr {transition_acc:.5f} {filename} Time: {time:.5f}"
 
     if extra:
         eval_str += "\nEval Extra:"
         if evaluation.HasField('invalid'):
-            eval_str += " inv{invalid:.3f}"
+            eval_str += " inv {invalid:.3f}"
 
     return eval_str
 
