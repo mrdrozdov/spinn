@@ -211,8 +211,7 @@ def train_format(log_entry, extra=False, rl=False):
         stats_str += " t {temperature:.3f}"
         stats_str += " eps {epsilon:.7f}"
     elif hasattr(log_entry, "temperature"):
-        stats_str += "Gumbel:"
-        stats_str += " t {temperature:.3f}"
+        stats_str += " Temp: {temperature:.3f}"
 
     return stats_str
 
