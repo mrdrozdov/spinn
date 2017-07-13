@@ -27,7 +27,6 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 
-
 from spinn.models.base import get_data_manager, get_flags, get_batch
 from spinn.models.base import flag_defaults, init_model
 from spinn.models.base import sequential_only, get_checkpoint_path, log_path
