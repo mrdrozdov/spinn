@@ -135,13 +135,15 @@ def load_data_and_embeddings(FLAGS, data_manager, logger, training_data_path, ev
     if FLAGS.data_type == "nli":
         # Load the eval data.
         raw_eval_sets = []
-        raw_eval_data, _ = data_manager.load_data(eval_data_path, FLAGS.lowercase, choose_eval)
-        raw_eval_sets.append((eval_data_path, raw_eval_data))
+        for path in eval_data_path.split(':'):
+            raw_eval_data, _ = data_manager.load_data(path, FLAGS.lowercase, choose_eval)
+            raw_eval_sets.append((path, raw_eval_data))
     else:
         # Load the eval data.
         raw_eval_sets = []
-        raw_eval_data, _ = data_manager.load_data(eval_data_path, FLAGS.lowercase)
-        raw_eval_sets.append((eval_data_path, raw_eval_data))
+        for path in eval_data_path.split(':'):
+            raw_eval_data, _ = data_manager.load_data(path, FLAGS.lowercase)
+            raw_eval_sets.append((path, raw_eval_data))
 
     # Prepare the vocabulary.
     if not vocabulary:
