@@ -114,7 +114,8 @@ def CropAndPadExample(example, left_padding, target_length, key,
         example[key] + ([symbol] * right_padding)
 
 
-def CropAndPadForSPINN(dataset, length, logger=None, sentence_pair_data=False, allow_cropping=False):
+def CropAndPadForSPINN(dataset, length, logger=None,
+                       sentence_pair_data=False, allow_cropping=False):
     # NOTE: This can probably be done faster in NumPy if it winds up making a
     # difference.
     # Always make sure that the transitions are aligned at the left edge, so

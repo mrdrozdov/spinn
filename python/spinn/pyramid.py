@@ -219,13 +219,14 @@ class Pyramid(nn.Module):
 
         for layer in range(seq_len - 1, 0, -1):
             composition_results = []
-            selection_logits_list = [] 
+            selection_logits_list = []
 
             for position in range(layer):
                 left = torch.squeeze(all_state_pairs[-1][position])
                 right = torch.squeeze(all_state_pairs[-1][position + 1])
                 composition_results.append(self.composition_fn(left, right))
-                selection_input = torch.cat([left[:, self.model_dim / 2:], right[:, self.model_dim / 2:]], 1)
+                selection_input = torch.cat(
+                    [left[:, self.model_dim / 2:], right[:, self.model_dim / 2:]], 1)
                 selection_logit = self.selection_fn(selection_input)
                 selection_logits_list.append(selection_logit)
 

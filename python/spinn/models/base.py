@@ -545,7 +545,8 @@ def init_model(
     elif FLAGS.optimizer_type == "YellowFin":
         optimizer = YFOptimizer(model.parameters(), lr=FLAGS.learning_rate)
         if FLAGS.actively_decay_learning_rate:
-            logger.Log("WARNING: Ignoring actively_decay_learning_rate and learning_rate_decay_per_10k_steps. Not implemeted for YellowFin.")
+            logger.Log(
+                "WARNING: Ignoring actively_decay_learning_rate and learning_rate_decay_per_10k_steps. Not implemeted for YellowFin.")
     else:
         raise NotImplementedError
 
