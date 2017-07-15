@@ -66,27 +66,31 @@ class RLSPINN(SPINN):
     def predict_actions(self, transition_output):
         transition_dist = F.softmax(
             transition_output / max(self.temperature, 1e-8)).data.cpu()
+        shift_probs = transition_dist[:, 0]
 
         if self.training:
             if self.catalan:
+                # TODO: Should enable this during eval also!
+                # TODO: Which probability should be backpropogated through?
+
                 # Interpolate between the uniform random distrubition of binary trees
                 # and the distribution from the transition_net's softmax.
-                p_temp = transition_dist[:, 0]
-                p = F.softmax(transition_output).data[:, 0].cpu()
-                original = torch.zeros(p.size()).fill_(0.5)
-                desired = [self.shift_probabilities.prob(n_red, n_step, n_tok)
+                p_shift = shift_probs
+                p_shift_catalan = [self.shift_probabilities.prob(n_red, n_step, n_tok)
                            for n_red, n_step, n_tok in zip(self.n_reduces, self.n_steps, self.n_tokens)]
-                desired = torch.FloatTensor(desired)
-                new_p = interpolate(p_temp, p, original, desired)
-                new_p = new_p.unsqueeze(1)
-                transition_dist = torch.cat([new_p, 1 - new_p], 1)
+                p_shift_catalan = torch.FloatTensor(p_shift_catalan)
+                p_shift_new_ = p_shift * p_shift_catalan
+                p_reduce_new_ = (1.-p_shift) * (1.-p_shift_catalan)
+                p_shift_new = p_shift_new_ / (p_shift_new_ + p_reduce_new_)
 
-            shift_probs = transition_dist[:, 0].numpy()
+                # TODO: Is there a problem when a probability for shift/reduce is 0?
+
+                shift_probs = p_shift_new
+            np_shift_probs = shift_probs.numpy()
             transition_preds = (np.random.rand(
-                *shift_probs.shape) > shift_probs).astype('int32')
+                *np_shift_probs.shape) > np_shift_probs).astype('int32')
         else:
             # Greedy prediction
-            shift_probs = transition_dist[:, 0]
             transition_preds = torch.round(
                 1 - shift_probs).numpy().astype('int32')
         return transition_preds
