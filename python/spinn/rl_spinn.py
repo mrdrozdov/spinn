@@ -65,35 +65,34 @@ class RLSPINN(SPINN):
 
     def predict_actions(self, transition_output):
         transition_dist = F.softmax(
-            transition_output / max(self.temperature, 1e-8)).data.cpu()
-        shift_probs = transition_dist[:, 0]
+            transition_output / max(self.temperature, 1e-8))
+
+        if self.catalan:
+            # Use the catalan distribution as a prior.
+            p_shift_catalan = [self.shift_probabilities.prob(n_red, n_step, n_tok)
+                       for n_red, n_step, n_tok in zip(self.n_reduces, self.n_steps, self.n_tokens)]
+            p_shift_catalan = torch.FloatTensor(p_shift_catalan).view(-1, 1)
+            p_catalan = torch.cat([p_shift_catalan, 1.-p_shift_catalan], 1)
+            p_catalan = to_gpu(Variable(p_catalan))
+
+            _p_new = transition_dist * p_catalan
+            p_new =  _p_new / _p_new.sum(1).expand_as(_p_new) # normalize
+            transition_dist = p_new
+
+            # TODO: Is there a problem when a probability for shift/reduce is 0?
+
+        transition_logdist = torch.log(transition_dist + 1e-8)
+        shift_probs = transition_dist.data[:, 0]
 
         if self.training:
-            if self.catalan:
-                # TODO: Should enable this during eval also!
-                # TODO: Which probability should be backpropogated through?
-
-                # Interpolate between the uniform random distrubition of binary trees
-                # and the distribution from the transition_net's softmax.
-                p_shift = shift_probs
-                p_shift_catalan = [self.shift_probabilities.prob(n_red, n_step, n_tok)
-                           for n_red, n_step, n_tok in zip(self.n_reduces, self.n_steps, self.n_tokens)]
-                p_shift_catalan = torch.FloatTensor(p_shift_catalan)
-                p_shift_new_ = p_shift * p_shift_catalan
-                p_reduce_new_ = (1.-p_shift) * (1.-p_shift_catalan)
-                p_shift_new = p_shift_new_ / (p_shift_new_ + p_reduce_new_)
-
-                # TODO: Is there a problem when a probability for shift/reduce is 0?
-
-                shift_probs = p_shift_new
-            np_shift_probs = shift_probs.numpy()
+            np_shift_probs = shift_probs.cpu().numpy()
             transition_preds = (np.random.rand(
                 *np_shift_probs.shape) > np_shift_probs).astype('int32')
         else:
             # Greedy prediction
             transition_preds = torch.round(
-                1 - shift_probs).numpy().astype('int32')
-        return transition_preds
+                1 - shift_probs).cpu().numpy().astype('int32')
+        return transition_logdist, transition_dist, transition_preds
 
 
 class BaseModel(_BaseModel):
