@@ -325,7 +325,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         if should_log:
             logger.LogEntry(log_entry)
 
-        progress_bar.step(i=step % FLAGS.statistics_interval_steps,
+        progress_bar.step(i=(step % FLAGS.statistics_interval_steps) + 1,
                           total=FLAGS.statistics_interval_steps)
 
 

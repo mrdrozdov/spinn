@@ -310,6 +310,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                     best_dev_error = 1 - acc
                     logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
                     trainer.save(best_checkpoint_path, step, best_dev_error)
+            progress_bar.reset()
 
         if step > FLAGS.ckpt_step and step % FLAGS.ckpt_interval_steps == 0:
             should_log = True
@@ -319,7 +320,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         if should_log:
             logger.LogEntry(log_entry)
 
-        progress_bar.step(i=step % FLAGS.statistics_interval_steps,
+        progress_bar.step(i=(step % FLAGS.statistics_interval_steps) + 1,
                           total=FLAGS.statistics_interval_steps)
 
 
