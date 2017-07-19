@@ -2,7 +2,7 @@
 
 # Generic job script for all experiments.
 
-#SBATCH --partition=gpu
+#SBATCH --partition=mhealth,k80_4,k80_8
 #SBATCH --gres=gpu:1
 #SBATCH --mem=16000
 #SBATCH -t24:00:00
