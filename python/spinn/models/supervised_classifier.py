@@ -249,17 +249,12 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         A.add('total_tokens', total_tokens)
         A.add('total_time', total_time)
 
-        if step % FLAGS.statistics_interval_steps == 0 \
-                or step % FLAGS.metrics_interval_steps == 0:
-            if step % FLAGS.statistics_interval_steps == 0:
-                progress_bar.step(i=FLAGS.statistics_interval_steps,
-                                  total=FLAGS.statistics_interval_steps)
-                progress_bar.finish()
-
+        if step % FLAGS.statistics_interval_steps == 0:
             A.add('xent_cost', xent_loss.data[0])
             A.add('l2_cost', l2_loss.data[0])
             stats(model, optimizer, A, step, log_entry)
             should_log = True
+            progress_bar.finish()
 
         if step % FLAGS.sample_interval_steps == 0 and FLAGS.num_samples > 0:
             should_log = True
@@ -315,21 +310,14 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                     best_dev_error = 1 - acc
                     logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
                     trainer.save(best_checkpoint_path, step, best_dev_error)
-            progress_bar.reset()
 
         if step > FLAGS.ckpt_step and step % FLAGS.ckpt_interval_steps == 0:
             should_log = True
             logger.Log("Checkpointing.")
             trainer.save(standard_checkpoint_path, step, best_dev_error)
 
-        log_level = afs_safe_logger.ProtoLogger.INFO
-        if not should_log and step % FLAGS.metrics_interval_steps == 0:
-            # Log to file, but not to stderr.
-            should_log = True
-            log_level = afs_safe_logger.ProtoLogger.DEBUG
-
         if should_log:
-            logger.LogEntry(log_entry, level=log_level)
+            logger.LogEntry(log_entry)
 
         progress_bar.step(i=step % FLAGS.statistics_interval_steps,
                           total=FLAGS.statistics_interval_steps)

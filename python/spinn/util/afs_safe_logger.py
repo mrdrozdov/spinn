@@ -31,7 +31,7 @@ class ProtoLogger(object):
             json_log_path=None,
             print_formatter=None,
             write_proto=True,
-            min_print_level=1):
+            min_print_level=0):
         # root: The parent log message to store in file (SpinnLog).
         #   The message must contain only "header" and "entries" as submessages.
         #   Fill out the header when creating the logger.
@@ -83,7 +83,7 @@ class ProtoLogger(object):
             msg_str = str(self.root)
             msg_fmt = self.print_formatter(message)
             if level >= self.min_print_level:
-                sys.stderr.write(msg_fmt)
+                sys.stderr.write("%s\n" % msg_fmt)
             if self.log_path:  # Write to the log file then close it
                 datetime_string = datetime.datetime.now().strftime(
                     "%y-%m-%d %H:%M:%S ")
@@ -91,6 +91,6 @@ class ProtoLogger(object):
                 if not self.write_proto:
                     msg_str = msg_line
                 with open(self.log_path, 'a') as f:
-                    f.write(msg_str)
+                    f.write("%s\n" % msg_str)
         finally:
             self.root.Clear()

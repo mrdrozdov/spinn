@@ -219,10 +219,9 @@ def train_format(log_entry, extra=False, rl=False):
 def eval_format(evaluation, extra=False):
     eval_str = "Step: {step} Eval acc: cl {class_acc:.5f} tr {transition_acc:.5f} {filename} Time: {time:.5f}"
 
-    if extra:
+    if extra and evaluation.HasField('invalid'):
         eval_str += "\nEval Extra:"
-        if evaluation.HasField('invalid'):
-            eval_str += " inv {invalid:.3f}"
+        eval_str += " inv {invalid:.3f}"
 
     return eval_str
 
@@ -233,7 +232,7 @@ def sample_format(entry):
                     gold_lb: {gold_lb} \n \
                     pred_tr: {pred_tr} \n \
                     strg_tr: {strg_tr} \n \
-                    strg_ev: {strg_ev} \n"
+                    strg_ev: {strg_ev} "
 
     return sample_str
 
