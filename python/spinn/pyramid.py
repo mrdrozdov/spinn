@@ -7,7 +7,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 
-from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer, gumbel_sample
+from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer, gumbel_sample, st_gumbel_sample
 from spinn.util.misc import Args, Vocab
 from spinn.util.blocks import SimpleTreeLSTM
 from spinn.util.sparks import sparks
@@ -236,8 +236,10 @@ class Pyramid(nn.Module):
             if not isinstance(local_temperature, float):
                 local_temperature = local_temperature.expand_as(selection_logits)
 
-            if self.training and self.gumbel:
+            if self.training and self.gumbel == "plain":
                 selection_probs = gumbel_sample(selection_logits, local_temperature)
+            elif self.training and self.gumbel == "st":
+                selection_probs = st_gumbel_sample(selection_logits, local_temperature)
             else:
                 # Plain softmax
                 selection_logits = selection_logits / local_temperature

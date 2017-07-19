@@ -285,8 +285,8 @@ def get_flags():
                                               "treegru", "tanh"], "Specify composition function.")
 
     # Pyramid model settings
-    gflags.DEFINE_boolean("pyramid_gumbel", True,
-                          "Use gumbel softmax in the Pyramid model gating.")
+    gflags.DEFINE_enum("pyramid_gumbel", "none", ["none", "plain", "st"],
+                          "Use gumbel softmax or straight-through gumbel softmax in the Pyramid model gating.")
     gflags.DEFINE_boolean("pyramid_trainable_temperature", None,
                           "If set, add a scalar trained temperature parameter.")
     gflags.DEFINE_float("pyramid_test_time_temperature_multiplier", 1.0,
@@ -417,7 +417,7 @@ def flag_defaults(FLAGS, load_log_flags=False):
 
     if not FLAGS.sample_interval_steps:
         FLAGS.sample_interval_steps = FLAGS.statistics_interval_steps
-        
+
     if not FLAGS.metrics_path:
         FLAGS.metrics_path = FLAGS.log_path
 

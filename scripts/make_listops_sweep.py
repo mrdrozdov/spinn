@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "listops_07_10_64cy"
+NAME = "listops_07_19"
 SWEEP_RUNS = 12
 
 LIN = "LIN"
@@ -43,12 +43,11 @@ FIXED_PARAMETERS = {
     "log_path": FLAGS.log_path,
     "metrics_path": FLAGS.log_path,
     "ckpt_path":  FLAGS.log_path,
-    "word_embedding_dim":   "256",
-    "model_dim":   "256",
+    "word_embedding_dim":   "128",
+    "model_dim":   "128",
     "eval_seq_length":  "3200",
     "eval_interval_steps": "1000",
     "statistics_interval_steps": "100",
-    "metrics_interval_steps": "100",
     "batch_size":  "64",
     "encode": "pass",
     "mlp_dim": "16",
@@ -57,7 +56,6 @@ FIXED_PARAMETERS = {
     "embedding_keep_rate": "1.0",
     "sample_interval_steps": "1000",
     "pyramid_test_time_temperature_multiplier": "0.0",
-    "pyramid_gumbel": "",
     "nocomposition_ln": "",
 }
 
@@ -70,7 +68,8 @@ SWEEP_PARAMETERS = {
     "pyramid_trainable_temperature": ("tt", BOOL, None, None),
     "pyramid_temperature_decay_per_10k_steps": ("tdc", EXP, 0.2, 1.0),
     "pyramid_selection_dim": ("sd", EXP, 2, 64),
-    "pyramid_temperature_cycle_length": ("cl", CHOICE, ['0', '30', '300'], None),    
+    "pyramid_temperature_cycle_length": ("cl", CHOICE, ['0', '0', '30', '300'], None),
+    "pyramid_gumbel": ("pg", CHOICE, ['plain', 'st'], None),   
 }
 
 sweep_name = "sweep_" + NAME + "_" + \
