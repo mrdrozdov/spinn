@@ -478,7 +478,7 @@ class SimpleProgressBar(object):
         sys.stdout.write('\r')
         pct = (i / float(total)) * 100
         ii = i * self.bar_length / total
-        fmt = "%s [%-{}s] %d%% %ds / %ds".format(self.bar_length)
+        fmt = "%s [%-{}s] %d%% %ds / %ds    ".format(self.bar_length)
         total_time = time.time() - self.begin
         expected = total_time / ((i + 1e-03) / float(total))
         sys.stdout.write(fmt % (self.msg, '=' * ii, pct, total_time, expected))
