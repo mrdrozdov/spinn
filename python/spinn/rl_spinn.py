@@ -10,7 +10,6 @@ import torch.nn.functional as F
 
 from spinn.util.blocks import MLP
 from spinn.util.blocks import the_gpu, to_gpu
-from spinn.util.catalan import interpolate
 
 from spinn.spinn_core_model import BaseModel as _BaseModel
 from spinn.spinn_core_model import SPINN
@@ -64,32 +63,35 @@ class RLSPINN(SPINN):
     eplison = 1.0
 
     def predict_actions(self, transition_output):
-        transition_dist = F.softmax(
-            transition_output / max(self.temperature, 1e-8)).data.cpu()
+        transition_output_t = transition_output / max(self.temperature, 1e-8)
+        transition_dist = F.softmax(transition_output_t)
+
+        if self.catalan:
+            # Use the catalan distribution as a prior.
+            p_shift_catalan = [self.shift_probabilities.prob(n_red, n_step, n_tok)
+                               for n_red, n_step, n_tok in zip(self.n_reduces, self.n_steps, self.n_tokens)]
+            p_shift_catalan = torch.FloatTensor(p_shift_catalan).view(-1, 1)
+            p_catalan = torch.cat([p_shift_catalan, 1. - p_shift_catalan], 1)
+            p_catalan = to_gpu(Variable(p_catalan))
+
+            _p_new = transition_dist * p_catalan
+            p_new = _p_new / _p_new.sum(1).expand_as(_p_new)  # normalize
+            transition_dist = p_new
+
+        transition_logdist = F.log_softmax(transition_output_t)
+        # # uncomment to backprop with prior
+        # transition_logdist = torch.log(transition_dist + 1e-8)
+        shift_probs = transition_dist.data[:, 0]
 
         if self.training:
-            if self.catalan:
-                # Interpolate between the uniform random distrubition of binary trees
-                # and the distribution from the transition_net's softmax.
-                p_temp = transition_dist[:, 0]
-                p = F.softmax(transition_output).data[:, 0].cpu()
-                original = torch.zeros(p.size()).fill_(0.5)
-                desired = [self.shift_probabilities.prob(n_red, n_step, n_tok)
-                           for n_red, n_step, n_tok in zip(self.n_reduces, self.n_steps, self.n_tokens)]
-                desired = torch.FloatTensor(desired)
-                new_p = interpolate(p_temp, p, original, desired)
-                new_p = new_p.unsqueeze(1)
-                transition_dist = torch.cat([new_p, 1 - new_p], 1)
-
-            shift_probs = transition_dist[:, 0].numpy()
+            np_shift_probs = shift_probs.cpu().numpy()
             transition_preds = (np.random.rand(
-                *shift_probs.shape) > shift_probs).astype('int32')
+                *np_shift_probs.shape) > np_shift_probs).astype('int32')
         else:
             # Greedy prediction
-            shift_probs = transition_dist[:, 0]
             transition_preds = torch.round(
-                1 - shift_probs).numpy().astype('int32')
-        return transition_preds
+                1 - shift_probs).cpu().numpy().astype('int32')
+        return transition_logdist, transition_preds
 
 
 class BaseModel(_BaseModel):
