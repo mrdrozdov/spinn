@@ -94,10 +94,13 @@ class CatalanPyramid(object):
             offset = n_reduces * 2 + 2
             ii = i - offset
 
-            relevant_rows = list(reversed(self.decimal_rows[0:n_tokens-2]))
-            decimal_row = list(reversed(relevant_rows[n_reduces]))
+            relevant_row_index = n_tokens - 2
+            relevant_row_index = relevant_row_index - n_reduces - 1
+            relevant_row = self.decimal_rows[relevant_row_index]
 
-            return decimal_row[ii]
+            iii = len(relevant_row) - ii - 1
+
+            return relevant_row[iii]
 
 
 class ShiftProbabilities(object):
