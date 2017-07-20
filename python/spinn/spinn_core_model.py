@@ -236,11 +236,9 @@ class SPINN(nn.Module):
         return _preds, _invalid
 
     def predict_actions(self, transition_output):
-        transition_dist = F.softmax(transition_output)
-        transition_dist = transition_dist.data.cpu().numpy()
-        transition_logdist = torch.log(transition_dist + 1e-8)
-        transition_preds = transition_dist.argmax(axis=1)
-        return transition_logdist, transition_dist, transition_preds
+        transition_logdist = F.log_softmax(transition_output)
+        transition_preds = transition_logdist.data.cpu().numpy().argmax(axis=1)
+        return transition_logdist, transition_preds
 
     def get_transitions_per_example(self, style="preds"):
         if style == "preds":
@@ -396,7 +394,7 @@ class SPINN(nn.Module):
                     # TODO: Mask before predicting. This should simplify things and reduce computation.
                     # The downside is that in the Action Phase, need to be smarter about which stacks/bufs
                     # are selected.
-                    transition_logdist, transition_dist, transition_preds = self.predict_actions(transition_output)
+                    transition_logdist, transition_preds = self.predict_actions(transition_output)
 
                     # Distribution of transitions use to calculate transition loss.
                     self.memory["t_logprobs"] = transition_logdist

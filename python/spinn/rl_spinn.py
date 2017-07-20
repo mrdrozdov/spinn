@@ -63,8 +63,8 @@ class RLSPINN(SPINN):
     eplison = 1.0
 
     def predict_actions(self, transition_output):
-        transition_dist = F.softmax(
-            transition_output / max(self.temperature, 1e-8))
+        transition_output_t = transition_output / max(self.temperature, 1e-8)
+        transition_dist = F.softmax(transition_output_t)
 
         if self.catalan:
             # Use the catalan distribution as a prior.
@@ -80,7 +80,8 @@ class RLSPINN(SPINN):
 
             # TODO: Is there a problem when a probability for shift/reduce is 0?
 
-        transition_logdist = torch.log(transition_dist + 1e-8)
+        transition_logdist = F.log_softmax(transition_output_t)
+        # transition_logdist = torch.log(transition_dist + 1e-8) # uncomment to backprop with prior
         shift_probs = transition_dist.data[:, 0]
 
         if self.training:
@@ -91,7 +92,7 @@ class RLSPINN(SPINN):
             # Greedy prediction
             transition_preds = torch.round(
                 1 - shift_probs).cpu().numpy().astype('int32')
-        return transition_logdist, transition_dist, transition_preds
+        return transition_logdist, transition_preds
 
 
 class BaseModel(_BaseModel):
