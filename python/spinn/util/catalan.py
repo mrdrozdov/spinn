@@ -1,36 +1,3 @@
-def interpolate(p_temp, p, original, desired):
-    """
-    interpolate(p_temp, p, original, desired)
-
-    Is used to recalculate temperature in a way that high temperature
-    converges at a desired non-uniform value. This operates under the assumption
-    that a probability from a "temperature-like" equation can be represented as a
-    fraction of the equation when temperature is 1 (`p`), and when temperature
-    is at some other value (`original`). One simple other value to use is the point of
-    convergence, which is uniform over the inputs.
-
-    Parameters
-    ----------
-
-    p_temp : FloatTensor
-        The output of sigmoid or softmax using temperature.
-    p : FloatTensor
-        The output of sigmoid or softmax without temperature or when t = 1.
-    original : FloatTensor
-        The original convergence point when sigmoid or softmax with temperature
-        was calculated. This will typically be 0.5.
-    desired : FloatTensor
-        The desired convergence point.
-
-    For examples:
-    https://github.com/mrdrozdov/notebooks/blob/master/temperature.ipynb
-    """
-    i = (p_temp - original) / (p - original)
-    new_p = i * p_temp + (1 - i) * desired
-    new_p = new_p.clamp(min=0, max=1)
-    return new_p
-
-
 class Catalan(object):
     def __init__(self):
         """
@@ -62,93 +29,78 @@ class Catalan(object):
 class CatalanPyramid(object):
     def __init__(self):
         self.cat = Catalan()
-
-    def build_pyramid(self, n):
-        """
-        Returns list of list of lists representing fractions in the Catalan Pyramid.
-
-        """
-
-        ret = [
-            [(1, 2)]
+        self.fraction_rows = [
+            [(1, 2)],
+        ]
+        self.decimal_rows = [
+            [0.5],
         ]
 
-        for i in range(1, n):
-            n_i = i + 1
-            row = [[None, None] for _ in range(n_i)]
+    def fill_rows(self, depth):
+        populated_rows = len(self.decimal_rows)
+        if populated_rows < depth:
+            for i in range(populated_rows, depth):
+                n_i = i + 1
+                fraction_row = [[None, None] for _ in range(n_i)]
 
-            # Rule 1: Right Diagonal Numerator
-            row[0][0] = 1
+                # Rule 1: Right Diagonal Numerator
+                fraction_row[0][0] = 1
 
-            # Rule 2: Right Diagonal Denominator
-            row[0][1] = i + 2
+                # Rule 2: Right Diagonal Denominator
+                fraction_row[0][1] = i + 2
 
-            # Rule 3: Left Diagonal Denominator
-            row[n_i - 1][1] = self.cat.catalan(i + 2)
+                # Rule 3: Left Diagonal Denominator
+                fraction_row[n_i - 1][1] = self.cat.catalan(i + 2)
 
-            # Rule 4: Left Diagonal Numerator
-            row[n_i - 1][0] = row[n_i - 1][1] - ret[-1][n_i - 2][1]
+                # Rule 4: Left Diagonal Numerator
+                fraction_row[n_i - 1][0] = fraction_row[n_i - 1][1] - self.fraction_rows[-1][n_i - 2][1]
 
-            for j in range(1, n_i - 1):
-                # Rule 5: Rest of Numerators
-                row[j][0] = row[j - 1][1]
+                for j in range(1, n_i - 1):
+                    # Rule 5: Rest of Numerators
+                    fraction_row[j][0] = fraction_row[j - 1][1]
 
-                # Rule 6: Rest of Denominators
-                row[j][1] = row[j][0] + ret[-1][j][1]
+                    # Rule 6: Rest of Denominators
+                    fraction_row[j][1] = fraction_row[j][0] + self.fraction_rows[-1][j][1]
 
-            ret.append(row)
+                # Normalize the row
+                decimal_row = [numerator / float(denominator) for numerator, denominator in fraction_row]
 
-        return ret
+                self.fraction_rows.append(fraction_row)
+                self.decimal_rows.append(decimal_row)
 
-    def normalize_pyramid(self, pyramid):
-        ret = []
-
-        for row in pyramid:
-            ret.append([n / float(d) for n, d in row])
-
-        return ret
-
-    def build_lookup_table(self, pyramid):
-        depth = len(pyramid) + 1
+    def access(self, n_reduces, i, n_tokens):
+        n_rows = n_tokens - 2
+        depth = n_tokens - 1
         width = depth * 2 + 1
-        ret = []
+        n_shifts = i - n_reduces
+        n_stack = n_shifts - n_reduces
 
-        for i in range(depth):
-            row = [0.0] * width
+        self.fill_rows(n_tokens-2)
 
-            if i > 0:
-                rowp = pyramid[i - 1]
-                for j, col in enumerate(rowp):
-                    row[-(j + i + 2)] = col
+        if n_reduces > 0 and n_reduces > n_shifts - 1: # unreachable state.
+            return 0.0
+        elif n_stack <= 1: # insufficient items on stack. must shift.
+            return 1.0
+        elif n_reduces == n_tokens - 1: # no reduces left. must shift.
+            return 1.0
+        elif n_shifts == n_tokens: # no shifts left. must reduce.
+            return 0.0
+        elif i >= n_tokens + n_reduces: # nothing on buffer. must reduce.
+            return 0.0
+        else:
+            offset = n_reduces * 2 + 2
+            ii = i - offset
 
-            if i == 0:
-                row[-(i + 2)] = 1.0
-            elif i < depth - 1:
-                row[-(i + 2 + len(rowp))] = 1.0
-            elif i == depth - 1:
-                row[0] = 1.0
-                row[1] = 1.0
+            relevant_rows = list(reversed(self.decimal_rows[0:n_tokens-2]))
+            decimal_row = list(reversed(relevant_rows[n_reduces]))
 
-            ret.append(row)
-
-        ret = list(reversed(ret))
-
-        return ret
-
-    def lookup_table(self, n_tokens):
-        pyr = self.build_pyramid(n_tokens - 2)
-        pyr = self.normalize_pyramid(pyr)
-        table = self.build_lookup_table(pyr)
-        return table
+            return decimal_row[ii]
 
 
 class ShiftProbabilities(object):
     def __init__(self):
         self.cache = dict()
-        self.builder = CatalanPyramid()
+        self.catalan_pyramid = CatalanPyramid()
 
     def prob(self, n_reduces, i, n_tokens):
-        if n_tokens not in self.cache:
-            self.cache[n_tokens] = self.builder.lookup_table(n_tokens)
-        table = self.cache[n_tokens]
-        return table[n_reduces][i]
+        return catalan_pyramid.access(n_reduces, i, n_tokens)

@@ -43,21 +43,70 @@ class CatalanTestCase(unittest.TestCase):
 
     def test_lookup_table_3(self):
         n_tokens = 3
-        builder = CatalanPyramid()
-        table = builder.lookup_table(n_tokens)
+        catalan_pyramid = CatalanPyramid()
 
-        for r1, r2 in zip(table, target_3):
-            for c1, c2 in zip(r1, r2):
-                assert c1 == c2, "\nRet: {}\nExp: {}".format(r1, r2)
+        depth = n_tokens - 1
+        width = n_tokens * 2 - 1
+
+        for i in range(width):
+            for n_reduces in range(depth):
+                actual = catalan_pyramid.access(n_reduces, i, n_tokens)
+                expected = target_3[n_reduces][i]
+                assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(actual, expected)
+
+    def test_lookup_table_3_with_twist(self):
+        n_tokens = 3
+        catalan_pyramid = CatalanPyramid()
+
+        catalan_pyramid.access(0, 0, 10) # populate extra rows.
+
+        depth = n_tokens - 1
+        width = n_tokens * 2 - 1
+
+        for i in range(width):
+            for n_reduces in range(depth):
+                actual = catalan_pyramid.access(n_reduces, i, n_tokens)
+                expected = target_3[n_reduces][i]
+                assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(actual, expected)
 
     def test_lookup_table_12(self):
         n_tokens = 12
-        builder = CatalanPyramid()
-        table = builder.lookup_table(n_tokens)
+        catalan_pyramid = CatalanPyramid()
 
-        for r1, r2 in zip(table, target_12):
-            for c1, c2 in zip(r1, r2):
-                assert almost_equal(c1, c2), "\nRet: {}\nExp: {}".format(r1, r2)
+        depth = n_tokens - 1
+        width = n_tokens * 2 - 1
+
+        for i in range(width):
+            for n_reduces in range(depth):
+                actual = catalan_pyramid.access(n_reduces, i, n_tokens)
+                expected = target_12[n_reduces][i]
+                assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(actual, expected)
+
+    def test_lookup_table_12_with_twist(self):
+        n_tokens = 12
+        catalan_pyramid = CatalanPyramid()
+
+        catalan_pyramid.access(0, 0, 20) # populate extra rows.
+
+        depth = n_tokens - 1
+        width = n_tokens * 2 - 1
+
+        for i in range(width):
+            for n_reduces in range(depth):
+                actual = catalan_pyramid.access(n_reduces, i, n_tokens)
+                expected = target_12[n_reduces][i]
+                assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(actual, expected)
+
+    def test_lookup_table_12_random_access(self):
+        n_tokens = 12
+        n_reduces = 3
+        i = 10
+        expected = 0.480769230769
+
+        catalan_pyramid = CatalanPyramid()
+        actual = catalan_pyramid.access(n_reduces, i, n_tokens)
+
+        assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(actual, expected)
 
 
 if __name__ == '__main__':
