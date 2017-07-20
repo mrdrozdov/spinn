@@ -52,13 +52,14 @@ class CatalanTestCase(unittest.TestCase):
             for n_reduces in range(depth):
                 actual = catalan_pyramid.access(n_reduces, i, n_tokens)
                 expected = target_3[n_reduces][i]
-                assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(actual, expected)
+                assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(
+                    actual, expected)
 
     def test_lookup_table_3_with_twist(self):
         n_tokens = 3
         catalan_pyramid = CatalanPyramid()
 
-        catalan_pyramid.access(0, 0, 10) # populate extra rows.
+        catalan_pyramid.access(0, 0, 10)  # populate extra rows.
 
         depth = n_tokens - 1
         width = n_tokens * 2 - 1
@@ -67,7 +68,8 @@ class CatalanTestCase(unittest.TestCase):
             for n_reduces in range(depth):
                 actual = catalan_pyramid.access(n_reduces, i, n_tokens)
                 expected = target_3[n_reduces][i]
-                assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(actual, expected)
+                assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(
+                    actual, expected)
 
     def test_lookup_table_12(self):
         n_tokens = 12
@@ -80,13 +82,14 @@ class CatalanTestCase(unittest.TestCase):
             for n_reduces in range(depth):
                 actual = catalan_pyramid.access(n_reduces, i, n_tokens)
                 expected = target_12[n_reduces][i]
-                assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(actual, expected)
+                assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(
+                    actual, expected)
 
     def test_lookup_table_12_with_twist(self):
         n_tokens = 12
         catalan_pyramid = CatalanPyramid()
 
-        catalan_pyramid.access(0, 0, 20) # populate extra rows.
+        catalan_pyramid.access(0, 0, 20)  # populate extra rows.
 
         depth = n_tokens - 1
         width = n_tokens * 2 - 1
@@ -95,7 +98,8 @@ class CatalanTestCase(unittest.TestCase):
             for n_reduces in range(depth):
                 actual = catalan_pyramid.access(n_reduces, i, n_tokens)
                 expected = target_12[n_reduces][i]
-                assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(actual, expected)
+                assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(
+                    actual, expected)
 
     def test_lookup_table_12_random_access(self):
         n_tokens = 12
@@ -106,7 +110,8 @@ class CatalanTestCase(unittest.TestCase):
         catalan_pyramid = CatalanPyramid()
         actual = catalan_pyramid.access(n_reduces, i, n_tokens)
 
-        assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(actual, expected)
+        assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(
+            actual, expected)
 
     def test_large(self):
         n_tokens = 1000
@@ -115,7 +120,8 @@ class CatalanTestCase(unittest.TestCase):
         # expected = ?
 
         catalan_pyramid = CatalanPyramid()
-        actual = catalan_pyramid.access(n_reduces, i, n_tokens) # causes OverflowError when dividing long ints
+        # causes OverflowError when dividing long ints
+        actual = catalan_pyramid.access(n_reduces, i, n_tokens)
 
 
 if __name__ == '__main__':

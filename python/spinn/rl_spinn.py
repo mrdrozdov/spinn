@@ -69,19 +69,18 @@ class RLSPINN(SPINN):
         if self.catalan:
             # Use the catalan distribution as a prior.
             p_shift_catalan = [self.shift_probabilities.prob(n_red, n_step, n_tok)
-                       for n_red, n_step, n_tok in zip(self.n_reduces, self.n_steps, self.n_tokens)]
+                               for n_red, n_step, n_tok in zip(self.n_reduces, self.n_steps, self.n_tokens)]
             p_shift_catalan = torch.FloatTensor(p_shift_catalan).view(-1, 1)
-            p_catalan = torch.cat([p_shift_catalan, 1.-p_shift_catalan], 1)
+            p_catalan = torch.cat([p_shift_catalan, 1. - p_shift_catalan], 1)
             p_catalan = to_gpu(Variable(p_catalan))
 
             _p_new = transition_dist * p_catalan
-            p_new =  _p_new / _p_new.sum(1).expand_as(_p_new) # normalize
+            p_new = _p_new / _p_new.sum(1).expand_as(_p_new)  # normalize
             transition_dist = p_new
 
-            # TODO: Is there a problem when a probability for shift/reduce is 0?
-
         transition_logdist = F.log_softmax(transition_output_t)
-        # transition_logdist = torch.log(transition_dist + 1e-8) # uncomment to backprop with prior
+        # # uncomment to backprop with prior
+        # transition_logdist = torch.log(transition_dist + 1e-8)
         shift_probs = transition_dist.data[:, 0]
 
         if self.training:

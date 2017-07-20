@@ -56,17 +56,20 @@ class CatalanPyramid(object):
                 fraction_row[n_i - 1][1] = self.cat.catalan(i + 2)
 
                 # Rule 4: Left Diagonal Numerator
-                fraction_row[n_i - 1][0] = fraction_row[n_i - 1][1] - self.fraction_rows[-1][n_i - 2][1]
+                fraction_row[n_i - 1][0] = fraction_row[n_i - 1][1] - \
+                    self.fraction_rows[-1][n_i - 2][1]
 
                 for j in range(1, n_i - 1):
                     # Rule 5: Rest of Numerators
                     fraction_row[j][0] = fraction_row[j - 1][1]
 
                     # Rule 6: Rest of Denominators
-                    fraction_row[j][1] = fraction_row[j][0] + self.fraction_rows[-1][j][1]
+                    fraction_row[j][1] = fraction_row[j][0] + \
+                        self.fraction_rows[-1][j][1]
 
                 # Normalize the row
-                decimal_row = [float(Decimal(numerator) / Decimal(denominator)) for numerator, denominator in fraction_row]
+                decimal_row = [float(Decimal(numerator) / Decimal(denominator))
+                               for numerator, denominator in fraction_row]
 
                 self.fraction_rows.append(fraction_row)
                 self.decimal_rows.append(decimal_row)
@@ -78,17 +81,17 @@ class CatalanPyramid(object):
         n_shifts = i - n_reduces
         n_stack = n_shifts - n_reduces
 
-        self.fill_rows(n_tokens-2)
+        self.fill_rows(n_tokens - 2)
 
-        if n_reduces > 0 and n_reduces > n_shifts - 1: # unreachable state.
+        if n_reduces > 0 and n_reduces > n_shifts - 1:  # unreachable state.
             return 0.0
-        elif n_stack <= 1: # insufficient items on stack. must shift.
+        elif n_stack <= 1:  # insufficient items on stack. must shift.
             return 1.0
-        elif n_reduces == n_tokens - 1: # no reduces left. must shift.
+        elif n_reduces == n_tokens - 1:  # no reduces left. must shift.
             return 1.0
-        elif n_shifts == n_tokens: # no shifts left. must reduce.
+        elif n_shifts == n_tokens:  # no shifts left. must reduce.
             return 0.0
-        elif i >= n_tokens + n_reduces: # nothing on buffer. must reduce.
+        elif i >= n_tokens + n_reduces:  # nothing on buffer. must reduce.
             return 0.0
         else:
             offset = n_reduces * 2 + 2
