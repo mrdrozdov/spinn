@@ -15,6 +15,9 @@ from spinn.spinn_core_model import BaseModel as _BaseModel
 from spinn.spinn_core_model import SPINN
 
 
+TINY = 1e-8
+
+
 def build_model(data_manager, initial_embeddings, vocab_size,
                 num_classes, FLAGS, context_args, composition_args, **kwargs):
     model_cls = BaseModel
@@ -63,7 +66,7 @@ class RLSPINN(SPINN):
     eplison = 1.0
 
     def predict_actions(self, transition_output):
-        transition_output_t = transition_output / max(self.temperature, 1e-8)
+        transition_output_t = transition_output / max(self.temperature, TINY)
         transition_dist = F.softmax(transition_output_t)
 
         if self.catalan:
@@ -75,12 +78,12 @@ class RLSPINN(SPINN):
             p_catalan = to_gpu(Variable(p_catalan))
 
             _p_new = transition_dist * p_catalan
-            p_new = _p_new / _p_new.sum(1).expand_as(_p_new)  # normalize
+            p_new =  _p_new / (_p_new.sum(1).expand_as(_p_new) + TINY) # normalize
             transition_dist = p_new
 
         transition_logdist = F.log_softmax(transition_output_t)
         # # uncomment to backprop with prior
-        # transition_logdist = torch.log(transition_dist + 1e-8)
+        # transition_logdist = torch.log(transition_dist + TINY)
         shift_probs = transition_dist.data[:, 0]
 
         if self.training:
