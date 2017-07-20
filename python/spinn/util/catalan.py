@@ -1,3 +1,6 @@
+from decimal import Decimal
+
+
 class Catalan(object):
     def __init__(self):
         """
@@ -63,7 +66,7 @@ class CatalanPyramid(object):
                     fraction_row[j][1] = fraction_row[j][0] + self.fraction_rows[-1][j][1]
 
                 # Normalize the row
-                decimal_row = [numerator / float(denominator) for numerator, denominator in fraction_row]
+                decimal_row = [float(Decimal(numerator) / Decimal(denominator)) for numerator, denominator in fraction_row]
 
                 self.fraction_rows.append(fraction_row)
                 self.decimal_rows.append(decimal_row)

@@ -108,6 +108,15 @@ class CatalanTestCase(unittest.TestCase):
 
         assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(actual, expected)
 
+    def test_large(self):
+        n_tokens = 1000
+        n_reduces = 3
+        i = 10
+        # expected = ?
+
+        catalan_pyramid = CatalanPyramid()
+        actual = catalan_pyramid.access(n_reduces, i, n_tokens) # causes OverflowError when dividing long ints
+
 
 if __name__ == '__main__':
     unittest.main()
