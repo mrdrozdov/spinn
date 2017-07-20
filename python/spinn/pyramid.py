@@ -125,20 +125,31 @@ class Pyramid(nn.Module):
         else:
             self.merge_sequence_memory = None
 
+        def recompute_logits(to_recompute, unbatched_selection_logits_list, unbatched_state_pairs):
+            left = torch.squeeze(
+                torch.cat([unbatched_state_pairs[index_pair[0]][index_pair[1]][:, :, self.model_dim / 2:] for index_pair in to_recompute], 0))
+            right = torch.squeeze(
+                torch.cat([unbatched_state_pairs[index_pair[0]][index_pair[1] + 1][:, :, self.model_dim / 2:] for index_pair in to_recompute], 0))
+            selection_input = torch.cat([left, right], 1)
+            selection_logit = self.selection_fn(selection_input)
+            split_selection_logit = torch.chunk(selection_logit, len(to_recompute), 0)
+            for i in range(len(to_recompute)):
+                index_pair = to_recompute[i]
+                if len(unbatched_selection_logits_list[index_pair[0]]) > index_pair[1]:
+                    unbatched_selection_logits_list[index_pair[0]][index_pair[1]] = \
+                        split_selection_logit[i].data.cpu().numpy()
+                else:
+                    # assert len(unbatched_selection_logits_list[index_pair[0]]) == index_pair[1]
+                    unbatched_selection_logits_list[index_pair[0]].append(split_selection_logit[i].data.cpu().numpy())
+            return unbatched_selection_logits_list
+
         # Most activations won't change between steps, so this can be preserved
         # and updated only when needed.
         unbatched_selection_logits_list = [[] for _ in range(batch_size)]
+        to_compute = []
         for position in range(seq_len - 1):
-            left = torch.squeeze(
-                torch.cat([unbatched_state_pairs[b][position][:, :, self.model_dim / 2:] for b in range(batch_size)], 0))
-            right = torch.squeeze(
-                torch.cat([unbatched_state_pairs[b][position + 1][:, :, self.model_dim / 2:] for b in range(batch_size)], 0))
-            selection_input = torch.cat([left, right], 1)
-            selection_logit = self.selection_fn(selection_input)
-            split_selection_logit = torch.chunk(selection_logit, batch_size, 0)
-            for b in range(batch_size):
-                unbatched_selection_logits_list[b].append(
-                    split_selection_logit[b].data.cpu().numpy())
+            to_compute += [(b, position) for b in range(batch_size)]
+        unbatched_selection_logits_list = recompute_logits(to_compute, unbatched_selection_logits_list, unbatched_state_pairs)
 
         for layer in range(seq_len - 1, 0, -1):
             selection_logits_list = [
@@ -170,7 +181,6 @@ class Pyramid(nn.Module):
             # Recompute invalidated selection logits in one big batch:
             # This is organized this way as the amount that needs to recompute depends
             # on the number of merges that were at the edge of the pyramid structure.
-            # TODO: Simplify by using this same code to compute the initial logits.
             if layer > 1:
                 to_recompute = []
                 for b in range(batch_size):
@@ -179,17 +189,7 @@ class Pyramid(nn.Module):
                         to_recompute.append((b, merge_indices[b] - 1))
                     if merge_indices[b] < len(unbatched_selection_logits_list[b]):
                         to_recompute.append((b, merge_indices[b]))
-                left = torch.squeeze(
-                    torch.cat([unbatched_state_pairs[index_pair[0]][index_pair[1]][:, :, self.model_dim / 2:] for index_pair in to_recompute], 0))
-                right = torch.squeeze(
-                    torch.cat([unbatched_state_pairs[index_pair[0]][index_pair[1] + 1][:, :, self.model_dim / 2:] for index_pair in to_recompute], 0))
-                selection_input = torch.cat([left, right], 1)
-                selection_logit = self.selection_fn(selection_input)
-                split_selection_logit = torch.chunk(selection_logit, len(to_recompute), 0)
-                for i in range(len(to_recompute)):
-                    index_pair = to_recompute[i]
-                    unbatched_selection_logits_list[index_pair[0]][index_pair[1]] = \
-                        split_selection_logit[i].data.cpu().numpy()
+                unbatched_selection_logits_list = recompute_logits(to_recompute, unbatched_selection_logits_list, unbatched_state_pairs)
 
         return torch.squeeze(
             torch.cat([unbatched_state_pairs[b][0][:, :, self.model_dim / 2:] for b in range(batch_size)], 0))
