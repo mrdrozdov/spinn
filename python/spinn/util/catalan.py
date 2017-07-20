@@ -109,4 +109,4 @@ class ShiftProbabilities(object):
         self.catalan_pyramid = CatalanPyramid()
 
     def prob(self, n_reduces, i, n_tokens):
-        return catalan_pyramid.access(n_reduces, i, n_tokens)
+        return self.catalan_pyramid.access(n_reduces, i, n_tokens)

@@ -10,7 +10,6 @@ import torch.nn.functional as F
 
 from spinn.util.blocks import MLP
 from spinn.util.blocks import the_gpu, to_gpu
-from spinn.util.catalan import interpolate
 
 from spinn.spinn_core_model import BaseModel as _BaseModel
 from spinn.spinn_core_model import SPINN
