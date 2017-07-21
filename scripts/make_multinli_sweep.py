@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "06_01_parse"
-SWEEP_RUNS = 12
+NAME = "06_21"
+SWEEP_RUNS = 8
 
 LIN = "LIN"
 EXP = "EXP"
@@ -38,7 +38,7 @@ FLAGS(sys.argv)
 
 FIXED_PARAMETERS = {
     "data_type":     "nli",
-    "model_type":      "SPINN",
+    "model_type":      "Pyramid",
     "training_data_path":    FLAGS.training_data_path,
     "eval_data_path":    FLAGS.eval_data_path,
     "embedding_data_path": FLAGS.embedding_data_path,
@@ -55,21 +55,25 @@ FIXED_PARAMETERS = {
     "embedding_keep_rate": "1.0",
     "batch_size":  "128",
     "encode": "gru",
-    "encode_reverse": "",
+    "encode_bidirectional": "",
     "num_mlp_layers": "2",
     "use_internal_parser": "",
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "learning_rate":      ("lr", EXP, 0.0001, 0.001),  # RNN likes higher, but below 009.
     "mlp_dim":      ("mld", EXP, 96, 256),  # RNN likes higher, but below 009.
-    "l2_lambda":          ("l2", EXP, 1e-7, 1e-5),
-    "learning_rate_decay_per_10k_steps": ("dec", LIN, 0.5, 0.8),
-    "tracking_lstm_hidden_dim": ("tdim", EXP, 8, 64),
     "semantic_classifier_keep_rate": ("skr", LIN, 0.8, 1.0),  # NB: Keep rates may depend considerably on dims.
     "embedding_keep_rate": ("ekr", LIN, 0.8, 1.0),
-    "transition_weight": ("trw", EXP, 0.1, 3.0),
+    "seq_length":      ("seq", LIN, 40, 120),  # RNN likes higher, but below 009.
+    "learning_rate":      ("lr", EXP, 0.00005, 0.002),  # RNN likes higher, but below 009.
+    "l2_lambda":          ("l2", EXP, 1e-7, 1e-3),
+    "learning_rate_decay_per_10k_steps": ("dc", LIN, 0.4, 1.0),
+    "pyramid_trainable_temperature": ("tt", BOOL, None, None),
+    "pyramid_temperature_decay_per_10k_steps": ("tdc", EXP, 0.33, 1.0),
+    "pyramid_selection_dim": ("sd", EXP, 2, 64),
+    "pyramid_temperature_cycle_length": ("cl", CHOICE, ['0', '0', '30', '300'], None),
+    "pyramid_gumbel": ("pg", CHOICE, ['plain', 'st'], None),   
 }
 
 
