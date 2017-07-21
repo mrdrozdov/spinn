@@ -322,6 +322,8 @@ def get_flags():
     gflags.DEFINE_float("rl_confidence_penalty", None, "Penalize probabilities of transitions.")
     gflags.DEFINE_boolean("rl_catalan", False,
                           "Sample over a uniform distribution of binary trees.")
+    gflags.DEFINE_boolean("rl_catalan_backprop", False,
+                          "Sample over a uniform distribution of binary trees.")
     gflags.DEFINE_boolean("rl_wake_sleep", False,
                           "Inverse relationship between temperature and rl_weight.")
     gflags.DEFINE_boolean("rl_transition_acc_as_reward", False,

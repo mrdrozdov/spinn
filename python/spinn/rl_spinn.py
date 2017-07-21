@@ -54,6 +54,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      rl_entropy=FLAGS.rl_entropy,
                      rl_entropy_beta=FLAGS.rl_entropy_beta,
                      rl_catalan=FLAGS.rl_catalan,
+                     rl_catalan_backprop=FLAGS.rl_catalan_backprop,
                      rl_transition_acc_as_reward=FLAGS.rl_transition_acc_as_reward,
                      context_args=context_args,
                      composition_args=composition_args,
@@ -63,6 +64,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
 class RLSPINN(SPINN):
     temperature = 1.0
     catalan = True
+    catalan_backprop = False
     eplison = 1.0
 
     def predict_actions(self, transition_output):
@@ -81,9 +83,10 @@ class RLSPINN(SPINN):
             p_new =  _p_new / (_p_new.sum(1).expand_as(_p_new) + TINY) # normalize
             transition_dist = p_new
 
-        transition_logdist = F.log_softmax(transition_output_t)
-        # # uncomment to backprop with prior
-        # transition_logdist = torch.log(transition_dist + TINY)
+        if self.catalan and self.catalan_backprop:
+            transition_logdist = torch.log(transition_dist + TINY)
+        else:
+            transition_logdist = F.log_softmax(transition_output_t)
         shift_probs = transition_dist.data[:, 0]
 
         if self.training:
@@ -112,6 +115,7 @@ class BaseModel(_BaseModel):
                  rl_entropy=None,
                  rl_entropy_beta=None,
                  rl_catalan=None,
+                 rl_catalan_backprop=None,
                  rl_transition_acc_as_reward=None,
                  **kwargs):
         super(BaseModel, self).__init__(**kwargs)
@@ -128,6 +132,7 @@ class BaseModel(_BaseModel):
         self.rl_entropy_beta = rl_entropy_beta
         self.spinn.epsilon = rl_epsilon
         self.spinn.catalan = rl_catalan
+        self.spinn.catalan_backprop = rl_catalan_backprop
         self.rl_transition_acc_as_reward = rl_transition_acc_as_reward
 
         if self.rl_baseline == "value":
