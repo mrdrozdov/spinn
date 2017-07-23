@@ -2,7 +2,6 @@
 
 This repository contains the source code based on the paper [A Fast Unified Model for Sentence Parsing and Understanding][1] and [original codebase][9]. For a more informal introduction to the ideas behind the model, see this [Stanford NLP blog post][8].
 
-
 The included implementations are:
 
 - A **Python/Pytorch** implementation of SPINN using a naïve stack representation (named `fat-stack`)
@@ -31,7 +30,7 @@ The main executable for the SNLI experiments in the paper is [supervised_classif
 Here's a sample command that runs a fast, low-dimensional CPU training run, training and testing only on the dev set. It assumes that you have a copy of [SNLI](http://nlp.stanford.edu/projects/snli/) available locally.
 
     PYTHONPATH=spinn/python \
-        python2.7 -m spinn.models.supervised_classifier --data_type snli \
+        python2.7 -m spinn.models.supervised_classifier --data_type nli \
         --training_data_path ~/data/snli_1.0/snli_1.0_dev.jsonl \
         --eval_data_path ~/data/snli_1.0/snli_1.0_dev.jsonl \
         --embedding_data_path python/spinn/tests/test_embedding_matrix.5d.txt \
@@ -55,7 +54,7 @@ Then open Visdom in a browser window to see graphs representing accuracy, loss a
 
 ## Contributing
 
-If you're interested in proposing a change or fix to SPINN, please submit a Pull Request. In addition, ensure that existing tests pass, and add new tests as you see appropriate. To run tests, simply run this command from the root directoy:
+If you're interested in proposing a change or fix to SPINN, please submit a Pull Request. In addition, ensure that existing tests pass, and add new tests as you see appropriate. To run tests, simply run this command from the root directory:
 
     nosetests python/spinn/tests
 
