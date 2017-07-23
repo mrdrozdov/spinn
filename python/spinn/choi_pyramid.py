@@ -8,7 +8,7 @@ from torch.nn import init
 from torch.autograd import Variable
 import torch.nn.functional as F
 
-from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer, gumbel_sample, st_gumbel_sample
+from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer
 from spinn.util.misc import Args, Vocab
 from spinn.util.blocks import SimpleTreeLSTM
 from spinn.util.sparks import sparks
@@ -55,14 +55,12 @@ class BinaryTreeLSTM(nn.Module):
         if use_leaf_rnn:
             self.leaf_rnn_cell = nn.LSTMCell(
                 input_size=word_dim, hidden_size=hidden_dim)
-        else:
-            self.word_linear = nn.Linear(in_features=word_dim,
-                                         out_features=2 * hidden_dim)
         self.treelstm_layer = BinaryTreeLSTMLayer(hidden_dim)
         self.comp_query = nn.Parameter(torch.FloatTensor(hidden_dim))
         self.reset_parameters()
 
     def reset_parameters(self):
+        print "RESETTING CHOI PYRAMID PARAMS"
         if self.use_leaf_rnn:
             init.kaiming_normal(self.leaf_rnn_cell.weight_ih.data)
             init.orthogonal(self.leaf_rnn_cell.weight_hh.data)
@@ -70,9 +68,6 @@ class BinaryTreeLSTM(nn.Module):
             init.constant(self.leaf_rnn_cell.bias_hh.data, val=0)
             # Set forget bias to 1
             self.leaf_rnn_cell.bias_ih.data.chunk(4)[1].fill_(1)
-        else:
-            init.kaiming_normal(self.word_linear.weight.data)
-            init.constant(self.word_linear.bias.data, val=0)
         self.treelstm_layer.reset_parameters()
         init.normal(self.comp_query.data, mean=0, std=0.01)
 
@@ -140,8 +135,7 @@ class BinaryTreeLSTM(nn.Module):
             cs = torch.stack(cs, dim=1)
             state = (hs, cs)
         else:
-            state = apply_nd(fn=self.word_linear, input=input)
-            state = state.chunk(num_chunks=2, dim=2)
+            state = input.chunk(num_chunks=2, dim=2)
         nodes = []
         if self.intra_attention:
             nodes.append(state[0])
@@ -233,7 +227,7 @@ class ChoiPyramid(nn.Module):
 
         self.embed = Embed(word_embedding_dim, vocab.size, vectors=vocab.vectors)
 
-        self.binary_tree_lstm = BinaryTreeLSTM(word_embedding_dim, model_dim, False, False, 1.0)
+        self.binary_tree_lstm = BinaryTreeLSTM(word_embedding_dim, model_dim / 2, False, False, 1.0)
 
         mlp_input_dim = self.get_features_dim()
 
@@ -273,7 +267,7 @@ class ChoiPyramid(nn.Module):
         batch_size, seq_len, model_dim = emb.data.size()
         example_lengths_var = to_gpu(Variable(torch.from_numpy(example_lengths))).long()
 
-        h = self.binary_tree_lstm(emb, example_lengths_var, return_select_masks=False)
+        hh, _ = self.binary_tree_lstm(emb, example_lengths_var, return_select_masks=False)
 
         h = self.wrap(hh)
         output = self.mlp(self.build_features(h))
@@ -470,7 +464,6 @@ def st_gumbel_softmax(logits, temperature=1.0, mask=None):
 
 
 def sequence_mask(sequence_length, max_length=None):
-    print sequence_length
     if max_length is None:
         max_length = sequence_length.data.max()
     batch_size = sequence_length.size(0)
