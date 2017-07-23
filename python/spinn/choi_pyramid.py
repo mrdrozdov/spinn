@@ -314,9 +314,9 @@ class ChoiPyramid(nn.Module):
             self.inverted_vocabulary = dict([(vocabulary[key], key) for key in vocabulary])
 
         if self.use_sentence_pair:
-            token_sequence = [self.inverted_vocabulary[token] for token in x[-1, :, 1]]
+            token_sequence = [self.inverted_vocabulary[token] for token in x[0, :, 0]]
         else:
-            token_sequence = [self.inverted_vocabulary[token] for token in x[-1, :]]
+            token_sequence = [self.inverted_vocabulary[token] for token in x[0, :]]
 
         for merge in self.get_sample_merge_sequence():
             token_sequence[merge] = (token_sequence[merge], token_sequence[merge + 1])
@@ -326,7 +326,7 @@ class ChoiPyramid(nn.Module):
     def get_sample_merge_sequence(self):
         merge_sequence = []
         for mask in self.mask_memory:
-            merge_sequence.append(np.argmax(mask[-1, :]))
+            merge_sequence.append(np.argmax(mask[0, :]))
         return merge_sequence
 
     # --- Sentence Style Switches ---
