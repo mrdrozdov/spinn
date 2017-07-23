@@ -66,7 +66,7 @@ SPINN outputs metrics and statistics into a text [protocol buffer](https://devel
 
 ## License
 
-Copyright 2016, Stanford University
+Copyright 2017, New York University
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use these files except in compliance with the License.
