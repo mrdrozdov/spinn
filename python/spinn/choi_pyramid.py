@@ -13,6 +13,8 @@ from spinn.util.misc import Args, Vocab
 from spinn.util.blocks import SimpleTreeLSTM
 from spinn.util.sparks import sparks
 
+# Source: https://github.com/nyu-mll/unsupervised-treelstm/commit/bbe1946e123e396362ecd071d1673766013463f2
+# Original author of core encoder: Jihun Choi, Seoul National Univ.
 
 def build_model(data_manager, initial_embeddings, vocab_size,
                 num_classes, FLAGS, context_args, composition_args, **kwargs):
@@ -254,12 +256,12 @@ class ChoiPyramid(nn.Module):
 
         return embeds
 
-    def forward(self, sentences, transitions, y_batch=None, example_lengths=None, show_sample=False,
+    def forward(self, sentences, _, __=None, example_lengths=None, show_sample=False,
                 pyramid_temperature_multiplier=1.0, **kwargs):
         # Useful when investigating dynamic batching:
         # self.seq_lengths = sentences.shape[1] - (sentences == 0).sum(1)
 
-        x = self.unwrap(sentences, transitions)
+        x, example_lengths = self.unwrap(sentences, example_lengths)
 
         emb = self.run_embed(x)
 
@@ -297,10 +299,10 @@ class ChoiPyramid(nn.Module):
 
     # --- Sentence Style Switches ---
 
-    def unwrap(self, sentences, transitions):
+    def unwrap(self, sentences, lengths=None):
         if self.use_sentence_pair:
-            return self.unwrap_sentence_pair(sentences, transitions)
-        return self.unwrap_sentence(sentences, transitions)
+            return self.unwrap_sentence_pair(sentences, lengths)
+        return self.unwrap_sentence(sentences, lengths)
 
     def wrap(self, hh):
         if self.use_sentence_pair:
@@ -309,12 +311,17 @@ class ChoiPyramid(nn.Module):
 
     # --- Sentence Specific ---
 
-    def unwrap_sentence_pair(self, sentences, transitions):
+    def unwrap_sentence_pair(self, sentences, lengths=None):
         x_prem = sentences[:, :, 0]
         x_hyp = sentences[:, :, 1]
         x = np.concatenate([x_prem, x_hyp], axis=0)
 
-        return to_gpu(Variable(torch.from_numpy(x), volatile=not self.training))
+        if lengths is not None:
+            len_prem = lengths[:, 0]
+            len_hyp = lengths[:, 1]
+            lengths = np.concatenate([len_prem, len_hyp], axis=0)        
+
+        return to_gpu(Variable(torch.from_numpy(x), volatile=not self.training)), lengths
 
     def wrap_sentence_pair(self, hh):
         batch_size = hh.size(0) / 2
@@ -323,8 +330,8 @@ class ChoiPyramid(nn.Module):
 
     # --- Sentence Pair Specific ---
 
-    def unwrap_sentence(self, sentences, transitions):
-        return to_gpu(Variable(torch.from_numpy(sentences), volatile=not self.training))
+    def unwrap_sentence(self, sentences, lengths=None):
+        return to_gpu(Variable(torch.from_numpy(sentences), volatile=not self.training)), lengths
 
     def wrap_sentence(self, hh):
         return hh
