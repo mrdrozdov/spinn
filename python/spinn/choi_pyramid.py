@@ -10,7 +10,7 @@ from torch.nn import init
 from torch.autograd import Variable
 import torch.nn.functional as F
 
-from spinn.util.blocks import Embed, to_gpu, MLP, Linear
+from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer
 from spinn.util.misc import Args, Vocab
 from spinn.util.blocks import SimpleTreeLSTM
 from spinn.util.sparks import sparks
@@ -52,12 +52,10 @@ class BinaryTreeLSTM(nn.Module):
         self.intra_attention = intra_attention
         self.gumbel_temperature = gumbel_temperature
         self.treelstm_layer = BinaryTreeLSTMLayer(hidden_dim)
-        self.comp_query = nn.Parameter(torch.FloatTensor(hidden_dim))
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        self.treelstm_layer.reset_parameters()
-        init.normal(self.comp_query.data, mean=0, std=0.01)
+        self.comp_query = Linear(initializer=HeKaimingInitializer)(in_features=hidden_dim,
+                                                                   out_features=1)
+                                                                   # TODO: Get rid of unused bias.
+ 
 
     @staticmethod
     def update_state(old_state, new_state, done_mask):
@@ -73,7 +71,7 @@ class BinaryTreeLSTM(nn.Module):
         old_h, old_c = old_state
         old_h_left, old_h_right = old_h[:, :-1, :], old_h[:, 1:, :]
         old_c_left, old_c_right = old_c[:, :-1, :], old_c[:, 1:, :]
-        comp_weights = dot_nd(query=self.comp_query, candidates=new_h)
+        comp_weights = dot_nd(query=self.comp_query.weight.squeeze(), candidates=new_h)
         if self.training:
             select_mask = st_gumbel_softmax(
                 logits=comp_weights, temperature=self.gumbel_temperature,
@@ -488,13 +486,8 @@ class BinaryTreeLSTMLayer(nn.Module):
     def __init__(self, hidden_dim):
         super(BinaryTreeLSTMLayer, self).__init__()
         self.hidden_dim = hidden_dim
-        self.comp_linear = nn.Linear(in_features=2 * hidden_dim,
-                                     out_features=5 * hidden_dim)
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        init.kaiming_normal(self.comp_linear.weight.data)
-        init.constant(self.comp_linear.bias.data, val=0)
+        self.comp_linear = Linear(initializer=HeKaimingInitializer)(in_features=2 * hidden_dim,
+                                                                    out_features=5 * hidden_dim)
 
     def forward(self, l=None, r=None):
         """
