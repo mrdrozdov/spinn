@@ -16,6 +16,7 @@ from spinn.util.sparks import sparks
 # Source: https://github.com/nyu-mll/unsupervised-treelstm/commit/bbe1946e123e396362ecd071d1673766013463f2
 # Original author of core encoder: Jihun Choi, Seoul National Univ.
 
+
 def build_model(data_manager, initial_embeddings, vocab_size,
                 num_classes, FLAGS, context_args, composition_args, **kwargs):
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
@@ -115,7 +116,7 @@ class BinaryTreeLSTM(nn.Module):
     def forward(self, input, length, return_select_masks=False):
         max_depth = input.size(1)
         length_mask = sequence_mask(sequence_length=length,
-                                          max_length=max_depth)
+                                    max_length=max_depth)
         select_masks = []
 
         if self.use_leaf_rnn:
@@ -150,12 +151,12 @@ class BinaryTreeLSTM(nn.Module):
                 # last iteration, since it has only one option left.
                 new_h, new_c, select_mask, selected_h = self.select_composition(
                     old_state=state, new_state=new_state,
-                    mask=length_mask[:, i+1:])
+                    mask=length_mask[:, i + 1:])
                 new_state = (new_h, new_c)
                 select_masks.append(select_mask)
                 if self.intra_attention:
                     nodes.append(selected_h)
-            done_mask = length_mask[:, i+1]
+            done_mask = length_mask[:, i + 1]
             state = self.update_state(old_state=state, new_state=new_state,
                                       done_mask=done_mask)
             if self.intra_attention and i >= max_depth - 2:
@@ -352,7 +353,7 @@ class ChoiPyramid(nn.Module):
         if lengths is not None:
             len_prem = lengths[:, 0]
             len_hyp = lengths[:, 1]
-            lengths = np.concatenate([len_prem, len_hyp], axis=0)        
+            lengths = np.concatenate([len_prem, len_hyp], axis=0)
 
         return to_gpu(Variable(torch.from_numpy(x), volatile=not self.training)), lengths
 
@@ -546,9 +547,7 @@ class BinaryTreeLSTMLayer(nn.Module):
         hlr_cat = torch.cat([hl, hr], dim=2)
         treelstm_vector = apply_nd(fn=self.comp_linear, input=hlr_cat)
         i, fl, fr, u, o = treelstm_vector.chunk(num_chunks=5, dim=2)
-        c = (cl*(fl + 1).sigmoid() + cr*(fr + 1).sigmoid()
-             + u.tanh()*i.sigmoid())
+        c = (cl * (fl + 1).sigmoid() + cr * (fr + 1).sigmoid()
+             + u.tanh() * i.sigmoid())
         h = o.sigmoid() * c.tanh()
         return h, c
-
-

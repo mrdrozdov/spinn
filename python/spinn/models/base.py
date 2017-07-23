@@ -257,7 +257,9 @@ def get_flags():
                          "If set, load GloVe-formatted embeddings from here.")
 
     # Model architecture settings.
-    gflags.DEFINE_enum("model_type", "RNN", ["CBOW", "RNN", "SPINN", "RLSPINN", "Pyramid", "ChoiPyramid"], "")
+    gflags.DEFINE_enum(
+        "model_type", "RNN", [
+            "CBOW", "RNN", "SPINN", "RLSPINN", "Pyramid", "ChoiPyramid"], "")
     gflags.DEFINE_integer("gpu", -1, "")
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")
@@ -291,7 +293,7 @@ def get_flags():
 
     # Pyramid model settings
     gflags.DEFINE_enum("pyramid_gumbel", "none", ["none", "plain", "st"],
-                          "Use gumbel softmax or straight-through gumbel softmax in the Pyramid model gating.")
+                       "Use gumbel softmax or straight-through gumbel softmax in the Pyramid model gating.")
     gflags.DEFINE_boolean("pyramid_trainable_temperature", None,
                           "If set, add a scalar trained temperature parameter.")
     gflags.DEFINE_float("pyramid_test_time_temperature_multiplier", 1.0,
