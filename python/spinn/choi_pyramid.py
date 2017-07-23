@@ -327,6 +327,7 @@ class ChoiPyramid(nn.Module):
         merge_sequence = []
         for mask in self.mask_memory:
             merge_sequence.append(np.argmax(mask[0, :]))
+        merge_sequence.append(0)
         return merge_sequence
 
     # --- Sentence Style Switches ---
