@@ -1,3 +1,5 @@
+# Source: https://github.com/nyu-mll/unsupervised-treelstm/commit/bbe1946e123e396362ecd071d1673766013463f2
+# Original author of core encoder: Jihun Choi, Seoul National Univ.
 
 import numpy as np
 
@@ -12,10 +14,6 @@ from spinn.util.blocks import Embed, to_gpu, MLP, Linear
 from spinn.util.misc import Args, Vocab
 from spinn.util.blocks import SimpleTreeLSTM
 from spinn.util.sparks import sparks
-
-# Source: https://github.com/nyu-mll/unsupervised-treelstm/commit/bbe1946e123e396362ecd071d1673766013463f2
-# Original author of core encoder: Jihun Choi, Seoul National Univ.
-
 
 def build_model(data_manager, initial_embeddings, vocab_size,
                 num_classes, FLAGS, context_args, composition_args, **kwargs):
@@ -46,30 +44,18 @@ def build_model(data_manager, initial_embeddings, vocab_size,
 
 class BinaryTreeLSTM(nn.Module):
 
-    def __init__(self, word_dim, hidden_dim, use_leaf_rnn, intra_attention,
+    def __init__(self, word_dim, hidden_dim, intra_attention,
                  gumbel_temperature):
         super(BinaryTreeLSTM, self).__init__()
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
-        self.use_leaf_rnn = use_leaf_rnn
         self.intra_attention = intra_attention
         self.gumbel_temperature = gumbel_temperature
-
-        if use_leaf_rnn:
-            self.leaf_rnn_cell = nn.LSTMCell(
-                input_size=word_dim, hidden_size=hidden_dim)
         self.treelstm_layer = BinaryTreeLSTMLayer(hidden_dim)
         self.comp_query = nn.Parameter(torch.FloatTensor(hidden_dim))
         self.reset_parameters()
 
     def reset_parameters(self):
-        if self.use_leaf_rnn:
-            init.kaiming_normal(self.leaf_rnn_cell.weight_ih.data)
-            init.orthogonal(self.leaf_rnn_cell.weight_hh.data)
-            init.constant(self.leaf_rnn_cell.bias_ih.data, val=0)
-            init.constant(self.leaf_rnn_cell.bias_hh.data, val=0)
-            # Set forget bias to 1
-            self.leaf_rnn_cell.bias_ih.data.chunk(4)[1].fill_(1)
         self.treelstm_layer.reset_parameters()
         init.normal(self.comp_query.data, mean=0, std=0.01)
 
@@ -118,26 +104,7 @@ class BinaryTreeLSTM(nn.Module):
         length_mask = sequence_mask(sequence_length=length,
                                     max_length=max_depth)
         select_masks = []
-
-        if self.use_leaf_rnn:
-            hs = []
-            cs = []
-            batch_size, max_length, _ = input.size()
-            zero_state = Variable(input.data.new(batch_size, self.hidden_dim)
-                                  .zero_())
-            h_prev = c_prev = zero_state
-            for i in range(max_length):
-                h, c = self.leaf_rnn_cell(
-                    input=input[:, i, :], hx=(h_prev, c_prev))
-                hs.append(h)
-                cs.append(c)
-                h_prev = h
-                c_prev = c
-            hs = torch.stack(hs, dim=1)
-            cs = torch.stack(cs, dim=1)
-            state = (hs, cs)
-        else:
-            state = input.chunk(num_chunks=2, dim=2)
+        state = input.chunk(num_chunks=2, dim=2)
         nodes = []
         if self.intra_attention:
             nodes.append(state[0])
@@ -229,7 +196,7 @@ class ChoiPyramid(nn.Module):
 
         self.embed = Embed(word_embedding_dim, vocab.size, vectors=vocab.vectors)
 
-        self.binary_tree_lstm = BinaryTreeLSTM(word_embedding_dim, model_dim / 2, False, False, 1.0)
+        self.binary_tree_lstm = BinaryTreeLSTM(word_embedding_dim, model_dim / 2, False, 1.0)
 
         mlp_input_dim = self.get_features_dim()
 
