@@ -76,7 +76,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
                        show_sample=show_sample,
                        example_lengths=eval_num_transitions_batch)
 
-        if show_sample and FLAGS.model_type == "Pyramid":
+        if show_sample and FLAGS.model_type in ["Pyramid", "ChoiPyramid"]:
             sample = model.get_sample(eval_X_batch, vocabulary)
             sample_str = model.prettyprint_sample(sample)
         show_sample = False  # Only show one sample, regardless of the number of batches.

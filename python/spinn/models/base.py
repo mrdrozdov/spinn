@@ -46,6 +46,10 @@ def sequential_only():
     return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW" or FLAGS.model_type == "Pyramid" or FLAGS.model_type == "ChoiPyramid"
 
 
+def pad_from_left():
+    return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW" or FLAGS.model_type == "Pyramid"
+
+
 def log_path(FLAGS, load=False):
     lp = FLAGS.load_log_path if load else FLAGS.log_path
     en = FLAGS.load_experiment_name if load else FLAGS.experiment_name
@@ -56,7 +60,7 @@ def get_batch(batch):
     X_batch, transitions_batch, y_batch, num_transitions_batch, example_ids = batch
 
     # Truncate each batch to max length within the batch.
-    X_batch_is_left_padded = sequential_only()
+    X_batch_is_left_padded = pad_from_left()
     transitions_batch_is_left_padded = True
     max_length = np.max(num_transitions_batch)
     seq_length = X_batch.shape[1]
@@ -170,7 +174,7 @@ def load_data_and_embeddings(FLAGS, data_manager, logger, training_data_path, ev
     training_data = util.PreprocessDataset(
         raw_training_data, vocabulary, FLAGS.seq_length, data_manager, eval_mode=False, logger=logger,
         sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-        simple=sequential_only(), allow_cropping=FLAGS.allow_cropping)
+        simple=sequential_only(), allow_cropping=FLAGS.allow_cropping, pad_from_left=pad_from_left())
     training_data_iter = util.MakeTrainingIterator(
         training_data, FLAGS.batch_size, FLAGS.smart_batching, FLAGS.use_peano,
         sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
@@ -185,7 +189,7 @@ def load_data_and_embeddings(FLAGS, data_manager, logger, training_data_path, ev
             data_manager, eval_mode=True, logger=logger,
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             simple=sequential_only(),
-            allow_cropping=FLAGS.allow_eval_cropping)
+            allow_cropping=FLAGS.allow_eval_cropping, pad_from_left=pad_from_left())
         eval_it = util.MakeEvalIterator(eval_data,
                                         FLAGS.batch_size, FLAGS.eval_data_limit, bucket_eval=FLAGS.bucket_eval,
                                         shuffle=FLAGS.shuffle_eval, rseed=FLAGS.shuffle_eval_seed)

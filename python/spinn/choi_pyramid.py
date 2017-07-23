@@ -240,7 +240,7 @@ class ChoiPyramid(nn.Module):
         self.reshape_context = context_args.reshape_context
 
         # For sample printing and logging
-        self.merge_sequence_memory = None
+        self.mask_memory = None
         self.inverted_vocabulary = None
         self.temperature_to_display = 0.0
 
@@ -268,7 +268,10 @@ class ChoiPyramid(nn.Module):
         batch_size, seq_len, model_dim = emb.data.size()
         example_lengths_var = to_gpu(Variable(torch.from_numpy(example_lengths))).long()
 
-        hh, _ = self.binary_tree_lstm(emb, example_lengths_var, return_select_masks=False)
+        hh, _, masks = self.binary_tree_lstm(emb, example_lengths_var, return_select_masks=True)
+
+        if show_sample:
+            self.mask_memory = [mask.data.cpu().numpy() for mask in masks]
 
         h = self.wrap(hh)
         output = self.mlp(self.build_features(h))
@@ -296,6 +299,35 @@ class ChoiPyramid(nn.Module):
         else:
             features = h
         return features
+
+    # --- Sample printing ---
+
+    def prettyprint_sample(self, tree):
+        if isinstance(tree, tuple):
+            return '( ' + self.prettyprint_sample(tree[0]) + \
+                ' ' + self.prettyprint_sample(tree[1]) + ' )'
+        else:
+            return tree
+
+    def get_sample(self, x, vocabulary):
+        if not self.inverted_vocabulary:
+            self.inverted_vocabulary = dict([(vocabulary[key], key) for key in vocabulary])
+
+        if self.use_sentence_pair:
+            token_sequence = [self.inverted_vocabulary[token] for token in x[-1, :, 1]]
+        else:
+            token_sequence = [self.inverted_vocabulary[token] for token in x[-1, :]]
+
+        for merge in self.get_sample_merge_sequence():
+            token_sequence[merge] = (token_sequence[merge], token_sequence[merge + 1])
+            del token_sequence[merge + 1]
+        return token_sequence[0]
+
+    def get_sample_merge_sequence(self):
+        merge_sequence = []
+        for mask in self.mask_memory:
+            merge_sequence.append(np.argmax(mask[-1, :]))
+        return merge_sequence
 
     # --- Sentence Style Switches ---
 
