@@ -27,6 +27,7 @@ import spinn.spinn_core_model
 import spinn.plain_rnn
 import spinn.cbow
 import spinn.pyramid
+import spinn.choi_pyramid
 
 from tuner_utils.yellowfin import YFOptimizer
 
@@ -42,6 +43,10 @@ FLAGS = gflags.FLAGS
 
 
 def sequential_only():
+    return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW" or FLAGS.model_type == "Pyramid" or FLAGS.model_type == "ChoiPyramid"
+
+
+def pad_from_left():
     return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW" or FLAGS.model_type == "Pyramid"
 
 
@@ -55,7 +60,7 @@ def get_batch(batch):
     X_batch, transitions_batch, y_batch, num_transitions_batch, example_ids = batch
 
     # Truncate each batch to max length within the batch.
-    X_batch_is_left_padded = sequential_only()
+    X_batch_is_left_padded = pad_from_left()
     transitions_batch_is_left_padded = True
     max_length = np.max(num_transitions_batch)
     seq_length = X_batch.shape[1]
@@ -169,7 +174,7 @@ def load_data_and_embeddings(FLAGS, data_manager, logger, training_data_path, ev
     training_data = util.PreprocessDataset(
         raw_training_data, vocabulary, FLAGS.seq_length, data_manager, eval_mode=False, logger=logger,
         sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-        simple=sequential_only(), allow_cropping=FLAGS.allow_cropping)
+        simple=sequential_only(), allow_cropping=FLAGS.allow_cropping, pad_from_left=pad_from_left())
     training_data_iter = util.MakeTrainingIterator(
         training_data, FLAGS.batch_size, FLAGS.smart_batching, FLAGS.use_peano,
         sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
@@ -184,7 +189,7 @@ def load_data_and_embeddings(FLAGS, data_manager, logger, training_data_path, ev
             data_manager, eval_mode=True, logger=logger,
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             simple=sequential_only(),
-            allow_cropping=FLAGS.allow_eval_cropping)
+            allow_cropping=FLAGS.allow_eval_cropping, pad_from_left=pad_from_left())
         eval_it = util.MakeEvalIterator(eval_data,
                                         FLAGS.batch_size, FLAGS.eval_data_limit, bucket_eval=FLAGS.bucket_eval,
                                         shuffle=FLAGS.shuffle_eval, rseed=FLAGS.shuffle_eval_seed)
@@ -252,7 +257,9 @@ def get_flags():
                          "If set, load GloVe-formatted embeddings from here.")
 
     # Model architecture settings.
-    gflags.DEFINE_enum("model_type", "RNN", ["CBOW", "RNN", "SPINN", "RLSPINN", "Pyramid"], "")
+    gflags.DEFINE_enum(
+        "model_type", "RNN", [
+            "CBOW", "RNN", "SPINN", "RLSPINN", "Pyramid", "ChoiPyramid"], "")
     gflags.DEFINE_integer("gpu", -1, "")
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")
@@ -286,17 +293,17 @@ def get_flags():
 
     # Pyramid model settings
     gflags.DEFINE_enum("pyramid_gumbel", "none", ["none", "plain", "st"],
-                          "Use gumbel softmax or straight-through gumbel softmax in the Pyramid model gating.")
+                       "Use gumbel softmax or straight-through gumbel softmax in the Pyramid model gating. Doesn't apply to ChoiPyramid.")
     gflags.DEFINE_boolean("pyramid_trainable_temperature", None,
                           "If set, add a scalar trained temperature parameter.")
     gflags.DEFINE_float("pyramid_test_time_temperature_multiplier", 1.0,
-                        "If in (0, 1), multiply the temperature by this constant at test time. If exactly 0.0, use the efficient hard max variant of the model at tent time.")
+                        "If in (0, 1), multiply the temperature by this constant at test time. If exactly 0.0, use the efficient hard max variant of the model at tent time.  Doesn't apply to ChoiPyramid.")
     gflags.DEFINE_float("pyramid_temperature_decay_per_10k_steps",
                         0.5, "Ideal for use with Gumbel.")
     gflags.DEFINE_float("pyramid_temperature_cycle_length",
                         0.0, "For wake-sleep-style experiments. 0.0 disables this feature.")
     gflags.DEFINE_integer("pyramid_selection_dim",
-                          20, "Hidden state size for the scoring function.")
+                          20, "Hidden state size for the scoring function. Doesn't apply to ChoiPyramid.")
 
     # Encode settings.
     gflags.DEFINE_enum("encode", "projection", [
@@ -423,7 +430,7 @@ def flag_defaults(FLAGS, load_log_flags=False):
     if not FLAGS.metrics_path:
         FLAGS.metrics_path = FLAGS.log_path
 
-    if FLAGS.model_type == "CBOW" or FLAGS.model_type == "RNN" or FLAGS.model_type == "Pyramid":
+    if FLAGS.model_type == "CBOW" or FLAGS.model_type == "RNN" or FLAGS.model_type == "Pyramid" or FLAGS.model_type == "ChoiPyramid":
         FLAGS.num_samples = 0
 
     if not torch.cuda.is_available():
@@ -450,6 +457,8 @@ def init_model(
         build_model = spinn.rl_spinn.build_model
     elif FLAGS.model_type == "Pyramid":
         build_model = spinn.pyramid.build_model
+    elif FLAGS.model_type == "ChoiPyramid":
+        build_model = spinn.choi_pyramid.build_model
     else:
         raise NotImplementedError
 

@@ -53,7 +53,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
     total_tokens = 0
     start = time.time()
 
-    if FLAGS.model_type == "Pyramid":
+    if FLAGS.model_type in ["Pyramid", "ChoiPyramid"]:
         pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (
             step / 10000.0)
         if FLAGS.pyramid_temperature_cycle_length > 0.0:
@@ -73,9 +73,10 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
                        use_internal_parser=FLAGS.use_internal_parser,
                        validate_transitions=FLAGS.validate_transitions,
                        pyramid_temperature_multiplier=pyramid_temperature_multiplier,
-                       show_sample=show_sample)
+                       show_sample=show_sample,
+                       example_lengths=eval_num_transitions_batch)
 
-        if show_sample and FLAGS.model_type == "Pyramid":
+        if show_sample and FLAGS.model_type in ["Pyramid", "ChoiPyramid"]:
             sample = model.get_sample(eval_X_batch, vocabulary)
             sample_str = model.prettyprint_sample(sample)
         show_sample = False  # Only show one sample, regardless of the number of batches.
@@ -153,7 +154,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
     model(X_batch, transitions_batch, y_batch,
           use_internal_parser=FLAGS.use_internal_parser,
           validate_transitions=FLAGS.validate_transitions,
-          pyramid_temperature_multiplier=1.0
+          pyramid_temperature_multiplier=1.0,
+          example_lengths=num_transitions_batch
           )
 
     # Train.
@@ -180,7 +182,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         # Reset cached gradients.
         optimizer.zero_grad()
 
-        if FLAGS.model_type == "Pyramid":
+        if FLAGS.model_type in ["Pyramid", "ChoiPyramid"]:
             pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (
                 step / 10000.0)
             if FLAGS.pyramid_temperature_cycle_length > 0.0:
@@ -194,7 +196,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         output = model(X_batch, transitions_batch, y_batch,
                        use_internal_parser=FLAGS.use_internal_parser,
                        validate_transitions=FLAGS.validate_transitions,
-                       pyramid_temperature_multiplier=pyramid_temperature_multiplier
+                       pyramid_temperature_multiplier=pyramid_temperature_multiplier,
+                       example_lengths=num_transitions_batch
                        )
 
         # Normalize output.
@@ -262,7 +265,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
             model(X_batch, transitions_batch, y_batch,
                   use_internal_parser=FLAGS.use_internal_parser,
                   validate_transitions=FLAGS.validate_transitions,
-                  pyramid_temperature_multiplier=pyramid_temperature_multiplier
+                  pyramid_temperature_multiplier=pyramid_temperature_multiplier,
+                  example_lengths=num_transitions_batch
                   )
             tr_transitions_per_example, tr_strength = model.spinn.get_transitions_per_example()
 
@@ -270,7 +274,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
             model(X_batch, transitions_batch, y_batch,
                   use_internal_parser=FLAGS.use_internal_parser,
                   validate_transitions=FLAGS.validate_transitions,
-                  pyramid_temperature_multiplier=pyramid_temperature_multiplier
+                  pyramid_temperature_multiplier=pyramid_temperature_multiplier,
+                  example_lengths=num_transitions_batch
                   )
             ev_transitions_per_example, ev_strength = model.spinn.get_transitions_per_example()
 

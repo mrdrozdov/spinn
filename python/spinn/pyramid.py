@@ -10,7 +10,6 @@ import torch.nn.functional as F
 from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer, gumbel_sample, st_gumbel_sample
 from spinn.util.misc import Args, Vocab
 from spinn.util.blocks import SimpleTreeLSTM
-from spinn.util.sparks import sparks
 
 
 def build_model(data_manager, initial_embeddings, vocab_size,
@@ -140,7 +139,8 @@ class Pyramid(nn.Module):
                         split_selection_logit[i].data.cpu().numpy()
                 else:
                     # assert len(unbatched_selection_logits_list[index_pair[0]]) == index_pair[1]
-                    unbatched_selection_logits_list[index_pair[0]].append(split_selection_logit[i].data.cpu().numpy())
+                    unbatched_selection_logits_list[index_pair[0]].append(
+                        split_selection_logit[i].data.cpu().numpy())
             return unbatched_selection_logits_list
 
         # Most activations won't change between steps, so this can be preserved
@@ -149,7 +149,8 @@ class Pyramid(nn.Module):
         to_compute = []
         for position in range(seq_len - 1):
             to_compute += [(b, position) for b in range(batch_size)]
-        unbatched_selection_logits_list = recompute_logits(to_compute, unbatched_selection_logits_list, unbatched_state_pairs)
+        unbatched_selection_logits_list = recompute_logits(
+            to_compute, unbatched_selection_logits_list, unbatched_state_pairs)
 
         for layer in range(seq_len - 1, 0, -1):
             selection_logits_list = [
@@ -189,7 +190,8 @@ class Pyramid(nn.Module):
                         to_recompute.append((b, merge_indices[b] - 1))
                     if merge_indices[b] < len(unbatched_selection_logits_list[b]):
                         to_recompute.append((b, merge_indices[b]))
-                unbatched_selection_logits_list = recompute_logits(to_recompute, unbatched_selection_logits_list, unbatched_state_pairs)
+                unbatched_selection_logits_list = recompute_logits(
+                    to_recompute, unbatched_selection_logits_list, unbatched_state_pairs)
 
         return torch.squeeze(
             torch.cat([unbatched_state_pairs[b][0][:, :, self.model_dim / 2:] for b in range(batch_size)], 0))
@@ -207,7 +209,7 @@ class Pyramid(nn.Module):
 
         temperature = temperature_multiplier
         if self.trainable_temperature:
-            temperature *= self.temperature
+            temperature *= F.relu(self.temperature)
         if not self.training:
             temperature *= \
                 self.test_temperature_multiplier

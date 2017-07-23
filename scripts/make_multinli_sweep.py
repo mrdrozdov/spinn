@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "06_21"
+NAME = "06_23"
 SWEEP_RUNS = 8
 
 LIN = "LIN"
@@ -38,7 +38,7 @@ FLAGS(sys.argv)
 
 FIXED_PARAMETERS = {
     "data_type":     "nli",
-    "model_type":      "Pyramid",
+    "model_type":      "ChoiPyramid",
     "training_data_path":    FLAGS.training_data_path,
     "eval_data_path":    FLAGS.eval_data_path,
     "embedding_data_path": FLAGS.embedding_data_path,
@@ -50,6 +50,7 @@ FIXED_PARAMETERS = {
     "seq_length":   "80",
     "eval_seq_length":  "810",
     "eval_interval_steps": "1000",
+    "sample_interval_steps": "1000",
     "statistics_interval_steps": "100",
     "semantic_classifier_keep_rate": "1.0",
     "embedding_keep_rate": "1.0",
@@ -65,15 +66,14 @@ SWEEP_PARAMETERS = {
     "mlp_dim":      ("mld", EXP, 96, 256),  # RNN likes higher, but below 009.
     "semantic_classifier_keep_rate": ("skr", LIN, 0.8, 1.0),  # NB: Keep rates may depend considerably on dims.
     "embedding_keep_rate": ("ekr", LIN, 0.8, 1.0),
-    "seq_length":      ("seq", LIN, 40, 120),  # RNN likes higher, but below 009.
     "learning_rate":      ("lr", EXP, 0.00005, 0.002),  # RNN likes higher, but below 009.
     "l2_lambda":          ("l2", EXP, 1e-7, 1e-3),
     "learning_rate_decay_per_10k_steps": ("dc", LIN, 0.4, 1.0),
-    "pyramid_trainable_temperature": ("tt", BOOL, None, None),
-    "pyramid_temperature_decay_per_10k_steps": ("tdc", EXP, 0.33, 1.0),
-    "pyramid_selection_dim": ("sd", EXP, 2, 64),
-    "pyramid_temperature_cycle_length": ("cl", CHOICE, ['0', '0', '30', '300'], None),
-    "pyramid_gumbel": ("pg", CHOICE, ['plain', 'st'], None),   
+#    "pyramid_trainable_temperature": ("tt", BOOL, None, None),
+#    "pyramid_temperature_decay_per_10k_steps": ("tdc", EXP, 0.33, 1.0),
+#    "pyramid_selection_dim": ("sd", EXP, 2, 64),
+#    "pyramid_temperature_cycle_length": ("cl", CHOICE, ['0', '0', '30', '300'], None),
+#    "pyramid_gumbel": ("pg", CHOICE, ['plain', 'st'], None),   
 }
 
 
