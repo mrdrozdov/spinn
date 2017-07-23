@@ -261,7 +261,7 @@ class ChoiPyramid(nn.Module):
 
         return embeds
 
-    def forward(self, sentences, transitions, y_batch=None, show_sample=False,
+    def forward(self, sentences, transitions, y_batch=None, example_lengths=None, show_sample=False,
                 pyramid_temperature_multiplier=1.0, **kwargs):
         # Useful when investigating dynamic batching:
         # self.seq_lengths = sentences.shape[1] - (sentences == 0).sum(1)
@@ -271,8 +271,9 @@ class ChoiPyramid(nn.Module):
         emb = self.run_embed(x)
 
         batch_size, seq_len, model_dim = emb.data.size()
+        example_lengths_var = to_gpu(Variable(torch.from_numpy(example_lengths))).long()
 
-        h = self.binary_tree_lstm(emb, seq_len, return_select_masks=False)
+        h = self.binary_tree_lstm(emb, example_lengths_var, return_select_masks=False)
 
         h = self.wrap(hh)
         output = self.mlp(self.build_features(h))
@@ -420,7 +421,7 @@ def convert_to_one_hot(indices, num_classes):
 
 def masked_softmax(logits, mask=None):
     eps = 1e-20
-    probs = functional.softmax(logits)
+    probs = F.softmax(logits)
     if mask is not None:
         mask = mask.float()
         probs = probs * mask + eps
@@ -469,6 +470,7 @@ def st_gumbel_softmax(logits, temperature=1.0, mask=None):
 
 
 def sequence_mask(sequence_length, max_length=None):
+    print sequence_length
     if max_length is None:
         max_length = sequence_length.data.max()
     batch_size = sequence_length.size(0)
