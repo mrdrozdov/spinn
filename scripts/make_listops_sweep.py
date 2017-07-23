@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "listops_07_23"
+NAME = "listops_07_23a"
 SWEEP_RUNS = 8
 
 LIN = "LIN"
@@ -58,19 +58,17 @@ FIXED_PARAMETERS = {
     "sample_interval_steps": "1000",
     "pyramid_test_time_temperature_multiplier": "0.0",
     "nocomposition_ln": "",
+    "learning_rate": "0.001",
+    "seq_length": "100",
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "seq_length":      ("seq", LIN, 40, 120),  # RNN likes higher, but below 009.
-    "learning_rate":      ("lr", EXP, 0.00005, 0.005),  # RNN likes higher, but below 009.
     "l2_lambda":          ("l2", EXP, 8e-7, 1e-3),
     "learning_rate_decay_per_10k_steps": ("dc", LIN, 0.3, 1.0),
-    #"pyramid_trainable_temperature": ("tt", BOOL, None, None),
-    #"pyramid_temperature_decay_per_10k_steps": ("tdc", EXP, 0.2, 1.0),
-    #"pyramid_selection_dim": ("sd", EXP, 2, 64),
-    #"pyramid_temperature_cycle_length": ("cl", CHOICE, ['0', '0', '30', '300'], None),
-    #"pyramid_gumbel": ("pg", CHOICE, ['plain', 'st'], None),   
+    "pyramid_trainable_temperature": ("tt", BOOL, None, None),
+    "pyramid_temperature_decay_per_10k_steps": ("tdc", EXP, 0.2, 1.0),
+    "pyramid_temperature_cycle_length": ("cl", CHOICE, ['0', '0', '30', '300'], None),
 }
 
 sweep_name = "sweep_" + NAME + "_" + \
