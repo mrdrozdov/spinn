@@ -53,7 +53,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
     total_tokens = 0
     start = time.time()
 
-    if FLAGS.model_type == "Pyramid":
+    if FLAGS.model_type in ["Pyramid", "ChoiPyramid"]:
         pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (
             step / 10000.0)
         if FLAGS.pyramid_temperature_cycle_length > 0.0:
@@ -182,7 +182,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         # Reset cached gradients.
         optimizer.zero_grad()
 
-        if FLAGS.model_type == "Pyramid":
+        if FLAGS.model_type in ["Pyramid", "ChoiPyramid"]:
             pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (
                 step / 10000.0)
             if FLAGS.pyramid_temperature_cycle_length > 0.0:

@@ -10,10 +10,9 @@ from torch.nn import init
 from torch.autograd import Variable
 import torch.nn.functional as F
 
-from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer
+from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer, LayerNormalization
 from spinn.util.misc import Args, Vocab
-from spinn.util.blocks import SimpleTreeLSTM
-from spinn.util.sparks import sparks
+
 
 def build_model(data_manager, initial_embeddings, vocab_size,
                 num_classes, FLAGS, context_args, composition_args, **kwargs):
@@ -36,119 +35,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      composition_ln=FLAGS.composition_ln,
                      context_args=context_args,
                      trainable_temperature=FLAGS.pyramid_trainable_temperature,
-                     test_temperature_multiplier=FLAGS.pyramid_test_time_temperature_multiplier,
-                     selection_dim=FLAGS.pyramid_selection_dim,
-                     gumbel=FLAGS.pyramid_gumbel,
                      )
-
-
-class BinaryTreeLSTM(nn.Module):
-
-    def __init__(self, word_dim, hidden_dim, intra_attention,
-                 gumbel_temperature):
-        super(BinaryTreeLSTM, self).__init__()
-        self.word_dim = word_dim
-        self.hidden_dim = hidden_dim
-        self.intra_attention = intra_attention
-        self.gumbel_temperature = gumbel_temperature
-        self.treelstm_layer = BinaryTreeLSTMLayer(hidden_dim)
-        self.comp_query = Linear(initializer=HeKaimingInitializer)(in_features=hidden_dim,
-                                                                   out_features=1)
-                                                                   # TODO: Get rid of unused bias.
- 
-
-    @staticmethod
-    def update_state(old_state, new_state, done_mask):
-        old_h, old_c = old_state
-        new_h, new_c = new_state
-        done_mask = done_mask.float().unsqueeze(1).unsqueeze(2).expand_as(new_h)
-        h = done_mask * new_h + (1 - done_mask) * old_h[:, :-1, :]
-        c = done_mask * new_c + (1 - done_mask) * old_c[:, :-1, :]
-        return h, c
-
-    def select_composition(self, old_state, new_state, mask):
-        new_h, new_c = new_state
-        old_h, old_c = old_state
-        old_h_left, old_h_right = old_h[:, :-1, :], old_h[:, 1:, :]
-        old_c_left, old_c_right = old_c[:, :-1, :], old_c[:, 1:, :]
-        comp_weights = dot_nd(query=self.comp_query.weight.squeeze(), candidates=new_h)
-        if self.training:
-            select_mask = st_gumbel_softmax(
-                logits=comp_weights, temperature=self.gumbel_temperature,
-                mask=mask)
-        else:
-            select_mask = greedy_select(logits=comp_weights, mask=mask)
-            select_mask = select_mask.float()
-        select_mask_expand = select_mask.unsqueeze(2).expand_as(new_h)
-        select_mask_cumsum = select_mask.cumsum(1)
-        left_mask = 1 - select_mask_cumsum
-        left_mask_expand = left_mask.unsqueeze(2).expand_as(old_h_left)
-        right_mask_leftmost_col = Variable(
-            select_mask_cumsum.data.new(new_h.size(0), 1).zero_())
-        right_mask = torch.cat(
-            [right_mask_leftmost_col, select_mask_cumsum[:, :-1]], dim=1)
-        right_mask_expand = right_mask.unsqueeze(2).expand_as(old_h_right)
-        new_h = (select_mask_expand * new_h
-                 + left_mask_expand * old_h_left
-                 + right_mask_expand * old_h_right)
-        new_c = (select_mask_expand * new_c
-                 + left_mask_expand * old_c_left
-                 + right_mask_expand * old_c_right)
-        selected_h = (select_mask_expand * new_h).sum(1)
-        return new_h, new_c, select_mask, selected_h
-
-    def forward(self, input, length, return_select_masks=False):
-        max_depth = input.size(1)
-        length_mask = sequence_mask(sequence_length=length,
-                                    max_length=max_depth)
-        select_masks = []
-        state = input.chunk(num_chunks=2, dim=2)
-        nodes = []
-        if self.intra_attention:
-            nodes.append(state[0])
-        for i in range(max_depth - 1):
-            h, c = state
-            l = (h[:, :-1, :], c[:, :-1, :])
-            r = (h[:, 1:, :], c[:, 1:, :])
-            new_state = self.treelstm_layer(l=l, r=r)
-            if i < max_depth - 2:
-                # We don't need to greedily select the composition in the
-                # last iteration, since it has only one option left.
-                new_h, new_c, select_mask, selected_h = self.select_composition(
-                    old_state=state, new_state=new_state,
-                    mask=length_mask[:, i + 1:])
-                new_state = (new_h, new_c)
-                select_masks.append(select_mask)
-                if self.intra_attention:
-                    nodes.append(selected_h)
-            done_mask = length_mask[:, i + 1]
-            state = self.update_state(old_state=state, new_state=new_state,
-                                      done_mask=done_mask)
-            if self.intra_attention and i >= max_depth - 2:
-                nodes.append(state[0])
-        h, c = state
-        if self.intra_attention:
-            att_mask = torch.cat([length_mask, length_mask[:, 1:]], dim=1)
-            att_mask = att_mask.float()
-            # nodes: (batch_size, num_tree_nodes, hidden_dim)
-            nodes = torch.cat(nodes, dim=1)
-            att_mask_expand = att_mask.unsqueeze(2).expand_as(nodes)
-            nodes = nodes * att_mask_expand
-            # nodes_mean: (batch_size, hidden_dim, 1)
-            nodes_mean = nodes.mean(1).squeeze(1).unsqueeze(2)
-            # att_weights: (batch_size, num_tree_nodes)
-            att_weights = torch.bmm(nodes, nodes_mean).squeeze(2)
-            att_weights = masked_softmax(
-                logits=att_weights, mask=att_mask)
-            # att_weights_expand: (batch_size, num_tree_nodes, hidden_dim)
-            att_weights_expand = att_weights.unsqueeze(2).expand_as(nodes)
-            # h: (batch_size, 1, 2 * hidden_dim)
-            h = (att_weights_expand * nodes).sum(1)
-        assert h.size(1) == 1 and c.size(1) == 1
-        if not return_select_masks:
-            return h.squeeze(1), c.squeeze(1)
-        else:
-            return h.squeeze(1), c.squeeze(1), select_masks
 
 
 class ChoiPyramid(nn.Module):
@@ -169,9 +56,6 @@ class ChoiPyramid(nn.Module):
                  composition_ln=None,
                  context_args=None,
                  trainable_temperature=None,
-                 test_temperature_multiplier=None,
-                 selection_dim=None,
-                 gumbel=None,
                  **kwargs
                  ):
         super(ChoiPyramid, self).__init__()
@@ -180,10 +64,7 @@ class ChoiPyramid(nn.Module):
         self.use_difference_feature = use_difference_feature
         self.use_product_feature = use_product_feature
         self.model_dim = model_dim
-        self.test_temperature_multiplier = test_temperature_multiplier
         self.trainable_temperature = trainable_temperature
-        self.gumbel = gumbel
-        self.selection_dim = selection_dim
 
         self.classifier_dropout_rate = 1. - classifier_keep_rate
         self.embedding_dropout_rate = 1. - embedding_keep_rate
@@ -194,7 +75,12 @@ class ChoiPyramid(nn.Module):
 
         self.embed = Embed(word_embedding_dim, vocab.size, vectors=vocab.vectors)
 
-        self.binary_tree_lstm = BinaryTreeLSTM(word_embedding_dim, model_dim / 2, False, 1.0)
+        self.binary_tree_lstm = BinaryTreeLSTM(
+            word_embedding_dim,
+            model_dim / 2,
+            False,
+            composition_ln=composition_ln,
+            trainable_temperature=trainable_temperature)
 
         mlp_input_dim = self.get_features_dim()
 
@@ -234,7 +120,11 @@ class ChoiPyramid(nn.Module):
         batch_size, seq_len, model_dim = emb.data.size()
         example_lengths_var = to_gpu(Variable(torch.from_numpy(example_lengths))).long()
 
-        hh, _, masks = self.binary_tree_lstm(emb, example_lengths_var, return_select_masks=True)
+        hh, _, masks, temperature = self.binary_tree_lstm(
+            emb, example_lengths_var, temperature_multiplier=pyramid_temperature_multiplier)
+
+        if self.training:
+            self.temperature_to_display = temperature
 
         if show_sample:
             self.mask_memory = [mask.data.cpu().numpy() for mask in masks]
@@ -335,6 +225,129 @@ class ChoiPyramid(nn.Module):
     def wrap_sentence(self, hh):
         return hh
 
+    # --- From Choi's 'treelstm.py' ---
+
+
+class BinaryTreeLSTM(nn.Module):
+
+    def __init__(self, word_dim, hidden_dim, intra_attention,
+                 composition_ln=False, trainable_temperature=False):
+        super(BinaryTreeLSTM, self).__init__()
+        self.word_dim = word_dim
+        self.hidden_dim = hidden_dim
+        self.intra_attention = intra_attention
+        self.treelstm_layer = BinaryTreeLSTMLayer(hidden_dim, composition_ln=composition_ln)
+
+        # TODO: Add something to blocks to make this use case more elegant.
+        self.comp_query = Linear(initializer=HeKaimingInitializer)(in_features=hidden_dim,
+                                                                   out_features=1)
+        self.trainable_temperature = trainable_temperature
+        if self.trainable_temperature:
+            self.temperature_param = nn.Parameter(torch.ones(1, 1), requires_grad=True)
+
+    @staticmethod
+    def update_state(old_state, new_state, done_mask):
+        old_h, old_c = old_state
+        new_h, new_c = new_state
+        done_mask = done_mask.float().unsqueeze(1).unsqueeze(2).expand_as(new_h)
+        h = done_mask * new_h + (1 - done_mask) * old_h[:, :-1, :]
+        c = done_mask * new_c + (1 - done_mask) * old_c[:, :-1, :]
+        return h, c
+
+    def select_composition(self, old_state, new_state, mask, temperature_multiplier=1.0):
+        new_h, new_c = new_state
+        old_h, old_c = old_state
+        old_h_left, old_h_right = old_h[:, :-1, :], old_h[:, 1:, :]
+        old_c_left, old_c_right = old_c[:, :-1, :], old_c[:, 1:, :]
+        comp_weights = dot_nd(query=self.comp_query.weight.squeeze(), candidates=new_h)
+        if self.training:
+            temperature = temperature_multiplier
+            if self.trainable_temperature:
+                temperature *= F.relu(self.temperature_param)
+            if not isinstance(temperature, float):
+                temperature_to_display = float(temperature.data.cpu().numpy())
+            else:
+                temperature_to_display = temperature
+
+            local_temperature = temperature
+            if not isinstance(local_temperature, float):
+                local_temperature = local_temperature.expand_as(comp_weights)
+
+            select_mask = st_gumbel_softmax(
+                logits=comp_weights, temperature=local_temperature,
+                mask=mask)
+        else:
+            select_mask = greedy_select(logits=comp_weights, mask=mask)
+            select_mask = select_mask.float()
+            temperature_to_display = None
+        select_mask_expand = select_mask.unsqueeze(2).expand_as(new_h)
+        select_mask_cumsum = select_mask.cumsum(1)
+        left_mask = 1 - select_mask_cumsum
+        left_mask_expand = left_mask.unsqueeze(2).expand_as(old_h_left)
+        right_mask_leftmost_col = Variable(
+            select_mask_cumsum.data.new(new_h.size(0), 1).zero_())
+        right_mask = torch.cat(
+            [right_mask_leftmost_col, select_mask_cumsum[:, :-1]], dim=1)
+        right_mask_expand = right_mask.unsqueeze(2).expand_as(old_h_right)
+        new_h = (select_mask_expand * new_h
+                 + left_mask_expand * old_h_left
+                 + right_mask_expand * old_h_right)
+        new_c = (select_mask_expand * new_c
+                 + left_mask_expand * old_c_left
+                 + right_mask_expand * old_c_right)
+        selected_h = (select_mask_expand * new_h).sum(1)
+        return new_h, new_c, select_mask, selected_h, temperature_to_display
+
+    def forward(self, input, length, temperature_multiplier=1.0):
+        max_depth = input.size(1)
+        length_mask = sequence_mask(sequence_length=length,
+                                    max_length=max_depth)
+        select_masks = []
+        state = input.chunk(num_chunks=2, dim=2)
+        nodes = []
+        if self.intra_attention:
+            nodes.append(state[0])
+        for i in range(max_depth - 1):
+            h, c = state
+            l = (h[:, :-1, :], c[:, :-1, :])
+            r = (h[:, 1:, :], c[:, 1:, :])
+            new_state = self.treelstm_layer(l=l, r=r)
+            if i < max_depth - 2:
+                # We don't need to greedily select the composition in the
+                # last iteration, since it has only one option left.
+                new_h, new_c, select_mask, selected_h, temperature_to_display = self.select_composition(
+                    old_state=state, new_state=new_state,
+                    mask=length_mask[:, i + 1:], temperature_multiplier=temperature_multiplier)
+                new_state = (new_h, new_c)
+                select_masks.append(select_mask)
+                if self.intra_attention:
+                    nodes.append(selected_h)
+            done_mask = length_mask[:, i + 1]
+            state = self.update_state(old_state=state, new_state=new_state,
+                                      done_mask=done_mask)
+            if self.intra_attention and i >= max_depth - 2:
+                nodes.append(state[0])
+        h, c = state
+        if self.intra_attention:
+            att_mask = torch.cat([length_mask, length_mask[:, 1:]], dim=1)
+            att_mask = att_mask.float()
+            # nodes: (batch_size, num_tree_nodes, hidden_dim)
+            nodes = torch.cat(nodes, dim=1)
+            att_mask_expand = att_mask.unsqueeze(2).expand_as(nodes)
+            nodes = nodes * att_mask_expand
+            # nodes_mean: (batch_size, hidden_dim, 1)
+            nodes_mean = nodes.mean(1).squeeze(1).unsqueeze(2)
+            # att_weights: (batch_size, num_tree_nodes)
+            att_weights = torch.bmm(nodes, nodes_mean).squeeze(2)
+            att_weights = masked_softmax(
+                logits=att_weights, mask=att_mask)
+            # att_weights_expand: (batch_size, num_tree_nodes, hidden_dim)
+            att_weights_expand = att_weights.unsqueeze(2).expand_as(nodes)
+            # h: (batch_size, 1, 2 * hidden_dim)
+            h = (att_weights_expand * nodes).sum(1)
+        assert h.size(1) == 1 and c.size(1) == 1
+        return h.squeeze(1), c.squeeze(1), select_masks, temperature_to_display
+
     # --- From Choi's 'basic.py' ---
 
 
@@ -351,30 +364,6 @@ def apply_nd(fn, input):
     output_flat = fn(x_flat)
     output_size = x_size[:-1] + (output_flat.size(-1),)
     return output_flat.view(*output_size)
-
-
-def affine_nd(input, weight, bias):
-    """
-    An helper function to make applying the "wx + b" operation for
-    n-dimensional x easier.
-
-    Args:
-        input (Variable): An arbitrary input data, whose size is
-            (d0, d1, ..., dn, input_dim)
-        weight (Variable): A matrix of size (output_dim, input_dim)
-        bias (Variable): A bias vector of size (output_dim,)
-
-    Returns:
-        output: The result of size (d0, ..., dn, output_dim)
-    """
-
-    input_size = input.size()
-    input_flat = input.view(-1, input_size[-1])
-    bias_expand = bias.unsqueeze(0).expand(input_flat.size(0), bias.size(0))
-    output_flat = torch.addmm(bias_expand, input_flat, weight)
-    output_size = input_size[:-1] + (weight.size(1),)
-    output = output_flat.view(*output_size)
-    return output
 
 
 def dot_nd(query, candidates):
@@ -482,12 +471,19 @@ def sequence_mask(sequence_length, max_length=None):
 
 
 class BinaryTreeLSTMLayer(nn.Module):
+    # TODO: Unify with SimpleTreeLSTM
 
-    def __init__(self, hidden_dim):
+    def __init__(self, hidden_dim, composition_ln=False):
         super(BinaryTreeLSTMLayer, self).__init__()
         self.hidden_dim = hidden_dim
         self.comp_linear = Linear(initializer=HeKaimingInitializer)(in_features=2 * hidden_dim,
                                                                     out_features=5 * hidden_dim)
+        self.composition_ln = composition_ln
+        if composition_ln:
+            self.left_h_ln = LayerNormalization(hidden_dim)
+            self.right_h_ln = LayerNormalization(hidden_dim)
+            self.left_c_ln = LayerNormalization(hidden_dim)
+            self.right_c_ln = LayerNormalization(hidden_dim)
 
     def forward(self, l=None, r=None):
         """
@@ -504,6 +500,13 @@ class BinaryTreeLSTMLayer(nn.Module):
 
         hl, cl = l
         hr, cr = r
+
+        if self.composition_ln:
+            hl = self.left_h_ln(hl)
+            hr = self.right_h_ln(hr)
+            cl = self.left_c_ln(cl)
+            cr = self.right_c_ln(cr)
+
         hlr_cat = torch.cat([hl, hr], dim=2)
         treelstm_vector = apply_nd(fn=self.comp_linear, input=hlr_cat)
         i, fl, fr, u, o = treelstm_vector.chunk(num_chunks=5, dim=2)

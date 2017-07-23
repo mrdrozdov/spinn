@@ -293,17 +293,17 @@ def get_flags():
 
     # Pyramid model settings
     gflags.DEFINE_enum("pyramid_gumbel", "none", ["none", "plain", "st"],
-                       "Use gumbel softmax or straight-through gumbel softmax in the Pyramid model gating.")
+                       "Use gumbel softmax or straight-through gumbel softmax in the Pyramid model gating. Doesn't apply to ChoiPyramid.")
     gflags.DEFINE_boolean("pyramid_trainable_temperature", None,
                           "If set, add a scalar trained temperature parameter.")
     gflags.DEFINE_float("pyramid_test_time_temperature_multiplier", 1.0,
-                        "If in (0, 1), multiply the temperature by this constant at test time. If exactly 0.0, use the efficient hard max variant of the model at tent time.")
+                        "If in (0, 1), multiply the temperature by this constant at test time. If exactly 0.0, use the efficient hard max variant of the model at tent time.  Doesn't apply to ChoiPyramid.")
     gflags.DEFINE_float("pyramid_temperature_decay_per_10k_steps",
                         0.5, "Ideal for use with Gumbel.")
     gflags.DEFINE_float("pyramid_temperature_cycle_length",
                         0.0, "For wake-sleep-style experiments. 0.0 disables this feature.")
     gflags.DEFINE_integer("pyramid_selection_dim",
-                          20, "Hidden state size for the scoring function.")
+                          20, "Hidden state size for the scoring function. Doesn't apply to ChoiPyramid.")
 
     # Encode settings.
     gflags.DEFINE_enum("encode", "projection", [

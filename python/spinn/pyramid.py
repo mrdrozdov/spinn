@@ -10,7 +10,6 @@ import torch.nn.functional as F
 from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer, gumbel_sample, st_gumbel_sample
 from spinn.util.misc import Args, Vocab
 from spinn.util.blocks import SimpleTreeLSTM
-from spinn.util.sparks import sparks
 
 
 def build_model(data_manager, initial_embeddings, vocab_size,
@@ -210,7 +209,7 @@ class Pyramid(nn.Module):
 
         temperature = temperature_multiplier
         if self.trainable_temperature:
-            temperature *= self.temperature
+            temperature *= F.relu(self.temperature)
         if not self.training:
             temperature *= \
                 self.test_temperature_multiplier
