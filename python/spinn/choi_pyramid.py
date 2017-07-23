@@ -8,7 +8,7 @@ from torch.nn import init
 from torch.autograd import Variable
 import torch.nn.functional as F
 
-from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer
+from spinn.util.blocks import Embed, to_gpu, MLP, Linear
 from spinn.util.misc import Args, Vocab
 from spinn.util.blocks import SimpleTreeLSTM
 from spinn.util.sparks import sparks
@@ -60,7 +60,6 @@ class BinaryTreeLSTM(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        print "RESETTING CHOI PYRAMID PARAMS"
         if self.use_leaf_rnn:
             init.kaiming_normal(self.leaf_rnn_cell.weight_ih.data)
             init.orthogonal(self.leaf_rnn_cell.weight_hh.data)
