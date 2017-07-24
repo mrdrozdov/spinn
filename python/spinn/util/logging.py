@@ -231,6 +231,7 @@ def sample_format(entry):
                     crossing: {crossing} \n \
                     gold_lb: {gold_lb} \n \
                     pred_tr: {pred_tr} \n \
+                    pred_ev: {pred_ev} \n \
                     strg_tr: {strg_tr} \n \
                     strg_ev: {strg_ev} "
 
