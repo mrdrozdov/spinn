@@ -354,7 +354,6 @@ def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=F
         dataset = CropAndPadSimple(dataset, seq_length, logger=logger,
                                    sentence_pair_data=sentence_pair_data, allow_cropping=allow_cropping, pad_from_left=pad_from_left)
     else:
-        assert pad_from_left, "SPINN requires left-side padding."
         dataset = CropAndPadForSPINN(dataset, seq_length, logger=logger,
                                      sentence_pair_data=sentence_pair_data, allow_cropping=allow_cropping)
 
