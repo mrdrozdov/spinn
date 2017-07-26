@@ -450,7 +450,7 @@ def LoadEmbeddingsFromText(vocabulary, embedding_dim, path):
     values from a GloVe - format vector file.
 
     For now, values not found in the file will be set to zero."""
-
+    loaded = 0
     emb = np.zeros(
         (len(vocabulary), embedding_dim), dtype=np.float32)
     with open(path, 'r') as f:
@@ -462,6 +462,8 @@ def LoadEmbeddingsFromText(vocabulary, embedding_dim, path):
             word = spl[0]
             if word in vocabulary:
                 emb[vocabulary[word], :] = [float(e) for e in spl[1:embedding_dim + 1]]
+                loaded += 1
+    assert loaded > 0, "No word embeddings of correct size found in file."
     return emb
 
 
