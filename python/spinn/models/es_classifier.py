@@ -47,6 +47,8 @@ from spinn.models.base import load_data_and_embeddings
 
 FLAGS = gflags.FLAGS
 
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
 
 def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=None):
     filename, dataset = eval_set
