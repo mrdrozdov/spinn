@@ -561,19 +561,20 @@ def run(only_forward=False):
             assert len(all_steps) == len(all_seeds)
 
             perturbation_id = 0
-            while all_models:
-                perturbed_model = all_models.pop()
-                true_step = all_steps.pop()
-                best_dev_error = all_dev_errs.pop()
-                root_id = all_roots.pop()
-                p = mp.Process(target=rollout, args=(queue,
-                                 perturbed_model, FLAGS, data_manager,
-                                 model, optimizer, trainer, training_data_iter,
-                                 eval_iterators, logger, true_step,
-                                 best_dev_error, perturbation_id, ev_step, header, root_id))
-                p.start()
-                processes.append(p)
-                perturbation_id += 1
+            if __name__ == '__main__':
+                while all_models:
+                    perturbed_model = all_models.pop()
+                    true_step = all_steps.pop()
+                    best_dev_error = all_dev_errs.pop()
+                    root_id = all_roots.pop()
+                    p = mp.Process(target=rollout, args=(queue,
+                                     perturbed_model, FLAGS, data_manager,
+                                     model, optimizer, trainer, training_data_iter,
+                                     eval_iterators, logger, true_step,
+                                     best_dev_error, perturbation_id, ev_step, header, root_id))
+                    p.start()
+                    processes.append(p)
+                    perturbation_id += 1
             assert len(all_models) == 0, "All models where not trained!"
 
             # Run processes in queue and

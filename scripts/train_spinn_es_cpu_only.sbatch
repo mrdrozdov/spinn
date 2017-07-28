@@ -2,9 +2,11 @@
 
 # Generic job script for all experiments.
 
+#SBATCH --nodes=1 
+#SBATCH --ntasks=1 
 #SBATCH --cpus-per-task=30
 #SBATCH --mem=60GB
-#SBATCH -t24:00:00
+#SBATCH -t48:00:00
 
 # Log what we're running and where.
 echo $SLURM_JOBID - `hostname` - $SPINN_FLAGS >> ~/spinn_machine_assignments.txt
