@@ -3,7 +3,6 @@
 # Generic job script for all experiments.
 
 #SBATCH --nodes=1 
-#SBATCH --ntasks=1 
 #SBATCH --cpus-per-task=30
 #SBATCH --mem=60GB
 #SBATCH -t48:00:00
