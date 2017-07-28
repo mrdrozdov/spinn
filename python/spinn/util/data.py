@@ -97,21 +97,28 @@ def TokensToIDs(vocabulary, dataset, sentence_pair_data=False):
     return dataset
 
 
-def CropAndPadExample(example, left_padding, target_length, key,
-                      symbol=0, logger=None, allow_cropping=False):
+def CropAndPadExample(example, padding_amount, target_length, key,
+                      symbol=0, logger=None, allow_cropping=False, pad_from_left=True):
     """
     Crop/pad a sequence value of the given dict `example`.
     """
-    if left_padding < 0:
+    if padding_amount < 0:
         if not allow_cropping:
             raise NotImplementedError("Cropping not allowed. "
                                       "Please set seq_length and eval_seq_length to some sufficiently large value or (for non-SPINN models) use --allow_cropping and --allow_eval_cropping..")
         # Crop, then pad normally.
-        example[key] = example[key][-left_padding:]
-        left_padding = 0
-    right_padding = target_length - (left_padding + len(example[key]))
-    example[key] = ([symbol] * left_padding) + \
-        example[key] + ([symbol] * right_padding)
+        if pad_from_left:
+            example[key] = example[key][-padding_amount:]
+        else:
+            example[key] = example[key][:-padding_amount]
+        padding_amount = 0
+    alternate_side_padding = target_length - (padding_amount + len(example[key]))
+    if pad_from_left:
+        example[key] = ([symbol] * padding_amount) + \
+            example[key] + ([symbol] * alternate_side_padding)
+    else:
+        example[key] = ([symbol] * alternate_side_padding) + \
+            example[key] + ([symbol] * padding_amount)
 
 
 def CropAndPadForSPINN(dataset, length, logger=None,
@@ -131,25 +138,25 @@ def CropAndPadForSPINN(dataset, length, logger=None,
         for (transitions_key, num_transitions_key, tokens_key) in keys:
             # Crop and Pad Transitions
             example[num_transitions_key] = len(example[transitions_key])
-            transitions_left_padding = length - example[num_transitions_key]
+            transitions_padding_amount = length - example[num_transitions_key]
             shifts_before_crop_and_pad = example[transitions_key].count(0)
             if transitions_key in example:
                 CropAndPadExample(
-                    example, transitions_left_padding, length, transitions_key,
+                    example, transitions_padding_amount, length, transitions_key,
                     symbol=T_SKIP, logger=logger, allow_cropping=allow_cropping)
             shifts_after_crop_and_pad = example[transitions_key].count(0)
 
             # Crop and Pad Tokens
-            tokens_left_padding = shifts_after_crop_and_pad - \
+            tokens_padding_amount = shifts_after_crop_and_pad - \
                 shifts_before_crop_and_pad
             CropAndPadExample(
-                example, tokens_left_padding, length, tokens_key,
+                example, tokens_padding_amount, length, tokens_key,
                 symbol=SENTENCE_PADDING_SYMBOL, logger=logger, allow_cropping=allow_cropping)
     return dataset
 
 
 def CropAndPadSimple(dataset, length, logger=None, sentence_pair_data=False,
-                     discard_long_training_examples=False, allow_cropping=True):
+                     discard_long_training_examples=False, allow_cropping=True, pad_from_left=True):
     # NOTE: This can probably be done faster in NumPy if it winds up making a
     # difference.
     if sentence_pair_data:
@@ -161,10 +168,10 @@ def CropAndPadSimple(dataset, length, logger=None, sentence_pair_data=False,
     for example in dataset:
         for tokens_key in keys:
             num_tokens = len(example[tokens_key])
-            tokens_left_padding = length - num_tokens
+            tokens_padding_amount = length - num_tokens
             CropAndPadExample(
-                example, tokens_left_padding, length, tokens_key,
-                symbol=SENTENCE_PADDING_SYMBOL, logger=logger, allow_cropping=allow_cropping)
+                example, tokens_padding_amount, length, tokens_key,
+                symbol=SENTENCE_PADDING_SYMBOL, logger=logger, allow_cropping=allow_cropping, pad_from_left=pad_from_left)
     return dataset
 
 
@@ -178,7 +185,7 @@ def Peano(x, y):
 
 
 def MakeTrainingIterator(sources, batch_size, smart_batches=True, use_peano=True,
-                         sentence_pair_data=True):
+                         sentence_pair_data=True, pad_from_left=True):
     # Make an iterator that exposes a dataset as random minibatches.
 
     def get_key(num_transitions):
@@ -339,13 +346,13 @@ def MakeBucketEvalIterator(sources, batch_size):
 
 
 def PreprocessDataset(dataset, vocabulary, seq_length, data_manager, eval_mode=False, logger=None,
-                      sentence_pair_data=False, simple=False, allow_cropping=False):
+                      sentence_pair_data=False, simple=False, allow_cropping=False, pad_from_left=True):
     dataset = TrimDataset(dataset, seq_length, eval_mode=eval_mode,
                           sentence_pair_data=sentence_pair_data, logger=logger, allow_cropping=allow_cropping)
     dataset = TokensToIDs(vocabulary, dataset, sentence_pair_data=sentence_pair_data)
     if simple:
         dataset = CropAndPadSimple(dataset, seq_length, logger=logger,
-                                   sentence_pair_data=sentence_pair_data, allow_cropping=allow_cropping)
+                                   sentence_pair_data=sentence_pair_data, allow_cropping=allow_cropping, pad_from_left=pad_from_left)
     else:
         dataset = CropAndPadForSPINN(dataset, seq_length, logger=logger,
                                      sentence_pair_data=sentence_pair_data, allow_cropping=allow_cropping)
@@ -443,7 +450,7 @@ def LoadEmbeddingsFromText(vocabulary, embedding_dim, path):
     values from a GloVe - format vector file.
 
     For now, values not found in the file will be set to zero."""
-
+    loaded = 0
     emb = np.zeros(
         (len(vocabulary), embedding_dim), dtype=np.float32)
     with open(path, 'r') as f:
@@ -455,6 +462,8 @@ def LoadEmbeddingsFromText(vocabulary, embedding_dim, path):
             word = spl[0]
             if word in vocabulary:
                 emb[vocabulary[word], :] = [float(e) for e in spl[1:embedding_dim + 1]]
+                loaded += 1
+    assert loaded > 0, "No word embeddings of correct size found in file."
     return emb
 
 
@@ -478,7 +487,7 @@ class SimpleProgressBar(object):
         sys.stdout.write('\r')
         pct = (i / float(total)) * 100
         ii = i * self.bar_length / total
-        fmt = "%s [%-{}s] %d%% %ds / %ds".format(self.bar_length)
+        fmt = "%s [%-{}s] %d%% %ds / %ds    ".format(self.bar_length)
         total_time = time.time() - self.begin
         expected = total_time / ((i + 1e-03) / float(total))
         sys.stdout.write(fmt % (self.msg, '=' * ii, pct, total_time, expected))

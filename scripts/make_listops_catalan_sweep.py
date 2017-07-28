@@ -9,21 +9,21 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "06_23a"
-SWEEP_RUNS = 8
+NAME = "07_22_acl"
+SWEEP_RUNS = 6
 
 LIN = "LIN"
 EXP = "EXP"
-SS_BASE = "SS_BASE"
 BOOL = "BOOL"
 CHOICE = "CHOICE"
+SS_BASE = "SS_BASE"
 
 FLAGS = gflags.FLAGS
 
-gflags.DEFINE_string("training_data_path", "/home/sb6065/multinli_0.9/multinli_0.9_snli_1.0_train_combined.jsonl", "")
-gflags.DEFINE_string("eval_data_path", "/home/sb6065/multinli_0.9/multinli_0.9_dev_matched.jsonl", "")
-gflags.DEFINE_string("embedding_data_path", "/home/sb6065/glove/glove.840B.300d.txt", "")
-gflags.DEFINE_string("log_path", "/scratch/sb6065/logs/spinn", "")
+gflags.DEFINE_string("training_data_path", "python/spinn/data/listops/train_d20a.tsv", "")
+gflags.DEFINE_string("eval_data_path", "python/spinn/data/listops/test_d20a.tsv", "")
+gflags.DEFINE_string("log_path", "~/logs/spinn", "")
+gflags.DEFINE_string("metrics_path", "~/logs/spinn", "")
 
 FLAGS(sys.argv)
 
@@ -37,42 +37,46 @@ FLAGS(sys.argv)
 # Non-tunable flags that must be passed in.
 
 FIXED_PARAMETERS = {
-    "data_type":     "nli",
-    "model_type":      "ChoiPyramid",
-    "training_data_path":    FLAGS.training_data_path,
-    "eval_data_path":    FLAGS.eval_data_path,
-    "embedding_data_path": FLAGS.embedding_data_path,
-    "log_path": FLAGS.log_path,
-    "metrics_path": FLAGS.log_path,
+    "batch_size":  "64",
     "ckpt_path":  FLAGS.log_path,
-    "word_embedding_dim":   "600",
-    "model_dim":   "600",
-    "seq_length":   "80",
-    "eval_seq_length":  "810",
-    "eval_interval_steps": "1000",
-    "sample_interval_steps": "1000",
-    "statistics_interval_steps": "100",
-    "semantic_classifier_keep_rate": "1.0",
+    "data_type":     "listops",
     "embedding_keep_rate": "1.0",
-    "batch_size":  "128",
-    "encode": "gru",
-    "encode_bidirectional": "",
-    "num_mlp_layers": "2",
-    "learning_rate": "0.001",
+    "encode": "pass",
+    "eval_data_path":    FLAGS.eval_data_path,
+    "eval_seq_length":  "3000",
+    "gpu":  "0",
+    "log_path": FLAGS.log_path,
+    "metrics_path": FLAGS.metrics_path,
+    "mlp_dim": "16",
+    "model_dim":   "32",
+    "model_type":      "RLSPINN",
+    "nolateral_tracking": "",
+    "nouse_tracking_in_composition": "",
+    "num_samples": "1",
+    "rl_baseline": "value",
+    "rl_catalan": "",
+    "rl_catalan_backprop": "",
+    "rl_reward": "standard",
+    "rl_wake_sleep": "",
+    "semantic_classifier_keep_rate": "1.0",
+    "seq_length":   "100",
+    "training_data_path":    FLAGS.training_data_path,
+    "transition_weight": "1",
+    "use_internal_parser": "",
+    "word_embedding_dim":   "32",
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "mlp_dim":      ("mld", EXP, 96, 512),  # RNN likes higher, but below 009.
-    "semantic_classifier_keep_rate": ("skr", LIN, 0.8, 1.0),  # NB: Keep rates may depend considerably on dims.
-    "embedding_keep_rate": ("ekr", LIN, 0.8, 1.0),
-    "l2_lambda":          ("l2", EXP, 1e-7, 1e-4),
-    "learning_rate_decay_per_10k_steps": ("dc", LIN, 0.4, 1.0),
-    "pyramid_trainable_temperature": ("tt", BOOL, None, None),
-    "pyramid_temperature_decay_per_10k_steps": ("tdc", EXP, 0.33, 1.0),
-    "pyramid_temperature_cycle_length": ("cl", CHOICE, ['0', '0', '30', '300'], None),
+    "rl_weight":  ("rlwt", EXP, 40., 60.),
+    "learning_rate":      ("lr", EXP, 0.004, 0.01),
+    "l2_lambda":          ("l2", EXP, 2e-6, 8e-6),
+    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.7, 0.9),
+    "rl_epsilon": ("eps", LIN, 0.8, 1.),
+    "rl_epsilon_decay": ("epsd", LIN, 8000, 10000),
+    "rl_confidence_penalty": ("rlconf", EXP, 1.5, 3.),
+    "rl_confidence_interval": ("rlconfint", EXP, 100, 700),
 }
-
 
 sweep_name = "sweep_" + NAME + "_" + \
     FIXED_PARAMETERS["data_type"] + "_" + FIXED_PARAMETERS["model_type"]
@@ -137,8 +141,11 @@ for run_id in range(SWEEP_RUNS):
         flags += " --" + param + " " + str(value)
 
     flags += " --experiment_name " + name
-    if NYU_NON_PBS:
-        print "cd spinn/python; python2.7 -m spinn.models.supervised_classifier " + flags
-    else:
-        print "SPINNMODEL=\"spinn.models.supervised_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh"
+    cuda = run_id % 2
+    print "export CUDA_VISIBLE_DEVICES={}; export PYTHONPATH=./python; cd ~/Developer/spinn; ".format(cuda) + \
+        "nohup python -m spinn.models.rl_classifier {} &> nohup_{}.out &".format(flags, name)
+    # if NYU_NON_PBS:
+    #     print "cd spinn/python; python2.7 -m spinn.models.rl_classifier " + flags
+    # else:
+    #     print "SPINNMODEL=\"spinn.models.rl_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_cpu_only.sh"
     print

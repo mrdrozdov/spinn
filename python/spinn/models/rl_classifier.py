@@ -249,12 +249,10 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
 
         train_rl_accumulate(model, data_manager, A, batch)
 
-        if step % FLAGS.statistics_interval_steps == 0 \
-                or step % FLAGS.metrics_interval_steps == 0:
-            if step % FLAGS.statistics_interval_steps == 0:
-                progress_bar.step(i=FLAGS.statistics_interval_steps,
-                                  total=FLAGS.statistics_interval_steps)
-                progress_bar.finish()
+        if step % FLAGS.statistics_interval_steps == 0:
+            progress_bar.step(i=FLAGS.statistics_interval_steps,
+                              total=FLAGS.statistics_interval_steps)
+            progress_bar.finish()
 
             A.add('xent_cost', xent_loss.data[0])
             A.add('l2_cost', l2_loss.data[0])
@@ -324,22 +322,17 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
             logger.Log("Checkpointing.")
             trainer.save(standard_checkpoint_path, step, best_dev_error)
 
-        log_level = afs_safe_logger.ProtoLogger.INFO
-        if not should_log and step % FLAGS.metrics_interval_steps == 0:
-            # Log to file, but not to stderr.
-            should_log = True
-            log_level = afs_safe_logger.ProtoLogger.DEBUG
-
         if should_log:
-            logger.LogEntry(log_entry, level=log_level)
+            logger.LogEntry(log_entry)
 
-        progress_bar.step(i=step % FLAGS.statistics_interval_steps,
+        progress_bar.step(i=(step % FLAGS.statistics_interval_steps) + 1,
                           total=FLAGS.statistics_interval_steps)
 
 
 def run(only_forward=False):
     logger = afs_safe_logger.ProtoLogger(log_path(FLAGS),
-                                         print_formatter=create_log_formatter(True, True),
+                                         print_formatter=create_log_formatter(
+                                             True, True),
                                          write_proto=FLAGS.write_proto_to_log)
     header = pb.SpinnHeader()
 

@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "listops_07_10_64cy"
-SWEEP_RUNS = 12
+NAME = "listops_07_23a"
+SWEEP_RUNS = 8
 
 LIN = "LIN"
 EXP = "EXP"
@@ -37,18 +37,18 @@ FLAGS(sys.argv)
 
 FIXED_PARAMETERS = {
     "data_type":     "listops",
-    "model_type":      "Pyramid",
+    "model_type":      "ChoiPyramid",
     "training_data_path":    FLAGS.training_data_path,
     "eval_data_path":    FLAGS.eval_data_path,
     "log_path": FLAGS.log_path,
     "metrics_path": FLAGS.log_path,
     "ckpt_path":  FLAGS.log_path,
-    "word_embedding_dim":   "256",
-    "model_dim":   "256",
-    "eval_seq_length":  "3200",
+    "word_embedding_dim":   "128",
+    "model_dim":   "128",
+    "eval_seq_length":  "500",
+    "allow_eval_cropping": "",
     "eval_interval_steps": "1000",
     "statistics_interval_steps": "100",
-    "metrics_interval_steps": "100",
     "batch_size":  "64",
     "encode": "pass",
     "mlp_dim": "16",
@@ -57,20 +57,18 @@ FIXED_PARAMETERS = {
     "embedding_keep_rate": "1.0",
     "sample_interval_steps": "1000",
     "pyramid_test_time_temperature_multiplier": "0.0",
-    "pyramid_gumbel": "",
     "nocomposition_ln": "",
+    "learning_rate": "0.001",
+    "seq_length": "100",
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "seq_length":      ("seq", LIN, 40, 120),  # RNN likes higher, but below 009.
-    "learning_rate":      ("lr", EXP, 0.00005, 0.005),  # RNN likes higher, but below 009.
     "l2_lambda":          ("l2", EXP, 8e-7, 1e-3),
     "learning_rate_decay_per_10k_steps": ("dc", LIN, 0.3, 1.0),
     "pyramid_trainable_temperature": ("tt", BOOL, None, None),
     "pyramid_temperature_decay_per_10k_steps": ("tdc", EXP, 0.2, 1.0),
-    "pyramid_selection_dim": ("sd", EXP, 2, 64),
-    "pyramid_temperature_cycle_length": ("cl", CHOICE, ['0', '30', '300'], None),    
+    "pyramid_temperature_cycle_length": ("cl", CHOICE, ['0', '0', '30', '300'], None),
 }
 
 sweep_name = "sweep_" + NAME + "_" + \
@@ -139,5 +137,5 @@ for run_id in range(SWEEP_RUNS):
     if NYU_NON_PBS:
         print "cd spinn/python; python2.7 -m spinn.models.supervised_classifier " + flags
     else:
-        print "SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh"
+        print "SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_cpu_only.sh"
     print
