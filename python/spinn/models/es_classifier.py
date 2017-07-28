@@ -561,6 +561,7 @@ def run(only_forward=False):
             assert len(all_steps) == len(all_seeds)
 
             perturbation_id = 0
+            j = 0
             while all_models:
                 perturbed_model = all_models.pop()
                 true_step = all_steps.pop()
@@ -572,13 +573,15 @@ def run(only_forward=False):
                                  eval_iterators, logger, true_step,
                                  best_dev_error, perturbation_id, ev_step, header, root_id))
                 p.start()
+                os.system("taskset -p -c %d %d" % ((j % mp.cpu_count()), p.pid)) 
                 processes.append(p)
                 perturbation_id += 1
+                j += 1
             assert len(all_models) == 0, "All models where not trained!"
 
             for p in processes:
                 p.join()
-                
+
             results = [queue.get() for p in processes]
 
             # Check to ensure the correct number of models where trained and saved
