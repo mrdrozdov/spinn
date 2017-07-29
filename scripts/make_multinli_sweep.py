@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "06_28b"
+NAME = "06_29"
 SWEEP_RUNS = 8
 
 LIN = "LIN"
@@ -64,11 +64,12 @@ FIXED_PARAMETERS = {
 SWEEP_PARAMETERS = {
     "embedding_keep_rate": ("ekr", LIN, 0.7, 1.0),
     "semantic_classifier_keep_rate": ("skr", LIN, 0.7, 1.0),
-    "l2_lambda":          ("l2", EXP, 1e-9, 1e-5),
+    "l2_lambda":          ("l2", EXP, 1e-9, 2e-6),
     "learning_rate_decay_per_10k_steps": ("dc", LIN, 0.4, 1.0),
     "pyramid_trainable_temperature": ("tt", BOOL, None, None),
     "pyramid_temperature_decay_per_10k_steps": ("tdc", CHOICE, ['0.33', '0.66', '1.0'], None),
-    "learning_rate": ("lr", EXP, 0.00005, 0.005),
+    "pyramid_temperature_cycle_length": ("cyc", CHOICE, ['30', '300', '3000', '0', '0'], None),
+    "learning_rate": ("lr", EXP, 0.00005, 0.003),
 }
 
 
@@ -138,5 +139,5 @@ for run_id in range(SWEEP_RUNS):
     if NYU_NON_PBS:
         print "cd spinn/python; python2.7 -m spinn.models.supervised_classifier " + flags
     else:
-        print "SPINNMODEL=\"spinn.models.supervised_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh"
+        print "SPINNMODEL=\"spinn.models.supervised_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh ../scripts/train_spinn.sbatch 1"
     print
