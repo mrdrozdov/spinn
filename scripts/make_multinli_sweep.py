@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "06_23a"
+NAME = "06_28b"
 SWEEP_RUNS = 8
 
 LIN = "LIN"
@@ -43,34 +43,32 @@ FIXED_PARAMETERS = {
     "eval_data_path":    FLAGS.eval_data_path,
     "embedding_data_path": FLAGS.embedding_data_path,
     "log_path": FLAGS.log_path,
-    "metrics_path": FLAGS.log_path,
     "ckpt_path":  FLAGS.log_path,
-    "word_embedding_dim":   "600",
+    "word_embedding_dim":   "300",
     "model_dim":   "600",
     "seq_length":   "80",
     "eval_seq_length":  "810",
     "eval_interval_steps": "1000",
     "sample_interval_steps": "1000",
     "statistics_interval_steps": "100",
-    "semantic_classifier_keep_rate": "1.0",
-    "embedding_keep_rate": "1.0",
     "batch_size":  "128",
     "encode": "gru",
-    "encode_bidirectional": "",
-    "num_mlp_layers": "2",
+    "encode_bidirectional": "", 
+    "num_mlp_layers": "1",
+    "mlp_dim": "1024",
     "learning_rate": "0.001",
+    "nocomposition_ln": "",
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "mlp_dim":      ("mld", EXP, 96, 512),  # RNN likes higher, but below 009.
-    "semantic_classifier_keep_rate": ("skr", LIN, 0.8, 1.0),  # NB: Keep rates may depend considerably on dims.
-    "embedding_keep_rate": ("ekr", LIN, 0.8, 1.0),
-    "l2_lambda":          ("l2", EXP, 1e-7, 1e-4),
+    "embedding_keep_rate": ("ekr", LIN, 0.7, 1.0),
+    "semantic_classifier_keep_rate": ("skr", LIN, 0.7, 1.0),
+    "l2_lambda":          ("l2", EXP, 1e-9, 1e-5),
     "learning_rate_decay_per_10k_steps": ("dc", LIN, 0.4, 1.0),
     "pyramid_trainable_temperature": ("tt", BOOL, None, None),
-    "pyramid_temperature_decay_per_10k_steps": ("tdc", EXP, 0.33, 1.0),
-    "pyramid_temperature_cycle_length": ("cl", CHOICE, ['0', '0', '30', '300'], None),
+    "pyramid_temperature_decay_per_10k_steps": ("tdc", CHOICE, ['0.33', '0.66', '1.0'], None),
+    "learning_rate": ("lr", EXP, 0.00005, 0.005),
 }
 
 

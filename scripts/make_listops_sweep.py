@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "listops_07_23a"
+NAME = "listops_07_24"
 SWEEP_RUNS = 8
 
 LIN = "LIN"
@@ -68,7 +68,8 @@ SWEEP_PARAMETERS = {
     "learning_rate_decay_per_10k_steps": ("dc", LIN, 0.3, 1.0),
     "pyramid_trainable_temperature": ("tt", BOOL, None, None),
     "pyramid_temperature_decay_per_10k_steps": ("tdc", EXP, 0.2, 1.0),
-    "pyramid_temperature_cycle_length": ("cl", CHOICE, ['0', '0', '30', '300'], None),
+    "pyramid_temperature_cycle_length": ("cl", CHOICE, ['0', '0', '300', '3000'], None),
+    "learning_rate": ("lr", EXP, 0.0001, 0.01),
 }
 
 sweep_name = "sweep_" + NAME + "_" + \
