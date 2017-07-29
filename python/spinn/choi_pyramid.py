@@ -453,7 +453,7 @@ def st_gumbel_softmax(logits, temperature=1.0, mask=None):
     y = masked_softmax(logits=y / temperature, mask=mask)
     y_argmax = y.max(1)[1].squeeze(1)
     y_hard = convert_to_one_hot(indices=y_argmax, num_classes=y.size(1)).float()
-    y = (y_hard - y).detach() + y
+    y = (y_hard - (y * temperature)).detach() + (y * temperature)
     return y
 
 
