@@ -575,7 +575,7 @@ def run(only_forward=False):
                                  eval_iterators, logger, true_step,
                                  best_dev_error, perturbation_id, ev_step, header, root_id))
 
-                os.system("taskset -p -c %d %d" % (perturbation_id % mp.cpu_count(), os.getpid()))
+                #os.system("taskset -p -c %d %d" % (perturbation_id % mp.cpu_count(), os.getpid()))
                 p.start()
                 processes.append(p)
                 perturbation_id += 1
