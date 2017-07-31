@@ -137,10 +137,13 @@ class BaseModel(_BaseModel):
 
         if self.rl_baseline == "value":
             # TODO: Flag-ify constants. 1024D MLP likely too big.
+            num_outputs = 2 if self.use_sentence_pair else 1
             self.v_dim = 100
-            self.v_rnn = nn.LSTM(self.input_dim, self.v_dim,
+            self.v_rnn_dim = self.v_dim
+            self.v_mlp_dim = self.v_dim * num_outputs
+            self.v_rnn = nn.LSTM(self.input_dim, self.v_rnn_dim,
                                  num_layers=1, batch_first=True)
-            self.v_mlp = MLP(self.v_dim,
+            self.v_mlp = MLP(self.v_mlp_dim,
                              mlp_dim=1024, num_classes=1, num_mlp_layers=2,
                              mlp_ln=True, classifier_dropout_rate=0.1)
 
@@ -155,11 +158,17 @@ class BaseModel(_BaseModel):
             x = Variable(embeds.data, volatile=not self.training).view(
                 batch_size, seq_length, -1)
             h0 = Variable(
-                to_gpu(torch.zeros(1, batch_size, self.v_dim)), volatile=not self.training)
+                to_gpu(torch.zeros(1, batch_size, self.v_rnn_dim)), volatile=not self.training)
             c0 = Variable(
-                to_gpu(torch.zeros(1, batch_size, self.v_dim)), volatile=not self.training)
+                to_gpu(torch.zeros(1, batch_size, self.v_rnn_dim)), volatile=not self.training)
             output, (hn, cn) = self.v_rnn(x, (h0, c0))
-            self.baseline_outp = self.v_mlp(hn.squeeze())
+            if self.use_sentence_pair:
+                hn = hn.squeeze()
+                h1, h2 = hn[:batch_size/2], hn[batch_size/2:]
+                hn_both = torch.cat([h1, h2], 1)
+                self.baseline_outp = self.v_mlp(hn_both.squeeze())
+            else:
+                self.baseline_outp = self.v_mlp(hn.squeeze())
 
     def run_greedy(self, sentences, transitions):
         inference_model_cls = BaseModel
