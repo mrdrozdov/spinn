@@ -1,7 +1,7 @@
 import unittest
 
 
-from spinn.util.catalan import CatalanPyramid
+from spinn.util.catalan import Catalan, CatalanPyramid
 
 
 target_3 = [
@@ -40,6 +40,15 @@ def almost_equal(a, b, threshold=1e-6):
 
 
 class CatalanTestCase(unittest.TestCase):
+
+    def test_catalan_numbers(self):
+        expected = [1, 1, 2, 5, 14, 42, 132, 429, 1430, 4862]
+        cat = Catalan()
+
+        for i in range(len(expected)):
+            actual = cat.catalan(i)
+            assert actual == expected[i], "{} != {}".format(actual, expected)
+
 
     def test_lookup_table_3(self):
         n_tokens = 3
