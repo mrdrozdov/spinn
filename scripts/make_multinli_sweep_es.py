@@ -10,13 +10,14 @@ import sys
 
 NYU_NON_PBS = False
 NAME = "08_3g"
-SWEEP_RUNS = 8
+SWEEP_RUNS = 14
 
 LIN = "LIN"
 EXP = "EXP"
 SS_BASE = "SS_BASE"
 BOOL = "BOOL"
 CHOICE = "CHOICE"
+MUL = "MUL" # multiple of 100
 
 FLAGS = gflags.FLAGS
 
@@ -51,7 +52,7 @@ FIXED_PARAMETERS = {
     "sample_interval_steps": "200",
     "statistics_interval_steps": "100",
     "ckpt_step": "1",
-    "ckpt_interval_steps": 
+    "ckpt_interval_steps": "100",
     "batch_size":  "32",
     "encode": "gru",
     "encode_bidirectional": "", 
@@ -77,7 +78,7 @@ SWEEP_PARAMETERS = {
     "tracking_lstm_hidden_dim": ("tdim", EXP, 8, 64),
     "es_num_episodes" : ("eps", LIN, 4, 6),
     "es_num_roots" : ("roots", LIN, 2, 3),
-    "es_episode_length" : ("lng", LIN, 100, 800),
+    "es_episode_length" : ("lng", MUL, 100, 700),
 }
 
 
@@ -117,6 +118,9 @@ for run_id in range(SWEEP_RUNS):
             sample = 1 - np.exp(lmn + (lmx - lmn) * r)
         elif t==CHOICE:
             sample = random.choice(mn)
+        elif t==MUL:
+            x = mn + (mx - mn) * r
+            sample =  x + 100 - x % 100
         else:
             sample = mn + (mx - mn) * r
 
