@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "06_29"
-SWEEP_RUNS = 8
+NAME = "tree_analysis_enc"
+SWEEP_RUNS = 5
 
 LIN = "LIN"
 EXP = "EXP"
@@ -51,25 +51,24 @@ FIXED_PARAMETERS = {
     "eval_interval_steps": "1000",
     "sample_interval_steps": "1000",
     "statistics_interval_steps": "100",
-    "batch_size":  "128",
+    "batch_size":  "32",
     "encode": "gru",
     "encode_bidirectional": "", 
     "num_mlp_layers": "1",
     "mlp_dim": "1024",
-    "learning_rate": "0.001",
-    "nocomposition_ln": "",
+    #"nocomposition_ln": "",
+    "embedding_keep_rate": "1.0",
+    "pyramid_trainable_temperature": "",
+    "learning_rate_decay_per_10k_steps": "1.0",
+    "pyramid_temperature_decay_per_10k_steps": "1.0", 
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "embedding_keep_rate": ("ekr", LIN, 0.7, 1.0),
-    "semantic_classifier_keep_rate": ("skr", LIN, 0.7, 1.0),
-    "l2_lambda":          ("l2", EXP, 1e-9, 2e-6),
-    "learning_rate_decay_per_10k_steps": ("dc", LIN, 0.4, 1.0),
-    "pyramid_trainable_temperature": ("tt", BOOL, None, None),
-    "pyramid_temperature_decay_per_10k_steps": ("tdc", CHOICE, ['0.33', '0.66', '1.0'], None),
-    "pyramid_temperature_cycle_length": ("cyc", CHOICE, ['30', '300', '3000', '0', '0'], None),
-    "learning_rate": ("lr", EXP, 0.00005, 0.003),
+    "semantic_classifier_keep_rate": ("skr", LIN, 0.5, 1.0),
+    "l2_lambda":          ("l2", EXP, 1e-9, 1e-6),
+    # "learning_rate_decay_per_10k_steps": ("dc", LIN, 0.4, 1.0),
+    "learning_rate": ("lr", EXP, 0.0001, 0.001),
 }
 
 
