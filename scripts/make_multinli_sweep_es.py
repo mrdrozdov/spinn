@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "08_3g"
+NAME = "08_3g_mirr"
 SWEEP_RUNS = 14
 
 LIN = "LIN"
@@ -66,6 +66,7 @@ FIXED_PARAMETERS = {
     "num_mlp_layers": "1",
     "num_samples": "1",
     "evolution": "",
+    "mirror" : "",
 }
 
 # Tunable parameters.
@@ -76,9 +77,9 @@ SWEEP_PARAMETERS = {
     "learning_rate_decay_per_10k_steps": ("dc", LIN, 0.4, 1.0),
     "learning_rate": ("lr", EXP, 0.00005, 0.005),
     "tracking_lstm_hidden_dim": ("tdim", EXP, 8, 64),
-    "es_num_episodes" : ("eps", LIN, 4, 6),
+    "es_num_episodes" : ("eps", LIN, 2, 3),
     "es_num_roots" : ("roots", LIN, 2, 3),
-    "es_episode_length" : ("lng", MUL, 100, 700),
+    "es_episode_length" : ("lng", MUL, 200, 800),
     "es_sigma": ("sig", EXP, 0.001, 0.1),
 }
 
