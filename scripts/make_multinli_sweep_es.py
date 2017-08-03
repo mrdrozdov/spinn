@@ -79,6 +79,7 @@ SWEEP_PARAMETERS = {
     "es_num_episodes" : ("eps", LIN, 4, 6),
     "es_num_roots" : ("roots", LIN, 2, 3),
     "es_episode_length" : ("lng", MUL, 100, 700),
+    "es_sigma": ("sig", EXP, 0.001, 0.1),
 }
 
 
