@@ -342,16 +342,21 @@ def perturb_model(model, random_seed):
     np.random.seed(random_seed)
     for i in range(FLAGS.es_num_episodes):
         pert_model = model
-        #anti_model = model
-        pert_model.load_state_dict(model.state_dict())  # Is this redundant?
-        # anti_model.load_state_dict(model.state_dict())
-        # for (k, v), (anti_k, anti_v) in zip(pert_model.es_params(), anti_model.es_params()):
-        for (k, v) in pert_model.spinn.evolution_params():
-            epsilon = np.random.normal(0, 1, v.size())
-            v += torch.from_numpy(FLAGS.es_sigma * epsilon).float()
-            #anti_v += torch.from_numpy(FLAGS.es_sigma * -epsilon).float()
-        models.append(pert_model)
-        # models.append(anti_model)
+        anti_model = model
+        pert_model.load_state_dict(model.state_dict()) 
+        anti_model.load_state_dict(model.state_dict())
+        if FLAGS.mirror == True: 
+            for (k, v), (anti_k, anti_v) in zip(pert_model.spinn.evolution_params(), anti_model.spinn.evolution_params()):
+                epsilon = np.random.normal(0, 1, v.size())
+                v += torch.from_numpy(FLAGS.es_sigma * epsilon).float()
+                anti_v += torch.from_numpy(FLAGS.es_sigma * -epsilon).float()
+            models.append(pert_model)
+            models.append(anti_model)
+        else:
+            for (k, v) in pert_model.spinn.evolution_params():
+                epsilon = np.random.normal(0, 1, v.size())
+                v += torch.from_numpy(FLAGS.es_sigma * epsilon).float()
+            models.append(pert_model)
     return models
 
 
