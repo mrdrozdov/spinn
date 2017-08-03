@@ -38,6 +38,19 @@ Here's a sample command that runs a fast, low-dimensional CPU training run, trai
 
 For full runs, you'll also need a copy of the 840B word 300D [GloVe word vectors](http://nlp.stanford.edu/projects/glove/).
 
+## Semi-Supervised Parsing
+
+You can train SPINN using only sentence-level labels. In this case, the integrated parser will randomly sample labels during training time, and will be optimized with the REINFORCE algorithm. The command to run this model looks slightly different:
+
+    PYTHONPATH=spinn/python \
+        python2.7 -m spinn.models.rl_classifier --data_type listops \
+        --training_data_path spinn/python/spinn/data/listops/train_d20a.tsv \
+        --eval_data_path spinn/python/spinn/data/listops/test_d20a.tsv  \
+        --word_embedding_dim 32 --model_dim 32 --mlp_dim 16 --model_type RLSPINN \
+        --rl_baseline value --rl_reward standard --rl_weight 42.0
+
+Note: This model does not yet work well on natural language data, although it does on the included synthetic dataset called `listops`. Please look at the [sweep file][10] for an idea of which hyperparameters to use.
+
 ## Log Analysis
 
 This project contains a handful of tools for easier analysis of your model's performance.
@@ -89,3 +102,4 @@ limitations under the License.
 [7]: https://github.com/stanfordnlp/spinn/releases/tag/ACL2016
 [8]: http://nlp.stanford.edu/blog/hybrid-tree-sequence-neural-networks-with-spinn/
 [9]: https://github.com/stanfordnlp/spinn
+[10]: https://github.com/nyu-mll/spinn/blob/master/scripts/make_listops_catalan_sweep.py

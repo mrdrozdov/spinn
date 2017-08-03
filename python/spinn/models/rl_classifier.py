@@ -165,6 +165,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         # Reset cached gradients.
         optimizer.zero_grad()
 
+        # TODO(START): There might be a floating point / int rounding issue.
         epsilon = FLAGS.rl_epsilon * math.exp(-step / FLAGS.rl_epsilon_decay)
 
         # Epsilon Greedy w. Decay.
@@ -183,6 +184,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         # Soft Wake/Sleep based on temperature.
         if FLAGS.rl_wake_sleep:
             model.rl_weight = temperature * FLAGS.rl_weight
+        # TODO(END)
 
         # Run model.
         output = model(X_batch, transitions_batch, y_batch,
