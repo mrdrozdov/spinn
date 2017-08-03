@@ -320,6 +320,7 @@ def rollout(queue, perturbed_model, FLAGS, data_manager,
     """
     perturbation_name = FLAGS.experiment_name + "_p" + str(perturbation_id)
     logger.Log("Model name is %s" % perturbation_name)
+    standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, perturbation_name)
     best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, perturbation_name, best=True)
 
     train_loop(FLAGS, data_manager, perturbed_model, optimizer,
@@ -327,7 +328,10 @@ def rollout(queue, perturbed_model, FLAGS, data_manager,
 
     # Once the episode ends, restore best checkpoint
     logger.Log("Restoring best checkpoint to run final evaluation of episode.")
-    ev_step, true_step, best_dev_error = trainer.load(best_checkpoint_path)
+    if os.path.exists(best_checkpoint_path):
+        ev_step, true_step, best_dev_error = trainer.load(best_checkpoint_path)
+    else:
+        ev_step, true_step, best_dev_error = trainer.load(standard_checkpoint_path)
     logger.Log("Best dev accuracy of model: Step %i, %f" % (true_step, 1. - best_dev_error))
 
     queue.put((ev_step, true_step, perturbation_id, best_dev_error))
