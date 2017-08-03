@@ -146,10 +146,18 @@ for run_id in range(SWEEP_RUNS):
     for param in params:
         value = params[param]
         flags += " --" + param + " " + str(value)
+        if param == "es_num_roots":
+            root = value
+        elif param == "es_num_episodes":
+            eps = value
+    num_cores = root * eps
 
     flags += " --experiment_name " + name
     if NYU_NON_PBS:
         print "cd spinn/python; python2.7 -m spinn.models.es_classifier " + flags
     else:
-        print "SPINNMODEL=\"spinn.models.es_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_es_cpu_only.sh"
+        if num_cores <= 10:
+            print "SPINNMODEL=\"spinn.models.es_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_es_cpu_only.sh"
+        else:
+            print "SPINNMODEL=\"spinn.models.es_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_es_cpu_only_20.sh"
     print
