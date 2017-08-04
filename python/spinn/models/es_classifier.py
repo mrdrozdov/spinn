@@ -447,9 +447,11 @@ def run(only_forward=False):
         true_step = 0
         best_dev_error = 1.0
         reload_ev_step = 0
-    #header.start_step = step
-    #header.start_time = int(time.time())
-    #header.model_label = perturbation_name
+    
+    if FLAGS.mirror: 
+        true_num_episodes = FLAGS.es_num_episodes * 2
+    else:
+        true_num_episodes = FLAGS.es_num_episodes
 
     # GPU support.
     the_gpu.gpu = FLAGS.gpu
@@ -583,8 +585,6 @@ def run(only_forward=False):
                                  model, optimizer, trainer, training_data_iter,
                                  eval_iterators, logger, true_step,
                                  best_dev_error, perturbation_id, ev_step, header, root_id))
-
-                #os.system("taskset -p -c %d %d" % (perturbation_id % mp.cpu_count(), os.getpid()))
                 p.start()
                 processes.append(p)
                 perturbation_id += 1
@@ -598,9 +598,9 @@ def run(only_forward=False):
 
             # Check to ensure the correct number of models where trained and saved
             if ev_step == 0:
-                assert len(results) == FLAGS.es_num_episodes
+                assert len(results) == true_num_episodes
             else:
-                assert len(results) == FLAGS.es_num_episodes * FLAGS.es_num_roots
+                assert len(results) == true_num_episodes * FLAGS.es_num_roots
 
 
 if __name__ == '__main__':

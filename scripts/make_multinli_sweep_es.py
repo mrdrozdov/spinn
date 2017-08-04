@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "08_3g_mirr"
+NAME = "08_04_mirr"
 SWEEP_RUNS = 14
 
 LIN = "LIN"
@@ -79,7 +79,7 @@ SWEEP_PARAMETERS = {
     "tracking_lstm_hidden_dim": ("tdim", EXP, 8, 64),
     "es_num_episodes" : ("eps", LIN, 2, 3),
     "es_num_roots" : ("roots", LIN, 2, 3),
-    "es_episode_length" : ("lng", MUL, 200, 800),
+    "es_episode_length" : ("lng", MUL, 150, 800),
     "es_sigma": ("sig", EXP, 0.001, 0.1),
 }
 
@@ -152,7 +152,7 @@ for run_id in range(SWEEP_RUNS):
             root = value
         elif param == "es_num_episodes":
             eps = value
-    num_cores = root * eps
+    num_cores = root * eps * 2
 
     flags += " --experiment_name " + name
     if NYU_NON_PBS:
