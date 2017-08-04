@@ -160,6 +160,8 @@ for run_id in range(SWEEP_RUNS):
     else:
         if num_cores <= 10:
             print "SPINNMODEL=\"spinn.models.es_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_es_cpu_only.sh"
+        elif num_cores <= 15:
+            print "SPINNMODEL=\"spinn.models.es_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_es_cpu_only_15.sh"
         else:
             print "SPINNMODEL=\"spinn.models.es_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_es_cpu_only_20.sh"
     print
