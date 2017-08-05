@@ -1,6 +1,6 @@
 import numpy as np
 from collections import deque
-import jsonl
+import json
 import os
 import logging_pb2 as pb
 
@@ -89,10 +89,10 @@ class EvalReporter(object):
         b = [preds.view(-1), target.view(-1), example_ids, output]
         for i, (pred, truth, eid, output) in enumerate(zip(*b)):
             sent = {}
-            sent['sentence_id'] = eid
+            sent['example_id'] = eid
             sent['prediction'] = pred
             sent['truth'] = truth
-            sent['output'] = list(output)
+            sent['output'] = [str(output_val) for output_val in output]
             if sent1_transitions is not None:
                 sent['sent1_transitions'] = list(sent1_transitions[i])
             if sent2_transitions is not None:
@@ -100,12 +100,11 @@ class EvalReporter(object):
             self.report.append(sent)
 
     def write_report(self, filename):
-        '''Commits the report to a file. Can be written as textproto or binary.
-        Binary is more space-efficient but can't be inspected manually from
-        a text editor.'''
-        else:
-            with open(filename, 'w') as f:
-                f.write(str(self.report))
+        '''Commits the report to a file.'''
+        with open(filename, 'w') as f:
+            for example in self.report:
+                json.dump(example, f, sort_keys=True)
+                f.write('\n')
 
 
 def PrintParamStatistics(name, param):
