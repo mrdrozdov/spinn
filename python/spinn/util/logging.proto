@@ -75,14 +75,14 @@ message SpinnEntry {
   optional string checkpoint = 21;
 }
 
-message EvalSentence {
-  optional int32 sentence_id = 1;
-  optional int32 prediction = 2; // The class with the highest output score
-  optional int32 truth = 3; // Real class label.
-  repeated float output = 4; // index = class, value = raw score
-  repeated int32 sent1_transitions = 5; // shift/reduce?
-  repeated int32 sent2_transitions = 6; // shift/reduce?
-}
+// message EvalSentence {
+//  optional int32 sentence_id = 1; // TODO: Switch to str.
+//  optional int32 prediction = 2; // The class with the highest output score
+//  optional int32 truth = 3; // Real class label.
+//  repeated float output = 4; // index = class, value = raw score
+//  repeated int32 sent1_transitions = 5; // shift/reduce?
+//  repeated int32 sent2_transitions = 6; // shift/reduce?
+// }
 
 message EvalBatch {
   repeated EvalSentence sentences = 1;

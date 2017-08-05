@@ -1,5 +1,6 @@
 import numpy as np
 from collections import deque
+import jsonl
 import os
 import logging_pb2 as pb
 
@@ -73,7 +74,7 @@ class MetricsLogger(object):
 class EvalReporter(object):
     def __init__(self):
         super(EvalReporter, self).__init__()
-        self.report = pb.EvaluationReport()
+        self.report = []
 
     def save_batch(self,
                    preds,
@@ -86,25 +87,22 @@ class EvalReporter(object):
         (information split by columns) to row-centric (by EvalSentence).'''
 
         b = [preds.view(-1), target.view(-1), example_ids, output]
-        batch = self.report.batches.add()
-        for i, (pred, truth, eid, output) in zip(*b):
-            sent = batch.sentences.add()
-            sent.sentence_id = eid
-            sent.prediction = pred
-            sent.truth = truth
-            sent.output = list(output)
+        for i, (pred, truth, eid, output) in enumerate(zip(*b)):
+            sent = {}
+            sent['sentence_id'] = eid
+            sent['prediction'] = pred
+            sent['truth'] = truth
+            sent['output'] = list(output)
             if sent1_transitions is not None:
-                sent.sent1_transitions = list(sent1_transitions[i])
+                sent['sent1_transitions'] = list(sent1_transitions[i])
             if sent2_transitions is not None:
-                sent.sent2_transitions = list(sent2_transitions[i])
+                sent['sent2_transitions'] = list(sent2_transitions[i])
+            self.report.append(sent)
 
-    def write_report(self, filename, binary=False):
+    def write_report(self, filename):
         '''Commits the report to a file. Can be written as textproto or binary.
         Binary is more space-efficient but can't be inspected manually from
         a text editor.'''
-        if binary:
-            with open(filename, 'wb') as f:
-                f.write(self.report.SerializeToString())
         else:
             with open(filename, 'w') as f:
                 f.write(str(self.report))
