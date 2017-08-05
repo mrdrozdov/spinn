@@ -586,6 +586,8 @@ class BaseModel(nn.Module):
         self.reshape_input = context_args.reshape_input
         self.reshape_context = context_args.reshape_context
 
+        self.inverted_vocabulary = None
+
     def get_features_dim(self):
         features_dim = self.hidden_dim * 2 if self.use_sentence_pair else self.hidden_dim
         if self.use_sentence_pair:
@@ -723,3 +725,32 @@ class BaseModel(nn.Module):
         h_premise = self.extract_h(self.wrap_items(items[:batch_size]))
         h_hypothesis = self.extract_h(self.wrap_items(items[batch_size:]))
         return [h_premise, h_hypothesis]
+
+    def get_samples(self, x, vocabulary, only_one=False):
+        # n=-1: Show all samples.
+        if not self.inverted_vocabulary:
+            self.inverted_vocabulary = dict([(vocabulary[key], key) for key in vocabulary])
+
+        transitions, _ = self.spinn.get_transitions_per_example()
+
+        token_sequences = []
+        batch_size = x.shape[0]
+        for s in (range(int(self.use_sentence_pair) + 1) if not only_one else [0]):
+            for b in (range(batch_size) if not only_one else [0]):
+                if self.use_sentence_pair:
+                    token_sequence = [self.inverted_vocabulary[token] for token in x[b, :, s]]
+                else:
+                    token_sequence = [self.inverted_vocabulary[token] for token in x[b, :]]
+
+                stack = []
+                token_sequence.reverse()
+                for transition in transitions[b + (s * batch_size)]:
+                    if transition == 0:
+                        stack.append(token_sequence.pop())
+                    if transition == 1:
+                        r = stack.pop()
+                        l = stack.pop()
+                        stack.append((l, r))
+                assert len(stack) == 1
+                token_sequences.append(stack[0])
+        return token_sequences

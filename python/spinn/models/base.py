@@ -372,11 +372,11 @@ def get_flags():
     gflags.DEFINE_boolean("expanded_eval_only_mode", False,
                           "If set, a checkpoint is loaded and a forward pass is done to get the predicted "
                           "transitions. The inferred parses are written to the supplied file(s) along with example-"
-                          "by-example accuracy information. Requirements: Must specify checkpoint path.")
+                          "by-example accuracy information. Requirements: Must specify checkpoint path.") # TODO: Rename.
     gflags.DEFINE_boolean("write_eval_report", False, "")
     gflags.DEFINE_boolean("eval_report_use_preds", True, "If False, use the given transitions in the report, "
                           "otherwise use predicted transitions. Note that when predicting transitions but not using them, the "
-                          "reported predictions will look very odd / not valid.")
+                          "reported predictions will look very odd / not valid.") # TODO: Remove.
 
     # Evolution Strategy
     gflags.DEFINE_boolean("transition_detach", False, "Detach transition decision from backprop.")

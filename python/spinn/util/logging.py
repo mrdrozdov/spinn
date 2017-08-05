@@ -293,3 +293,15 @@ def create_log_formatter(extra, rl):
     def fmt(log_entry):
         return log_formatter(log_entry, extra, rl)
     return fmt
+
+
+def prettyprint_tree(tree):
+    if isinstance(tree, tuple):
+        return '( ' + prettyprint_tree(tree[0]) + \
+            ' ' + prettyprint_tree(tree[1]) + ' )'
+    else:
+        return tree
+
+def prettyprint_trees(trees):
+    strings = [prettyprint_tree(tree) for tree in trees]
+    return strings

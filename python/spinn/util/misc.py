@@ -82,7 +82,9 @@ class EvalReporter(object):
                    example_ids,
                    output,
                    sent1_transitions=None,
-                   sent2_transitions=None):
+                   sent2_transitions=None,
+                   sent1_trees=None,
+                   sent2_trees=None):
         '''Saves a batch. Transforms the batch from column-centric information
         (information split by columns) to row-centric (by EvalSentence).'''
 
@@ -97,6 +99,11 @@ class EvalReporter(object):
                 sent['sent1_transitions'] = list(sent1_transitions[i])
             if sent2_transitions is not None:
                 sent['sent2_transitions'] = list(sent2_transitions[i])
+            if sent1_trees is not None:
+                sent['sent1_tree'] = sent1_trees[i]
+            if sent2_trees is not None:
+                sent['sent2_tree'] = sent2_trees[i]
+
             self.report.append(sent)
 
     def write_report(self, filename):

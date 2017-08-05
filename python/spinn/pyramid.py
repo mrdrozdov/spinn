@@ -286,7 +286,7 @@ class Pyramid(nn.Module):
 
         return embeds
 
-    def forward(self, sentences, transitions, y_batch=None, show_sample=False,
+    def forward(self, sentences, transitions, y_batch=None, store_parse_masks=False,
                 pyramid_temperature_multiplier=1.0, **kwargs):
         # Useful when investigating dynamic batching:
         # self.seq_lengths = sentences.shape[1] - (sentences == 0).sum(1)
@@ -295,9 +295,9 @@ class Pyramid(nn.Module):
         emb = self.run_embed(x)
 
         if self.test_temperature_multiplier == 0.0 and not self.training:
-            hh = self.run_hard_pyramid(emb, show_sample)
+            hh = self.run_hard_pyramid(emb, store_parse_masks)
         else:
-            hh = self.run_pyramid(emb, show_sample,
+            hh = self.run_pyramid(emb, store_parse_masks,
                                   temperature_multiplier=pyramid_temperature_multiplier)
 
         h = self.wrap(hh)
@@ -329,10 +329,10 @@ class Pyramid(nn.Module):
 
     # --- Sample printing ---
 
-    def prettyprint_sample(self, tree):
+    def prettyprint_tree(self, tree):
         if isinstance(tree, tuple):
-            return '( ' + self.prettyprint_sample(tree[0]) + \
-                ' ' + self.prettyprint_sample(tree[1]) + ' )'
+            return '( ' + self.prettyprint_tree(tree[0]) + \
+                ' ' + self.prettyprint_tree(tree[1]) + ' )'
         else:
             return tree
 
