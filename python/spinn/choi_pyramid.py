@@ -159,7 +159,8 @@ class ChoiPyramid(nn.Module):
     # --- Sample printing ---
 
     def get_samples(self, x, vocabulary, only_one=False):
-        # n=-1: Show all samples.
+        # TODO: Don't show padding.
+
         if not self.inverted_vocabulary:
             self.inverted_vocabulary = dict([(vocabulary[key], key) for key in vocabulary])
 
