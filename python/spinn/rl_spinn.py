@@ -51,8 +51,6 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      rl_weight=FLAGS.rl_weight,
                      rl_whiten=FLAGS.rl_whiten,
                      rl_valid=FLAGS.rl_valid,
-                     rl_entropy=FLAGS.rl_entropy,
-                     rl_entropy_beta=FLAGS.rl_entropy_beta,
                      rl_catalan=FLAGS.rl_catalan,
                      rl_catalan_backprop=FLAGS.rl_catalan_backprop,
                      rl_transition_acc_as_reward=FLAGS.rl_transition_acc_as_reward,
@@ -112,8 +110,6 @@ class BaseModel(_BaseModel):
                  rl_whiten=None,
                  rl_valid=None,
                  rl_epsilon=None,
-                 rl_entropy=None,
-                 rl_entropy_beta=None,
                  rl_catalan=None,
                  rl_catalan_backprop=None,
                  rl_transition_acc_as_reward=None,
@@ -128,8 +124,6 @@ class BaseModel(_BaseModel):
         self.rl_weight = rl_weight
         self.rl_whiten = rl_whiten
         self.rl_valid = rl_valid
-        self.rl_entropy = rl_entropy
-        self.rl_entropy_beta = rl_entropy_beta
         self.spinn.epsilon = rl_epsilon
         self.spinn.catalan = rl_catalan
         self.spinn.catalan_backprop = rl_catalan_backprop
@@ -193,7 +187,8 @@ class BaseModel(_BaseModel):
 
     def build_reward(self, probs, target, rl_reward="standard"):
         if rl_reward == "standard":  # Zero One Loss.
-            rewards = torch.eq(probs.max(1)[1], target).float()
+            y = probs.max(1, keepdim=False)[1]
+            rewards = torch.eq(y, target).float()
         elif rl_reward == "xent":  # Cross Entropy Loss.
             _target = target.long().view(-1, 1)
             # get the log of the inverse probabilities
@@ -300,19 +295,10 @@ class BaseModel(_BaseModel):
             t_preds[t_mask]).long().view(-1, 1), volatile=not self.training))
         log_p_action = torch.gather(t_logprobs, 1, actions)
 
-        # source: https://github.com/miyosuda/async_deep_reinforce/issues/1
-        if self.rl_entropy:
-            # TODO: Taking exp of a log is not the best way to get the initial
-            # probability...
-            entropy = - (t_logprobs * torch.exp(t_logprobs)).sum(1)
-        else:
-            entropy = 0.0
-
         # NOTE: Not sure I understand why entropy is inside this
         # multiplication. Investigate?
-        policy_losses = log_p_action * \
-            to_gpu(Variable(advantage, volatile=log_p_action.volatile) +
-                   entropy * self.rl_entropy_beta)
+        policy_losses = log_p_action.view(-1) * \
+            to_gpu(Variable(advantage, volatile=log_p_action.volatile))
         policy_loss = -1. * torch.sum(policy_losses)
         policy_loss /= log_p_action.size(0)
         policy_loss *= self.rl_weight

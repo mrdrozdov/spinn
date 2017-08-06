@@ -160,7 +160,7 @@ class SPINN(nn.Module):
         self.memories = []
 
     def forward(self, example, use_internal_parser=False, validate_transitions=True):
-        self.n_tokens = (example.tokens.data != 0).long().sum(1).view(-1).tolist()
+        self.n_tokens = (example.tokens.data != 0).long().sum(1, keepdim=False).tolist()
 
         if self.debug:
             seq_length = example.tokens.size(1)
