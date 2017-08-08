@@ -80,7 +80,8 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
 
         # Calculate class accuracy.
         target = torch.from_numpy(eval_y_batch).long()
-        pred = logits.data.max(1)[1].cpu()  # get the index of the max log-probability
+        #pred = logits.data.max(1)[1].cpu()  # get the index of the max log-probability
+        pred = logits.data.max(1, keepdim=False)[1].cpu()
 
         eval_accumulate(model, data_manager, A, batch)
         A.add('class_correct', pred.eq(target).sum())
@@ -192,7 +193,8 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
 
         # Calculate class accuracy.
         target = torch.from_numpy(y_batch).long()
-        pred = logits.data.max(1)[1].cpu()  # get the index of the max log-probability
+        #pred = logits.data.max(1)[1].cpu()  # get the index of the max log-probability
+        pred = logits.data.max(1, keepdim=False)[1].cpu()
         class_acc = pred.eq(target).sum() / float(target.size(0))
 
         # Calculate class loss.
