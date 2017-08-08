@@ -14,7 +14,7 @@ from spinn.util.blocks import get_l2_loss, the_gpu, to_gpu
 from spinn.util.misc import Accumulator, EvalReporter
 from spinn.util.misc import recursively_set_device
 from spinn.util.logging import stats, train_accumulate, create_log_formatter
-from spinn.util.logging import eval_stats, eval_accumulate
+from spinn.util.logging import eval_stats, eval_accumulate, prettyprint_trees
 from spinn.util.loss import auxiliary_loss
 from spinn.util.sparks import sparks, dec_str
 import spinn.util.evalb as evalb
@@ -44,7 +44,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
     index = len(log_entry.evaluation)
     eval_log = log_entry.evaluation.add()
     reporter = EvalReporter()
-    sample_str = None
+    tree_strs = None
 
     # Evaluate
     total_batches = len(dataset)
@@ -57,7 +57,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
         pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (
             step / 10000.0)
         if FLAGS.pyramid_temperature_cycle_length > 0.0:
-            min_temp = 0.05
+            min_temp = 1e-5
             pyramid_temperature_multiplier *= (math.cos((step) /
                                                         FLAGS.pyramid_temperature_cycle_length) + 1 + min_temp) / 2
     else:
@@ -73,13 +73,16 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
                        use_internal_parser=FLAGS.use_internal_parser,
                        validate_transitions=FLAGS.validate_transitions,
                        pyramid_temperature_multiplier=pyramid_temperature_multiplier,
-                       show_sample=show_sample,
+                       store_parse_masks=show_sample,
                        example_lengths=eval_num_transitions_batch)
 
-        if show_sample and FLAGS.model_type in ["Pyramid", "ChoiPyramid"]:
-            sample = model.get_sample(eval_X_batch, vocabulary)
-            sample_str = model.prettyprint_sample(sample)
-        show_sample = False  # Only show one sample, regardless of the number of batches.
+        can_sample = FLAGS.model_type in ["ChoiPyramid"] or (FLAGS.model_type == "SPINN" and FLAGS.use_internal_parser)  # TODO: Restore support in Pyramid if using.
+        if show_sample and can_sample:
+            tmp_samples = model.get_samples(eval_X_batch, vocabulary, only_one=not FLAGS.write_eval_report)
+            tree_strs = prettyprint_trees(tmp_samples) 
+        if not FLAGS.write_eval_report:
+            show_sample = False  # Only show one sample, regardless of the number of batches.
+
 
         # Normalize output.
         logits = F.log_softmax(output)
@@ -101,25 +104,30 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
         total_tokens += sum([(nt + 1) / 2 for nt in eval_num_transitions_batch.reshape(-1)])
 
         if FLAGS.write_eval_report:
-            reporter_args = [pred, target, eval_ids, output.data.cpu().numpy()]
-            if hasattr(model, 'transition_loss'):
-                transitions_per_example, _ = model.spinn.get_transitions_per_example(
-                    style="preds" if FLAGS.eval_report_use_preds else "given")
-                if model.use_sentence_pair:
-                    batch_size = pred.size(0)
-                    sent1_transitions = transitions_per_example[:batch_size]
-                    sent2_transitions = transitions_per_example[batch_size:]
-                    reporter_args.append(sent1_transitions)
-                    reporter_args.append(sent2_transitions)
-                else:
-                    reporter_args.append(transitions_per_example)
-            reporter.save_batch(*reporter_args)
+            transitions_per_example, _ = model.spinn.get_transitions_per_example(
+                    style="preds" if FLAGS.eval_report_use_preds else "given") if (FLAGS.model_type == "SPINN" and FLAGS.use_internal_parser) else (None, None) 
+
+            if model.use_sentence_pair:
+                batch_size = pred.size(0)
+                sent1_transitions = transitions_per_example[:batch_size] if transitions_per_example is not None else None
+                sent2_transitions = transitions_per_example[batch_size:] if transitions_per_example is not None else None
+
+                sent1_trees = tree_strs[:batch_size] if tree_strs is not None else None
+                sent2_trees = tree_strs[batch_size:] if tree_strs is not None else None
+            else:
+                sent1_transitions = transitions_per_example if transitions_per_example is not None else None
+                sent2_transitions = None
+
+                sent1_trees = tree_strs if tree_strs is not None else None
+                sent2_trees = None
+
+            reporter.save_batch(pred, target, eval_ids, output.data.cpu().numpy(), sent1_transitions, sent2_transitions, sent1_trees, sent2_trees)
 
         # Print Progress
         progress_bar.step(i + 1, total=total_batches)
     progress_bar.finish()
-    if sample_str is not None:
-        logger.Log('Sample: ' + sample_str)
+    if tree_strs is not None:
+        logger.Log('Sample: ' + tree_strs[0])
 
     end = time.time()
     total_time = end - start
@@ -404,7 +412,7 @@ def run(only_forward=False):
         log_entry = pb.SpinnEntry()
         for index, eval_set in enumerate(eval_iterators):
             log_entry.Clear()
-            evaluate(FLAGS, model, data_manager, eval_set, log_entry, logger, step, vocabulary)
+            evaluate(FLAGS, model, data_manager, eval_set, log_entry, logger, step, vocabulary, show_sample=True)
             print(log_entry)
             logger.LogEntry(log_entry)
     else:

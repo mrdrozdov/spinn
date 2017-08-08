@@ -1,5 +1,6 @@
 import numpy as np
 from collections import deque
+import json
 import os
 import logging_pb2 as pb
 
@@ -73,7 +74,7 @@ class MetricsLogger(object):
 class EvalReporter(object):
     def __init__(self):
         super(EvalReporter, self).__init__()
-        self.report = pb.EvaluationReport()
+        self.report = []
 
     def save_batch(self,
                    preds,
@@ -81,33 +82,36 @@ class EvalReporter(object):
                    example_ids,
                    output,
                    sent1_transitions=None,
-                   sent2_transitions=None):
+                   sent2_transitions=None,
+                   sent1_trees=None,
+                   sent2_trees=None):
         '''Saves a batch. Transforms the batch from column-centric information
         (information split by columns) to row-centric (by EvalSentence).'''
 
         b = [preds.view(-1), target.view(-1), example_ids, output]
-        batch = self.report.batches.add()
-        for i, (pred, truth, eid, output) in zip(*b):
-            sent = batch.sentences.add()
-            sent.sentence_id = eid
-            sent.prediction = pred
-            sent.truth = truth
-            sent.output = list(output)
+        for i, (pred, truth, eid, output) in enumerate(zip(*b)):
+            sent = {}
+            sent['example_id'] = eid
+            sent['prediction'] = pred
+            sent['truth'] = truth
+            sent['output'] = [str(output_val) for output_val in output]
             if sent1_transitions is not None:
-                sent.sent1_transitions = list(sent1_transitions[i])
+                sent['sent1_transitions'] = list(sent1_transitions[i])
             if sent2_transitions is not None:
-                sent.sent2_transitions = list(sent2_transitions[i])
+                sent['sent2_transitions'] = list(sent2_transitions[i])
+            if sent1_trees is not None:
+                sent['sent1_tree'] = sent1_trees[i]
+            if sent2_trees is not None:
+                sent['sent2_tree'] = sent2_trees[i]
 
-    def write_report(self, filename, binary=False):
-        '''Commits the report to a file. Can be written as textproto or binary.
-        Binary is more space-efficient but can't be inspected manually from
-        a text editor.'''
-        if binary:
-            with open(filename, 'wb') as f:
-                f.write(self.report.SerializeToString())
-        else:
-            with open(filename, 'w') as f:
-                f.write(str(self.report))
+            self.report.append(sent)
+
+    def write_report(self, filename):
+        '''Commits the report to a file.'''
+        with open(filename, 'w') as f:
+            for example in self.report:
+                json.dump(example, f, sort_keys=True)
+                f.write('\n')
 
 
 def PrintParamStatistics(name, param):

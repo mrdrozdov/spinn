@@ -34,3 +34,5 @@ writing/gist/gist.fls
 writing/hard_stack_paper/paper.pdf
 
 *.metric
+
+*.report

@@ -108,7 +108,7 @@ class ChoiPyramid(nn.Module):
 
         return embeds
 
-    def forward(self, sentences, _, __=None, example_lengths=None, show_sample=False,
+    def forward(self, sentences, _, __=None, example_lengths=None, store_parse_masks=False,
                 pyramid_temperature_multiplier=1.0, **kwargs):
         # Useful when investigating dynamic batching:
         # self.seq_lengths = sentences.shape[1] - (sentences == 0).sum(1)
@@ -126,7 +126,7 @@ class ChoiPyramid(nn.Module):
         if self.training:
             self.temperature_to_display = temperature
 
-        if show_sample:
+        if store_parse_masks:
             self.mask_memory = [mask.data.cpu().numpy() for mask in masks]
 
         h = self.wrap(hh)
@@ -158,31 +158,33 @@ class ChoiPyramid(nn.Module):
 
     # --- Sample printing ---
 
-    def prettyprint_sample(self, tree):
-        if isinstance(tree, tuple):
-            return '( ' + self.prettyprint_sample(tree[0]) + \
-                ' ' + self.prettyprint_sample(tree[1]) + ' )'
-        else:
-            return tree
+    def get_samples(self, x, vocabulary, only_one=False):
+        # TODO: Don't show padding.
 
-    def get_sample(self, x, vocabulary):
         if not self.inverted_vocabulary:
             self.inverted_vocabulary = dict([(vocabulary[key], key) for key in vocabulary])
 
-        if self.use_sentence_pair:
-            token_sequence = [self.inverted_vocabulary[token] for token in x[0, :, 0]]
-        else:
-            token_sequence = [self.inverted_vocabulary[token] for token in x[0, :]]
+        token_sequences = []
+        batch_size = x.shape[0]
+        for s in (range(int(self.use_sentence_pair) + 1) if not only_one else [0]):
+            for b in (range(batch_size) if not only_one else [0]):
+                if self.use_sentence_pair:
+                    token_sequence = [self.inverted_vocabulary[token] for token in x[b, :, s]]
+                else:
+                    token_sequence = [self.inverted_vocabulary[token] for token in x[b, :]]
 
-        for merge in self.get_sample_merge_sequence():
-            token_sequence[merge] = (token_sequence[merge], token_sequence[merge + 1])
-            del token_sequence[merge + 1]
-        return token_sequence[0]
+                for merge in self.get_sample_merge_sequence(b, s, batch_size):
+                    token_sequence[merge] = (token_sequence[merge], token_sequence[merge + 1])
+                    del token_sequence[merge + 1]
+                assert len(token_sequence) == 1
+                token_sequences.append(token_sequence[0])
+        return token_sequences
 
-    def get_sample_merge_sequence(self):
+    def get_sample_merge_sequence(self, b, s, batch_size):
         merge_sequence = []
+        index = b + (s * batch_size)
         for mask in self.mask_memory:
-            merge_sequence.append(np.argmax(mask[0, :]))
+            merge_sequence.append(np.argmax(mask[index, :]))
         merge_sequence.append(0)
         return merge_sequence
 
