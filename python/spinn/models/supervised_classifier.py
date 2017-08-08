@@ -80,7 +80,8 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
         if show_sample and can_sample:
             tmp_samples = model.get_samples(eval_X_batch, vocabulary, only_one=not FLAGS.write_eval_report)
             tree_strs = prettyprint_trees(tmp_samples) 
-        show_sample = False  # Only show one sample, regardless of the number of batches.
+        if not FLAGS.write_eval_report:
+            show_sample = False  # Only show one sample, regardless of the number of batches.
 
 
         # Normalize output.
