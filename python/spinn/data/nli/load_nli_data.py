@@ -8,7 +8,8 @@ SENTENCE_PAIR_DATA = True
 LABEL_MAP = {
     "entailment": 0,
     "neutral": 1,
-    "contradiction": 2
+    "contradiction": 2,
+    "hidden": 0,  # Used in the unlabeled test set---needs to map to some arbitrary label.
 }
 
 

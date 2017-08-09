@@ -365,7 +365,7 @@ def run(only_forward=False):
 
     # Build model.
     vocab_size = len(vocabulary)
-    num_classes = len(data_manager.LABEL_MAP)
+    num_classes = len(set(data_manager.LABEL_MAP.values()))
 
     model, optimizer, trainer = init_model(
         FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_manager, header)
