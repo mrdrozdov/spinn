@@ -405,7 +405,10 @@ def BuildVocabulary(raw_training_data, raw_eval_sets, embedding_path,
     logger.Log("Constructing vocabulary...")
 
     types_in_data = set()
-    for dataset in [raw_training_data] + [eval_dataset[1] for eval_dataset in raw_eval_sets]:
+    datasets = [eval_dataset[1] for eval_dataset in raw_eval_sets]
+    if raw_training_data is not None:
+        datasets.append(raw_training_data)
+    for dataset in datasets:
         if sentence_pair_data:
             types_in_data.update(itertools.chain.from_iterable([example["premise_tokens"]
                                                                 for example in dataset]))

@@ -10,6 +10,7 @@
 from spinn.data.sst.base import convert_unary_binary_bracketed_data
 
 SENTENCE_PAIR_DATA = False
+FIXED_VOCABULARY = None
 
 LABEL_MAP = {
     "0": 0,
@@ -22,7 +23,7 @@ LABEL_MAP = {
 
 def load_data(path, vocabulary=None, seq_length=None, batch_size=32, eval_mode=False, logger=None):
     dataset = convert_unary_binary_bracketed_data(path)
-    return dataset, None
+    return dataset
 
 
 if __name__ == "__main__":

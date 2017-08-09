@@ -128,35 +128,39 @@ def load_data_and_embeddings(FLAGS, data_manager, logger, training_data_path, ev
     if FLAGS.eval_genre is not None:
         def choose_eval(x): return x.get('genre') == FLAGS.eval_genre
 
-    if FLAGS.data_type == "nli":
-        # Load the data.
-        raw_training_data, vocabulary = data_manager.load_data(
-            training_data_path, FLAGS.lowercase, choose_train)
+    if not FLAGS.expanded_eval_only_mode:
+        if FLAGS.data_type == "nli":
+            # Load the data.
+            raw_training_data = data_manager.load_data(
+                training_data_path, FLAGS.lowercase, choose_train)
+        else:
+            # Load the data.
+            raw_training_data = data_manager.load_data(
+                training_data_path, FLAGS.lowercase)
     else:
-        # Load the data.
-        raw_training_data, vocabulary = data_manager.load_data(
-            training_data_path, FLAGS.lowercase)
+        raw_training_data = None
 
     if FLAGS.data_type == "nli":
         # Load the eval data.
         raw_eval_sets = []
         for path in eval_data_path.split(':'):
-            raw_eval_data, _ = data_manager.load_data(path, FLAGS.lowercase, choose_eval)
+            raw_eval_data = data_manager.load_data(path, FLAGS.lowercase, choose_eval)
             raw_eval_sets.append((path, raw_eval_data))
     else:
         # Load the eval data.
         raw_eval_sets = []
         for path in eval_data_path.split(':'):
-            raw_eval_data, _ = data_manager.load_data(path, FLAGS.lowercase)
+            raw_eval_data = data_manager.load_data(path, FLAGS.lowercase)
             raw_eval_sets.append((path, raw_eval_data))
 
     # Prepare the vocabulary.
-    if not vocabulary:
+    if not data_manager.FIXED_VOCABULARY:
         logger.Log("In open vocabulary mode. Using loaded embeddings without fine-tuning.")
         vocabulary = util.BuildVocabulary(
             raw_training_data, raw_eval_sets, FLAGS.embedding_data_path, logger=logger,
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
     else:
+        vocabulary = data_manager.FIXED_VOCABULARY
         logger.Log("In fixed vocabulary mode. Training embeddings.")
 
     # Load pretrained embeddings.
@@ -174,10 +178,10 @@ def load_data_and_embeddings(FLAGS, data_manager, logger, training_data_path, ev
     training_data = util.PreprocessDataset(
         raw_training_data, vocabulary, FLAGS.seq_length, data_manager, eval_mode=False, logger=logger,
         sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-        simple=sequential_only(), allow_cropping=FLAGS.allow_cropping, pad_from_left=pad_from_left())
+        simple=sequential_only(), allow_cropping=FLAGS.allow_cropping, pad_from_left=pad_from_left()) if raw_training_data is not None else None
     training_data_iter = util.MakeTrainingIterator(
         training_data, FLAGS.batch_size, FLAGS.smart_batching, FLAGS.use_peano,
-        sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
+        sentence_pair_data=data_manager.SENTENCE_PAIR_DATA) if raw_training_data is not None else None
 
     # Preprocess eval sets.
     eval_iterators = []

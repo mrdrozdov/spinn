@@ -23,4 +23,4 @@ def load_data(path, lowercase=None):
             example["example_id"] = str(example_id)
 
             examples.append(example)
-    return examples, FIXED_VOCABULARY
+    return examples

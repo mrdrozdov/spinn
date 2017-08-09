@@ -54,7 +54,7 @@ def convert_binary_bracketed_data(filename):
 
 def load_data(path):
     dataset = convert_binary_bracketed_data(path)
-    return dataset, FIXED_VOCABULARY
+    return dataset
 
 
 if __name__ == "__main__":

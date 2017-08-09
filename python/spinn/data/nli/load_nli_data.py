@@ -4,6 +4,7 @@ import json
 import codecs
 
 SENTENCE_PAIR_DATA = True
+FIXED_VOCABULARY = None
 
 LABEL_MAP = {
     "entailment": 0,
@@ -64,7 +65,7 @@ def load_data(path, lowercase=False, choose=lambda x: True):
                 failed_parse += 1
     if failed_parse > 0:
         print("Warning: Failed to convert binary parse for {} examples.".format(failed_parse))
-    return examples, None
+    return examples
 
 
 if __name__ == "__main__":

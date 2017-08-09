@@ -27,4 +27,4 @@ def load_data(path, lowercase=None):
             example["example_id"] = str(pairID)
 
             examples.append(example)
-    return examples, FIXED_VOCABULARY
+    return examples
