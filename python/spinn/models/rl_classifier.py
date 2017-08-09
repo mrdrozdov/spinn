@@ -15,7 +15,7 @@ from spinn.util.misc import Accumulator, EvalReporter
 from spinn.util.misc import recursively_set_device
 from spinn.util.logging import stats, train_accumulate, create_log_formatter
 from spinn.util.logging import train_rl_accumulate
-from spinn.util.logging import eval_stats, eval_accumulate
+from spinn.util.logging import eval_stats, eval_accumulate, prettyprint_trees
 from spinn.util.loss import auxiliary_loss
 from spinn.util.sparks import sparks, dec_str
 import spinn.util.evalb as evalb
@@ -36,18 +36,19 @@ from spinn.models.base import load_data_and_embeddings
 FLAGS = gflags.FLAGS
 
 
-def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=None):
+def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
+             logger, step, vocabulary=None, show_sample=False):
     filename, dataset = eval_set
 
     A = Accumulator()
     index = len(log_entry.evaluation)
     eval_log = log_entry.evaluation.add()
     reporter = EvalReporter()
+    tree_strs = None
 
     # Evaluate
     total_batches = len(dataset)
-    progress_bar = SimpleProgressBar(
-        msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
+    progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
     total_tokens = 0
     start = time.time()
@@ -60,7 +61,16 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
         # Run model.
         output = model(eval_X_batch, eval_transitions_batch, eval_y_batch,
                        use_internal_parser=FLAGS.use_internal_parser,
-                       validate_transitions=FLAGS.validate_transitions)
+                       validate_transitions=FLAGS.validate_transitions,
+                       store_parse_masks=show_sample,
+                       example_lengths=eval_num_transitions_batch)
+
+        can_sample = (FLAGS.model_type == "RLSPINN" and FLAGS.use_internal_parser)
+        if show_sample and can_sample:
+            tmp_samples = model.get_samples(eval_X_batch, vocabulary, only_one=not FLAGS.write_eval_report)
+            tree_strs = prettyprint_trees(tmp_samples)
+        if not FLAGS.write_eval_report:
+            show_sample = False  # Only show one sample, regardless of the number of batches.
 
         # Normalize output.
         logits = F.log_softmax(output)
@@ -80,23 +90,30 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
             [(nt + 1) / 2 for nt in eval_num_transitions_batch.reshape(-1)])
 
         if FLAGS.write_eval_report:
-            reporter_args = [pred, target, eval_ids, output.data.cpu().numpy()]
-            if hasattr(model, 'transition_loss'):
-                transitions_per_example, _ = model.spinn.get_transitions_per_example(
-                    style="preds" if FLAGS.eval_report_use_preds else "given")
-                if model.use_sentence_pair:
-                    batch_size = pred.size(0)
-                    sent1_transitions = transitions_per_example[:batch_size]
-                    sent2_transitions = transitions_per_example[batch_size:]
-                    reporter_args.append(sent1_transitions)
-                    reporter_args.append(sent2_transitions)
-                else:
-                    reporter_args.append(transitions_per_example)
-            reporter.save_batch(*reporter_args)
+            transitions_per_example, _ = model.spinn.get_transitions_per_example(
+                    style="preds" if FLAGS.eval_report_use_preds else "given") if (FLAGS.model_type == "SPINN" and FLAGS.use_internal_parser) else (None, None)
+
+            if model.use_sentence_pair:
+                batch_size = pred.size(0)
+                sent1_transitions = transitions_per_example[:batch_size] if transitions_per_example is not None else None
+                sent2_transitions = transitions_per_example[batch_size:] if transitions_per_example is not None else None
+
+                sent1_trees = tree_strs[:batch_size] if tree_strs is not None else None
+                sent2_trees = tree_strs[batch_size:] if tree_strs is not None else None
+            else:
+                sent1_transitions = transitions_per_example if transitions_per_example is not None else None
+                sent2_transitions = None
+
+                sent1_trees = tree_strs if tree_strs is not None else None
+                sent2_trees = None
+
+            reporter.save_batch(pred, target, eval_ids, output.data.cpu().numpy(), sent1_transitions, sent2_transitions, sent1_trees, sent2_trees)
 
         # Print Progress
         progress_bar.step(i + 1, total=total_batches)
     progress_bar.finish()
+    if tree_strs is not None:
+        logger.Log('Sample: ' + tree_strs[0])
 
     end = time.time()
     total_time = end - start
@@ -108,10 +125,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
     eval_log.filename = filename
 
     if FLAGS.write_eval_report:
-        path_fname = '{}.{}.{}.report'.format(
-            FLAGS.experiment_name, step, index)
-        eval_report_path = os.path.join(FLAGS.log_path, path_fname)
-        eval_log.report_path = eval_report_path
+        eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".report")
         reporter.write_report(eval_report_path)
 
     eval_class_acc = eval_log.eval_class_accuracy
@@ -313,7 +327,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
             should_log = True
             for index, eval_set in enumerate(eval_iterators):
                 acc, tacc = evaluate(
-                    FLAGS, model, data_manager, eval_set, log_entry, step)
+                    FLAGS, model, data_manager, eval_set, log_entry, logger, step)
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (
                         1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
@@ -414,7 +428,7 @@ def run(only_forward=False):
         for index, eval_set in enumerate(eval_iterators):
             log_entry.Clear()
             acc = evaluate(FLAGS, model, data_manager,
-                           eval_set, log_entry, step, vocabulary)
+                           eval_set, log_entry, logger, step, vocabulary, show_sample=True)
             print(log_entry)
             logger.LogEntry(log_entry)
     else:
