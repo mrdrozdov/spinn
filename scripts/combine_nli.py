@@ -44,7 +44,8 @@ for filename in FLAGS.inputs.split(','):
 
     print("Read {} lines. Kept {}.".format(ii + 1, len(db[filename])))
 
-with open(FLAGS.output, 'w') as f_out:
+output = os.path.expanduser(FLAGS.output)
+with open(output, 'w') as f_out:
     for filename in db.keys():
         with open(filename) as f_in:
             for line in f_in:

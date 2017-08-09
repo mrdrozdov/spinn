@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "07_30_tacl"
+NAME = "08_01_tacl"
 SWEEP_RUNS = 4
 
 LIN = "LIN"
@@ -65,6 +65,9 @@ FIXED_PARAMETERS = {
     "use_internal_parser": "",
     "word_embedding_dim":   "300",
     "learning_rate_decay_per_10k_steps": "0.906176807691",
+    "semantic_classifier_keep_rate": "1.0",
+    "embedding_keep_rate": "1.0",
+    "gpu": "0",
 }
 
 # Tunable parameters.
@@ -73,8 +76,6 @@ SWEEP_PARAMETERS = {
     "rl_weight":  ("rlwt", EXP, 1.0, 5.0),
     "l2_lambda":          ("l2", EXP, 1e-7, 1e-5),
     "tracking_lstm_hidden_dim": ("tdim", EXP, 8, 64),
-    "semantic_classifier_keep_rate": ("skr", LIN, 0.8, 1.0),  # NB: Keep rates may depend considerably on dims.
-    "embedding_keep_rate": ("ekr", LIN, 0.8, 1.0),
     "rl_epsilon": ("eps", LIN, 0.1, 1.0),
     "rl_epsilon_decay": ("epsd", EXP, 1000, 1000000),
     "rl_confidence_penalty": ("rlcp", EXP, 0.00001, 0.01),
