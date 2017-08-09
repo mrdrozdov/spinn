@@ -37,7 +37,7 @@ FLAGS = gflags.FLAGS
 
 
 def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
-             logger, step, vocabulary=None, show_sample=False):
+             logger, step, vocabulary=None, show_sample=False, eval_index=0):
     filename, dataset = eval_set
 
     A = Accumulator()
@@ -139,7 +139,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
     eval_log.filename = filename
 
     if FLAGS.write_eval_report:
-        eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".report")
+        eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".eval_set_" + str(eval_index) + ".report")
         reporter.write_report(eval_report_path)
 
     eval_class_acc = eval_log.eval_class_accuracy
@@ -322,11 +322,11 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
                 acc, tacc = evaluate(FLAGS, model, data_manager, eval_set, log_entry, logger, step,
                                      show_sample=(
                                          step %
-                                         FLAGS.sample_interval_steps == 0), vocabulary=vocabulary)
+                                         FLAGS.sample_interval_steps == 0), vocabulary=vocabulary, eval_index=index)
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (
                         1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
-                    logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
+                    logger.Log("Checkpointing with new best dev accuracy of %f" % acc)  # TODO: This mixes information across dev sets. Fix.
                     trainer.save(best_checkpoint_path, step, best_dev_error)
             progress_bar.reset()
 
@@ -412,7 +412,7 @@ def run(only_forward=False):
         log_entry = pb.SpinnEntry()
         for index, eval_set in enumerate(eval_iterators):
             log_entry.Clear()
-            evaluate(FLAGS, model, data_manager, eval_set, log_entry, logger, step, vocabulary, show_sample=True)
+            evaluate(FLAGS, model, data_manager, eval_set, log_entry, logger, step, vocabulary, show_sample=True, eval_index=index)
             print(log_entry)
             logger.LogEntry(log_entry)
     else:
