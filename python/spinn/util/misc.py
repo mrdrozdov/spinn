@@ -96,9 +96,9 @@ class EvalReporter(object):
             sent['truth'] = truth
             sent['output'] = [str(output_val) for output_val in output]
             if sent1_transitions is not None:
-                sent['sent1_transitions'] = list(sent1_transitions[i])
+                sent['sent1_transitions'] = sent1_transitions[i].tolist()
             if sent2_transitions is not None:
-                sent['sent2_transitions'] = list(sent2_transitions[i])
+                sent['sent2_transitions'] = sent2_transitions[i].tolist()
             if sent1_trees is not None:
                 sent['sent1_tree'] = sent1_trees[i]
             if sent2_trees is not None:
