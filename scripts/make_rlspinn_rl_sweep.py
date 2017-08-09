@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "08_01_tacl"
+NAME = "08_08_tacl"
 SWEEP_RUNS = 4
 
 LIN = "LIN"
@@ -72,12 +72,12 @@ FIXED_PARAMETERS = {
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "learning_rate":      ("lr", EXP, 0.00003, 0.01),  # RNN likes higher, but below 009.
+    "learning_rate":      ("lr", EXP, 0.00003, 0.003),  # RNN likes higher, but below 009.
     "rl_weight":  ("rlwt", EXP, 1.0, 5.0),
     "l2_lambda":          ("l2", EXP, 1e-7, 1e-5),
-    "tracking_lstm_hidden_dim": ("tdim", EXP, 8, 64),
-    "rl_epsilon": ("eps", LIN, 0.1, 1.0),
-    "rl_epsilon_decay": ("epsd", EXP, 1000, 1000000),
+    "tracking_lstm_hidden_dim": ("tdim", EXP, 16, 32),
+    "rl_epsilon": ("eps", LIN, 0.1, 0.5),
+    "rl_epsilon_decay": ("epsd", EXP, 1000, 5000),
     "rl_confidence_penalty": ("rlcp", EXP, 0.00001, 0.01),
     "rl_confidence_interval": ("rlci", EXP, 10, 100),
 }
