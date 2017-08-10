@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "tree_analysis_enc"
+NAME = "tree_analysis_enc_full"
 SWEEP_RUNS = 5
 
 LIN = "LIN"
@@ -38,7 +38,8 @@ FLAGS(sys.argv)
 
 FIXED_PARAMETERS = {
     "data_type":     "nli",
-    "model_type":      "ChoiPyramid",
+    "model_type":      "SPINN",
+
     "training_data_path":    FLAGS.training_data_path,
     "eval_data_path":    FLAGS.eval_data_path,
     "embedding_data_path": FLAGS.embedding_data_path,
@@ -52,15 +53,17 @@ FIXED_PARAMETERS = {
     "sample_interval_steps": "1000",
     "statistics_interval_steps": "100",
     "batch_size":  "32",
-    "encode": "gru",
-    "encode_bidirectional": "", 
+    "encode": "projection",
+    #"encode_bidirectional": "", 
     "num_mlp_layers": "1",
     "mlp_dim": "1024",
     #"nocomposition_ln": "",
     "embedding_keep_rate": "1.0",
-    "pyramid_trainable_temperature": "",
+    #"pyramid_trainable_temperature": "",
     "learning_rate_decay_per_10k_steps": "1.0",
-    "pyramid_temperature_decay_per_10k_steps": "1.0", 
+    #"pyramid_temperature_decay_per_10k_steps": "1.0", 
+    "use_internal_parser": "",
+    "use_tracking_in_composition": "",
 }
 
 # Tunable parameters.
@@ -69,6 +72,8 @@ SWEEP_PARAMETERS = {
     "l2_lambda":          ("l2", EXP, 1e-9, 1e-6),
     # "learning_rate_decay_per_10k_steps": ("dc", LIN, 0.4, 1.0),
     "learning_rate": ("lr", EXP, 0.0001, 0.001),
+    'tracking_lstm_hidden_dim': ('tlhd', 'EXP', 8, 64),
+    'transition_weight': ('twt', 'EXP', 0.25, 4.0)
 }
 
 
