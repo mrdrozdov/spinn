@@ -109,6 +109,10 @@ def get_data_manager(data_type):
 
 def get_checkpoint_path(ckpt_path, experiment_name, suffix=".ckpt", best=False):
     # Set checkpoint path.
+
+    if FLAGS.expanded_eval_only_mode and FLAGS.expanded_eval_only_mode_use_best_checkpoint:
+        best = True
+
     if ckpt_path.endswith(".ckpt") or ckpt_path.endswith(".ckpt_best"):
         checkpoint_path = ckpt_path
     else:
@@ -375,6 +379,8 @@ def get_flags():
                           "If set, a checkpoint is loaded and a forward pass is done to get the predicted "
                           "transitions. The inferred parses are written to the supplied file(s) along with example-"
                           "by-example accuracy information. Requirements: Must specify checkpoint path.") # TODO: Rename.
+    gflags.DEFINE_boolean("expanded_eval_only_mode_use_best_checkpoint", True,
+                          "When in expanded_eval_only_mode, load the ckpt_best checkpoint.")
     gflags.DEFINE_boolean("write_eval_report", False, "")
     gflags.DEFINE_boolean("eval_report_use_preds", True, "If False, use the given transitions in the report, "
                           "otherwise use predicted transitions. Note that when predicting transitions but not using them, the "
