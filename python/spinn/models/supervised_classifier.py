@@ -67,7 +67,6 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
     for i, dataset_batch in enumerate(dataset):
         batch = get_batch(dataset_batch)
         eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, eval_ids = batch
-        print len(eval_ids), i
 
         # Run model.
         output = model(eval_X_batch, eval_transitions_batch, eval_y_batch,
