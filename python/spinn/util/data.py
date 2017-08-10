@@ -268,14 +268,14 @@ def MakeTrainingIterator(sources, batch_size, smart_batches=True, use_peano=True
     return train_iter()
 
 
-def MakeEvalIterator(sources, batch_size, limit=-1, shuffle=False, rseed=123, bucket_eval=False):
+def MakeEvalIterator(sources, batch_size, limit=None, shuffle=False, rseed=123, bucket_eval=False):
     if bucket_eval:
         return MakeBucketEvalIterator(sources, batch_size)[:limit]
     else:
         return MakeStandardEvalIterator(sources, batch_size, limit, shuffle, rseed)
 
 
-def MakeStandardEvalIterator(sources, batch_size, limit=-1, shuffle=False, rseed=123):
+def MakeStandardEvalIterator(sources, batch_size, limit=None, shuffle=False, rseed=123):
     # Make a list of minibatches from a dataset to use as an iterator.
     # TODO(SB): Pad out the last few examples in the eval set if they don't
     # form a batch.

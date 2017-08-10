@@ -252,7 +252,7 @@ def get_flags():
         "Trim overly long evaluation examples to fit. If not set, crash on overly long examples.")
     gflags.DEFINE_boolean("smart_batching", True, "Organize batches using sequence length.")
     gflags.DEFINE_boolean("use_peano", True, "A mind-blowing sorting key.")
-    gflags.DEFINE_integer("eval_data_limit", -1,
+    gflags.DEFINE_integer("eval_data_limit", None,
                           "Truncate evaluation set to this many batches. -1 indicates no truncation.")
     gflags.DEFINE_boolean("bucket_eval", True, "Bucket evaluation data for speed improvement.")
     gflags.DEFINE_boolean("shuffle_eval", False, "Shuffle evaluation data.")
