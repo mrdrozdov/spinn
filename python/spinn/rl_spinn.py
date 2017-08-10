@@ -217,7 +217,7 @@ class BaseModel(_BaseModel):
             approx_rewards = self.build_reward(
                 probs, target, rl_reward=self.rl_reward)
 
-            baseline = approx_rewards
+            baseline = approx_rewards.view(-1)
         elif self.rl_baseline == "value":
             output = self.baseline_outp
 
@@ -232,7 +232,7 @@ class BaseModel(_BaseModel):
             else:
                 raise NotImplementedError
 
-            baseline = baseline.data.cpu()
+            baseline = baseline.data.cpu().view(-1)
         else:
             raise NotImplementedError
 
