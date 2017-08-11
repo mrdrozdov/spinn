@@ -400,14 +400,6 @@ def restore(logger, trainer, queue, FLAGS, name, path):
     queue.put((ev_step, true_step, perturbation_id, dev_error))
 
 
-"""
-def evaluate_perturbation(logger, trainer, queue, FLAGS, name, path):
-    perturbation_id = name[-1]
-    ev_step, true_step, dev_error = trainer.load(path)
-    queue.put((ev_step, true_step, perturbation_id, dev_error))
-"""
-
-
 def run(only_forward=False):
     #logger = afs_safe_logger.ProtoLogger(log_path(FLAGS))
     logger = afs_safe_logger.ProtoLogger(log_path(FLAGS),
@@ -546,6 +538,17 @@ def run(only_forward=False):
         for ev_step in range(reload_ev_step, FLAGS.es_steps):
             logger.Log("Evolution step: %i" % ev_step)
 
+            # Downsample dev-set for evaluation runs during training
+            eval_iterators_ = []
+            if FLAGS.eval_sample_size != None:
+                for file in eval_iterators:
+                    eval_filename = eval_iterators[0][0]
+                    eval_batches = eval_iterators[0][1]
+                    eval_batches = random.sample(eval_batches, FLAGS.eval_sample_size)
+                    eval_iterators_.append((eval_filename, eval_batches))
+            else:
+                eval_iterators_ = eval_iterators
+
             # Choose root models for next generation using dev-set accuracy
             if len(results) != 0:
                 base = False
@@ -590,7 +593,7 @@ def run(only_forward=False):
                 p = mp.Process(target=rollout, args=(queue,
                                  perturbed_model, FLAGS, data_manager,
                                  model, optimizer, trainer, training_data_iter,
-                                 eval_iterators, logger, true_step,
+                                 eval_iterators_, logger, true_step,
                                  best_dev_error, perturbation_id, ev_step, header, root_id))
                 p.start()
                 processes.append(p)
