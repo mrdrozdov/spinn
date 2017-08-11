@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "08_04_stndmirr"
+NAME = "0811_stnd"
 SWEEP_RUNS = 8
 
 LIN = "LIN"
@@ -151,7 +151,7 @@ for run_id in range(SWEEP_RUNS):
             root = value
         elif param == "es_num_episodes":
             eps = value
-    num_cores = root * eps * 2
+    num_cores = root * eps
 
     flags += " --experiment_name " + name
     if NYU_NON_PBS:
