@@ -544,10 +544,15 @@ def run(only_forward=False):
                 for file in eval_iterators:
                     eval_filename = eval_iterators[0][0]
                     eval_batches = eval_iterators[0][1]
-                    eval_batches = random.sample(eval_batches, FLAGS.eval_sample_size)
+                    full = len(eval_batches)
+                    subsample = int(full * FLAGS.eval_sample_size)
+                    eval_batches = random.sample(eval_batches, subsample)
                     eval_iterators_.append((eval_filename, eval_batches))
             else:
                 eval_iterators_ = eval_iterators
+
+
+            print "Num of example: %i" %(len(eval_iterators_[0][1]) * FLAGS.batch_size)
 
             # Choose root models for next generation using dev-set accuracy
             if len(results) != 0:

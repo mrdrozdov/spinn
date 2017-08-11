@@ -395,7 +395,7 @@ def get_flags():
     gflags.DEFINE_integer("es_episode_length", 1000, "Length of each episode.")
     gflags.DEFINE_integer("es_steps", 1000, "Number of evolution steps.")
     gflags.DEFINE_boolean("mirror", False, "Do mirrored/antithetic sampling. If doing mirrored sampling, number of perturbtations will be double es_num_episodes.")
-    gflags.DEFINE_integer("eval_sample_size", None, "Number of batches to be sampled for evaluation during training (only for ES). If None, use all.")
+    gflags.DEFINE_float("eval_sample_size", None, "Percentage (eg 0.3) of batches to be sampled for evaluation during training (only for ES). If None, use all.")
 
 
 def flag_defaults(FLAGS, load_log_flags=False):
