@@ -16,6 +16,7 @@ import random
 import sys
 import time
 import glob
+from shutil import copyfile
 
 import gflags
 import numpy as np
@@ -321,9 +322,13 @@ def rollout(queue, perturbed_model, FLAGS, data_manager,
     Train each episode
     """
     perturbation_name = FLAGS.experiment_name + "_p" + str(perturbation_id)
+    root_name = FLAGS.experiment_name + "_p" + str(root_id)
     logger.Log("Model name is %s" % perturbation_name)
     standard_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, perturbation_name)
     best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, perturbation_name, best=True)
+    root_best_checkpoint_path = get_checkpoint_path(FLAGS.ckpt_path, root_name, best=True)
+    if os.path.exists(root_best_checkpoint_path) and root_best_checkpoint_path != best_checkpoint_path:
+        copyfile(root_best_checkpoint_path, best_checkpoint_path)
 
     train_loop(FLAGS, data_manager, perturbed_model, optimizer,
                trainer, training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id)
@@ -368,7 +373,7 @@ def generate_seeds_and_models(trainer, model, root_id, base=False):
     """
     if not base:
         root_name = FLAGS.experiment_name + "_p" + str(root_id)
-        root_path = os.path.join(FLAGS.ckpt_path, root_name + ".ckpt_best")
+        root_path = os.path.join(FLAGS.ckpt_path, root_name + ".ckpt")
         ev_step, true_step, dev_error = trainer.load(root_path)
     np.random.seed()
     random_seed = np.random.randint(2**20)
@@ -427,7 +432,7 @@ def run(only_forward=False):
 
     # Build model.
     vocab_size = len(vocabulary)
-    num_classes = len(set(data_manager.LABEL_MAP.values()))
+    num_classes = len(data_manager.LABEL_MAP)
 
     model, optimizer, trainer = init_model(
         FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_manager, header)
