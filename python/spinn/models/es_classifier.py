@@ -551,9 +551,6 @@ def run(only_forward=False):
             else:
                 eval_iterators_ = eval_iterators
 
-
-            print "Num of example: %i" %(len(eval_iterators_[0][1]) * FLAGS.batch_size)
-
             # Choose root models for next generation using dev-set accuracy
             if len(results) != 0:
                 base = False
