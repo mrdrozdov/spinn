@@ -67,6 +67,7 @@ FIXED_PARAMETERS = {
     "num_samples": "1",
     "evolution": "",
     "embedding_keep_rate": "1.0"
+    "eval_sample_size": "0.3",
 }
 
 # Tunable parameters.
@@ -75,7 +76,7 @@ SWEEP_PARAMETERS = {
     "l2_lambda":          ("l2", EXP, 1e-8, 2e-5),
     "learning_rate_decay_per_10k_steps": ("dc", LIN, 0.4, 1.0),
     "learning_rate": ("lr", EXP, 0.00005, 0.005),
-    "tracking_lstm_hidden_dim": ("tdim", EXP, 20, 40),
+    "tracking_lstm_hidden_dim": ("tdim", LIN, 20, 40),
     "es_num_episodes" : ("eps", LIN, 4, 5),
     "es_num_roots" : ("roots", LIN, 1, 4),
     "es_episode_length" : ("lng", MUL, 150, 550),
