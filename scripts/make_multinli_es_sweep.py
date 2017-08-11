@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "08_04_mirr"
-SWEEP_RUNS = 14
+NAME = "08_04_stndmirr"
+SWEEP_RUNS = 8
 
 LIN = "LIN"
 EXP = "EXP"
@@ -47,11 +47,11 @@ FIXED_PARAMETERS = {
     "word_embedding_dim":   "300",
     "model_dim":   "600",
     "seq_length":   "80",
-    "eval_seq_length":  "80",
+    "eval_seq_length":  "810",
     "eval_interval_steps": "100",
-    "sample_interval_steps": "200",
+    "sample_interval_steps": "100",
     "statistics_interval_steps": "100",
-    "ckpt_step": "1",
+    "ckpt_step": "100",
     "ckpt_interval_steps": "100",
     "batch_size":  "32",
     "encode": "gru",
@@ -66,7 +66,6 @@ FIXED_PARAMETERS = {
     "num_mlp_layers": "1",
     "num_samples": "1",
     "evolution": "",
-    "mirror" : "",
 }
 
 # Tunable parameters.
@@ -76,11 +75,11 @@ SWEEP_PARAMETERS = {
     "l2_lambda":          ("l2", EXP, 1e-8, 2e-5),
     "learning_rate_decay_per_10k_steps": ("dc", LIN, 0.4, 1.0),
     "learning_rate": ("lr", EXP, 0.00005, 0.005),
-    "tracking_lstm_hidden_dim": ("tdim", EXP, 8, 64),
-    "es_num_episodes" : ("eps", LIN, 2, 3),
-    "es_num_roots" : ("roots", LIN, 2, 3),
-    "es_episode_length" : ("lng", MUL, 150, 800),
-    "es_sigma": ("sig", EXP, 0.001, 0.1),
+    "tracking_lstm_hidden_dim": ("tdim", EXP, 20, 40),
+    "es_num_episodes" : ("eps", LIN, 4, 5),
+    "es_num_roots" : ("roots", LIN, 1, 4),
+    "es_episode_length" : ("lng", MUL, 150, 550),
+    "es_sigma": ("sig", EXP, 0.01, 0.08),
 }
 
 
