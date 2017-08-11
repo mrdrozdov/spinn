@@ -3,7 +3,7 @@
 # Generic job script for all experiments.
 
 #SBATCH --nodes=1 
-#SBATCH --cpus-per-task=30
+#SBATCH --cpus-per-task=10
 #SBATCH --mem=60GB
 #SBATCH -t48:00:00
 
@@ -11,7 +11,7 @@
 echo $SLURM_JOBID - `hostname` - $SPINN_FLAGS >> ~/spinn_machine_assignments.txt
 
 # Make sure we have access to HPC-managed libraries.
-module load python/intel/2.7.12 pytorch/0.1.12_2 protobuf/intel/3.1.0
+module load python/intel/2.7.12 pytorch/0.2.0_1 protobuf/intel/3.1.0
 
 # Default model.
 MODEL="spinn.models.es_classifier"
