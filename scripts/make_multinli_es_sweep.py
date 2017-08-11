@@ -66,11 +66,11 @@ FIXED_PARAMETERS = {
     "num_mlp_layers": "1",
     "num_samples": "1",
     "evolution": "",
+    "embedding_keep_rate": "1.0"
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "embedding_keep_rate": ("ekr", LIN, 0.8, 1.0),
     "semantic_classifier_keep_rate": ("skr",    LIN, 0.8, 1.0),
     "l2_lambda":          ("l2", EXP, 1e-8, 2e-5),
     "learning_rate_decay_per_10k_steps": ("dc", LIN, 0.4, 1.0),
