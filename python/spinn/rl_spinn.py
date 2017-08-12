@@ -222,17 +222,17 @@ class BaseModel(_BaseModel):
             output = self.baseline_outp
 
             if self.rl_reward == "standard":
-                baseline = F.sigmoid(output)
+                baseline = F.sigmoid(output).view(-1)
                 self.value_loss = nn.BCELoss()(baseline, to_gpu(
                     Variable(rewards, volatile=not self.training)))
             elif self.rl_reward == "xent":
-                baseline = output
+                baseline = output.view(-1)
                 self.value_loss = nn.MSELoss()(baseline, to_gpu(
                     Variable(rewards, volatile=not self.training)))
             else:
                 raise NotImplementedError
 
-            baseline = baseline.data.cpu().view(-1)
+            baseline = baseline.data.cpu()
         else:
             raise NotImplementedError
 
