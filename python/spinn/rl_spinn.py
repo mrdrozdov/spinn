@@ -63,7 +63,7 @@ class RLSPINN(SPINN):
     temperature = 1.0
     catalan = True
     catalan_backprop = False
-    eplison = 1.0
+    epsilon = 1.0  # unused. kept to prevent logging from breaking.
 
     def predict_actions(self, transition_output):
         transition_output_t = transition_output / max(self.temperature, TINY)
@@ -124,7 +124,6 @@ class BaseModel(_BaseModel):
         self.rl_weight = rl_weight
         self.rl_whiten = rl_whiten
         self.rl_valid = rl_valid
-        self.spinn.epsilon = rl_epsilon
         self.spinn.catalan = rl_catalan
         self.spinn.catalan_backprop = rl_catalan_backprop
         self.rl_transition_acc_as_reward = rl_transition_acc_as_reward
