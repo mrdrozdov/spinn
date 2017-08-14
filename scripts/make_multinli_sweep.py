@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "tree_analysis_enc_full"
+NAME = "tree_analysis_enc"
 SWEEP_RUNS = 5
 
 LIN = "LIN"
@@ -53,8 +53,8 @@ FIXED_PARAMETERS = {
     "sample_interval_steps": "1000",
     "statistics_interval_steps": "100",
     "batch_size":  "32",
-    "encode": "projection",
-    #"encode_bidirectional": "", 
+    "encode": "gru",
+    "encode_bidirectional": "", 
     "num_mlp_layers": "1",
     "mlp_dim": "1024",
     #"nocomposition_ln": "",
@@ -64,6 +64,7 @@ FIXED_PARAMETERS = {
     #"pyramid_temperature_decay_per_10k_steps": "1.0", 
     "use_internal_parser": "",
     "use_tracking_in_composition": "",
+    "transition_weight": "1.0",
 }
 
 # Tunable parameters.
@@ -73,7 +74,7 @@ SWEEP_PARAMETERS = {
     # "learning_rate_decay_per_10k_steps": ("dc", LIN, 0.4, 1.0),
     "learning_rate": ("lr", EXP, 0.0001, 0.001),
     'tracking_lstm_hidden_dim': ('tlhd', 'EXP', 8, 64),
-    'transition_weight': ('twt', 'EXP', 0.25, 4.0)
+    'rl_weight': ('rlwt', EXP, 1.0, 8.0),
 }
 
 
@@ -143,5 +144,5 @@ for run_id in range(SWEEP_RUNS):
     if NYU_NON_PBS:
         print "cd spinn/python; python2.7 -m spinn.models.supervised_classifier " + flags
     else:
-        print "SPINNMODEL=\"spinn.models.supervised_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh ../scripts/train_spinn.sbatch 1"
+        print "SPINNMODEL=\"spinn.models.rl_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh ../scripts/train_spinn.sbatch 1"
     print
