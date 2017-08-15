@@ -333,15 +333,17 @@ def rollout(queue, perturbed_model, FLAGS, data_manager,
     train_loop(FLAGS, data_manager, perturbed_model, optimizer,
                trainer, training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id)
 
+
     # Once the episode ends, restore best checkpoint
     logger.Log("Restoring best checkpoint to run final evaluation of episode.")
     if os.path.exists(best_checkpoint_path):
         ev_step, true_step, best_dev_error = trainer.load(best_checkpoint_path)
     else:
         ev_step, true_step, best_dev_error = trainer.load(standard_checkpoint_path)
+    
     logger.Log("Best dev accuracy of model: Step %i, %f" % (true_step, 1. - best_dev_error))
 
-    queue.put((ev_step, true_step, perturbation_id, best_dev_error))
+    queue.put((ev_step, true_step, perturbation_id, 1. - best_dev_error))
 
 
 def perturb_model(model, random_seed):
@@ -514,15 +516,9 @@ def run(only_forward=False):
                 pert_name = ckpt_names.pop()
                 path = os.path.join(FLAGS.ckpt_path, pert_name)
                 name = pert_name.replace('.ckpt_best', '')
-                p_restore = mp.Process(
-                    target=restore,
-                    args=(
-                        logger,
-                        trainer,
-                        restore_queue,
-                        FLAGS,
-                        name,
-                        path))
+                p_restore = mp.Process(target=restore,
+                                args=(logger, trainer, restore_queue,
+                                    FLAGS, name, path))
                 p_restore.start()
                 processes_restore.append(p_restore)
             assert len(ckpt_names) == 0
@@ -555,11 +551,8 @@ def run(only_forward=False):
             if len(results) != 0:
                 base = False
                 chosen_models = []
-                acc_order = [
-                    i[0] for i in sorted(
-                        enumerate(results),
-                        key=lambda x:x[1][3],
-                        reverse=True)]
+                acc_order = [i[0] for i in sorted(enumerate(results),
+                                key=lambda x:x[1][3])]
                 for i in range(FLAGS.es_num_roots):
                     id_ = acc_order[i]
                     logger.Log(
