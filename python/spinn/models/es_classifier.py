@@ -377,6 +377,8 @@ def generate_seeds_and_models(trainer, model, root_id, base=False):
         root_name = FLAGS.experiment_name + "_p" + str(root_id)
         root_path = os.path.join(FLAGS.ckpt_path, root_name + ".ckpt")
         ev_step, true_step, dev_error = trainer.load(root_path)
+    else:
+        true_step = 0
     np.random.seed()
     random_seed = np.random.randint(2**20)
     models = perturb_model(model, random_seed)
