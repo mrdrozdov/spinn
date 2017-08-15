@@ -480,6 +480,7 @@ def init_model(
 
     if FLAGS.encode == "projection":
         encoder = Linear()(FLAGS.word_embedding_dim, FLAGS.model_dim)
+        context_args.input_dim = FLAGS.model_dim
     elif FLAGS.encode == "gru":
         context_args.reshape_input = lambda x, batch_size, seq_length: x.view(
             batch_size, seq_length, -1)
