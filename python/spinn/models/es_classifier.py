@@ -380,7 +380,7 @@ def generate_seeds_and_models(trainer, model, root_id, base=False):
     np.random.seed()
     random_seed = np.random.randint(2**20)
     models = perturb_model(model, random_seed)
-    return random_seed, models
+    return random_seed, models, true_step
 
 
 def get_pert_names(best=False):
@@ -567,11 +567,11 @@ def run(only_forward=False):
             all_seeds, all_models, all_roots, all_steps, all_dev_errs = ([] for i in range(5))
             for chosen_model in chosen_models:
                 perturbation_id = chosen_model[2]
-                random_seed, models = generate_seeds_and_models(
+                random_seed, models, true_step = generate_seeds_and_models(
                     trainer, model, perturbation_id, base=base)
                 for i in range(len(models)):
                     all_seeds.append(random_seed)
-                    all_steps.append(chosen_model[1])
+                    all_steps.append(true_step) #chosen_model[1])
                     all_dev_errs.append(chosen_model[3])
                     all_roots.append(perturbation_id)
                 all_models += models
