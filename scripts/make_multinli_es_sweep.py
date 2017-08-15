@@ -66,7 +66,7 @@ FIXED_PARAMETERS = {
     "num_mlp_layers": "1",
     "num_samples": "1",
     "evolution": "",
-    "embedding_keep_rate": "1.0"
+    "embedding_keep_rate": "1.0",
     "eval_sample_size": "0.3",
 }
 
