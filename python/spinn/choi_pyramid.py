@@ -174,6 +174,7 @@ class ChoiPyramid(nn.Module):
                     token_sequence = [self.inverted_vocabulary[token] for token in x[b, :]]
 
                 for merge in self.get_sample_merge_sequence(b, s, batch_size):
+                    assert merge < len(token_sequence) - 1, "Bad Merge: " + str(token_sequence) + " - merge at " + str(merge)
                     token_sequence[merge] = (token_sequence[merge], token_sequence[merge + 1])
                     del token_sequence[merge + 1]
                 assert len(token_sequence) == 1
