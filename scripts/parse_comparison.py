@@ -19,6 +19,7 @@ import gflags
 import sys
 import codecs
 import json
+import random
 
 LABEL_MAP = {'entailment': 0, 'neutral': 1, 'contradiction': 2}
 
@@ -118,6 +119,13 @@ def example_f1(e1, e2):
     prec = float(len(c1.intersection(c2))) / len(c2)  # TODO: More efficient.
     return prec  # For strictly binary trees, P = R = F1
 
+def randomize(parse):
+    tokens = tokenize_parse(parse)
+    while len(tokens) > 1:
+        merge = random.choice(range(len(tokens) - 1))
+        tokens[merge] = "( " + tokens[merge] + " " + tokens[merge + 1] + " )"
+        del tokens[merge + 1]
+    return tokens[0]
 
 def run():
     gt = {}
@@ -138,16 +146,21 @@ def run():
     rb = to_rb(gt)
 
     report = {}
-    with codecs.open(FLAGS.main_report_path, encoding='utf-8') as f:
-        for line in f:
-            try:
-                line = line.encode('UTF-8')
-            except UnicodeError as e:
-                print "ENCODING ERROR:", line, e
-                line = "{}"
-            loaded_example = json.loads(line)
-            report[loaded_example['example_id'] + "_1"] = loaded_example['sent1_tree']
-            report[loaded_example['example_id'] + "_2"] = loaded_example['sent2_tree']
+    if FLAGS.main_report_path != "_":
+        with codecs.open(FLAGS.main_report_path, encoding='utf-8') as f:
+            for line in f:
+                try:
+                    line = line.encode('UTF-8')
+                except UnicodeError as e:
+                    print "ENCODING ERROR:", line, e
+                    line = "{}"
+                loaded_example = json.loads(line)
+                report[loaded_example['example_id'] + "_1"] = loaded_example['sent1_tree']
+                report[loaded_example['example_id'] + "_2"] = loaded_example['sent2_tree']
+    else:
+        # No source. Try random parses.
+        for sentence in gt:
+            report[sentence] = randomize(gt[sentence])
 
     ptb = {}
     with codecs.open(FLAGS.ptb_data_path, encoding='utf-8') as f:
@@ -163,15 +176,19 @@ def run():
             ptb[loaded_example['pairID']] = loaded_example['sentence1_binary_parse']
 
     ptb_report = {}
-    with codecs.open(FLAGS.ptb_report_path, encoding='utf-8') as f:
-        for line in f:
-            try:
-                line = line.encode('UTF-8')
-            except UnicodeError as e:
-                print "ENCODING ERROR:", line, e
-                line = "{}"
-            loaded_example = json.loads(line)
-            ptb_report[loaded_example['example_id']] = loaded_example['sent1_tree']
+    if FLAGS.ptb_report_path != "_":
+        with codecs.open(FLAGS.ptb_report_path, encoding='utf-8') as f:
+            for line in f:
+                try:
+                    line = line.encode('UTF-8')
+                except UnicodeError as e:
+                    print "ENCODING ERROR:", line, e
+                    line = "{}"
+                loaded_example = json.loads(line)
+                ptb_report[loaded_example['example_id']] = loaded_example['sent1_tree']
+    else:
+        for sentence in ptb:
+            ptb_report[sentence] = randomize(ptb[sentence])
 
     print FLAGS.main_report_path + '\t' + str(corpus_f1(report, lb)) + '\t' + str(corpus_f1(report, rb)) + '\t' + str(corpus_f1(report, gt)) + '\t' + str(corpus_f1(ptb_report, ptb))
 
