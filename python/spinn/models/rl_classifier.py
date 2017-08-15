@@ -37,7 +37,7 @@ FLAGS = gflags.FLAGS
 
 
 def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
-             logger, step, vocabulary=None, show_sample=False):
+             logger, step, vocabulary=None, show_sample=False, eval_index=0):
     filename, dataset = eval_set
 
     A = Accumulator()
@@ -125,7 +125,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
     eval_log.filename = filename
 
     if FLAGS.write_eval_report:
-        eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".report")
+        eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".eval_set_" + str(eval_index) + ".report")
         reporter.write_report(eval_report_path)
 
     eval_class_acc = eval_log.eval_class_accuracy
@@ -180,17 +180,13 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         # Reset cached gradients.
         optimizer.zero_grad()
 
-        epsilon = FLAGS.rl_epsilon * math.exp(-step / float(FLAGS.rl_epsilon_decay))
-
-        # Epsilon Greedy w. Decay.
-        model.spinn.epsilon = epsilon
-
-        # Confidence Penalty for Transition Predictions.
         temperature = math.sin(math.pi / 2 + step /
                                float(FLAGS.rl_confidence_interval) * 2 * math.pi)
         temperature = (temperature + 1) / 2
 
+        # Confidence Penalty for Transition Predictions.
         if FLAGS.rl_confidence_penalty:
+            epsilon = FLAGS.rl_epsilon * math.exp(-step / float(FLAGS.rl_epsilon_decay))
             temp = 1 + \
                 (temperature - .5) * FLAGS.rl_confidence_penalty * epsilon
             model.spinn.temperature = max(1e-3, temp)
@@ -325,7 +321,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
             should_log = True
             for index, eval_set in enumerate(eval_iterators):
                 acc, tacc = evaluate(
-                    FLAGS, model, data_manager, eval_set, log_entry, logger, step)
+                    FLAGS, model, data_manager, eval_set, log_entry, logger, step, eval_index=index)
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (
                         1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
@@ -426,7 +422,7 @@ def run(only_forward=False):
         for index, eval_set in enumerate(eval_iterators):
             log_entry.Clear()
             acc = evaluate(FLAGS, model, data_manager,
-                           eval_set, log_entry, logger, step, vocabulary, show_sample=True)
+                           eval_set, log_entry, logger, step, vocabulary, show_sample=True, eval_index=index)
             print(log_entry)
             logger.LogEntry(log_entry)
     else:

@@ -120,9 +120,8 @@ def example_f1(e1, e2):
 
 
 def run():
-    print "Loading parsed corpus (ignoring unlabeled examples)..."
     gt = {}
-    with codecs.open(FLAGS.data_path, encoding='utf-8') as f:
+    with codecs.open(FLAGS.main_data_path, encoding='utf-8') as f:
         for line in f:
             try:
                 line = line.encode('UTF-8')
@@ -134,15 +133,12 @@ def run():
                 continue
             gt[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_binary_parse']
             gt[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_binary_parse']
-    print "Found", len(gt), "examples."
 
-    print "Building LB/RB parses..."
     lb = to_lb(gt)
     rb = to_rb(gt)
 
-    print "Loading report..."
     report = {}
-    with codecs.open(FLAGS.report_path, encoding='utf-8') as f:
+    with codecs.open(FLAGS.main_report_path, encoding='utf-8') as f:
         for line in f:
             try:
                 line = line.encode('UTF-8')
@@ -153,18 +149,38 @@ def run():
             report[loaded_example['example_id'] + "_1"] = loaded_example['sent1_tree']
             report[loaded_example['example_id'] + "_2"] = loaded_example['sent2_tree']
 
-    print "Found", len(report), "examples."
+    ptb = {}
+    with codecs.open(FLAGS.ptb_data_path, encoding='utf-8') as f:
+        for line in f:
+            try:
+                line = line.encode('UTF-8')
+            except UnicodeError as e:
+                print "ENCODING ERROR:", line, e
+                line = "{}"
+            loaded_example = json.loads(line)
+            if loaded_example["gold_label"] not in LABEL_MAP:
+                continue
+            ptb[loaded_example['pairID']] = loaded_example['sentence1_binary_parse']
 
-    print "Computing scores..."
-    print 
-    print "F1 Scores:"
-    print "wrt LB\twrt RB\twrt GT"
-    print corpus_f1(report, lb), '\t', corpus_f1(report, rb), '\t', corpus_f1(report, gt)
+    ptb_report = {}
+    with codecs.open(FLAGS.ptb_report_path, encoding='utf-8') as f:
+        for line in f:
+            try:
+                line = line.encode('UTF-8')
+            except UnicodeError as e:
+                print "ENCODING ERROR:", line, e
+                line = "{}"
+            loaded_example = json.loads(line)
+            ptb_report[loaded_example['example_id']] = loaded_example['sent1_tree']
+
+    print FLAGS.main_report_path + '\t' + str(corpus_f1(report, lb)) + '\t' + str(corpus_f1(report, rb)) + '\t' + str(corpus_f1(report, gt)) + '\t' + str(corpus_f1(ptb_report, ptb))
 
 
 if __name__ == '__main__':
-    gflags.DEFINE_string("report_path", "./checkpoints/example-nli.report", "")
-    gflags.DEFINE_string("data_path", "./snli_1.0/snli_1.0_dev.jsonl", "")
+    gflags.DEFINE_string("main_report_path", "./checkpoints/example-nli.report", "")
+    gflags.DEFINE_string("main_data_path", "./snli_1.0/snli_1.0_dev.jsonl", "")
+    gflags.DEFINE_string("ptb_report_path", "./snli_1.0/snli_1.0_dev.jsonl", "")
+    gflags.DEFINE_string("ptb_data_path", "./ptb.jsonl", "")
 
     FLAGS(sys.argv)
 
