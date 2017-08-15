@@ -314,6 +314,12 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         progress_bar.step(i=(true_step % FLAGS.statistics_interval_steps) + 1,
                           total=FLAGS.statistics_interval_steps)
 
+    # ev_step, true_step, perturbation_id, best_dev_error
+    if os.path.exists(best_checkpoint_path):
+        return ev_step, true_step, perturbation_id, best_dev_error
+    else:
+        return ev_step, true_step, perturbation_id, (1 - acc)
+
 
 def rollout(queue, perturbed_model, FLAGS, data_manager,
             model, optimizer, trainer, training_data_iter,
@@ -330,20 +336,14 @@ def rollout(queue, perturbed_model, FLAGS, data_manager,
     if os.path.exists(root_best_checkpoint_path) and root_best_checkpoint_path != best_checkpoint_path:
         copyfile(root_best_checkpoint_path, best_checkpoint_path)
 
-    train_loop(FLAGS, data_manager, perturbed_model, optimizer,
-               trainer, training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id)
+    ev_step, true_step, perturbation_id, dev_error = train_loop(FLAGS, 
+                            data_manager, perturbed_model, optimizer, 
+                            trainer, training_data_iter, eval_iterators, 
+                            logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id)
 
+    logger.Log("Best dev accuracy of model: Step %i, %f" % (true_step, 1. - dev_error))
 
-    # Once the episode ends, restore best checkpoint
-    logger.Log("Restoring best checkpoint to run final evaluation of episode.")
-    if os.path.exists(best_checkpoint_path):
-        ev_step, true_step, best_dev_error = trainer.load(best_checkpoint_path)
-    else:
-        ev_step, true_step, best_dev_error = trainer.load(standard_checkpoint_path)
-    
-    logger.Log("Best dev accuracy of model: Step %i, %f" % (true_step, 1. - best_dev_error))
-
-    queue.put((ev_step, true_step, perturbation_id, best_dev_error))
+    queue.put((ev_step, true_step, perturbation_id, dev_error))
 
 
 def perturb_model(model, random_seed):
