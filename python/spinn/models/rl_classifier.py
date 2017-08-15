@@ -37,7 +37,7 @@ FLAGS = gflags.FLAGS
 
 
 def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
-             logger, step, vocabulary=None, show_sample=False):
+             logger, step, vocabulary=None, show_sample=False, eval_index=0):
     filename, dataset = eval_set
 
     A = Accumulator()
@@ -125,7 +125,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
     eval_log.filename = filename
 
     if FLAGS.write_eval_report:
-        eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".report")
+        eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".eval_set_" + str(eval_index) + ".report")
         reporter.write_report(eval_report_path)
 
     eval_class_acc = eval_log.eval_class_accuracy
@@ -321,7 +321,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
             should_log = True
             for index, eval_set in enumerate(eval_iterators):
                 acc, tacc = evaluate(
-                    FLAGS, model, data_manager, eval_set, log_entry, logger, step)
+                    FLAGS, model, data_manager, eval_set, log_entry, logger, step, eval_index=index)
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (
                         1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
@@ -422,7 +422,7 @@ def run(only_forward=False):
         for index, eval_set in enumerate(eval_iterators):
             log_entry.Clear()
             acc = evaluate(FLAGS, model, data_manager,
-                           eval_set, log_entry, logger, step, vocabulary, show_sample=True)
+                           eval_set, log_entry, logger, step, vocabulary, show_sample=True, eval_index=index)
             print(log_entry)
             logger.LogEntry(log_entry)
     else:
