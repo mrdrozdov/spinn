@@ -307,6 +307,7 @@ class BinaryTreeLSTM(nn.Module):
         select_masks = []
         state = input.chunk(num_chunks=2, dim=2)
         nodes = []
+        temperature_to_display = -1.0  # For one or two-word trees where we never compute a temperature
         if self.intra_attention:
             nodes.append(state[0])
         for i in range(max_depth - 1):
