@@ -343,7 +343,7 @@ def rollout(queue, perturbed_model, FLAGS, data_manager,
     
     logger.Log("Best dev accuracy of model: Step %i, %f" % (true_step, 1. - best_dev_error))
 
-    queue.put((ev_step, true_step, perturbation_id, 1. - best_dev_error))
+    queue.put((ev_step, true_step, perturbation_id, best_dev_error))
 
 
 def perturb_model(model, random_seed):
@@ -549,10 +549,13 @@ def run(only_forward=False):
 
             # Choose root models for next generation using dev-set accuracy
             if len(results) != 0:
+                print results
                 base = False
                 chosen_models = []
                 acc_order = [i[0] for i in sorted(enumerate(results),
-                                key=lambda x:x[1][3])]
+                                            key=lambda x:x[1][3])]
+                print acc_order
+                exit(1)
                 for i in range(FLAGS.es_num_roots):
                     id_ = acc_order[i]
                     logger.Log(
