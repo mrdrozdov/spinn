@@ -20,6 +20,7 @@ import sys
 import codecs
 import json
 import random
+import re
 
 LABEL_MAP = {'entailment': 0, 'neutral': 1, 'contradiction': 2}
 
@@ -127,6 +128,9 @@ def randomize(parse):
         del tokens[merge + 1]
     return tokens[0]
 
+def to_latex(parse):
+    return ("\\Tree " + parse).replace('(', '[').replace(')', ']').replace(' . ', ' $.$ ')
+
 def run():
     gt = {}
     with codecs.open(FLAGS.main_data_path, encoding='utf-8') as f:
@@ -163,17 +167,18 @@ def run():
             report[sentence] = randomize(gt[sentence])
 
     ptb = {}
-    with codecs.open(FLAGS.ptb_data_path, encoding='utf-8') as f:
-        for line in f:
-            try:
-                line = line.encode('UTF-8')
-            except UnicodeError as e:
-                print "ENCODING ERROR:", line, e
-                line = "{}"
-            loaded_example = json.loads(line)
-            if loaded_example["gold_label"] not in LABEL_MAP:
-                continue
-            ptb[loaded_example['pairID']] = loaded_example['sentence1_binary_parse']
+    if FLAGS.ptb_data_path != "_":
+        with codecs.open(FLAGS.ptb_data_path, encoding='utf-8') as f:
+            for line in f:
+                try:
+                    line = line.encode('UTF-8')
+                except UnicodeError as e:
+                    print "ENCODING ERROR:", line, e
+                    line = "{}"
+                loaded_example = json.loads(line)
+                if loaded_example["gold_label"] not in LABEL_MAP:
+                    continue
+                ptb[loaded_example['pairID']] = loaded_example['sentence1_binary_parse']
 
     ptb_report = {}
     if FLAGS.ptb_report_path != "_":
@@ -190,14 +195,23 @@ def run():
         for sentence in ptb:
             ptb_report[sentence] = randomize(ptb[sentence])
 
+    if FLAGS.print_latex:
+        for index, sentence in enumerate(gt):
+            if index == 100:
+                break
+            print to_latex(gt[sentence])
+            print to_latex(report[sentence])
+            print
+
     print FLAGS.main_report_path + '\t' + str(corpus_f1(report, lb)) + '\t' + str(corpus_f1(report, rb)) + '\t' + str(corpus_f1(report, gt)) + '\t' + str(corpus_f1(ptb_report, ptb))
 
 
 if __name__ == '__main__':
     gflags.DEFINE_string("main_report_path", "./checkpoints/example-nli.report", "")
     gflags.DEFINE_string("main_data_path", "./snli_1.0/snli_1.0_dev.jsonl", "")
-    gflags.DEFINE_string("ptb_report_path", "./snli_1.0/snli_1.0_dev.jsonl", "")
-    gflags.DEFINE_string("ptb_data_path", "./ptb.jsonl", "")
+    gflags.DEFINE_string("ptb_report_path", "_", "")
+    gflags.DEFINE_string("ptb_data_path", "_", "")
+    gflags.DEFINE_boolean("print_latex", False, "")
 
     FLAGS(sys.argv)
 
