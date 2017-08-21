@@ -27,7 +27,7 @@ from spinn.util.blocks import get_l2_loss, the_gpu, to_gpu
 from spinn.util.misc import Accumulator, EvalReporter
 from spinn.util.misc import recursively_set_device
 from spinn.util.logging import stats, train_accumulate, create_log_formatter
-from spinn.util.logging import eval_stats, eval_accumulate
+from spinn.util.logging import eval_stats, eval_accumulate, prettyprint_trees
 from spinn.util.loss import auxiliary_loss
 from spinn.util.sparks import sparks, dec_str
 import spinn.util.evalb as evalb
@@ -51,13 +51,14 @@ FLAGS = gflags.FLAGS
 os.environ['OMP_NUM_THREADS'] = '1'
 os.environ['MKL_NUM_THREADS'] = '1'
 
-def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=None):
+def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=None, show_sample=False, eval_index=0):
     filename, dataset = eval_set
 
     A = Accumulator()
     index = len(log_entry.evaluation)
     eval_log = log_entry.evaluation.add()
     reporter = EvalReporter()
+    tree_strs = None
 
     # Evaluate
     total_batches = len(dataset)
@@ -72,16 +73,32 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
         eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, eval_ids = batch
 
         # Run model.
+        """
         output = model(eval_X_batch, eval_transitions_batch, eval_y_batch,
                        use_internal_parser=FLAGS.use_internal_parser,
                        validate_transitions=FLAGS.validate_transitions)
+        """
+        output = model(eval_X_batch, eval_transitions_batch, eval_y_batch,
+                       use_internal_parser=FLAGS.use_internal_parser,
+                       validate_transitions=FLAGS.validate_transitions,
+                       store_parse_masks=show_sample,
+                       example_lengths=eval_num_transitions_batch)
+
+        can_sample = (FLAGS.model_type == "SPINN" and FLAGS.use_internal_parser)
+        if show_sample and can_sample:
+            tmp_samples = model.get_samples(eval_X_batch, vocabulary, only_one=not FLAGS.write_eval_report)
+            tree_strs = prettyprint_trees(tmp_samples)
+        if not FLAGS.write_eval_report:
+            show_sample = False  # Only show one sample, regardless of the number of batches.
+
 
         # Normalize output.
         logits = F.log_softmax(output)
 
         # Calculate class accuracy.
         target = torch.from_numpy(eval_y_batch).long()
-        #pred = logits.data.max(1)[1].cpu()  # get the index of the max log-probability
+
+        # get the index of the max log-probability
         pred = logits.data.max(1, keepdim=False)[1].cpu()
 
         eval_accumulate(model, data_manager, A, batch)
@@ -94,6 +111,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
         # Update Aggregate Accuracies
         total_tokens += sum([(nt + 1) / 2 for nt in eval_num_transitions_batch.reshape(-1)])
 
+        """
         if FLAGS.write_eval_report:
             reporter_args = [pred, target, eval_ids, output.data.cpu().numpy()]
             if hasattr(model, 'transition_loss'):
@@ -108,6 +126,27 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
                 else:
                     reporter_args.append(transitions_per_example)
             reporter.save_batch(*reporter_args)
+        """
+
+        if FLAGS.write_eval_report:
+            transitions_per_example, _ = model.spinn.get_transitions_per_example(
+                    style="preds" if FLAGS.eval_report_use_preds else "given") if (FLAGS.model_type == "SPINN" and FLAGS.use_internal_parser) else (None, None)
+
+            if model.use_sentence_pair:
+                batch_size = pred.size(0)
+                sent1_transitions = transitions_per_example[:batch_size] if transitions_per_example is not None else None
+                sent2_transitions = transitions_per_example[batch_size:] if transitions_per_example is not None else None
+
+                sent1_trees = tree_strs[:batch_size] if tree_strs is not None else None
+                sent2_trees = tree_strs[batch_size:] if tree_strs is not None else None
+            else:
+                sent1_transitions = transitions_per_example if transitions_per_example is not None else None
+                sent2_transitions = None
+
+                sent1_trees = tree_strs if tree_strs is not None else None
+                sent2_trees = None
+
+            reporter.save_batch(pred, target, eval_ids, output.data.cpu().numpy(), sent1_transitions, sent2_transitions, sent1_trees, sent2_trees)
 
         # Print Progress
         progress_bar.step(i + 1, total=total_batches)
@@ -122,8 +161,14 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
     eval_stats(model, A, eval_log)
     eval_log.filename = filename
 
+    """
     if FLAGS.write_eval_report:
         eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".report")
+        reporter.write_report(eval_report_path)
+    """
+
+    if FLAGS.write_eval_report:
+        eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".eval_set_" + str(eval_index) + ".report")
         reporter.write_report(eval_report_path)
 
     eval_class_acc = eval_log.eval_class_accuracy
@@ -133,7 +178,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
 
 
 def train_loop(FLAGS, data_manager, model, optimizer, trainer,
-               training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id):
+               training_data_iter, eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id, vocabulary):
     perturbation_name = FLAGS.experiment_name + "_p" + str(perturbation_id)
     root_name = FLAGS.experiment_name + "_p" + str(root_id)
     # Accumulate useful statistics.
@@ -194,8 +239,10 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
 
         # Calculate class accuracy.
         target = torch.from_numpy(y_batch).long()
-        #pred = logits.data.max(1)[1].cpu()  # get the index of the max log-probability
+
+        # get the index of the max log-probability
         pred = logits.data.max(1, keepdim=False)[1].cpu()
+
         class_acc = pred.eq(target).sum() / float(target.size(0))
 
         # Calculate class loss.
@@ -296,15 +343,20 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         if true_step > 0 and true_step % FLAGS.eval_interval_steps == 0:
             should_log = True
             for index, eval_set in enumerate(eval_iterators):
-                acc, tacc = evaluate(FLAGS, model, data_manager, eval_set, log_entry, true_step)
-                if FLAGS.ckpt_on_best_dev_error and index == 0 and (
-                        1 - acc) < 0.99 * best_dev_error and true_step > FLAGS.ckpt_step:
+                acc, tacc = evaluate(FLAGS, model, data_manager, eval_set,
+                                         log_entry, true_step, vocabulary,
+                                         show_sample=(true_step %FLAGS.sample_interval_steps == 0),
+                                         eval_index=index)
+                if FLAGS.ckpt_on_best_dev_error and index == 0 and \
+                    (1 - acc) < 0.99 * best_dev_error and \
+                    true_step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
-                    logger.Log("Checkpointing with new best dev accuracy of %f" % acc)
+                    logger.Log("Checkpointing with new best dev accuracy of %f" % acc) # TODO: This mixes information across dev sets. Fix.
                     trainer.save(best_checkpoint_path, true_step, best_dev_error, ev_step)
             progress_bar.reset()
 
         if true_step > FLAGS.ckpt_step and true_step % FLAGS.ckpt_interval_steps == 0:
+            should_log = True
             logger.Log("Checkpointing.")
             trainer.save(standard_checkpoint_path, true_step, best_dev_error, ev_step)
 
@@ -314,7 +366,6 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         progress_bar.step(i=(true_step % FLAGS.statistics_interval_steps) + 1,
                           total=FLAGS.statistics_interval_steps)
 
-    # ev_step, true_step, perturbation_id, best_dev_error
     if os.path.exists(best_checkpoint_path):
         return ev_step, true_step, perturbation_id, best_dev_error
     else:
@@ -323,7 +374,7 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
 
 def rollout(queue, perturbed_model, FLAGS, data_manager,
             model, optimizer, trainer, training_data_iter,
-            eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id):
+            eval_iterators, logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id, vocabulary):
     """
     Train each episode
     """
@@ -339,7 +390,7 @@ def rollout(queue, perturbed_model, FLAGS, data_manager,
     ev_step, true_step, perturbation_id, dev_error = train_loop(FLAGS, 
                             data_manager, perturbed_model, optimizer, 
                             trainer, training_data_iter, eval_iterators, 
-                            logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id)
+                            logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id, vocabulary)
 
     logger.Log("Best dev accuracy of model: Step %i, %f" % (true_step, 1. - dev_error))
 
@@ -473,7 +524,7 @@ def run(only_forward=False):
 
     # Do an evaluation-only run.
     if only_forward:
-        assert len(ckpt_names) == 0, "Can not run forward pass without best checkpoints supplied."
+        assert len(ckpt_names) != 0, "Can not run forward pass without best checkpoints supplied."
         log_entry = pb.SpinnEntry()
 
         restore_queue = mp.Queue()
@@ -482,31 +533,33 @@ def run(only_forward=False):
             pert_name = ckpt_names.pop()
             path = os.path.join(FLAGS.ckpt_path, pert_name)
             name = pert_name.replace('.ckpt_best', '')
-            p_restore = mp.Process(
-                target=restore,
-                args=(
-                    logger,
-                    trainer,
-                    restore_queue,
-                    FLAGS,
-                    name,
-                    path))
+            p_restore = mp.Process(target=restore, args=(logger, 
+                                trainer, restore_queue,
+                                FLAGS, name, path))
             p_restore.start()
             processes_restore.append(p_restore)
         assert len(ckpt_names) == 0
+        
         results = [restore_queue.get() for p in processes_restore]
-        reload_ev_step = results[0][0]
+        assert results != 0 
 
-        while all_models:
-            p_checkpoint = all_models.pop()
-            p_model = p_checkpoint[2]
-            true_step = p_checkpoint[1]
-            for index, eval_set in enumerate(eval_iterators):
-                log_entry.Clear()
-                evaluate(FLAGS, p_model, data_manager, eval_set, log_entry, true_step, vocabulary)
-                print(log_entry)
-                logger.LogEntry(log_entry)
+        acc_order = [i[0] for i in sorted(enumerate(results), 
+                                        key=lambda x:x[1][3])]
+        best_id = acc_order[0]
+        best_name = FLAGS.experiment_name + "_p" + str(best_id)
+        print "Picking best perturbation/model %s to run evaluation" % (best_name)
+        best_path = os.path.join(FLAGS.ckpt_path, best_name + ".ckpt_best")
+        ev_step, true_step, dev_error = trainer.load(best_path)
 
+        for index, eval_set in enumerate(eval_iterators):
+            log_entry.Clear()
+            evaluate(FLAGS, model, data_manager, eval_set,
+                log_entry, true_step, vocabulary, show_sample=True,
+                eval_index=index)
+            print(log_entry)
+            logger.LogEntry(log_entry)
+
+    # Train the model.
     else:
         # Restore model, i.e. perturbation spawns, from best checkpoint, if it exists, or standard checkpoint.
         # Get dev-set accuracies so we can select which models to use for the next evolution step.
@@ -591,7 +644,7 @@ def run(only_forward=False):
                                  perturbed_model, FLAGS, data_manager,
                                  model, optimizer, trainer, training_data_iter,
                                  eval_iterators_, logger, true_step,
-                                 best_dev_error, perturbation_id, ev_step, header, root_id))
+                                 best_dev_error, perturbation_id, ev_step, header, root_id, vocabulary))
                 p.start()
                 processes.append(p)
                 perturbation_id += 1
