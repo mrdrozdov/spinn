@@ -96,6 +96,17 @@ def corpus_average_depth(corpus):
         local_averages.append(average_depth(corpus[key]))
     return float(sum(local_averages)) / len(local_averages)
 
+
+def average_length(parse):
+    return len(parse.split())
+
+
+def corpus_average_length(corpus):
+    local_averages = []
+    for key in corpus:
+        local_averages.append(average_length(corpus[key]))
+    return float(sum(local_averages)) / len(local_averages)
+
 def corpus_f1(corpus_1, corpus_2):
     """ 
     Note: If a few examples in one dataset are missing from the other (i.e., some examples from the source corpus were not included 
@@ -124,12 +135,10 @@ def to_indexed_contituents(parse):
         elif token == ')':
             start = backpointers.pop()
             end = word_index
-            if not "_PAD" in sp[start:end]: 
-                constituent = (start, end)
-                indexed_constituents.add(constituent)
+            constituent = (start, end)
+            indexed_constituents.add(constituent)
         else:
-            if token != "_PAD":
-                word_index += 1
+            word_index += 1
     return indexed_constituents
 
 
@@ -161,9 +170,26 @@ def read_nli_report(path):
                 print "ENCODING ERROR:", line, e
                 line = "{}"
             loaded_example = json.loads(line)
-            report[loaded_example['example_id'] + "_1"] = loaded_example['sent1_tree']
-            report[loaded_example['example_id'] + "_2"] = loaded_example['sent2_tree']
+            report[loaded_example['example_id'] + "_1"] = unpad(loaded_example['sent1_tree'])
+            report[loaded_example['example_id'] + "_2"] = unpad(loaded_example['sent2_tree'])
     return report
+
+
+def unpad(parse):
+    tokens = parse.split()
+    to_drop = 0
+    for i in range(len(tokens) - 1, -1, -1):
+        if tokens[i] == "_PAD":
+            to_drop += 1
+        elif tokens[i] == ")":
+            continue
+        else:
+            break
+    if to_drop == 0:
+        return parse
+    else:
+        return " ".join(tokens[to_drop:-2 * to_drop])
+
 
 def run():
     gt = {}
@@ -213,7 +239,7 @@ def run():
         report = read_nli_report(FLAGS.main_report_path)
     else:
         # No source. Try random parses.
-        report = []
+        report = {}
         for sentence in gt:
             report[sentence] = randomize(gt[sentence])
 
@@ -241,7 +267,7 @@ def run():
                     print "ENCODING ERROR:", line, e
                     line = "{}"
                 loaded_example = json.loads(line)
-                ptb_report[loaded_example['example_id']] = loaded_example['sent1_tree']
+                ptb_report[loaded_example['example_id']] = unpad(loaded_example['sent1_tree'])
     elif len(ptb) > 0:
         for sentence in ptb:
             ptb_report[sentence] = randomize(ptb[sentence])
