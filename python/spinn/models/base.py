@@ -17,7 +17,7 @@ from spinn.data.boolean import load_boolean_data
 from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.nli import load_nli_data
-from spinn.util.blocks import ModelTrainer, ModelTrainer_ES, bundle, to_gpu
+from spinn.util.blocks import ModelTrainer, ModelTrainer_ES, bundle, to_gpu, CState
 from spinn.util.blocks import EncodeGRU, IntraAttention, Linear, ReduceTreeGRU, ReduceTreeLSTM
 from spinn.util.misc import Args
 from spinn.util.logparse import parse_flags
@@ -480,8 +480,9 @@ def init_model(
     context_args.reshape_context = lambda x, batch_size, seq_length: x
 
     if FLAGS.encode_c == "learn":
-        # TODO: Learn the initial c-state.
-        raise NotImplementedError
+        # Learn the initial c-state.
+        encode_c = CState(FLAGS.model_dim / 2)
+        context_args.encode_dim = FLAGS.model_dim / 2
     elif FLAGS.encode_c == "zero":
         # Use all zeros for initial c.
         def initial_c_zeros(h):
