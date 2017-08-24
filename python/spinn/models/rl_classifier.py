@@ -360,7 +360,7 @@ def train_loop(
         if step > 0 and step % FLAGS.eval_interval_steps == 0:
             should_log = True
             for index, eval_set in enumerate(eval_iterators):
-                acc, tacc = evaluate(
+                acc, _ = evaluate(
                     FLAGS, model, data_manager, eval_set, log_entry, logger, step, eval_index=index)
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (
                         1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:

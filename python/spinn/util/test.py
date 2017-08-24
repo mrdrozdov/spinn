@@ -65,7 +65,6 @@ def default_args(**kwargs):
     composition_args.transition_weight = args['transition_weight']
     composition_args.wrap_items = lambda x: torch.cat(x, 0)
     composition_args.extract_h = lambda x: x
-    composition_args.extract_c = None
     composition_args.composition = Reduce()
     composition_args.tracking_ln = False
     composition_args.detach = False

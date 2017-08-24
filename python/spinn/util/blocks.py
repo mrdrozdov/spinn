@@ -10,45 +10,6 @@ import torch.nn.functional as F
 from spinn.util.misc import recursively_set_device
 from functools import reduce
 
-EULER = 0.57721566490153286060651209008240243104215933593992
-
-
-def gumbel_sample(input, temperature=1.0, avg=False, N=10000):
-
-    # more accurate version of gumbel estimator as described in https://arxiv.org/abs/1706.04161
-    # averages N gumbel distributions and subtracts out Euler's constant
-    if avg:
-        noise = to_gpu(torch.rand([input.size()[-1] * N]))
-        noise.add_(1e-9).log_().neg_()
-        noise.add_(1e-9).log_().neg_()
-        noise.add_(-EULER)
-        noise = Variable(noise.view(N, input.size(-1)))
-        x = (input + noise)
-        x = torch.mean(x, 0) / temperature
-    else:
-        noise = to_gpu(torch.rand(input.size()))
-        noise.add_(1e-9).log_().neg_()
-        noise.add_(1e-9).log_().neg_()
-        noise = Variable(noise)
-        x = (input + noise) / temperature
-    x = F.softmax(x.view(input.size(0), -1))
-    return x.view_as(input)
-
-
-def st_gumbel_sample(input, temperature=1.0, avg=False, N=10000):
-    # Untested. Source:
-    # https://discuss.pytorch.org/t/stop-gradients-for-st-gumbel-softmax/530/5
-    x = gumbel_sample(input, temperature, avg, N)
-
-    max_val, _ = torch.max(x, x.dim() - 1)
-    x_hard = x == max_val
-    tmp = (x_hard.float() - x)
-    tmp2 = tmp.clone()
-    tmp2.detach_()
-    x = tmp2 + x
-
-    return x.view_as(input)
-
 
 def debug_gradient(model, losses):
     model.zero_grad()
@@ -104,11 +65,6 @@ def to_cuda(var, gpu):
         return var.cuda()
     return var
 
-# Chainer already has a method for moving a variable to/from GPU in-place,
-# but that messes with backpropagation. So I do it with a copy. Note that
-# cuda.get_device() actually returns the dummy device, not the current one
-# -- but F.copy will move it to the active GPU anyway (!)
-
 
 def to_gpu(var):
     return to_cuda(var, the_gpu())
@@ -116,13 +72,6 @@ def to_gpu(var):
 
 def to_cpu(var):
     return to_cuda(var, -1)
-
-
-def arr_to_gpu(arr):
-    if the_gpu() >= 0:
-        return torch.cuda.FloatTensor(arr)
-    else:
-        return arr
 
 
 class LSTMState:
@@ -171,18 +120,6 @@ class LSTMState:
             self._both = torch.cat(
                 (to_cpu(self._c), to_cpu(self._h)), 1)
         return self._both
-
-
-def get_seq_h(state, hidden_dim):
-    return state[:, :, hidden_dim:]
-
-
-def get_seq_c(state, hidden_dim):
-    return state[:, :, :hidden_dim]
-
-
-def get_seq_state(c, h):
-    return torch.cat([h, c], 2)
 
 
 def get_h(state, hidden_dim):
@@ -268,7 +205,6 @@ class LayerNormalization(nn.Module):
         super(LayerNormalization, self).__init__()
 
         self.eps = eps
-        self.hidden_size = hidden_size
         self.a2 = nn.Parameter(torch.ones(1, hidden_size), requires_grad=True)
         self.b2 = nn.Parameter(torch.zeros(1, hidden_size), requires_grad=True)
 
@@ -520,7 +456,6 @@ class GRU(nn.Module):
 class IntraAttention(nn.Module):
     def __init__(self, inp_size, outp_size, distance_bias=True):
         super(IntraAttention, self).__init__()
-        self.inp_size = inp_size
         self.outp_size = outp_size
         self.distance_bias = distance_bias
         self.f = nn.Linear(inp_size, outp_size)
@@ -673,7 +608,7 @@ class LSTM(nn.Module):
         #   input => seq_len x batch_size x model_dim
         #   h_0   => (num_layers x bi[1,2]) x batch_size x model_dim
         #   c_0   => (num_layers x bi[1,2]) x batch_size x model_dim
-        output, (hn, cn) = self.rnn(x, (h0, c0))
+        output, (hn, _) = self.rnn(x, (h0, c0))
 
         if self.reverse:
             output = reverse_tensor(output, dim=1)
@@ -882,83 +817,10 @@ def UniformInitializer(param, range):
     param.data.set_(torch.from_numpy(init))
 
 
-def NormalInitializer(param, std):
-    shape = param.size()
-    init = np.random.normal(0.0, std, shape).astype(np.float32)
-    param.data.set_(torch.from_numpy(init))
-
-
 def ZeroInitializer(param):
     shape = param.size()
     init = np.zeros(shape).astype(np.float32)
     param.data.set_(torch.from_numpy(init))
-
-
-def OneInitializer(param):
-    shape = param.size()
-    init = np.ones(shape).astype(np.float32)
-    param.data.set_(torch.from_numpy(init))
-
-
-def ValueInitializer(param, value):
-    shape = param.size()
-    init = np.ones(shape).astype(np.float32) * value
-    param.data.set_(torch.from_numpy(init))
-
-
-def TreeLSTMBiasInitializer(param):
-    shape = param.size()
-
-    hidden_dim = shape[0] / 5
-    init = np.zeros(shape).astype(np.float32)
-    init[hidden_dim:3 * hidden_dim] = 1
-
-    param.data.set_(torch.from_numpy(init))
-
-
-def LSTMBiasInitializer(param):
-    shape = param.size()
-
-    hidden_dim = shape[0] / 4
-    init = np.zeros(shape)
-    init[hidden_dim:2 * hidden_dim] = 1
-
-    param.data.set_(torch.from_numpy(init))
-
-
-def DoubleIdentityInitializer(param, range):
-    shape = param.size()
-
-    half_d = shape[0] / 2
-    double_identity = np.concatenate((
-        np.identity(half_d), np.identity(half_d))).astype(np.float32)
-
-    param.data.set_(torch.from_numpy(double_identity)).add_(
-        UniformInitializer(param.clone(), range))
-
-
-def PassthroughLSTMInitializer(lstm):
-    G_POSITION = 3
-    F_POSITION = 1
-
-    i_dim = lstm.weight_ih_l0.size()[1]
-    h_dim = lstm.weight_hh_l0.size()[1]
-    assert i_dim == h_dim, "PassthroughLSTM requires input dim == hidden dim."
-
-    hh_init = np.zeros(lstm.weight_hh_l0.size()).astype(np.float32)
-    ih_init = np.zeros(lstm.weight_ih_l0.size()).astype(np.float32)
-    ih_init[G_POSITION * h_dim:(G_POSITION + 1) *
-            h_dim, :] = np.identity(h_dim)
-
-    bhh_init = np.zeros(lstm.bias_hh_l0.size()).astype(np.float32)
-    bih_init = np.ones(lstm.bias_ih_l0.size()).astype(np.float32) * 2
-    bih_init[G_POSITION * h_dim:(G_POSITION + 1) * h_dim] = 0
-    bih_init[F_POSITION * h_dim:(F_POSITION + 1) * h_dim] = -2
-
-    lstm.weight_hh_l0.data.set_(torch.from_numpy(hh_init))
-    lstm.weight_ih_l0.data.set_(torch.from_numpy(ih_init))
-    lstm.bias_hh_l0.data.set_(torch.from_numpy(bhh_init))
-    lstm.bias_ih_l0.data.set_(torch.from_numpy(bih_init))
 
 
 def Linear(initializer=DefaultUniformInitializer,

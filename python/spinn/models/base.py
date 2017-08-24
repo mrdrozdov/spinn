@@ -698,7 +698,6 @@ def init_model(
     composition_args.transition_weight = FLAGS.transition_weight
     composition_args.wrap_items = lambda x: torch.cat(x, 0)
     composition_args.extract_h = lambda x: x
-    composition_args.extract_c = None
 
     composition_args.detach = FLAGS.transition_detach
     composition_args.evolution = FLAGS.evolution

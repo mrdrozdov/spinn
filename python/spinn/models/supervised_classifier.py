@@ -374,7 +374,7 @@ def train_loop(
         if step > 0 and step % FLAGS.eval_interval_steps == 0:
             should_log = True
             for index, eval_set in enumerate(eval_iterators):
-                acc, tacc = evaluate(
+                acc, _ = evaluate(
                     FLAGS, model, data_manager, eval_set, log_entry, logger, step, show_sample=(
                         step %
                         FLAGS.sample_interval_steps == 0), vocabulary=vocabulary, eval_index=index)

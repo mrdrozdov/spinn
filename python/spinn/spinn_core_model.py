@@ -314,7 +314,7 @@ class SPINN(nn.Module):
     def t_skip(self):
         """SKIP: Acts as padding and is a noop."""
 
-    def shift_phase(self, tops, trackings, stacks, idxs):
+    def shift_phase(self, tops, trackings, stacks):
         """SHIFT: Should dequeue buffer and item to stack."""
         if len(stacks) > 0:
             shift_candidates = iter(tops)
@@ -489,7 +489,7 @@ class SPINN(nn.Module):
             # Action Phase
             # ============
 
-            self.shift_phase(s_tops, s_trackings, s_stacks, s_idxs)
+            self.shift_phase(s_tops, s_trackings, s_stacks)
             self.reduce_phase(r_lefts, r_rights, r_trackings, r_stacks)
             self.reduce_phase_hook(r_lefts, r_rights, r_trackings, r_stacks)
 

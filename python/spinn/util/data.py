@@ -196,7 +196,6 @@ def CropAndPadSimple(
         length,
         logger=None,
         sentence_pair_data=False,
-        discard_long_training_examples=False,
         allow_cropping=True,
         pad_from_left=True):
     # NOTE: This can probably be done faster in NumPy if it winds up making a
