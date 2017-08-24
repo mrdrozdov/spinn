@@ -9,7 +9,7 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 
 from spinn.util.blocks import Embed, Linear, MLP
-from spinn.util.blocks import bundle, lstm, to_gpu, unbundle
+from spinn.util.blocks import bundle, lstm, to_gpu, unbundle, get_state
 from spinn.util.blocks import LayerNormalization
 from spinn.util.misc import Example, Vocab
 from spinn.util.blocks import HeKaimingInitializer
@@ -583,6 +583,7 @@ class BaseModel(nn.Module):
         self.input_dim = context_args.input_dim
 
         self.encode = context_args.encoder
+        self.encode_c = context_args.encode_c
         self.reshape_input = context_args.reshape_input
         self.reshape_context = context_args.reshape_context
 
@@ -633,18 +634,25 @@ class BaseModel(nn.Module):
 
         b, l = example.tokens.size()[:2]
 
+        # Encode the input to build the initial h-state for TreeLSTM.
         embeds = self.embed(example.tokens)
         embeds = self.reshape_input(embeds, b, l)
         embeds = self.encode(embeds)
         embeds = self.reshape_context(embeds, b, l)
-        self.forward_hook(embeds, b, l)
-        embeds = F.dropout(embeds, self.embedding_dropout_rate, training=self.training)
+
+        h = embeds
+
+        # Build the c-state, optionally using the h-state (such as in the "mix" setting).
+        c = self.encode_c(h)
+
+        # Concatenate h and c to build the leaves for TreeLSTM.
+        leaves = get_state(c, h)
+
+        self.forward_hook(leaves, b, l)
+        leaves = F.dropout(leaves, self.embedding_dropout_rate, training=self.training)
 
         # Make Buffers
-        # _embeds = torch.chunk(to_cpu(embeds), b, 0)
-        # _embeds = [torch.chunk(x, l, 0) for x in _embeds]
-        # buffers = [list(reversed(x)) for x in _embeds]
-        ee = torch.chunk(embeds, b * l, 0)[::-1]
+        ee = torch.chunk(leaves, b * l, 0)[::-1]
         bb = []
         for ii in range(b):
             ex = list(ee[ii * l:(ii + 1) * l])
