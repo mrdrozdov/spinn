@@ -4,7 +4,6 @@ import math
 # PyTorch
 import torch
 import torch.nn as nn
-from torch.nn.parameter import Parameter
 from torch.autograd import Variable
 import torch.nn.functional as F
 
@@ -179,7 +178,7 @@ def get_seq_c(state, hidden_dim):
 
 
 def get_seq_state(c, h):
-    return torch.cat([c, h], 2)
+    return torch.cat([h, c], 2)
 
 
 def get_h(state, hidden_dim):
@@ -191,7 +190,7 @@ def get_c(state, hidden_dim):
 
 
 def get_state(c, h):
-    return torch.cat([c, h], 1)
+    return torch.cat([h, c], 1)
 
 
 def bundle(lstm_iter):
@@ -741,29 +740,6 @@ class SimpleTreeLSTM(nn.Module):
             lstm_in += self.right(right_h)
 
         return torch.cat(treelstm(left_c, right_c, lstm_in), 1)
-
-
-class CState(nn.Module):
-    """A module that learns the c-state for TreeLSTM.
-
-    Args:
-        h: The h-state for the TreeLSTM.
-
-    Returns:
-        c: The c-state for the TreeLSTM, which is essentially
-           a bias term expanded to the correct dimensionality.
-    """
-    def __init__(self, dim):
-        super(CState, self).__init__()
-        self.dim = dim
-        self.c = Parameter(torch.FloatTensor(dim))
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        self.c.data.zero_()
-
-    def forward(self, h):
-        return self.c.view(1, -1).expand_as(h)
 
 
 class MLP(nn.Module):

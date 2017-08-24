@@ -17,7 +17,7 @@ from spinn.data.boolean import load_boolean_data
 from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.nli import load_nli_data
-from spinn.util.blocks import ModelTrainer, ModelTrainer_ES, bundle, to_gpu, CState
+from spinn.util.blocks import ModelTrainer, ModelTrainer_ES, bundle
 from spinn.util.blocks import EncodeGRU, IntraAttention, Linear, ReduceTreeGRU, ReduceTreeLSTM
 from spinn.util.misc import Args
 from spinn.util.logparse import parse_flags
@@ -34,7 +34,6 @@ from tuner_utils.yellowfin import YFOptimizer
 # PyTorch
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 from functools import reduce
@@ -317,7 +316,6 @@ def get_flags():
     # Encode settings.
     gflags.DEFINE_enum("encode", "projection", [
                        "pass", "projection", "gru", "attn"], "Encode embeddings with sequential context.")
-    gflags.DEFINE_enum("encode_c", "zero", ["learn", "zero", "mix", "pass"], "Initial c-state for TreeLSTM.")
     gflags.DEFINE_boolean("encode_reverse", False, "Encode in reverse order.")
     gflags.DEFINE_boolean("encode_bidirectional", False, "Encode in both directions.")
     gflags.DEFINE_integer("encode_num_layers", 1, "RNN layers in encoding net.")
@@ -478,29 +476,10 @@ def init_model(
     context_args = Args()
     context_args.reshape_input = lambda x, batch_size, seq_length: x
     context_args.reshape_context = lambda x, batch_size, seq_length: x
-
-    if FLAGS.encode_c == "learn":
-        # Learn the initial c-state.
-        encode_c = CState(FLAGS.model_dim / 2)
-        context_args.encode_dim = FLAGS.model_dim / 2
-    elif FLAGS.encode_c == "zero":
-        # Use all zeros for initial c.
-        def initial_c_zeros(h):
-            return to_gpu(Variable(torch.zeros(h.size()), volatile=h.volatile))
-        encode_c = initial_c_zeros
-        context_args.encode_dim = FLAGS.model_dim / 2
-    elif FLAGS.encode_c == "mix":
-        # TODO: Use the encoded context for both initial h and initial c.
-        raise NotImplementedError
-    elif FLAGS.encode_c == "pass":
-        # Do nothing. This is necessary for some models like CBOW.
-        encode_c = lambda x: x
-        context_args.encode_dim = FLAGS.model_dim
-    else:
-        raise NotImplementedError
+    context_args.input_dim = FLAGS.word_embedding_dim
 
     if FLAGS.encode == "projection":
-        encoder = Linear()(FLAGS.word_embedding_dim, context_args.encode_dim)
+        encoder = Linear()(FLAGS.word_embedding_dim, FLAGS.model_dim)
         context_args.input_dim = FLAGS.model_dim
     elif FLAGS.encode == "gru":
         context_args.reshape_input = lambda x, batch_size, seq_length: x.view(
@@ -508,7 +487,7 @@ def init_model(
         context_args.reshape_context = lambda x, batch_size, seq_length: x.view(
             batch_size * seq_length, -1)
         context_args.input_dim = FLAGS.model_dim
-        encoder = EncodeGRU(FLAGS.word_embedding_dim, context_args.encode_dim,
+        encoder = EncodeGRU(FLAGS.word_embedding_dim, FLAGS.model_dim,
                             num_layers=FLAGS.encode_num_layers,
                             bidirectional=FLAGS.encode_bidirectional,
                             reverse=FLAGS.encode_reverse)
@@ -518,14 +497,13 @@ def init_model(
         context_args.reshape_context = lambda x, batch_size, seq_length: x.view(
             batch_size * seq_length, -1)
         context_args.input_dim = FLAGS.model_dim
-        encoder = IntraAttention(FLAGS.word_embedding_dim, context_args.encode_dim)
+        encoder = IntraAttention(FLAGS.word_embedding_dim, FLAGS.model_dim)
     elif FLAGS.encode == "pass":
         def encoder(x): return x
     else:
         raise NotImplementedError
 
     context_args.encoder = encoder
-    context_args.encode_c = encode_c
 
     # Composition Function.
     composition_args = Args()
