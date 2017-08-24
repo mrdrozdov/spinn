@@ -178,7 +178,7 @@ def get_seq_c(state, hidden_dim):
 
 
 def get_seq_state(c, h):
-    return torch.cat([h, c], 2)
+    return torch.cat([c, h], 2)
 
 
 def get_h(state, hidden_dim):
@@ -190,7 +190,7 @@ def get_c(state, hidden_dim):
 
 
 def get_state(c, h):
-    return torch.cat([h, c], 1)
+    return torch.cat([c, h], 1)
 
 
 def bundle(lstm_iter):
