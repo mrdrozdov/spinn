@@ -78,7 +78,7 @@ class RLSPINN(SPINN):
             p_catalan = to_gpu(Variable(p_catalan))
 
             _p_new = transition_dist * p_catalan
-            p_new = _p_new / (_p_new.sum(1).expand_as(_p_new) + TINY)  # normalize
+            p_new = _p_new / (_p_new.sum(1) + TINY)  # normalize
             transition_dist = p_new
 
         if self.catalan and self.catalan_backprop:

@@ -23,7 +23,7 @@ def gumbel_sample(input, temperature=1.0, avg=False, N=10000):
         noise.add_(1e-9).log_().neg_()
         noise.add_(-EULER)
         noise = Variable(noise.view(N, input.size(-1)))
-        x = (input.expand_as(noise) + noise)
+        x = (input + noise)
         x = torch.mean(x, 0) / temperature
     else:
         noise = to_gpu(torch.rand(input.size()))
@@ -40,7 +40,7 @@ def st_gumbel_sample(input, temperature=1.0, avg=False, N=10000):
     x = gumbel_sample(input, temperature, avg, N)
 
     max_val, _ = torch.max(x, x.dim() - 1)
-    x_hard = x == max_val.expand_as(x)
+    x_hard = x == max_val
     tmp = (x_hard.float() - x)
     tmp2 = tmp.clone()
     tmp2.detach_()
@@ -272,9 +272,9 @@ class LayerNormalization(nn.Module):
         mu = torch.mean(z)
         sigma = torch.std(z)
 
-        ln_out = (z - mu.expand_as(z)) / (sigma.expand_as(z) + self.eps)
+        ln_out = (z - mu) / (sigma + self.eps)
 
-        ln_out = ln_out * self.a2.expand_as(ln_out) + self.b2.expand_as(ln_out)
+        ln_out = ln_out * self.a2 + self.b2
         return ln_out
 
 
@@ -526,7 +526,7 @@ class IntraAttention(nn.Module):
         """
 
         bias = torch.range(0, seq_len - 1).float().unsqueeze(0).repeat(seq_len, 1)
-        diff = torch.range(0, seq_len - 1).float().unsqueeze(1).expand_as(bias)
+        diff = torch.range(0, seq_len - 1).float().unsqueeze(1)
         bias = (bias - diff).abs()
         bias = bias.clamp(0, max_distance)
 
@@ -558,7 +558,7 @@ class IntraAttention(nn.Module):
 
         e = F.softmax(e)
         e = e.view(batch_size, seq_len, seq_len, 1)
-        e = e.expand_as(f_broadcast)
+        e = e
 
         # assert e[0, 0, :, 0].sum() == 1
 

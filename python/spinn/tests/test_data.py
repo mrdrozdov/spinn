@@ -136,7 +136,7 @@ class DataTestCase(unittest.TestCase):
 
     def test_vocab(self):
         data_manager = load_nli_data
-        raw_data, _ = data_manager.load_data(nli_data_path)
+        raw_data = data_manager.load_data(nli_data_path)
         data_sets = [(nli_data_path, raw_data)]
         vocabulary = util.BuildVocabulary(
             raw_data, data_sets, embedding_data_path, logger=MockLogger(),
@@ -145,7 +145,7 @@ class DataTestCase(unittest.TestCase):
 
     def test_load_embed(self):
         data_manager = load_nli_data
-        raw_data, _ = data_manager.load_data(nli_data_path)
+        raw_data = data_manager.load_data(nli_data_path)
         data_sets = [(nli_data_path, raw_data)]
         vocabulary = util.BuildVocabulary(
             raw_data, data_sets, embedding_data_path, logger=MockLogger(),
@@ -167,7 +167,7 @@ class SNLITestCase(unittest.TestCase):
 
     def test_load(self):
         data_manager = load_nli_data
-        raw_data, _ = data_manager.load_data(nli_data_path)
+        raw_data = data_manager.load_data(nli_data_path)
         assert len(raw_data) == 20
 
         hyp_seq_lengths = Counter([len(x['hypothesis_transitions'])
@@ -189,7 +189,7 @@ class SNLITestCase(unittest.TestCase):
         simple = False
 
         data_manager = load_nli_data
-        raw_data, _ = data_manager.load_data(nli_data_path)
+        raw_data = data_manager.load_data(nli_data_path)
         data_sets = [(nli_data_path, raw_data)]
         vocabulary = util.BuildVocabulary(
             raw_data, data_sets, embedding_data_path, logger=MockLogger(),
@@ -242,7 +242,7 @@ class SNLITestCase(unittest.TestCase):
         simple = False
 
         data_manager = load_nli_data
-        raw_data, _ = data_manager.load_data(nli_data_path)
+        raw_data = data_manager.load_data(nli_data_path)
         data_sets = [(nli_data_path, raw_data)]
         vocabulary = util.BuildVocabulary(
             raw_data, data_sets, embedding_data_path, logger=MockLogger(),
@@ -270,7 +270,7 @@ class SNLITestCase(unittest.TestCase):
         simple = False
 
         data_manager = load_nli_data
-        raw_data, _ = data_manager.load_data(nli_data_path)
+        raw_data = data_manager.load_data(nli_data_path)
         data_sets = [(nli_data_path, raw_data)]
         vocabulary = util.BuildVocabulary(
             raw_data, data_sets, embedding_data_path, logger=MockLogger(),
@@ -297,7 +297,7 @@ class SSTTestCase(unittest.TestCase):
 
     def test_load(self):
         data_manager = load_sst_data
-        raw_data, _ = data_manager.load_data(sst_data_path)
+        raw_data = data_manager.load_data(sst_data_path)
         assert len(raw_data) == 30
 
         seq_lengths = Counter([len(x['transitions']) for x in raw_data])
@@ -309,7 +309,7 @@ class SSTTestCase(unittest.TestCase):
         simple = False
 
         data_manager = load_sst_data
-        raw_data, _ = data_manager.load_data(sst_data_path)
+        raw_data = data_manager.load_data(sst_data_path)
         data_sets = [(sst_data_path, raw_data)]
         vocabulary = util.BuildVocabulary(
             raw_data, data_sets, embedding_data_path, logger=MockLogger(),
@@ -355,7 +355,8 @@ class ArithmeticTestCase(unittest.TestCase):
         simple = False
 
         data_manager = load_sign_data
-        raw_data, vocabulary = data_manager.load_data(sign_data_path)
+        raw_data = data_manager.load_data(sign_data_path)
+        vocabulary = data_manager.FIXED_VOCABULARY
 
         OPERATOR_TOKENS = [vocabulary["+"], vocabulary["-"]]
 
@@ -388,7 +389,9 @@ class ArithmeticTestCase(unittest.TestCase):
         simple = False
 
         data_manager = load_simple_data
-        raw_data, vocabulary = data_manager.load_data(simple_data_path)
+        raw_data = data_manager.load_data(simple_data_path)
+        vocabulary = data_manager.FIXED_VOCABULARY
+
 
         OPERATOR_TOKENS = [vocabulary["+"], vocabulary["-"]]
 
@@ -471,7 +474,8 @@ class DualArithmeticTestCase(unittest.TestCase):
         simple = False
 
         data_manager = load_eq_data
-        raw_data, vocabulary = data_manager.load_data(eq_data_path)
+        raw_data = data_manager.load_data(eq_data_path)
+        vocabulary = data_manager.FIXED_VOCABULARY
 
         OPERATOR_TOKENS = [vocabulary["+"], vocabulary["-"]]
 
@@ -505,7 +509,8 @@ class DualArithmeticTestCase(unittest.TestCase):
         simple = False
 
         data_manager = load_relational_data
-        raw_data, vocabulary = data_manager.load_data(relational_data_path)
+        raw_data = data_manager.load_data(relational_data_path)
+        vocabulary = data_manager.FIXED_VOCABULARY
 
         OPERATOR_TOKENS = [vocabulary["+"], vocabulary["-"]]
 
@@ -540,7 +545,7 @@ class BooleanTestCase(unittest.TestCase):
     def test_load(self):
         # NOTE: Boolean tsv file uses a tab between label and example.
         data_manager = load_boolean_data
-        raw_data, _ = data_manager.load_data(boolean_data_path)
+        raw_data = data_manager.load_data(boolean_data_path)
         assert len(raw_data) == 20
 
         seq_lengths = Counter([len(x['transitions']) for x in raw_data])
@@ -551,7 +556,8 @@ class BooleanTestCase(unittest.TestCase):
         simple = False
 
         data_manager = load_boolean_data
-        raw_data, vocabulary = data_manager.load_data(boolean_data_path)
+        raw_data = data_manager.load_data(boolean_data_path)
+        vocabulary = data_manager.FIXED_VOCABULARY
 
         OPERATOR_TOKENS = [vocabulary["and"], vocabulary["or"]]
 
@@ -585,7 +591,8 @@ class BooleanTestCase(unittest.TestCase):
 
 
 def suite_single_seq(seq_length, simple, data_manager, path, starts_with, limit=100):
-    raw_data, vocabulary = data_manager.load_data(path)
+    raw_data = data_manager.load_data(path)
+    vocabulary = data_manager.FIXED_VOCABULARY
 
     data = util.PreprocessDataset(
         raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),

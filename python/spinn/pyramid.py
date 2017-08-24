@@ -236,7 +236,7 @@ class Pyramid(nn.Module):
 
             local_temperature = temperature
             if not isinstance(local_temperature, float):
-                local_temperature = local_temperature.expand_as(selection_logits)
+                local_temperature = local_temperature
 
             if self.training and self.gumbel == "plain":
                 selection_probs = gumbel_sample(selection_logits, local_temperature)
@@ -266,9 +266,9 @@ class Pyramid(nn.Module):
                 left = torch.squeeze(all_state_pairs[-1][position])
                 right = torch.squeeze(all_state_pairs[-1][position + 1])
                 composition_result = composition_results[position]
-                new_state_pair = copy_left.expand_as(left) * left \
-                    + copy_right.expand_as(right) * right \
-                    + select.unsqueeze(1).expand_as(composition_result) * composition_result
+                new_state_pair = copy_left * left \
+                    + copy_right * right \
+                    + select.unsqueeze(1) * composition_result
                 layer_state_pairs.append(new_state_pair)
             all_state_pairs.append(layer_state_pairs)
 

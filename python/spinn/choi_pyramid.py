@@ -254,7 +254,7 @@ class BinaryTreeLSTM(nn.Module):
     def update_state(old_state, new_state, done_mask):
         old_h, old_c = old_state
         new_h, new_c = new_state
-        done_mask = done_mask.float().unsqueeze(1).unsqueeze(2).expand_as(new_h)
+        done_mask = done_mask.float().unsqueeze(1).unsqueeze(2)
         h = done_mask * new_h + (1 - done_mask) * old_h[:, :-1, :]
         c = done_mask * new_c + (1 - done_mask) * old_c[:, :-1, :]
         return h, c
@@ -276,7 +276,7 @@ class BinaryTreeLSTM(nn.Module):
 
             local_temperature = temperature
             if not isinstance(local_temperature, float):
-                local_temperature = local_temperature.expand_as(comp_weights)
+                local_temperature = local_temperature
 
             select_mask = st_gumbel_softmax(
                 logits=comp_weights, temperature=local_temperature,
@@ -285,15 +285,15 @@ class BinaryTreeLSTM(nn.Module):
             select_mask = greedy_select(logits=comp_weights, mask=mask)
             select_mask = select_mask.float()
             temperature_to_display = None
-        select_mask_expand = select_mask.unsqueeze(2).expand_as(new_h)
+        select_mask_expand = select_mask.unsqueeze(2)
         select_mask_cumsum = select_mask.cumsum(1)
         left_mask = 1 - select_mask_cumsum
-        left_mask_expand = left_mask.unsqueeze(2).expand_as(old_h_left)
+        left_mask_expand = left_mask.unsqueeze(2)
         right_mask_leftmost_col = Variable(
             select_mask_cumsum.data.new(new_h.size(0), 1).zero_())
         right_mask = torch.cat(
             [right_mask_leftmost_col, select_mask_cumsum[:, :-1]], dim=1)
-        right_mask_expand = right_mask.unsqueeze(2).expand_as(old_h_right)
+        right_mask_expand = right_mask.unsqueeze(2)
         new_h = (select_mask_expand * new_h
                  + left_mask_expand * old_h_left
                  + right_mask_expand * old_h_right)
@@ -339,7 +339,7 @@ class BinaryTreeLSTM(nn.Module):
             att_mask = att_mask.float()
             # nodes: (batch_size, num_tree_nodes, hidden_dim)
             nodes = torch.cat(nodes, dim=1)
-            att_mask_expand = att_mask.unsqueeze(2).expand_as(nodes)
+            att_mask_expand = att_mask.unsqueeze(2)
             nodes = nodes * att_mask_expand
             # nodes_mean: (batch_size, hidden_dim, 1)
             nodes_mean = nodes.mean(1).squeeze(1).unsqueeze(2)
@@ -348,7 +348,7 @@ class BinaryTreeLSTM(nn.Module):
             att_weights = masked_softmax(
                 logits=att_weights, mask=att_mask)
             # att_weights_expand: (batch_size, num_tree_nodes, hidden_dim)
-            att_weights_expand = att_weights.unsqueeze(2).expand_as(nodes)
+            att_weights_expand = att_weights.unsqueeze(2)
             # h: (batch_size, 1, 2 * hidden_dim)
             h = (att_weights_expand * nodes).sum(1)
         assert h.size(1) == 1 and c.size(1) == 1
@@ -419,7 +419,7 @@ def masked_softmax(logits, mask=None):
     if mask is not None:
         mask = mask.float()
         probs = probs * mask + eps
-        probs = probs / probs.sum(1, keepdim=True).expand_as(probs)
+        probs = probs / probs.sum(1, keepdim=True)
     return probs
 
 
@@ -472,7 +472,7 @@ def sequence_mask(sequence_length, max_length=None):
     seq_range_expand = Variable(seq_range_expand)
     if sequence_length.is_cuda:
         seq_range_expand = seq_range_expand.cuda()
-    seq_length_expand = sequence_length.unsqueeze(1).expand_as(seq_range_expand)
+    seq_length_expand = sequence_length.unsqueeze(1)
     return seq_range_expand < seq_length_expand
 
 
