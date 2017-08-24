@@ -167,7 +167,7 @@ class BaseModel(_BaseModel):
                         batch_size,
                         self.v_rnn_dim)),
                 volatile=not self.training)
-            output, (hn, cn) = self.v_rnn(x, (h0, c0))
+            output, (hn, _) = self.v_rnn(x, (h0, c0))
             if self.use_sentence_pair:
                 hn = hn.squeeze()
                 h1, h2 = hn[:batch_size / 2], hn[batch_size / 2:]

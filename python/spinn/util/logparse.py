@@ -35,15 +35,6 @@ def get_format(filename, prefix):
     raise Exception("Format string not found.")
 
 
-def get_json_data(filename, prefix):
-    with open(filename) as f:
-        for line in f:
-            if prefix in line:
-                data = line[line.find(prefix) + len(prefix):].strip()
-                return json.loads(data)
-    raise Exception("Format string not found.")
-
-
 def parse_flags(filename):
     PREFIX_FLAGS = "Flag Values:\n"
     TERMINAL = "}\n"

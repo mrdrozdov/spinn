@@ -76,7 +76,6 @@ class CatalanPyramid(object):
                 self.decimal_rows.append(decimal_row)
 
     def access(self, n_reduces, i, n_tokens):
-        n_rows = n_tokens - 2
         depth = n_tokens - 1
         width = depth * 2 + 1
         n_shifts = i - n_reduces
