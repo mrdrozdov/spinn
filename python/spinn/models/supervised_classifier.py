@@ -381,7 +381,6 @@ def train_loop(
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (
                         1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
-                    # TODO: This mixes information across dev sets. Fix.
                     logger.Log(
                         "Checkpointing with new best dev accuracy of %f" %
                         acc)
