@@ -107,6 +107,7 @@ def corpus_average_length(corpus):
         local_averages.append(average_length(corpus[key]))
     return float(sum(local_averages)) / len(local_averages)
 
+
 def corpus_f1(corpus_1, corpus_2):
     """ 
     Note: If a few examples in one dataset are missing from the other (i.e., some examples from the source corpus were not included 
@@ -174,6 +175,19 @@ def read_nli_report(path):
             report[loaded_example['example_id'] + "_2"] = unpad(loaded_example['sent2_tree'])
     return report
 
+def read_ptb_report(path):
+    report = {}
+    with codecs.open(path, encoding='utf-8') as f:
+        for line in f:
+            try:
+                line = line.encode('UTF-8')
+            except UnicodeError as e:
+                print "ENCODING ERROR:", line, e
+                line = "{}"
+            loaded_example = json.loads(line)
+            report[loaded_example['example_id']] = unpad(loaded_example['sent1_tree'])
+    return report
+
 
 def unpad(parse):
     tokens = parse.split()
@@ -209,40 +223,6 @@ def run():
     lb = to_lb(gt)
     rb = to_rb(gt)
 
-    if FLAGS.report_path_template_for_internal_f1 != "_":
-        if FLAGS.report_path_template_for_internal_f1 == "_r":
-            reports = []
-            print "Creating five sets of random parses."
-            paths = range(5)
-            for _ in paths:
-                report = {}
-                for sentence in gt:
-                    report[sentence] = randomize(gt[sentence])
-                reports.append(report)
-        else:
-            paths = glob.glob(FLAGS.report_path_template_for_internal_f1)
-            reports = []
-            for path in paths:
-                print "Loading", path
-                reports.append(read_nli_report(path))
-        f1s = []
-        for i in range(len(paths) - 1):
-            for j in range(i + 1, len(paths)):
-                path_1 = paths[i]
-                path_2 = paths[j]
-                f1 = corpus_f1(reports[i], reports[j])
-                f1s.append(f1)
-                print f1, path_1, path_2
-        print "Mean Internal F1:", sum(f1s) / len(f1s)
-
-    if FLAGS.main_report_path != "_":
-        report = read_nli_report(FLAGS.main_report_path)
-    else:
-        # No source. Try random parses.
-        report = {}
-        for sentence in gt:
-            report[sentence] = randomize(gt[sentence])
-
     ptb = {}
     if FLAGS.ptb_data_path != "_":
         with codecs.open(FLAGS.ptb_data_path, encoding='utf-8') as f:
@@ -257,44 +237,77 @@ def run():
                     continue
                 ptb[loaded_example['pairID']] = loaded_example['sentence1_binary_parse']
 
-    ptb_report = {}
-    if FLAGS.ptb_report_path != "_":
-        with codecs.open(FLAGS.ptb_report_path, encoding='utf-8') as f:
-            for line in f:
-                try:
-                    line = line.encode('UTF-8')
-                except UnicodeError as e:
-                    print "ENCODING ERROR:", line, e
-                    line = "{}"
-                loaded_example = json.loads(line)
-                ptb_report[loaded_example['example_id']] = unpad(loaded_example['sent1_tree'])
-    elif len(ptb) > 0:
-        for sentence in ptb:
-            ptb_report[sentence] = randomize(ptb[sentence])
+    reports = []
+    ptb_reports = []
+    if FLAGS.use_random_parses:
+        print "Creating five sets of random parses for the main data."
+        report_paths = range(5)
+        for _ in report_paths:
+            report = {}
+            for sentence in gt:
+                report[sentence] = randomize(gt[sentence])
+            reports.append(report)  
 
-    if FLAGS.print_latex:
-        for index, sentence in enumerate(gt):
-            if index == 100:
-                break
-            print to_latex(gt[sentence])
-            print to_latex(report[sentence])
-            print
-
-    average_depth = corpus_average_depth(report)
-
-    print FLAGS.main_report_path + '\t' + str(corpus_f1(report, lb)) + '\t' + str(corpus_f1(report, rb)) + '\t' + str(corpus_f1(report, gt)) + '\t' + str(corpus_average_depth(report)),
-    if len(ptb) > 0:
-        print  '\t' + str(corpus_f1(ptb_report, ptb)) + '\t' + str(corpus_average_depth(ptb_report))
+        print "Creating five sets of random parses for the PTB data."
+        ptb_report_paths = range(5)
+        for _ in report_paths:
+            report = {}
+            for sentence in ptb:
+                report[sentence] = randomize(ptb[sentence])
+            ptb_reports.append(report)
     else:
-        print
+        report_paths = glob.glob(FLAGS.main_report_path_template)
+        for path in report_paths:
+            print "Loading", path
+            reports.append(read_nli_report(path))
+
+        if FLAGS.main_report_path_template != "_":
+            ptb_report_paths = glob.glob(FLAGS.ptb_report_path_template)
+            for path in ptb_report_paths:
+                print "Loading", path
+                ptb_reports.append(read_ptb_report(path))
+
+    if len(reports) > 1 and FLAGS.compute_self_f1:
+        f1s = []
+        for i in range(len(report_paths) - 1):
+            for j in range(i + 1, len(report_paths)):
+                path_1 = report_paths[i]
+                path_2 = report_paths[j]
+                f1 = corpus_f1(reports[i], reports[j])
+                f1s.append(f1)
+        print "Mean Self F1:" + "\t" + str(sum(f1s) / len(f1s))
+
+    for i, report in enumerate(reports):
+        print report_paths[i]
+        if FLAGS.print_latex > 0:
+            for index, sentence in enumerate(gt):
+                if index == FLAGS.print_latex:
+                    break
+                print to_latex(gt[sentence])
+                print to_latex(report[sentence])
+                print
+        print str(corpus_f1(report, lb)) + '\t' + str(corpus_f1(report, rb)) + '\t' + str(corpus_f1(report, gt)) + '\t' + str(corpus_average_depth(report))
+
+    for i, report in enumerate(ptb_reports):
+        print ptb_report_paths[i]
+        if FLAGS.print_latex > 0:
+            for index, sentence in enumerate(ptb):
+                if index == FLAGS.print_latex:
+                    break
+                print to_latex(ptb[sentence])
+                print to_latex(report[sentence])
+                print
+        print  str(corpus_f1(report, ptb)) + '\t' + str(corpus_average_depth(report))
+
 
 if __name__ == '__main__':
-    gflags.DEFINE_string("main_report_path", "./checkpoints/example-nli.report", "")
-    gflags.DEFINE_string("main_data_path", "./snli_1.0/snli_1.0_dev.jsonl", "")
-    gflags.DEFINE_string("ptb_report_path", "_", "")
-    gflags.DEFINE_string("ptb_data_path", "_", "")
-    gflags.DEFINE_string("report_path_template_for_internal_f1", "_", "Note, use '\*' escaping in arguments to prevent the shell from prematurely expanding '*'. Use value '_r' to use random parses.")
-    gflags.DEFINE_boolean("print_latex", False, "")
+    gflags.DEFINE_string("main_report_path_template", "./checkpoints/*.report", "A template (with wildcards input as \*) for the paths to the main reports.")
+    gflags.DEFINE_string("main_data_path", "./snli_1.0/snli_1.0_dev.jsonl", "A template (with wildcards input as \*) for the paths to the main reports.")
+    gflags.DEFINE_string("ptb_report_path_template", "_", "A template (with wildcards input as \*) for the paths to the PTB reports, or '_' if not available.")
+    gflags.DEFINE_string("ptb_data_path", "_", "The path to the PTB data in SNLI format, or '_' if not available.")
+    gflags.DEFINE_boolean("compute_self_f1", True, "Compute self F1 over all reports matching main_report_path_template.")
+    gflags.DEFINE_boolean("use_random_parses", False, "Replace all report trees with randomly generated trees. Report path template flags are not used when this is set.")
+    gflags.DEFINE_integer("print_latex", 0, "Print this many trees in LaTeX format for each report.")
 
     FLAGS(sys.argv)
 
