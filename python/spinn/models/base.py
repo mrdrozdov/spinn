@@ -490,7 +490,8 @@ def init_model(
         encoder = EncodeGRU(FLAGS.word_embedding_dim, FLAGS.model_dim,
                             num_layers=FLAGS.encode_num_layers,
                             bidirectional=FLAGS.encode_bidirectional,
-                            reverse=FLAGS.encode_reverse)
+                            reverse=FLAGS.encode_reverse,
+                            mix=(FLAGS.model_type != "CBOW"))
     elif FLAGS.encode == "attn":
         context_args.reshape_input = lambda x, batch_size, seq_length: x.view(
             batch_size, seq_length, -1)

@@ -568,11 +568,22 @@ class IntraAttention(nn.Module):
 
 
 class EncodeGRU(GRU):
-    def __init__(self, *args, **kwargs):
-        super(EncodeGRU, self).__init__(*args, **kwargs)
+    def __init__(self, inp_dim, model_dim, bidirectional=False, mix=True, *args, **kwargs):
+        if mix and bidirectional:
+            self.mix = True
+            assert model_dim % 4 == 0, "Model dim must be divisible by 4 to use bidirectional GRU encoder."
+            self.half_state_dim = model_dim / 4
+        super(EncodeGRU, self).__init__(inp_dim, model_dim, *args, bidirectional=bidirectional, **kwargs)
 
     def forward(self, x, h0=None):
-        output, hn = super(EncodeGRU, self).forward(x, h0)
+        output, _ = super(EncodeGRU, self).forward(x, h0)
+        if self.mix:
+            # Prevent feeding only forward state into h and only backward state into c
+            a = output[:, :, 0:self.half_state_dim]
+            b = output[:, :, self.half_state_dim:2 * self.half_state_dim]
+            c = output[:, :, 2 * self.half_state_dim:3 * self.half_state_dim]
+            d = output[:, :, 3 * self.half_state_dim:4 * self.half_state_dim]
+            output = torch.cat([a, c, b, d], 2)
         return output.contiguous()
 
 
