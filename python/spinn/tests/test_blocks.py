@@ -81,7 +81,11 @@ class PytorchTestCase(unittest.TestCase):
         class MyModel(nn.Module):
             def __init__(self):
                 super(MyModel, self).__init__()
-                self.l = Linear(SimpleInitializer, SimpleBiasInitializer)(10, 10)
+                self.l = Linear(
+                    SimpleInitializer,
+                    SimpleBiasInitializer)(
+                    10,
+                    10)
 
         model_to_save = MyModel()
         model_to_load = MyModel()

@@ -37,7 +37,9 @@ def default_args(**kwargs):
     context_args = Args()
     context_args.reshape_input = lambda x, batch_size, seq_length: x
     context_args.reshape_context = lambda x, batch_size, seq_length: x
-    context_args.encoder = nn.Linear(args['word_embedding_dim'], args['model_dim'])
+    context_args.encoder = nn.Linear(
+        args['word_embedding_dim'],
+        args['model_dim'])
     context_args.input_dim = args['model_dim']
 
     args['context_args'] = context_args
@@ -45,7 +47,15 @@ def default_args(**kwargs):
     class Reduce(nn.Module):
         def forward(self, lefts, rights, tracking):
             batch_size = len(lefts)
-            return torch.chunk(torch.cat(lefts, 0) - torch.cat(rights, 0), batch_size, 0)
+            return torch.chunk(
+                torch.cat(
+                    lefts,
+                    0) -
+                torch.cat(
+                    rights,
+                    0),
+                batch_size,
+                0)
 
     composition_args = Args()
     composition_args.lateral_tracking = True

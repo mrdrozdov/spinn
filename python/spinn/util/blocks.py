@@ -36,7 +36,8 @@ def gumbel_sample(input, temperature=1.0, avg=False, N=10000):
 
 
 def st_gumbel_sample(input, temperature=1.0, avg=False, N=10000):
-    # Untested. Source: https://discuss.pytorch.org/t/stop-gradients-for-st-gumbel-softmax/530/5
+    # Untested. Source:
+    # https://discuss.pytorch.org/t/stop-gradients-for-st-gumbel-softmax/530/5
     x = gumbel_sample(input, temperature, avg, N)
 
     max_val, _ = torch.max(x, x.dim() - 1)
@@ -55,8 +56,11 @@ def debug_gradient(model, losses):
     for name, loss in losses:
         print(name)
         loss.backward(retain_variables=True)
-        stats = [(p.grad.norm().data[0], p.grad.max().data[0], p.grad.min().data[0], p.size())
-                 for p in model.parameters()]
+        stats = [
+            (p.grad.norm().data[0],
+             p.grad.max().data[0],
+             p.grad.min().data[0],
+             p.size()) for p in model.parameters()]
         for s in stats:
             print(s)
         print
@@ -303,14 +307,18 @@ class ReduceTreeGRU(nn.Module):
 
     """
 
-    def __init__(self, size, tracker_size=None, use_tracking_in_composition=None):
+    def __init__(self, size, tracker_size=None,
+                 use_tracking_in_composition=None):
         super(ReduceTreeGRU, self).__init__()
         self.size = size
         self.W = Linear(initializer=HeKaimingInitializer)(size, 2 * size)
         self.Vl = Linear(initializer=HeKaimingInitializer)(size, size)
         self.Vr = Linear(initializer=HeKaimingInitializer)(size, size)
         if tracker_size is not None and use_tracking_in_composition:
-            self.U = Linear(initializer=HeKaimingInitializer)(tracker_size, 3 * size)
+            self.U = Linear(
+                initializer=HeKaimingInitializer)(
+                tracker_size,
+                3 * size)
 
     def forward(self, left, right, tracking=None):
         def slice_gate(gate_data, hidden_dim, i):
@@ -398,7 +406,8 @@ class ModelTrainer(object):
         model_state_dict = checkpoint['model_state_dict']
 
         # HACK: Compatability for saving supervised SPINN and loading RL SPINN.
-        if 'baseline' in self.model.state_dict().keys() and 'baseline' not in model_state_dict:
+        if 'baseline' in self.model.state_dict().keys(
+        ) and 'baseline' not in model_state_dict:
             model_state_dict['baseline'] = torch.FloatTensor([0.0])
 
         self.model.load_state_dict(model_state_dict)
@@ -435,7 +444,8 @@ class ModelTrainer_ES(object):
         model_state_dict = checkpoint['model_state_dict']
 
         # HACK: Compatability for saving supervised SPINN and loading RL SPINN.
-        if 'baseline' in self.model.state_dict().keys() and 'baseline' not in model_state_dict:
+        if 'baseline' in self.model.state_dict().keys(
+        ) and 'baseline' not in model_state_dict:
             model_state_dict['baseline'] = torch.FloatTensor([0.0])
 
         self.model.load_state_dict(model_state_dict)
@@ -454,8 +464,12 @@ class Embed(nn.Module):
         if self.vectors is None:
             embeds = self.embed(tokens.contiguous().view(-1).long())
         else:
-            embeds = self.vectors.take(tokens.data.cpu().numpy().ravel(), axis=0)
-            embeds = to_gpu(Variable(torch.from_numpy(embeds), volatile=tokens.volatile))
+            embeds = self.vectors.take(
+                tokens.data.cpu().numpy().ravel(), axis=0)
+            embeds = to_gpu(
+                Variable(
+                    torch.from_numpy(embeds),
+                    volatile=tokens.volatile))
 
         return embeds
 
@@ -484,8 +498,13 @@ class GRU(nn.Module):
 
         # Initialize state unless it is given.
         if h0 is None:
-            h0 = to_gpu(Variable(torch.zeros(num_layers * bi, batch_size,
-                                             model_dim / bi), volatile=not self.training))
+            h0 = to_gpu(
+                Variable(
+                    torch.zeros(
+                        num_layers * bi,
+                        batch_size,
+                        model_dim / bi),
+                    volatile=not self.training))
 
         # Expects (input, h_0):
         #   input => seq_len x batch_size x model_dim
@@ -525,7 +544,12 @@ class IntraAttention(nn.Module):
 
         """
 
-        bias = torch.range(0, seq_len - 1).float().unsqueeze(0).repeat(seq_len, 1)
+        bias = torch.range(
+            0,
+            seq_len -
+            1).float().unsqueeze(0).repeat(
+            seq_len,
+            1)
         diff = torch.range(0, seq_len - 1).float().unsqueeze(1)
         bias = (bias - diff).abs()
         bias = bias.clamp(0, max_distance)
@@ -543,9 +567,11 @@ class IntraAttention(nn.Module):
         hidden_dim = self.outp_size
         batch_size, seq_len, _ = x.size()
 
-        f = self.f(x.view(batch_size * seq_len, -1)).view(batch_size, seq_len, -1)
+        f = self.f(x.view(batch_size * seq_len, -1)
+                   ).view(batch_size, seq_len, -1)
 
-        f_broadcast = f.unsqueeze(1).expand(batch_size, seq_len, seq_len, hidden_dim)
+        f_broadcast = f.unsqueeze(1).expand(
+            batch_size, seq_len, seq_len, hidden_dim)
 
         # assert f_broadcast[0, 0, 0, :] == f_broadcast[0, 1, 0, :]
 
@@ -568,17 +594,32 @@ class IntraAttention(nn.Module):
 
 
 class EncodeGRU(GRU):
-    def __init__(self, inp_dim, model_dim, bidirectional=False, mix=True, *args, **kwargs):
+    def __init__(
+            self,
+            inp_dim,
+            model_dim,
+            bidirectional=False,
+            mix=True,
+            *args,
+            **kwargs):
         if mix and bidirectional:
             self.mix = True
             assert model_dim % 4 == 0, "Model dim must be divisible by 4 to use bidirectional GRU encoder."
             self.half_state_dim = model_dim / 4
-        super(EncodeGRU, self).__init__(inp_dim, model_dim, *args, bidirectional=bidirectional, **kwargs)
+        super(
+            EncodeGRU,
+            self).__init__(
+            inp_dim,
+            model_dim,
+            *args,
+            bidirectional=bidirectional,
+            **kwargs)
 
     def forward(self, x, h0=None):
         output, _ = super(EncodeGRU, self).forward(x, h0)
         if self.mix:
-            # Prevent feeding only forward state into h and only backward state into c
+            # Prevent feeding only forward state into h and only backward state
+            # into c
             a = output[:, :, 0:self.half_state_dim]
             b = output[:, :, self.half_state_dim:2 * self.half_state_dim]
             c = output[:, :, 2 * self.half_state_dim:3 * self.half_state_dim]
@@ -612,11 +653,21 @@ class LSTM(nn.Module):
 
         # Initialize state unless it is given.
         if h0 is None:
-            h0 = to_gpu(Variable(torch.zeros(num_layers * bi, batch_size,
-                                             model_dim / bi), volatile=not self.training))
+            h0 = to_gpu(
+                Variable(
+                    torch.zeros(
+                        num_layers * bi,
+                        batch_size,
+                        model_dim / bi),
+                    volatile=not self.training))
         if c0 is None:
-            c0 = to_gpu(Variable(torch.zeros(num_layers * bi, batch_size,
-                                             model_dim / bi), volatile=not self.training))
+            c0 = to_gpu(
+                Variable(
+                    torch.zeros(
+                        num_layers * bi,
+                        batch_size,
+                        model_dim / bi),
+                    volatile=not self.training))
 
         # Expects (input, h_0, c_0):
         #   input => seq_len x batch_size x model_dim
@@ -650,7 +701,9 @@ class ReduceTreeLSTM(nn.Module):
         super(ReduceTreeLSTM, self).__init__()
         self.composition_ln = composition_ln
         self.left = Linear(initializer=HeKaimingInitializer)(size, 5 * size)
-        self.right = Linear(initializer=HeKaimingInitializer)(size, 5 * size, bias=False)
+        self.right = Linear(
+            initializer=HeKaimingInitializer)(
+            size, 5 * size, bias=False)
         if composition_ln:
             self.left_ln = LayerNormalization(size)
             self.right_ln = LayerNormalization(size)
@@ -721,7 +774,9 @@ class SimpleTreeLSTM(nn.Module):
         self.composition_ln = composition_ln
         self.hidden_dim = size
         self.left = Linear(initializer=HeKaimingInitializer)(size, 5 * size)
-        self.right = Linear(initializer=HeKaimingInitializer)(size, 5 * size, bias=False)
+        self.right = Linear(
+            initializer=HeKaimingInitializer)(
+            size, 5 * size, bias=False)
         if composition_ln:
             self.left_ln = LayerNormalization(size)
             self.right_ln = LayerNormalization(size)
@@ -754,8 +809,14 @@ class SimpleTreeLSTM(nn.Module):
 
 
 class MLP(nn.Module):
-    def __init__(self, mlp_input_dim, mlp_dim, num_classes, num_mlp_layers, mlp_ln,
-                 classifier_dropout_rate=0.0):
+    def __init__(
+            self,
+            mlp_input_dim,
+            mlp_dim,
+            num_classes,
+            num_mlp_layers,
+            mlp_ln,
+            classifier_dropout_rate=0.0):
         super(MLP, self).__init__()
 
         self.num_mlp_layers = num_mlp_layers
@@ -787,7 +848,10 @@ class MLP(nn.Module):
             if self.mlp_ln:
                 ln = getattr(self, 'ln{}'.format(i))
                 h = ln(h)
-            h = F.dropout(h, self.classifier_dropout_rate, training=self.training)
+            h = F.dropout(
+                h,
+                self.classifier_dropout_rate,
+                training=self.training)
         layer = getattr(self, 'l{}'.format(self.num_mlp_layers))
         y = layer(h)
         return y
@@ -883,7 +947,8 @@ def PassthroughLSTMInitializer(lstm):
 
     hh_init = np.zeros(lstm.weight_hh_l0.size()).astype(np.float32)
     ih_init = np.zeros(lstm.weight_ih_l0.size()).astype(np.float32)
-    ih_init[G_POSITION * h_dim:(G_POSITION + 1) * h_dim, :] = np.identity(h_dim)
+    ih_init[G_POSITION * h_dim:(G_POSITION + 1) *
+            h_dim, :] = np.identity(h_dim)
 
     bhh_init = np.zeros(lstm.bias_hh_l0.size()).astype(np.float32)
     bih_init = np.ones(lstm.bias_ih_l0.size()).astype(np.float32) * 2
@@ -896,7 +961,8 @@ def PassthroughLSTMInitializer(lstm):
     lstm.bias_ih_l0.data.set_(torch.from_numpy(bih_init))
 
 
-def Linear(initializer=DefaultUniformInitializer, bias_initializer=ZeroInitializer):
+def Linear(initializer=DefaultUniformInitializer,
+           bias_initializer=ZeroInitializer):
     class CustomLinear(nn.Linear):
         def reset_parameters(self):
             initializer(self.weight)

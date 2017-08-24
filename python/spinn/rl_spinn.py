@@ -26,37 +26,38 @@ def build_model(data_manager, initial_embeddings, vocab_size,
     assert FLAGS.use_tracking_in_composition or not FLAGS.tracking_lstm_hidden_dim or (FLAGS.tracking_lstm_hidden_dim and not FLAGS.lateral_tracking and not FLAGS.predict_use_cell), \
         "You appear to want to train an RNN using only RL gradients. This is well defined, but it is nonetheless a terrible idea."
 
-    return model_cls(model_dim=FLAGS.model_dim,
-                     word_embedding_dim=FLAGS.word_embedding_dim,
-                     vocab_size=vocab_size,
-                     initial_embeddings=initial_embeddings,
-                     num_classes=num_classes,
-                     mlp_dim=FLAGS.mlp_dim,
-                     embedding_keep_rate=FLAGS.embedding_keep_rate,
-                     classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
-                     tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
-                     transition_weight=FLAGS.transition_weight,
-                     use_sentence_pair=use_sentence_pair,
-                     lateral_tracking=FLAGS.lateral_tracking,
-                     use_tracking_in_composition=FLAGS.use_tracking_in_composition,
-                     predict_use_cell=FLAGS.predict_use_cell,
-                     use_difference_feature=FLAGS.use_difference_feature,
-                     use_product_feature=FLAGS.use_product_feature,
-                     num_mlp_layers=FLAGS.num_mlp_layers,
-                     mlp_ln=FLAGS.mlp_ln,
-                     rl_mu=FLAGS.rl_mu,
-                     rl_epsilon=FLAGS.rl_epsilon,
-                     rl_baseline=FLAGS.rl_baseline,
-                     rl_reward=FLAGS.rl_reward,
-                     rl_weight=FLAGS.rl_weight,
-                     rl_whiten=FLAGS.rl_whiten,
-                     rl_valid=FLAGS.rl_valid,
-                     rl_catalan=FLAGS.rl_catalan,
-                     rl_catalan_backprop=FLAGS.rl_catalan_backprop,
-                     rl_transition_acc_as_reward=FLAGS.rl_transition_acc_as_reward,
-                     context_args=context_args,
-                     composition_args=composition_args,
-                     )
+    return model_cls(
+        model_dim=FLAGS.model_dim,
+        word_embedding_dim=FLAGS.word_embedding_dim,
+        vocab_size=vocab_size,
+        initial_embeddings=initial_embeddings,
+        num_classes=num_classes,
+        mlp_dim=FLAGS.mlp_dim,
+        embedding_keep_rate=FLAGS.embedding_keep_rate,
+        classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
+        tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
+        transition_weight=FLAGS.transition_weight,
+        use_sentence_pair=use_sentence_pair,
+        lateral_tracking=FLAGS.lateral_tracking,
+        use_tracking_in_composition=FLAGS.use_tracking_in_composition,
+        predict_use_cell=FLAGS.predict_use_cell,
+        use_difference_feature=FLAGS.use_difference_feature,
+        use_product_feature=FLAGS.use_product_feature,
+        num_mlp_layers=FLAGS.num_mlp_layers,
+        mlp_ln=FLAGS.mlp_ln,
+        rl_mu=FLAGS.rl_mu,
+        rl_epsilon=FLAGS.rl_epsilon,
+        rl_baseline=FLAGS.rl_baseline,
+        rl_reward=FLAGS.rl_reward,
+        rl_weight=FLAGS.rl_weight,
+        rl_whiten=FLAGS.rl_whiten,
+        rl_valid=FLAGS.rl_valid,
+        rl_catalan=FLAGS.rl_catalan,
+        rl_catalan_backprop=FLAGS.rl_catalan_backprop,
+        rl_transition_acc_as_reward=FLAGS.rl_transition_acc_as_reward,
+        context_args=context_args,
+        composition_args=composition_args,
+    )
 
 
 class RLSPINN(SPINN):
@@ -71,8 +72,10 @@ class RLSPINN(SPINN):
 
         if self.catalan:
             # Use the catalan distribution as a prior.
-            p_shift_catalan = [self.shift_probabilities.prob(n_red, n_step, n_tok)
-                               for n_red, n_step, n_tok in zip(self.n_reduces, self.n_steps, self.n_tokens)]
+            p_shift_catalan = [
+                self.shift_probabilities.prob(
+                    n_red, n_step, n_tok) for n_red, n_step, n_tok in zip(
+                    self.n_reduces, self.n_steps, self.n_tokens)]
             p_shift_catalan = torch.FloatTensor(p_shift_catalan).view(-1, 1)
             p_catalan = torch.cat([p_shift_catalan, 1. - p_shift_catalan], 1)
             p_catalan = to_gpu(Variable(p_catalan))
@@ -151,13 +154,23 @@ class BaseModel(_BaseModel):
             x = Variable(embeds.data, volatile=not self.training).view(
                 batch_size, seq_length, -1)
             h0 = Variable(
-                to_gpu(torch.zeros(1, batch_size, self.v_rnn_dim)), volatile=not self.training)
+                to_gpu(
+                    torch.zeros(
+                        1,
+                        batch_size,
+                        self.v_rnn_dim)),
+                volatile=not self.training)
             c0 = Variable(
-                to_gpu(torch.zeros(1, batch_size, self.v_rnn_dim)), volatile=not self.training)
+                to_gpu(
+                    torch.zeros(
+                        1,
+                        batch_size,
+                        self.v_rnn_dim)),
+                volatile=not self.training)
             output, (hn, cn) = self.v_rnn(x, (h0, c0))
             if self.use_sentence_pair:
                 hn = hn.squeeze()
-                h1, h2 = hn[:batch_size/2], hn[batch_size/2:]
+                h1, h2 = hn[:batch_size / 2], hn[batch_size / 2:]
                 hn_both = torch.cat([h1, h2], 1)
                 self.baseline_outp = self.v_mlp(hn_both.squeeze())
             else:

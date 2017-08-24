@@ -53,7 +53,9 @@ if __name__ == '__main__':
 
     # This isn't really a problem for sentence pair data.
     gflags.DEFINE_string(
-        "exclude", None, "If not None, exclude any example that appears in this file.")
+        "exclude",
+        None,
+        "If not None, exclude any example that appears in this file.")
 
     FLAGS(sys.argv)
 
@@ -103,7 +105,10 @@ if __name__ == '__main__':
 
             if data_type.is_label((result1, result2)) == label:
                 if FLAGS.exclude is not None:
-                    check = hash(dict(premise_tokens=seq1, hypothesis_tokens=seq2))
+                    check = hash(
+                        dict(
+                            premise_tokens=seq1,
+                            hypothesis_tokens=seq2))
                     check_label = str(data_type.LABELS[label])
                     if check in exclude_dict.get(check_label):
                         skip_counter += 1

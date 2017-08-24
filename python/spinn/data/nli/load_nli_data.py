@@ -10,7 +10,8 @@ LABEL_MAP = {
     "entailment": 0,
     "neutral": 1,
     "contradiction": 2,
-    "hidden": 0,  # Used in the unlabeled test set---needs to map to some arbitrary label.
+    # Used in the unlabeled test set---needs to map to some arbitrary label.
+    "hidden": 0,
 }
 
 
@@ -64,7 +65,8 @@ def load_data(path, lowercase=False, choose=lambda x: True):
             else:
                 failed_parse += 1
     if failed_parse > 0:
-        print("Warning: Failed to convert binary parse for {} examples.".format(failed_parse))
+        print(
+            "Warning: Failed to convert binary parse for {} examples.".format(failed_parse))
     return examples
 
 

@@ -39,9 +39,18 @@ from the sentence padding token). Transitions are padded on the left.
 """
 
 
-nli_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_snli.jsonl")
-sst_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_sst.txt")
-boolean_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_boolean.tsv")
+nli_data_path = os.path.join(
+    os.path.dirname(
+        os.path.realpath(__file__)),
+    "test_snli.jsonl")
+sst_data_path = os.path.join(
+    os.path.dirname(
+        os.path.realpath(__file__)),
+    "test_sst.txt")
+boolean_data_path = os.path.join(
+    os.path.dirname(
+        os.path.realpath(__file__)),
+    "test_boolean.tsv")
 embedding_data_path = os.path.join(os.path.dirname(
     os.path.realpath(__file__)), "test_embedding_matrix.5d.txt")
 sign_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),
@@ -95,7 +104,8 @@ def t_is_left_to_right(ts):
         if t == T_SHIFT:
             return True
         else:
-            # If the first symbol is a REDUCE, then the transitions are reversed.
+            # If the first symbol is a REDUCE, then the transitions are
+            # reversed.
             return False
 
     # Hypothetically, is possible to have zero transitions, and padded completely with SKIPs.
@@ -120,7 +130,8 @@ def s_is_left_to_right(s, EOS_TOKEN):
         if w == util.SENTENCE_PADDING_SYMBOL:
             continue
 
-        # TODO: What about single token sentence? This is probably good enough for now.
+        # TODO: What about single token sentence? This is probably good enough
+        # for now.
         if w in EOS_TOKEN:
             # If the first symbol is an EOS, then the sentence is reversed.
             return False
@@ -172,17 +183,36 @@ class SNLITestCase(unittest.TestCase):
 
         hyp_seq_lengths = Counter([len(x['hypothesis_transitions'])
                                    for x in raw_data])
-        assert hyp_seq_lengths == {13: 4, 15: 4, 11: 2, 17: 2,
-                                   23: 2, 5: 1, 39: 1, 9: 1, 19: 1, 7: 1, 29: 1}
+        assert hyp_seq_lengths == {
+            13: 4,
+            15: 4,
+            11: 2,
+            17: 2,
+            23: 2,
+            5: 1,
+            39: 1,
+            9: 1,
+            19: 1,
+            7: 1,
+            29: 1}
 
         prem_seq_lengths = Counter([len(x['premise_transitions'])
                                     for x in raw_data])
         assert prem_seq_lengths == {35: 7, 19: 3, 33: 3, 67: 3, 53: 3, 105: 1}
 
-        min_seq_lengths = Counter([min(len(x['hypothesis_transitions']), len(x['premise_transitions']))
-                                   for x in raw_data])
-        assert min_seq_lengths == {13: 4, 15: 4, 11: 2,
-                                   17: 2, 19: 2, 23: 2, 35: 1, 5: 1, 7: 1, 9: 1}
+        min_seq_lengths = Counter([min(len(x['hypothesis_transitions']), len(
+            x['premise_transitions'])) for x in raw_data])
+        assert min_seq_lengths == {
+            13: 4,
+            15: 4,
+            11: 2,
+            17: 2,
+            19: 2,
+            23: 2,
+            35: 1,
+            5: 1,
+            7: 1,
+            9: 1}
 
     def test_preprocess(self):
         seq_length = 25
@@ -200,7 +230,12 @@ class SNLITestCase(unittest.TestCase):
         EOS_TOKEN = vocabulary["."]
 
         data = util.PreprocessDataset(
-            raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
+            raw_data,
+            vocabulary,
+            seq_length,
+            data_manager,
+            eval_mode=False,
+            logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             simple=simple)
 
@@ -210,7 +245,8 @@ class SNLITestCase(unittest.TestCase):
         assert tokens.shape == (2, seq_length, 2)
         assert transitions.shape == (2, seq_length, 2)
 
-        for s, ts, (num_hyp_t, num_prem_t) in zip(tokens, transitions, num_transitions):
+        for s, ts, (num_hyp_t, num_prem_t) in zip(
+                tokens, transitions, num_transitions):
             hyp_s = s[:, 0]
             prem_s = s[:, 1]
             hyp_t = ts[:, 0]
@@ -228,7 +264,8 @@ class SNLITestCase(unittest.TestCase):
             assert len([x for x in hyp_t if x != T_SKIP]) == num_hyp_t
             assert len([x for x in prem_t if x != T_SKIP]) == num_prem_t
 
-            # The transitions should start with SKIP and end with REDUCE (ignoring SKIPs).
+            # The transitions should start with SKIP and end with REDUCE
+            # (ignoring SKIPs).
             assert t_is_left_to_right(hyp_t)
             assert t_is_left_to_right(prem_t)
 
@@ -251,13 +288,19 @@ class SNLITestCase(unittest.TestCase):
             vocabulary, word_embedding_dim, embedding_data_path)
 
         data = util.PreprocessDataset(
-            raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
+            raw_data,
+            vocabulary,
+            seq_length,
+            data_manager,
+            eval_mode=False,
+            logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             simple=simple)
 
         tokens, transitions, labels, num_transitions = data[:4]
 
-        for s, ts, (num_hyp_t, num_prem_t) in zip(tokens, transitions, num_transitions):
+        for s, ts, (num_hyp_t, num_prem_t) in zip(
+                tokens, transitions, num_transitions):
             hyp_t = ts[:, 0]
             prem_t = ts[:, 1]
 
@@ -279,13 +322,19 @@ class SNLITestCase(unittest.TestCase):
             vocabulary, word_embedding_dim, embedding_data_path)
 
         data = util.PreprocessDataset(
-            raw_data, vocabulary, seq_length, data_manager, eval_mode=True, logger=MockLogger(),
+            raw_data,
+            vocabulary,
+            seq_length,
+            data_manager,
+            eval_mode=True,
+            logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             simple=simple)
 
         tokens, transitions, labels, num_transitions = data[:4]
 
-        for s, ts, (num_hyp_t, num_prem_t) in zip(tokens, transitions, num_transitions):
+        for s, ts, (num_hyp_t, num_prem_t) in zip(
+                tokens, transitions, num_transitions):
             hyp_t = ts[:, 0]
             prem_t = ts[:, 1]
 
@@ -301,8 +350,25 @@ class SSTTestCase(unittest.TestCase):
         assert len(raw_data) == 30
 
         seq_lengths = Counter([len(x['transitions']) for x in raw_data])
-        assert seq_lengths == {15: 3, 53: 3, 57: 3, 59: 2, 37: 2, 47: 2, 23: 2,
-                               45: 2, 25: 2, 65: 1, 35: 1, 49: 1, 41: 1, 11: 1, 17: 1, 67: 1, 27: 1, 63: 1}
+        assert seq_lengths == {
+            15: 3,
+            53: 3,
+            57: 3,
+            59: 2,
+            37: 2,
+            47: 2,
+            23: 2,
+            45: 2,
+            25: 2,
+            65: 1,
+            35: 1,
+            49: 1,
+            41: 1,
+            11: 1,
+            17: 1,
+            67: 1,
+            27: 1,
+            63: 1}
 
     def test_preprocess(self):
         seq_length = 30
@@ -320,7 +386,12 @@ class SSTTestCase(unittest.TestCase):
         EOS_TOKEN = vocabulary["."]
 
         data = util.PreprocessDataset(
-            raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
+            raw_data,
+            vocabulary,
+            seq_length,
+            data_manager,
+            eval_mode=False,
+            logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             simple=simple)
 
@@ -341,7 +412,8 @@ class SSTTestCase(unittest.TestCase):
             # The num_transitions should count non-skip transitions
             assert len([x for x in ts if x != T_SKIP]) == num_t
 
-            # The transitions should start with SKIP and end with REDUCE (ignoring SKIPs).
+            # The transitions should start with SKIP and end with REDUCE
+            # (ignoring SKIPs).
             assert t_is_left_to_right(ts)
 
             # The transitions should be padded on the left.
@@ -361,7 +433,12 @@ class ArithmeticTestCase(unittest.TestCase):
         OPERATOR_TOKENS = [vocabulary["+"], vocabulary["-"]]
 
         data = util.PreprocessDataset(
-            raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
+            raw_data,
+            vocabulary,
+            seq_length,
+            data_manager,
+            eval_mode=False,
+            logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             simple=simple)
 
@@ -378,7 +455,8 @@ class ArithmeticTestCase(unittest.TestCase):
             # The num_transitions should count non-skip transitions
             assert len([x for x in ts if x != T_SKIP]) == num_t
 
-            # The transitions should start with SKIP and end with REDUCE (ignoring SKIPs).
+            # The transitions should start with SKIP and end with REDUCE
+            # (ignoring SKIPs).
             assert t_is_left_to_right(ts)
 
             # The transitions should be padded on the left.
@@ -392,11 +470,15 @@ class ArithmeticTestCase(unittest.TestCase):
         raw_data = data_manager.load_data(simple_data_path)
         vocabulary = data_manager.FIXED_VOCABULARY
 
-
         OPERATOR_TOKENS = [vocabulary["+"], vocabulary["-"]]
 
         data = util.PreprocessDataset(
-            raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
+            raw_data,
+            vocabulary,
+            seq_length,
+            data_manager,
+            eval_mode=False,
+            logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             simple=simple)
 
@@ -413,7 +495,8 @@ class ArithmeticTestCase(unittest.TestCase):
             # The num_transitions should count non-skip transitions
             assert len([x for x in ts if x != T_SKIP]) == num_t
 
-            # The transitions should start with SKIP and end with REDUCE (ignoring SKIPs).
+            # The transitions should start with SKIP and end with REDUCE
+            # (ignoring SKIPs).
             assert t_is_left_to_right(ts)
 
             # The transitions should be padded on the left.
@@ -454,7 +537,8 @@ class ArithmeticTestCase(unittest.TestCase):
         actual = spans(transitions, tokens)
         actual = set([el.span for el in actual if el.tag != "leaf"])
 
-        assert expected == actual, "\nExpected: {}\nActual: {}".format(expected, actual)
+        assert expected == actual, "\nExpected: {}\nActual: {}".format(
+            expected, actual)
 
     def test_structure_spans(self):
         spans = load_simple_data.spans
@@ -464,7 +548,8 @@ class ArithmeticTestCase(unittest.TestCase):
         actual = spans(transitions, tokens)
         actual = set([el.span for el in actual if el.tag == "struct"])
 
-        assert expected == actual, "\nExpected: {}\nActual: {}".format(expected, actual)
+        assert expected == actual, "\nExpected: {}\nActual: {}".format(
+            expected, actual)
 
 
 class DualArithmeticTestCase(unittest.TestCase):
@@ -480,7 +565,12 @@ class DualArithmeticTestCase(unittest.TestCase):
         OPERATOR_TOKENS = [vocabulary["+"], vocabulary["-"]]
 
         data = util.PreprocessDataset(
-            raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
+            raw_data,
+            vocabulary,
+            seq_length,
+            data_manager,
+            eval_mode=False,
+            logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             simple=simple)
 
@@ -498,7 +588,8 @@ class DualArithmeticTestCase(unittest.TestCase):
                 # The num_transitions should count non-skip transitions
                 assert len([x for x in ts if x != T_SKIP]) == num_t
 
-                # The transitions should start with SKIP and end with REDUCE (ignoring SKIPs).
+                # The transitions should start with SKIP and end with REDUCE
+                # (ignoring SKIPs).
                 assert t_is_left_to_right(ts)
 
                 # The transitions should be padded on the left.
@@ -515,7 +606,12 @@ class DualArithmeticTestCase(unittest.TestCase):
         OPERATOR_TOKENS = [vocabulary["+"], vocabulary["-"]]
 
         data = util.PreprocessDataset(
-            raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
+            raw_data,
+            vocabulary,
+            seq_length,
+            data_manager,
+            eval_mode=False,
+            logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             simple=simple)
 
@@ -533,7 +629,8 @@ class DualArithmeticTestCase(unittest.TestCase):
                 # The num_transitions should count non-skip transitions
                 assert len([x for x in ts if x != T_SKIP]) == num_t
 
-                # The transitions should start with SKIP and end with REDUCE (ignoring SKIPs).
+                # The transitions should start with SKIP and end with REDUCE
+                # (ignoring SKIPs).
                 assert t_is_left_to_right(ts)
 
                 # The transitions should be padded on the left.
@@ -562,7 +659,12 @@ class BooleanTestCase(unittest.TestCase):
         OPERATOR_TOKENS = [vocabulary["and"], vocabulary["or"]]
 
         data = util.PreprocessDataset(
-            raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
+            raw_data,
+            vocabulary,
+            seq_length,
+            data_manager,
+            eval_mode=False,
+            logger=MockLogger(),
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
             simple=simple)
 
@@ -583,31 +685,45 @@ class BooleanTestCase(unittest.TestCase):
             # The num_transitions should count non-skip transitions
             assert len([x for x in ts if x != T_SKIP]) == num_t
 
-            # The transitions should start with SKIP and end with REDUCE (ignoring SKIPs).
+            # The transitions should start with SKIP and end with REDUCE
+            # (ignoring SKIPs).
             assert t_is_left_to_right(ts)
 
             # The transitions should be padded on the left.
             assert t_is_left_padded(ts)
 
 
-def suite_single_seq(seq_length, simple, data_manager, path, starts_with, limit=100):
+def suite_single_seq(
+        seq_length,
+        simple,
+        data_manager,
+        path,
+        starts_with,
+        limit=100):
     raw_data = data_manager.load_data(path)
     vocabulary = data_manager.FIXED_VOCABULARY
 
     data = util.PreprocessDataset(
-        raw_data, vocabulary, seq_length, data_manager, eval_mode=False, logger=MockLogger(),
+        raw_data,
+        vocabulary,
+        seq_length,
+        data_manager,
+        eval_mode=False,
+        logger=MockLogger(),
         sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
         simple=simple)
 
     seqs, transitions, labels, num_transitions = data[:4]
 
-    for i, (s, ts, num_t) in enumerate(zip(seqs, transitions, num_transitions)):
+    for i, (s, ts, num_t) in enumerate(
+            zip(seqs, transitions, num_transitions)):
 
         if i > limit:
             break
 
         # The sentence should begin with an operator.
-        assert s[0] in starts_with, "{}: {} not in {}".format(i, s[0], starts_with)
+        assert s[0] in starts_with, "{}: {} not in {}".format(
+            i, s[0], starts_with)
 
         # The sentences should be padded on the right.
         assert not s_is_left_padded(s)
@@ -615,7 +731,8 @@ def suite_single_seq(seq_length, simple, data_manager, path, starts_with, limit=
         # The num_transitions should count non-skip transitions
         assert len([x for x in ts if x != T_SKIP]) == num_t
 
-        # The transitions should start with SKIP and end with REDUCE (ignoring SKIPs).
+        # The transitions should start with SKIP and end with REDUCE (ignoring
+        # SKIPs).
         assert t_is_left_to_right(ts)
 
         # The transitions should be padded on the left.
@@ -642,7 +759,8 @@ class ListopsTestCase(unittest.TestCase):
         actual = load_listops_data.spans(transitions, tokens)
         actual = set([el.span for el in actual if el.tag != "leaf"])
 
-        assert expected == actual, "\nExpected: {}\nActual: {}".format(expected, actual)
+        assert expected == actual, "\nExpected: {}\nActual: {}".format(
+            expected, actual)
 
     def test_strucure_spans(self):
         tokens = ['[MAX', '3', '[MAX', '1', '7', ']', ']']
@@ -652,7 +770,8 @@ class ListopsTestCase(unittest.TestCase):
         actual = load_listops_data.spans(transitions, tokens)
         actual = set([el.span for el in actual if el.tag == "struct"])
 
-        assert expected == actual, "\nExpected: {}\nActual: {}".format(expected, actual)
+        assert expected == actual, "\nExpected: {}\nActual: {}".format(
+            expected, actual)
 
 
 if __name__ == '__main__':

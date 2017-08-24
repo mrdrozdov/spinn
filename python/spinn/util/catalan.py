@@ -24,7 +24,8 @@ class Catalan(object):
         if n <= self.sofar:
             return self.cache[n]
         else:
-            for c in self.catalan_it(start=self.sofar, end=n, c=self.cache[self.sofar]):
+            for c in self.catalan_it(
+                    start=self.sofar, end=n, c=self.cache[self.sofar]):
                 pass
             return c
 

@@ -80,7 +80,9 @@ def read_file(filename):
     flags = parse_flags(filename)
     train_str, train_extra_str = get_format(
         filename, FMT_TRAIN), get_format(filename, FMT_TRAIN_EXTRA)
-    eval_str, eval_extra_str = get_format(filename, FMT_EVAL), get_format(filename, FMT_EVAL_EXTRA)
+    eval_str, eval_extra_str = get_format(
+        filename, FMT_EVAL), get_format(
+        filename, FMT_EVAL_EXTRA)
 
     dtrain, dtrain_extra, deval, deval_extra = [], [], [], []
 
@@ -88,15 +90,17 @@ def read_file(filename):
         for line in f:
             line = line.strip()
             if is_train(line):
-                dtrain.append(parse(train_str, line[line.find(START_TRAIN):].strip()))
+                dtrain.append(parse(train_str,
+                                    line[line.find(START_TRAIN):].strip()))
             elif is_train_extra(line):
                 dtrain_extra.append(
                     parse(train_extra_str, line[line.find(START_TRAIN_EXTRA):].strip()))
             elif is_eval(line):
-                deval.append(parse(eval_str, line[line.find(START_EVAL):].strip()))
+                deval.append(parse(eval_str,
+                                   line[line.find(START_EVAL):].strip()))
             elif is_eval_extra(line):
-                deval_extra.append(
-                    parse(eval_extra_str, line[line.find(START_EVAL_EXTRA):].strip()))
+                deval_extra.append(parse(eval_extra_str,
+                                         line[line.find(START_EVAL_EXTRA):].strip()))
 
     return dtrain, dtrain_extra, deval, deval_extra, flags
 

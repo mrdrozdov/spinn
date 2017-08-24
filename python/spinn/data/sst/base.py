@@ -1,4 +1,9 @@
-def convert_unary_binary_bracketed_data(filename, keep_fn=lambda x: True, convert_fn=lambda x: x):
+
+
+def convert_unary_binary_bracketed_data(
+        filename,
+        keep_fn=lambda x: True,
+        convert_fn=lambda x: x):
     # Build a binary tree out of a binary parse in which every
     # leaf node is wrapped as a unary constituent, as here:
     #   (4 (2 (2 The ) (2 actors ) ) (3 (4 (2 are ) (3 fantastic ) ) (2 . ) ) )
