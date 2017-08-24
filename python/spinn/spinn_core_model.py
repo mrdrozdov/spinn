@@ -459,6 +459,8 @@ class SPINN(nn.Module):
             # Pre-Action Phase
             # ================
 
+            # TODO: See if PyTorch's 'Advanced Indexing for Tensors and Variables' features would simplify this.
+
             # For SHIFT
             s_stacks, s_tops, s_trackings, s_idxs = [], [], [], []
 
