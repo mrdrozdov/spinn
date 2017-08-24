@@ -530,6 +530,10 @@ def get_flags():
         True,
         "If error on the first eval set (the dev set) is "
         "at most 0.99 of error at the previous checkpoint, save a special 'best' checkpoint.")
+    gflags.DEFINE_integer(
+        "early_stopping_steps_to_wait",
+        25000,
+        "If development set error doesn't improve significantly in this many steps, cease training.")
     gflags.DEFINE_boolean("evalb", False, "Print transition statistics.")
     gflags.DEFINE_integer("num_samples", 0, "Print sampled transitions.")
 

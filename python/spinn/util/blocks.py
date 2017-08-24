@@ -318,7 +318,7 @@ class ModelTrainer(object):
         self.model = model
         self.optimizer = optimizer
 
-    def save(self, filename, step, best_dev_error):
+    def save(self, filename, step, best_dev_error, best_dev_step):
         optimizer_state_dict = self.optimizer.state_dict()
 
         if the_gpu() >= 0:
@@ -329,6 +329,7 @@ class ModelTrainer(object):
         torch.save({
             'step': step,
             'best_dev_error': best_dev_error,
+            'best_dev_step': best_dev_step,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': optimizer_state_dict,
         }, filename)
@@ -348,7 +349,13 @@ class ModelTrainer(object):
 
         self.model.load_state_dict(model_state_dict)
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        return checkpoint['step'], checkpoint['best_dev_error']
+
+        if 'best_dev_step' in checkpoint:
+            best_dev_step = checkpoint['best_dev_step']
+        else:
+            best_dev_step = 0
+
+        return checkpoint['step'], checkpoint['best_dev_error'], best_dev_step
 
 
 class ModelTrainer_ES(object):

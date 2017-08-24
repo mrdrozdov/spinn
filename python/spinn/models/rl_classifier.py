@@ -168,7 +168,8 @@ def train_loop(
         eval_iterators,
         logger,
         step,
-        best_dev_error):
+        best_dev_error,
+        best_dev_step):
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
 
@@ -197,6 +198,10 @@ def train_loop(
 
     log_entry = pb.SpinnEntry()
     for step in range(step, FLAGS.training_steps):
+        if (step - best_dev_step) > FLAGS.early_stopping_steps_to_wait:
+            logger.Log('No improvement after ' + str(FLAGS.early_stopping_steps_to_wait) + ' steps. Stopping training.')
+            break
+            
         model.train()
         log_entry.Clear()
         log_entry.step = step
@@ -365,15 +370,16 @@ def train_loop(
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (
                         1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
+                    best_dev_step = step
                     logger.Log(
                         "Checkpointing with new best dev accuracy of %f" % acc)
-                    trainer.save(best_checkpoint_path, step, best_dev_error)
+                    trainer.save(best_checkpoint_path, step, best_dev_error, best_dev_step)
             progress_bar.reset()
 
         if step > FLAGS.ckpt_step and step % FLAGS.ckpt_interval_steps == 0:
             should_log = True
             logger.Log("Checkpointing.")
-            trainer.save(standard_checkpoint_path, step, best_dev_error)
+            trainer.save(standard_checkpoint_path, step, best_dev_error, best_dev_step)
 
         if should_log:
             logger.LogEntry(log_entry)
@@ -425,13 +431,13 @@ def run(only_forward=False):
     # Load checkpoint if available.
     if FLAGS.load_best and os.path.isfile(best_checkpoint_path):
         logger.Log("Found best checkpoint, restoring.")
-        step, best_dev_error = trainer.load(best_checkpoint_path)
+        step, best_dev_error, best_dev_step = trainer.load(best_checkpoint_path)
         logger.Log(
             "Resuming at step: {} with best dev accuracy: {}".format(
                 step, 1. - best_dev_error))
     elif os.path.isfile(standard_checkpoint_path):
         logger.Log("Found checkpoint, restoring.")
-        step, best_dev_error = trainer.load(standard_checkpoint_path)
+        step, best_dev_error, best_dev_step = trainer.load(standard_checkpoint_path)
         logger.Log(
             "Resuming at step: {} with best dev accuracy: {}".format(
                 step, 1. - best_dev_error))
@@ -439,6 +445,7 @@ def run(only_forward=False):
         assert not only_forward, "Can't run an eval-only run without a checkpoint. Supply a checkpoint."
         step = 0
         best_dev_error = 1.0
+        best_dev_step = 0
     header.start_step = step
     header.start_time = int(time.time())
 
@@ -485,7 +492,8 @@ def run(only_forward=False):
             eval_iterators,
             logger,
             step,
-            best_dev_error)
+            best_dev_error,
+            best_dev_step)
 
 
 if __name__ == '__main__':
