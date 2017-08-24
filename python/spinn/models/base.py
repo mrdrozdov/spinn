@@ -26,7 +26,6 @@ import spinn.rl_spinn
 import spinn.spinn_core_model
 import spinn.plain_rnn
 import spinn.cbow
-import spinn.pyramid
 import spinn.choi_pyramid
 
 from tuner_utils.yellowfin import YFOptimizer
@@ -43,11 +42,11 @@ FLAGS = gflags.FLAGS
 
 
 def sequential_only():
-    return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW" or FLAGS.model_type == "Pyramid" or FLAGS.model_type == "ChoiPyramid"
+    return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW" or FLAGS.model_type == "ChoiPyramid"
 
 
 def pad_from_left():
-    return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW" or FLAGS.model_type == "Pyramid"
+    return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW"
 
 
 def log_path(FLAGS, load=False):
@@ -267,7 +266,7 @@ def get_flags():
     # Model architecture settings.
     gflags.DEFINE_enum(
         "model_type", "RNN", [
-            "CBOW", "RNN", "SPINN", "RLSPINN", "Pyramid", "ChoiPyramid"], "")
+            "CBOW", "RNN", "SPINN", "RLSPINN", "ChoiPyramid"], "")
     gflags.DEFINE_integer("gpu", -1, "")
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")
@@ -300,18 +299,12 @@ def get_flags():
                                               "treegru", "tanh"], "Specify composition function.")
 
     # Pyramid model settings
-    gflags.DEFINE_enum("pyramid_gumbel", "none", ["none", "plain", "st"],
-                       "Use gumbel softmax or straight-through gumbel softmax in the Pyramid model gating. Doesn't apply to ChoiPyramid.")
     gflags.DEFINE_boolean("pyramid_trainable_temperature", None,
                           "If set, add a scalar trained temperature parameter.")
-    gflags.DEFINE_float("pyramid_test_time_temperature_multiplier", 1.0,
-                        "If in (0, 1), multiply the temperature by this constant at test time. If exactly 0.0, use the efficient hard max variant of the model at tent time.  Doesn't apply to ChoiPyramid.")
     gflags.DEFINE_float("pyramid_temperature_decay_per_10k_steps",
-                        0.5, "Ideal for use with Gumbel.")
+                        0.5, "What it says on the box.")
     gflags.DEFINE_float("pyramid_temperature_cycle_length",
                         0.0, "For wake-sleep-style experiments. 0.0 disables this feature.")
-    gflags.DEFINE_integer("pyramid_selection_dim",
-                          20, "Hidden state size for the scoring function. Doesn't apply to ChoiPyramid.")
 
     # Encode settings.
     gflags.DEFINE_enum("encode", "projection", [
@@ -465,8 +458,6 @@ def init_model(
         build_model = spinn.spinn_core_model.build_model
     elif FLAGS.model_type == "RLSPINN":
         build_model = spinn.rl_spinn.build_model
-    elif FLAGS.model_type == "Pyramid":
-        build_model = spinn.pyramid.build_model
     elif FLAGS.model_type == "ChoiPyramid":
         build_model = spinn.choi_pyramid.build_model
     else:
