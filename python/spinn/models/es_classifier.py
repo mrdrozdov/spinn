@@ -197,7 +197,8 @@ def train_loop(
         ev_step,
         header,
         root_id,
-        vocabulary):
+        vocabulary,
+        best_dev_step):
     perturbation_name = FLAGS.experiment_name + "_p" + str(perturbation_id)
     root_name = FLAGS.experiment_name + "_p" + str(root_id)
     # Accumulate useful statistics.
@@ -235,6 +236,7 @@ def train_loop(
     log_entry = pb.SpinnEntry()
     for step in range(FLAGS.es_episode_length):
         true_step += 1
+
         model.train()
         log_entry.Clear()
         log_entry.step = true_step
@@ -381,25 +383,19 @@ def train_loop(
                     (1 - acc) < 0.99 * best_dev_error and \
                         true_step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
-                    # TODO: This mixes information across dev sets. Fix.
+                    best_dev_step = true_step
                     logger.Log(
                         "Checkpointing with new best dev accuracy of %f" %
                         acc)
-                    trainer.save(
-                        best_checkpoint_path,
-                        true_step,
-                        best_dev_error,
-                        ev_step)
+                    trainer.save(best_checkpoint_path, true_step, 
+                        best_dev_error, ev_step, best_dev_step)
             progress_bar.reset()
 
         if true_step > FLAGS.ckpt_step and true_step % FLAGS.ckpt_interval_steps == 0:
             should_log = True
             logger.Log("Checkpointing.")
-            trainer.save(
-                standard_checkpoint_path,
-                true_step,
-                best_dev_error,
-                ev_step)
+            trainer.save(standard_checkpoint_path,true_step,
+                best_dev_error, ev_step, best_dev_step)
 
         if should_log:
             logger.LogEntry(log_entry)
@@ -408,9 +404,9 @@ def train_loop(
                           total=FLAGS.statistics_interval_steps)
 
     if os.path.exists(best_checkpoint_path):
-        return ev_step, true_step, perturbation_id, best_dev_error
+        return ev_step, true_step, perturbation_id, best_dev_error, best_dev_step
     else:
-        return ev_step, true_step, perturbation_id, (1 - acc)
+        return ev_step, true_step, perturbation_id, (1 - acc), best_dev_step
 
 
 def rollout(
@@ -430,7 +426,8 @@ def rollout(
         ev_step,
         header,
         root_id,
-        vocabulary):
+        vocabulary,
+        best_dev_step):
     """
     Train each episode
     """
@@ -447,16 +444,18 @@ def rollout(
             root_best_checkpoint_path) and root_best_checkpoint_path != best_checkpoint_path:
         copyfile(root_best_checkpoint_path, best_checkpoint_path)
 
-    ev_step, true_step, perturbation_id, dev_error = train_loop(FLAGS,
-                                                                data_manager, perturbed_model, optimizer,
-                                                                trainer, training_data_iter, eval_iterators,
-                                                                logger, true_step, best_dev_error, perturbation_id, ev_step, header, root_id, vocabulary)
+    ev_step, true_step, perturbation_id, dev_error, best_dev_step = train_loop(FLAGS,
+                            data_manager, perturbed_model, optimizer,
+                            trainer, training_data_iter, eval_iterators,
+                            logger, true_step, best_dev_error,
+                            perturbation_id, ev_step, header,
+                            root_id, vocabulary, best_dev_step)
 
     logger.Log(
         "Best dev accuracy of model: Step %i, %f" %
-        (true_step, 1. - dev_error))
+        (best_dev_step, 1. - dev_error))
 
-    queue.put((ev_step, true_step, perturbation_id, dev_error))
+    queue.put((ev_step, true_step, perturbation_id, dev_error, best_dev_step))
 
 
 def perturb_model(model, random_seed):
@@ -493,13 +492,14 @@ def generate_seeds_and_models(trainer, model, root_id, base=False):
         root_path = os.path.join(FLAGS.ckpt_path, root_name + ".ckpt")
         if not os.path.exists(root_path):
             root_path = root_path + "_best"
-        ev_step, true_step, dev_error = trainer.load(root_path)
+        ev_step, true_step, dev_error, best_dev_step = trainer.load(root_path)
     else:
         true_step = 0
+        best_dev_step = 0
     np.random.seed()
     random_seed = np.random.randint(2**20)
     models = perturb_model(model, random_seed)
-    return random_seed, models, true_step
+    return random_seed, models, true_step, best_dev_step
 
 
 def get_pert_names(best=False):
@@ -525,8 +525,8 @@ def restore(logger, trainer, queue, FLAGS, name, path):
     logger.Log(
         "Restoring best checkpoint of perturbed model %s." %
         perturbation_id)
-    ev_step, true_step, dev_error = trainer.load(path)
-    queue.put((ev_step, true_step, perturbation_id, dev_error))
+    ev_step, true_step, dev_error, best_dev_step = trainer.load(path)
+    queue.put((ev_step, true_step, perturbation_id, dev_error, best_dev_step))
 
 
 def run(only_forward=False):
@@ -576,6 +576,7 @@ def run(only_forward=False):
         assert not only_forward, "Can't run an eval-only run without best checkpoints. Supply best checkpoint(s)."
         true_step = 0
         best_dev_error = 1.0
+        best_dev_step = 0
         reload_ev_step = 0
 
     if FLAGS.mirror:
@@ -630,9 +631,8 @@ def run(only_forward=False):
                                           key=lambda x:x[1][3])]
         best_id = acc_order[0]
         best_name = FLAGS.experiment_name + "_p" + str(best_id)
-        #print "Picking best perturbation/model %s to run evaluation" % (best_name)
         best_path = os.path.join(FLAGS.ckpt_path, best_name + ".ckpt_best")
-        ev_step, true_step, dev_error = trainer.load(best_path)
+        ev_step, true_step, dev_error, best_dev_step = trainer.load(best_path)
 
         print "Picking best perturbation/model %s to run evaluation, with best dev accuracy of %f" % (best_name, 1. - dev_error)
 
@@ -646,11 +646,11 @@ def run(only_forward=False):
 
     # Train the model.
     else:
-        # Restore model, i.e. perturbation spawns, from best checkpoint, if it exists, or standard checkpoint.
+        # Restore model, i.e. perturbation spawns, from best checkpoint.
         # Get dev-set accuracies so we can select which models to use for the
         # next evolution step.
         if len(ckpt_names) != 0:
-            logger.Log("Restoring models from best or standard checkpoints")
+            logger.Log("Restoring models from best  checkpoints")
             processes_restore = []
             restore_queue = mp.Queue()
             while ckpt_names:
@@ -668,7 +668,7 @@ def run(only_forward=False):
 
         else:
             id_ = "B"
-            chosen_models = [(reload_ev_step, true_step, id_, best_dev_error)]
+            chosen_models = [(reload_ev_step, true_step, id_, best_dev_error, best_dev_step)]
             base = True  # This is the "base" model
             results = []
 
@@ -701,21 +701,30 @@ def run(only_forward=False):
                         results[id_][2])
                     chosen_models.append(results[id_])
 
+                # Early stopping based on current best model
+                best_current = chosen_models[0]
+                best_current_step = best_current[1] # true_step
+                best_current_dev_step = best_current[4] # best_dev_step
+                if (best_current_step - best_current_dev_step) > FLAGS.early_stopping_steps_to_wait:
+                    logger.Log('No improvement after ' + str(FLAGS.early_stopping_steps_to_wait) + ' steps. Stopping training.')
+                    break
+
             # Flush results from previous generatrion
             results = []
             processes = []
             queue = mp.Queue()
-            all_seeds, all_models, all_roots, all_steps, all_dev_errs = (
-                [] for i in range(5))
+            all_seeds, all_models, all_roots, all_steps, all_dev_errs, all_best_dev_steps = (
+                [] for i in range(6))
             for chosen_model in chosen_models:
                 perturbation_id = chosen_model[2]
-                random_seed, models, true_step = generate_seeds_and_models(
+                random_seed, models, true_step, best_dev_step  = generate_seeds_and_models(
                     trainer, model, perturbation_id, base=base)
                 for i in range(len(models)):
                     all_seeds.append(random_seed)
-                    all_steps.append(true_step)  # chosen_model[1])
+                    all_steps.append(true_step)
                     all_dev_errs.append(chosen_model[3])
                     all_roots.append(perturbation_id)
+                    all_best_dev_steps.append(best_dev_step)
                 all_models += models
             assert len(all_seeds) == len(all_models)
             assert len(all_steps) == len(all_seeds)
@@ -727,6 +736,7 @@ def run(only_forward=False):
                 true_step = all_steps.pop()
                 best_dev_error = all_dev_errs.pop()
                 root_id = all_roots.pop()
+                best_dev_step = all_best_dev_steps.pop()
                 p = mp.Process(
                     target=rollout,
                     args=(
@@ -746,7 +756,8 @@ def run(only_forward=False):
                         ev_step,
                         header,
                         root_id,
-                        vocabulary))
+                        vocabulary,
+                        best_dev_step))
                 p.start()
                 processes.append(p)
                 perturbation_id += 1
@@ -758,8 +769,7 @@ def run(only_forward=False):
 
             results = [queue.get() for p in processes]
 
-            # Check to ensure the correct number of models where trained and
-            # saved
+            # Check to ensure the correct number of models where trained and saved
             if ev_step == 0:
                 assert len(results) == true_num_episodes
             else:
