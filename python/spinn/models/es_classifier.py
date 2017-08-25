@@ -73,11 +73,6 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
         eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, eval_ids = batch
 
         # Run model.
-        """
-        output = model(eval_X_batch, eval_transitions_batch, eval_y_batch,
-                       use_internal_parser=FLAGS.use_internal_parser,
-                       validate_transitions=FLAGS.validate_transitions)
-        """
         output = model(eval_X_batch, eval_transitions_batch, eval_y_batch,
                        use_internal_parser=FLAGS.use_internal_parser,
                        validate_transitions=FLAGS.validate_transitions,
@@ -90,7 +85,6 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
             tree_strs = prettyprint_trees(tmp_samples)
         if not FLAGS.write_eval_report:
             show_sample = False  # Only show one sample, regardless of the number of batches.
-
 
         # Normalize output.
         logits = F.log_softmax(output)
@@ -110,23 +104,6 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
 
         # Update Aggregate Accuracies
         total_tokens += sum([(nt + 1) / 2 for nt in eval_num_transitions_batch.reshape(-1)])
-
-        """
-        if FLAGS.write_eval_report:
-            reporter_args = [pred, target, eval_ids, output.data.cpu().numpy()]
-            if hasattr(model, 'transition_loss'):
-                transitions_per_example, _ = model.spinn.get_transitions_per_example(
-                    style="preds" if FLAGS.eval_report_use_preds else "given")
-                if model.use_sentence_pair:
-                    batch_size = pred.size(0)
-                    sent1_transitions = transitions_per_example[:batch_size]
-                    sent2_transitions = transitions_per_example[batch_size:]
-                    reporter_args.append(sent1_transitions)
-                    reporter_args.append(sent2_transitions)
-                else:
-                    reporter_args.append(transitions_per_example)
-            reporter.save_batch(*reporter_args)
-        """
 
         if FLAGS.write_eval_report:
             transitions_per_example, _ = model.spinn.get_transitions_per_example(
@@ -160,12 +137,6 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry, step, vocabulary=N
 
     eval_stats(model, A, eval_log)
     eval_log.filename = filename
-
-    """
-    if FLAGS.write_eval_report:
-        eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".report")
-        reporter.write_report(eval_report_path)
-    """
 
     if FLAGS.write_eval_report:
         eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".eval_set_" + str(eval_index) + ".report")
@@ -427,6 +398,8 @@ def generate_seeds_and_models(trainer, model, root_id, base=False):
     if not base:
         root_name = FLAGS.experiment_name + "_p" + str(root_id)
         root_path = os.path.join(FLAGS.ckpt_path, root_name + ".ckpt")
+        if not os.path.exists(root_path):
+            root_path = root_path + "_best"
         ev_step, true_step, dev_error = trainer.load(root_path)
     else:
         true_step = 0
@@ -456,7 +429,6 @@ def restore(logger, trainer, queue, FLAGS, name, path):
 
 
 def run(only_forward=False):
-    #logger = afs_safe_logger.ProtoLogger(log_path(FLAGS))
     logger = afs_safe_logger.ProtoLogger(log_path(FLAGS),
                                          print_formatter=create_log_formatter(True, False),
                                          write_proto=FLAGS.write_proto_to_log)
@@ -547,9 +519,11 @@ def run(only_forward=False):
                                         key=lambda x:x[1][3])]
         best_id = acc_order[0]
         best_name = FLAGS.experiment_name + "_p" + str(best_id)
-        print "Picking best perturbation/model %s to run evaluation" % (best_name)
+        #print "Picking best perturbation/model %s to run evaluation" % (best_name)
         best_path = os.path.join(FLAGS.ckpt_path, best_name + ".ckpt_best")
         ev_step, true_step, dev_error = trainer.load(best_path)
+
+        print "Picking best perturbation/model %s to run evaluation, with best dev accuracy of %f" % (best_name, 1. - dev_error)
 
         for index, eval_set in enumerate(eval_iterators):
             log_entry.Clear()
