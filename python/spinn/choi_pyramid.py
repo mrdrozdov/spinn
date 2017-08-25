@@ -73,7 +73,10 @@ class ChoiPyramid(nn.Module):
         vocab.size = initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size
         vocab.vectors = initial_embeddings
 
-        self.embed = Embed(word_embedding_dim, vocab.size, vectors=vocab.vectors)
+        self.embed = Embed(
+            word_embedding_dim,
+            vocab.size,
+            vectors=vocab.vectors)
 
         self.binary_tree_lstm = BinaryTreeLSTM(
             word_embedding_dim,
@@ -103,13 +106,24 @@ class ChoiPyramid(nn.Module):
         embeds = self.reshape_input(embeds, batch_size, seq_length)
         embeds = self.encode(embeds)
         embeds = self.reshape_context(embeds, batch_size, seq_length)
-        embeds = torch.cat([b.unsqueeze(0) for b in torch.chunk(embeds, batch_size, 0)], 0)
-        embeds = F.dropout(embeds, self.embedding_dropout_rate, training=self.training)
+        embeds = torch.cat([b.unsqueeze(0)
+                            for b in torch.chunk(embeds, batch_size, 0)], 0)
+        embeds = F.dropout(
+            embeds,
+            self.embedding_dropout_rate,
+            training=self.training)
 
         return embeds
 
-    def forward(self, sentences, _, __=None, example_lengths=None, store_parse_masks=False,
-                pyramid_temperature_multiplier=1.0, **kwargs):
+    def forward(
+            self,
+            sentences,
+            _,
+            __=None,
+            example_lengths=None,
+            store_parse_masks=False,
+            pyramid_temperature_multiplier=1.0,
+            **kwargs):
         # Useful when investigating dynamic batching:
         # self.seq_lengths = sentences.shape[1] - (sentences == 0).sum(1)
 
@@ -118,7 +132,8 @@ class ChoiPyramid(nn.Module):
         emb = self.run_embed(x)
 
         batch_size, seq_len, model_dim = emb.data.size()
-        example_lengths_var = to_gpu(Variable(torch.from_numpy(example_lengths))).long()
+        example_lengths_var = to_gpu(
+            Variable(torch.from_numpy(example_lengths))).long()
 
         hh, _, masks, temperature = self.binary_tree_lstm(
             emb, example_lengths_var, temperature_multiplier=pyramid_temperature_multiplier)
@@ -162,22 +177,27 @@ class ChoiPyramid(nn.Module):
         # TODO: Don't show padding.
 
         if not self.inverted_vocabulary:
-            self.inverted_vocabulary = dict([(vocabulary[key], key) for key in vocabulary])
+            self.inverted_vocabulary = dict(
+                [(vocabulary[key], key) for key in vocabulary])
 
         token_sequences = []
         batch_size = x.shape[0]
-        for s in (range(int(self.use_sentence_pair) + 1) if not only_one else [0]):
+        for s in (range(int(self.use_sentence_pair) + 1)
+                  if not only_one else [0]):
             for b in (range(batch_size) if not only_one else [0]):
                 if self.use_sentence_pair:
-                    token_sequence = [self.inverted_vocabulary[token] for token in x[b, :, s]]
+                    token_sequence = [self.inverted_vocabulary[token]
+                                      for token in x[b, :, s]]
                 else:
-                    token_sequence = [self.inverted_vocabulary[token] for token in x[b, :]]
+                    token_sequence = [self.inverted_vocabulary[token]
+                                      for token in x[b, :]]
 
                 for merge in self.get_sample_merge_sequence(b, s, batch_size):
                     if len(token_sequence) <= 1:
                         # For padding quirks around single-word sentences.
                         break
-                    token_sequence[merge] = (token_sequence[merge], token_sequence[merge + 1])
+                    token_sequence[merge] = (
+                        token_sequence[merge], token_sequence[merge + 1])
                     del token_sequence[merge + 1]
                 assert len(token_sequence) == 1
                 token_sequences.append(token_sequence[0])
@@ -215,7 +235,8 @@ class ChoiPyramid(nn.Module):
             len_hyp = lengths[:, 1]
             lengths = np.concatenate([len_prem, len_hyp], axis=0)
 
-        return to_gpu(Variable(torch.from_numpy(x), volatile=not self.training)), lengths
+        return to_gpu(Variable(torch.from_numpy(
+            x), volatile=not self.training)), lengths
 
     def wrap_sentence_pair(self, hh):
         batch_size = hh.size(0) / 2
@@ -225,7 +246,8 @@ class ChoiPyramid(nn.Module):
     # --- Sentence Pair Specific ---
 
     def unwrap_sentence(self, sentences, lengths=None):
-        return to_gpu(Variable(torch.from_numpy(sentences), volatile=not self.training)), lengths
+        return to_gpu(Variable(torch.from_numpy(sentences),
+                               volatile=not self.training)), lengths
 
     def wrap_sentence(self, hh):
         return hh
@@ -241,30 +263,41 @@ class BinaryTreeLSTM(nn.Module):
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
         self.intra_attention = intra_attention
-        self.treelstm_layer = BinaryTreeLSTMLayer(hidden_dim, composition_ln=composition_ln)
+        self.treelstm_layer = BinaryTreeLSTMLayer(
+            hidden_dim, composition_ln=composition_ln)
 
         # TODO: Add something to blocks to make this use case more elegant.
-        self.comp_query = Linear(initializer=HeKaimingInitializer)(in_features=hidden_dim,
-                                                                   out_features=1)
+        self.comp_query = Linear(
+            initializer=HeKaimingInitializer)(
+            in_features=hidden_dim,
+            out_features=1)
         self.trainable_temperature = trainable_temperature
         if self.trainable_temperature:
-            self.temperature_param = nn.Parameter(torch.ones(1, 1), requires_grad=True)
+            self.temperature_param = nn.Parameter(
+                torch.ones(1, 1), requires_grad=True)
 
     @staticmethod
     def update_state(old_state, new_state, done_mask):
         old_h, old_c = old_state
         new_h, new_c = new_state
-        done_mask = done_mask.float().unsqueeze(1).unsqueeze(2).expand_as(new_h)
+        done_mask = done_mask.float().unsqueeze(1).unsqueeze(2)
         h = done_mask * new_h + (1 - done_mask) * old_h[:, :-1, :]
         c = done_mask * new_c + (1 - done_mask) * old_c[:, :-1, :]
         return h, c
 
-    def select_composition(self, old_state, new_state, mask, temperature_multiplier=1.0):
+    def select_composition(
+            self,
+            old_state,
+            new_state,
+            mask,
+            temperature_multiplier=1.0):
         new_h, new_c = new_state
         old_h, old_c = old_state
         old_h_left, old_h_right = old_h[:, :-1, :], old_h[:, 1:, :]
         old_c_left, old_c_right = old_c[:, :-1, :], old_c[:, 1:, :]
-        comp_weights = dot_nd(query=self.comp_query.weight.squeeze(), candidates=new_h)
+        comp_weights = dot_nd(
+            query=self.comp_query.weight.squeeze(),
+            candidates=new_h)
         if self.training:
             temperature = temperature_multiplier
             if self.trainable_temperature:
@@ -276,7 +309,7 @@ class BinaryTreeLSTM(nn.Module):
 
             local_temperature = temperature
             if not isinstance(local_temperature, float):
-                local_temperature = local_temperature.expand_as(comp_weights)
+                local_temperature = local_temperature
 
             select_mask = st_gumbel_softmax(
                 logits=comp_weights, temperature=local_temperature,
@@ -285,15 +318,15 @@ class BinaryTreeLSTM(nn.Module):
             select_mask = greedy_select(logits=comp_weights, mask=mask)
             select_mask = select_mask.float()
             temperature_to_display = None
-        select_mask_expand = select_mask.unsqueeze(2).expand_as(new_h)
+        select_mask_expand = select_mask.unsqueeze(2)
         select_mask_cumsum = select_mask.cumsum(1)
         left_mask = 1 - select_mask_cumsum
-        left_mask_expand = left_mask.unsqueeze(2).expand_as(old_h_left)
+        left_mask_expand = left_mask.unsqueeze(2)
         right_mask_leftmost_col = Variable(
             select_mask_cumsum.data.new(new_h.size(0), 1).zero_())
         right_mask = torch.cat(
             [right_mask_leftmost_col, select_mask_cumsum[:, :-1]], dim=1)
-        right_mask_expand = right_mask.unsqueeze(2).expand_as(old_h_right)
+        right_mask_expand = right_mask.unsqueeze(2)
         new_h = (select_mask_expand * new_h
                  + left_mask_expand * old_h_left
                  + right_mask_expand * old_h_right)
@@ -310,7 +343,8 @@ class BinaryTreeLSTM(nn.Module):
         select_masks = []
         state = input.chunk(num_chunks=2, dim=2)
         nodes = []
-        temperature_to_display = -1.0  # For one or two-word trees where we never compute a temperature
+        # For one or two-word trees where we never compute a temperature
+        temperature_to_display = -1.0
         if self.intra_attention:
             nodes.append(state[0])
         for i in range(max_depth - 1):
@@ -339,7 +373,7 @@ class BinaryTreeLSTM(nn.Module):
             att_mask = att_mask.float()
             # nodes: (batch_size, num_tree_nodes, hidden_dim)
             nodes = torch.cat(nodes, dim=1)
-            att_mask_expand = att_mask.unsqueeze(2).expand_as(nodes)
+            att_mask_expand = att_mask.unsqueeze(2)
             nodes = nodes * att_mask_expand
             # nodes_mean: (batch_size, hidden_dim, 1)
             nodes_mean = nodes.mean(1).squeeze(1).unsqueeze(2)
@@ -348,7 +382,7 @@ class BinaryTreeLSTM(nn.Module):
             att_weights = masked_softmax(
                 logits=att_weights, mask=att_mask)
             # att_weights_expand: (batch_size, num_tree_nodes, hidden_dim)
-            att_weights_expand = att_weights.unsqueeze(2).expand_as(nodes)
+            att_weights_expand = att_weights.unsqueeze(2)
             # h: (batch_size, 1, 2 * hidden_dim)
             h = (att_weights_expand * nodes).sum(1)
         assert h.size(1) == 1 and c.size(1) == 1
@@ -419,7 +453,7 @@ def masked_softmax(logits, mask=None):
     if mask is not None:
         mask = mask.float()
         probs = probs * mask + eps
-        probs = probs / probs.sum(1, keepdim=True).expand_as(probs)
+        probs = probs / probs.sum(1, keepdim=True)
     return probs
 
 
@@ -458,7 +492,9 @@ def st_gumbel_softmax(logits, temperature=1.0, mask=None):
     y = logits + gumbel_noise
     y = masked_softmax(logits=y / temperature, mask=mask)
     y_argmax = y.max(1)[1]
-    y_hard = convert_to_one_hot(indices=y_argmax, num_classes=y.size(1)).float()
+    y_hard = convert_to_one_hot(
+        indices=y_argmax,
+        num_classes=y.size(1)).float()
     y = (y_hard - y).detach() + y
     return y
 
@@ -472,7 +508,7 @@ def sequence_mask(sequence_length, max_length=None):
     seq_range_expand = Variable(seq_range_expand)
     if sequence_length.is_cuda:
         seq_range_expand = seq_range_expand.cuda()
-    seq_length_expand = sequence_length.unsqueeze(1).expand_as(seq_range_expand)
+    seq_length_expand = sequence_length.unsqueeze(1)
     return seq_range_expand < seq_length_expand
 
 
@@ -482,8 +518,10 @@ class BinaryTreeLSTMLayer(nn.Module):
     def __init__(self, hidden_dim, composition_ln=False):
         super(BinaryTreeLSTMLayer, self).__init__()
         self.hidden_dim = hidden_dim
-        self.comp_linear = Linear(initializer=HeKaimingInitializer)(in_features=2 * hidden_dim,
-                                                                    out_features=5 * hidden_dim)
+        self.comp_linear = Linear(
+            initializer=HeKaimingInitializer)(
+            in_features=2 * hidden_dim,
+            out_features=5 * hidden_dim)
         self.composition_ln = composition_ln
         if composition_ln:
             self.left_h_ln = LayerNormalization(hidden_dim)

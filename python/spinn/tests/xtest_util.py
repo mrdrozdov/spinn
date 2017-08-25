@@ -28,7 +28,8 @@ def test_build_vocabulary_for_ascii_embedding_file():
 
 def test_load_embeddings_from_ascii():
     vocabulary = {"strange_and_exotic_word": 0, "the": 1, ".": 2}
-    loaded_matrix = util.LoadEmbeddingsFromASCII(vocabulary, 5, TEST_EMBEDDING_MATRIX)
+    loaded_matrix = util.LoadEmbeddingsFromASCII(
+        vocabulary, 5, TEST_EMBEDDING_MATRIX)
     expected = np.asarray(
         [[0, 0, 0, 0, 0],
          [0.418, 0.24968, -0.41242, 0.1217, 0.34527],

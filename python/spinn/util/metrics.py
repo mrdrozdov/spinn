@@ -27,7 +27,13 @@ class MetricsWriter(MetricsBase):
 
 
 class MetricsReader(MetricsBase):
-    def read(self, key, offset=None, limit=None, nan_default=0.0, inf_default=0.0):
+    def read(
+            self,
+            key,
+            offset=None,
+            limit=None,
+            nan_default=0.0,
+            inf_default=0.0):
         table = []
         with open(self._filename(key), 'r+b') as f:
 

@@ -35,7 +35,9 @@ class SPINNTestCase(unittest.TestCase):
     def test_save_sup_load_rl(self):
         pass
 
-        model_to_save = MockModel(spinn.spinn_core_model.BaseModel, default_args())
+        model_to_save = MockModel(
+            spinn.spinn_core_model.BaseModel,
+            default_args())
         opt_to_save = optim.SGD(model_to_save.parameters(), lr=0.1)
         trainer_to_save = ModelTrainer(model_to_save, opt_to_save)
 
@@ -57,8 +59,14 @@ class SPINNTestCase(unittest.TestCase):
         MockModel(spinn.spinn_core_model.BaseModel, default_args())
         MockModel(spinn.rl_spinn.BaseModel, default_args())
 
-        MockModel(spinn.spinn_core_model.BaseModel, default_args(use_sentence_pair=True))
-        MockModel(spinn.rl_spinn.BaseModel, default_args(use_sentence_pair=True))
+        MockModel(
+            spinn.spinn_core_model.BaseModel,
+            default_args(
+                use_sentence_pair=True))
+        MockModel(
+            spinn.rl_spinn.BaseModel,
+            default_args(
+                use_sentence_pair=True))
 
     def test_basic_stack(self):
         model = MockModel(BaseModel, default_args())
@@ -72,7 +80,15 @@ class SPINNTestCase(unittest.TestCase):
         class Reduce(nn.Module):
             def forward(self, lefts, rights, tracking):
                 batch_size = len(lefts)
-                return torch.chunk(torch.cat(lefts, 0) - torch.cat(rights, 0), batch_size, 0)
+                return torch.chunk(
+                    torch.cat(
+                        lefts,
+                        0) -
+                    torch.cat(
+                        rights,
+                        0),
+                    batch_size,
+                    0)
 
         model.encode = Projection()
         model.spinn.reduce = Reduce()
@@ -118,13 +134,16 @@ class SPINNTestCase(unittest.TestCase):
             0, 0, 1, 1, 0, 1
         ]).astype(np.int32)
 
-        ret, _ = model.spinn.validate(transitions, preds, stacks, bufs, zero_padded=False)
+        ret, _ = model.spinn.validate(
+            transitions, preds, stacks, bufs, zero_padded=False)
         expected = np.array([
             2, 1, 0, 0, 0, 1
         ], dtype=np.int32)
 
-        assert all(p == e for p, e in zip(ret.ravel().tolist(), expected.ravel().tolist())), \
-            "gold: {}\npreds: {}".format(expected, ret)
+        assert all(
+            p == e for p, e in zip(
+                ret.ravel().tolist(), expected.ravel().tolist())), "gold: {}\npreds: {}".format(
+            expected, ret)
 
 
 if __name__ == '__main__':

@@ -18,7 +18,13 @@ LABEL_MAP = {
 }
 
 
-def load_data(path, vocabulary=None, seq_length=None, batch_size=32, eval_mode=False, logger=None):
+def load_data(
+        path,
+        vocabulary=None,
+        seq_length=None,
+        batch_size=32,
+        eval_mode=False,
+        logger=None):
 
     def keep_fn(label):
         if label == "2":
@@ -33,9 +39,10 @@ def load_data(path, vocabulary=None, seq_length=None, batch_size=32, eval_mode=F
         else:
             raise ValueError("Bad Label: {}".format(label))
 
-    dataset = convert_unary_binary_bracketed_data(path, keep_fn=keep_fn, convert_fn=convert_fn)
+    dataset = convert_unary_binary_bracketed_data(
+        path, keep_fn=keep_fn, convert_fn=convert_fn)
     return dataset
-    
+
 
 if __name__ == "__main__":
     pass

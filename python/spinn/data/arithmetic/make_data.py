@@ -51,7 +51,9 @@ if __name__ == '__main__':
     gflags.DEFINE_integer("limit", 100, "")
     gflags.DEFINE_boolean("balance_length", False, "")
     gflags.DEFINE_string(
-        "exclude", None, "If not None, exclude any example that appears in this file.")
+        "exclude",
+        None,
+        "If not None, exclude any example that appears in this file.")
     gflags.DEFINE_enum("data_type", "simple", ["simple", "sign"], "")
     FLAGS(sys.argv)
 
@@ -85,7 +87,8 @@ if __name__ == '__main__':
     for idx in tqdm(range(limit)):
 
         label = min(idx // label_size, len(data_type.LABELS) - 1)
-        desired_length = min(3 + 2 * ((idx % label_size) // length_size), length)
+        desired_length = min(
+            3 + 2 * ((idx % label_size) // length_size), length)
         if idx >= label_size * len(data_type.LABELS):
             desired_length = length
 
