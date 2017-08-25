@@ -387,15 +387,23 @@ def train_loop(
                     logger.Log(
                         "Checkpointing with new best dev accuracy of %f" %
                         acc)
-                    trainer.save(best_checkpoint_path, true_step, 
-                        best_dev_error, ev_step, best_dev_step)
+                    trainer.save(
+                        best_checkpoint_path,
+                        true_step,
+                        best_dev_error,
+                        ev_step,
+                        best_dev_step)
             progress_bar.reset()
 
         if true_step > FLAGS.ckpt_step and true_step % FLAGS.ckpt_interval_steps == 0:
             should_log = True
             logger.Log("Checkpointing.")
-            trainer.save(standard_checkpoint_path,true_step,
-                best_dev_error, ev_step, best_dev_step)
+            trainer.save(
+                standard_checkpoint_path,
+                true_step,
+                best_dev_error,
+                ev_step,
+                best_dev_step)
 
         if should_log:
             logger.LogEntry(log_entry)
