@@ -108,18 +108,46 @@ def corpus_average_length(corpus):
     return float(sum(local_averages)) / len(local_averages)
 
 
-def corpus_f1(corpus_1, corpus_2):
+def corpus_stats(corpus_1, corpus_2, first_two=False, neg_pair=False):
     """ 
     Note: If a few examples in one dataset are missing from the other (i.e., some examples from the source corpus were not included 
       in a model corpus), the shorter dataset must be supplied as corpus_1.
     """
 
-    accum = 0.0
+    f1_accum = 0.0
     count = 0.0
+    first_two_count = 0.0
+    three_count = 0.0
+    neg_pair_count = 0.0
+    neg_count = 0.0
     for key in corpus_1:     
-        accum += example_f1(corpus_1[key], corpus_2[key])
+        c1 = to_indexed_contituents(corpus_1[key])
+        c2 = to_indexed_contituents(corpus_2[key])
+
+        f1_accum += example_f1(c1, c2)
         count += 1
-    return accum / count
+
+        if first_two and len(c1) > 1:
+            if (0, 2) in c1:
+                first_two_count += 1
+            three_count += 1 
+        if neg_pair:
+            word_index = 0
+            tokens = corpus_1[key].split()
+            for token_index, token in enumerate(tokens):
+                if token in ['(', ')']:
+                    continue
+                if token in ["n't", "not", "never", "no", "none", "Not", "Never", "No", "None"]:
+                    if tokens[token_index + 1] not in ['(', ')']:
+                        neg_pair_count += 1
+                    neg_count += 1
+                word_index += 1
+    stats = f1_accum / count
+    if first_two:
+        stats = str(stats) + '\t' + str(first_two_count / three_count)
+    if neg_pair:
+        stats = str(stats) + '\t' + str(neg_pair_count / neg_count)
+    return stats
 
 
 def to_indexed_contituents(parse):
@@ -143,10 +171,7 @@ def to_indexed_contituents(parse):
     return indexed_constituents
 
 
-def example_f1(e1, e2):
-    c1 = to_indexed_contituents(e1)
-    c2 = to_indexed_contituents(e2)
-
+def example_f1(c1, c2):
     prec = float(len(c1.intersection(c2))) / len(c2)  # TODO: More efficient.
     return prec  # For strictly binary trees, P = R = F1
 
@@ -273,9 +298,9 @@ def run():
             for j in range(i + 1, len(report_paths)):
                 path_1 = report_paths[i]
                 path_2 = report_paths[j]
-                f1 = corpus_f1(reports[i], reports[j])
+                f1 = corpus_stats(reports[i], reports[j])
                 f1s.append(f1)
-        print "Mean Self F1:" + "\t" + str(sum(f1s) / len(f1s))
+        print "Mean Self F1:\t" + str(sum(f1s) / len(f1s))
 
     for i, report in enumerate(reports):
         print report_paths[i]
@@ -286,7 +311,7 @@ def run():
                 print to_latex(gt[sentence])
                 print to_latex(report[sentence])
                 print
-        print str(corpus_f1(report, lb)) + '\t' + str(corpus_f1(report, rb)) + '\t' + str(corpus_f1(report, gt)) + '\t' + str(corpus_average_depth(report))
+        print str(corpus_stats(report, lb)) + '\t' + str(corpus_stats(report, rb)) + '\t' + str(corpus_stats(report, gt, first_two=FLAGS.first_two, neg_pair=FLAGS.neg_pair)) + '\t' + str(corpus_average_depth(report))
 
     for i, report in enumerate(ptb_reports):
         print ptb_report_paths[i]
@@ -297,7 +322,7 @@ def run():
                 print to_latex(ptb[sentence])
                 print to_latex(report[sentence])
                 print
-        print  str(corpus_f1(report, ptb)) + '\t' + str(corpus_average_depth(report))
+        print  str(corpus_stats(report, ptb)) + '\t' + str(corpus_average_depth(report))
 
 
 if __name__ == '__main__':
@@ -307,6 +332,8 @@ if __name__ == '__main__':
     gflags.DEFINE_string("ptb_data_path", "_", "The path to the PTB data in SNLI format, or '_' if not available.")
     gflags.DEFINE_boolean("compute_self_f1", True, "Compute self F1 over all reports matching main_report_path_template.")
     gflags.DEFINE_boolean("use_random_parses", False, "Replace all report trees with randomly generated trees. Report path template flags are not used when this is set.")
+    gflags.DEFINE_boolean("first_two", False, "Show 'first two' metric.")
+    gflags.DEFINE_boolean("neg_pair", False, "Show 'neg_pair' metric.")
     gflags.DEFINE_integer("print_latex", 0, "Print this many trees in LaTeX format for each report.")
 
     FLAGS(sys.argv)
