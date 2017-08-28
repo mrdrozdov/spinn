@@ -117,6 +117,7 @@ def corpus_stats(corpus_1, corpus_2, first_two=False, neg_pair=False):
     f1_accum = 0.0
     count = 0.0
     first_two_count = 0.0
+    last_two_count = 0.0
     three_count = 0.0
     neg_pair_count = 0.0
     neg_count = 0.0
@@ -130,6 +131,9 @@ def corpus_stats(corpus_1, corpus_2, first_two=False, neg_pair=False):
         if first_two and len(c1) > 1:
             if (0, 2) in c1:
                 first_two_count += 1
+            num_words = len(c1) + 1
+            if (num_words - 2, num_words) in c1:
+                last_two_count += 1
             three_count += 1 
         if neg_pair:
             word_index = 0
@@ -144,7 +148,7 @@ def corpus_stats(corpus_1, corpus_2, first_two=False, neg_pair=False):
                 word_index += 1
     stats = f1_accum / count
     if first_two:
-        stats = str(stats) + '\t' + str(first_two_count / three_count)
+        stats = str(stats) + '\t' + str(first_two_count / three_count) + '\t' + str(last_two_count / three_count)
     if neg_pair:
         stats = str(stats) + '\t' + str(neg_pair_count / neg_count)
     return stats
@@ -332,7 +336,7 @@ if __name__ == '__main__':
     gflags.DEFINE_string("ptb_data_path", "_", "The path to the PTB data in SNLI format, or '_' if not available.")
     gflags.DEFINE_boolean("compute_self_f1", True, "Compute self F1 over all reports matching main_report_path_template.")
     gflags.DEFINE_boolean("use_random_parses", False, "Replace all report trees with randomly generated trees. Report path template flags are not used when this is set.")
-    gflags.DEFINE_boolean("first_two", False, "Show 'first two' metric.")
+    gflags.DEFINE_boolean("first_two", False, "Show 'first two' and 'last two' metrics.")
     gflags.DEFINE_boolean("neg_pair", False, "Show 'neg_pair' metric.")
     gflags.DEFINE_integer("print_latex", 0, "Print this many trees in LaTeX format for each report.")
 
