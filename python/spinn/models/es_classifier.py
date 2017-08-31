@@ -55,7 +55,6 @@ os.environ['MKL_NUM_THREADS'] = '1'
 def evaluate(
         FLAGS,
         model,
-        data_manager,
         eval_set,
         log_entry,
         step,
@@ -110,7 +109,7 @@ def evaluate(
         # get the index of the max log-probability
         pred = logits.data.max(1, keepdim=False)[1].cpu()
 
-        eval_accumulate(model, data_manager, A, batch)
+        eval_accumulate(model, A, batch)
         A.add('class_correct', pred.eq(target).sum())
         A.add('class_total', target.size(0))
 
@@ -184,7 +183,6 @@ def evaluate(
 
 def train_loop(
         FLAGS,
-        data_manager,
         model,
         optimizer,
         trainer,
@@ -313,7 +311,7 @@ def train_loop(
 
         total_time = end - start
 
-        train_accumulate(model, data_manager, A, batch)
+        train_accumulate(model, A, batch)
         A.add('class_acc', class_acc)
         A.add('total_tokens', total_tokens)
         A.add('total_time', total_time)
@@ -376,7 +374,7 @@ def train_loop(
             should_log = True
             for index, eval_set in enumerate(eval_iterators):
                 acc, tacc = evaluate(
-                    FLAGS, model, data_manager, eval_set, log_entry, true_step, vocabulary, show_sample=(
+                    FLAGS, model, eval_set, log_entry, true_step, vocabulary, show_sample=(
                         true_step %
                         FLAGS.sample_interval_steps == 0), eval_index=index)
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and \
@@ -421,7 +419,6 @@ def rollout(
         queue,
         perturbed_model,
         FLAGS,
-        data_manager,
         model,
         optimizer,
         trainer,
@@ -453,7 +450,7 @@ def rollout(
         copyfile(root_best_checkpoint_path, best_checkpoint_path)
 
     ev_step, true_step, perturbation_id, dev_error, best_dev_step = train_loop(FLAGS,
-                            data_manager, perturbed_model, optimizer,
+                            perturbed_model, optimizer,
                             trainer, training_data_iter, eval_iterators,
                             logger, true_step, best_dev_error,
                             perturbation_id, ev_step, header,
@@ -646,7 +643,7 @@ def run(only_forward=False):
 
         for index, eval_set in enumerate(eval_iterators):
             log_entry.Clear()
-            evaluate(FLAGS, model, data_manager, eval_set,
+            evaluate(FLAGS, model, eval_set,
                      log_entry, true_step, vocabulary, show_sample=True,
                      eval_index=index)
             print(log_entry)
@@ -751,7 +748,6 @@ def run(only_forward=False):
                         queue,
                         perturbed_model,
                         FLAGS,
-                        data_manager,
                         model,
                         optimizer,
                         trainer,

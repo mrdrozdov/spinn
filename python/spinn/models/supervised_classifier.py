@@ -36,7 +36,7 @@ from spinn.models.base import load_data_and_embeddings
 FLAGS = gflags.FLAGS
 
 
-def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
+def evaluate(FLAGS, model, eval_set, log_entry,
              logger, step, vocabulary=None, show_sample=False, eval_index=0):
     filename, dataset = eval_set
 
@@ -102,7 +102,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
         # get the index of the max log-probability
         pred = logits.data.max(1, keepdim=False)[1].cpu()
 
-        eval_accumulate(model, data_manager, A, batch)
+        eval_accumulate(model, A, batch)
         A.add('class_correct', pred.eq(target).sum())
         A.add('class_total', target.size(0))
 
@@ -178,7 +178,6 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
 
 def train_loop(
         FLAGS,
-        data_manager,
         model,
         optimizer,
         trainer,
@@ -313,7 +312,7 @@ def train_loop(
 
         total_time = end - start
 
-        train_accumulate(model, data_manager, A, batch)
+        train_accumulate(model, A, batch)
         A.add('class_acc', class_acc)
         A.add('total_tokens', total_tokens)
         A.add('total_time', total_time)
@@ -380,7 +379,7 @@ def train_loop(
             should_log = True
             for index, eval_set in enumerate(eval_iterators):
                 acc, _ = evaluate(
-                    FLAGS, model, data_manager, eval_set, log_entry, logger, step, show_sample=(
+                    FLAGS, model, eval_set, log_entry, logger, step, show_sample=(
                         step %
                         FLAGS.sample_interval_steps == 0), vocabulary=vocabulary, eval_index=index)
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (
@@ -481,7 +480,6 @@ def run(only_forward=False):
             evaluate(
                 FLAGS,
                 model,
-                data_manager,
                 eval_set,
                 log_entry,
                 logger,
@@ -494,7 +492,6 @@ def run(only_forward=False):
     else:
         train_loop(
             FLAGS,
-            data_manager,
             model,
             optimizer,
             trainer,
