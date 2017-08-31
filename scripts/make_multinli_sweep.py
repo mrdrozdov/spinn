@@ -40,11 +40,11 @@ FIXED_PARAMETERS = {
     "data_type":     "nli",
     "model_type":      "RLSPINN",
 
-    "training_data_path":    FLAGS.training_data_path,
-    "eval_data_path":    FLAGS.eval_data_path,
-    "embedding_data_path": FLAGS.embedding_data_path,
-    "log_path": FLAGS.log_path,
-    "ckpt_path":  FLAGS.log_path,
+    "training_data_path": "$TRAINING_DATA_PATH",
+    "eval_data_path": "$EVAL_DATA_PATH",
+    "embedding_data_path": "$EMBEDDING_DATA_PATH",
+    "log_path": "$LOG_PATH",
+    "ckpt_path":  "$LOG_PATH",
     "word_embedding_dim":   "300",
     "model_dim":   "600",
     "seq_length":   "80",
@@ -86,6 +86,15 @@ print "# NAME: " + sweep_name
 print "# NUM RUNS: " + str(SWEEP_RUNS)
 print "# SWEEP PARAMETERS: " + str(SWEEP_PARAMETERS)
 print "# FIXED_PARAMETERS: " + str(FIXED_PARAMETERS)
+print
+
+# Print training paths as variables so they can be easily changed without
+# having to change this script.
+print "# Adjust these to your own setup."
+print "TRAINING_DATA_PATH=" + FLAGS.training_data_path
+print "EVAL_DATA_PATH=" + FLAGS.eval_data_path
+print "EMBEDDING_DATA_PATH=" + FLAGS.embedding_data_path
+print "LOG_PATH=" + FLAGS.log_path
 print
 
 for run_id in range(SWEEP_RUNS):
