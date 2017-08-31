@@ -102,7 +102,7 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
         # get the index of the max log-probability
         pred = logits.data.max(1, keepdim=False)[1].cpu()
 
-        eval_accumulate(model, data_manager, A, batch)
+        eval_accumulate(model, A, batch)
         A.add('class_correct', pred.eq(target).sum())
         A.add('class_total', target.size(0))
 
@@ -313,7 +313,7 @@ def train_loop(
 
         total_time = end - start
 
-        train_accumulate(model, data_manager, A, batch)
+        train_accumulate(model, A, batch)
         A.add('class_acc', class_acc)
         A.add('total_tokens', total_tokens)
         A.add('total_time', total_time)

@@ -32,7 +32,7 @@ def inspect(model):
     return InspectModel(model)
 
 
-def train_accumulate(model, data_manager, A, batch):
+def train_accumulate(model, A, batch):
 
     X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = batch
     im = inspect(model)
@@ -52,7 +52,7 @@ def train_accumulate(model, data_manager, A, batch):
         A.add('invalid', model.spinn.invalid)
 
 
-def train_rl_accumulate(model, data_manager, A, batch):
+def train_rl_accumulate(model, A, batch):
 
     im = inspect(model)
 
@@ -136,7 +136,7 @@ def stats(model, optimizer, A, step, log_entry):
     return log_entry
 
 
-def eval_accumulate(model, data_manager, A, batch):
+def eval_accumulate(model, A, batch):
 
     X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = batch
 
