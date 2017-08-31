@@ -39,10 +39,12 @@ def train_accumulate(model, data_manager, A, batch):
 
     # Accumulate stats for transition accuracy.
     if im.has_transition_loss:
-        preds = [m["t_preds"]
-                 for m in model.spinn.memories if m.get('t_preds', None) is not None]
-        truth = [m["t_given"]
-                 for m in model.spinn.memories if m.get('t_given', None) is not None]
+        preds = [
+            m["t_preds"] for m in model.spinn.memories if m.get(
+                't_preds', None) is not None]
+        truth = [
+            m["t_given"] for m in model.spinn.memories if m.get(
+                't_given', None) is not None]
         A.add('preds', preds)
         A.add('truth', truth)
 
@@ -142,10 +144,12 @@ def eval_accumulate(model, data_manager, A, batch):
 
     # Accumulate stats for transition accuracy.
     if im.has_transition_loss:
-        preds = [m["t_preds"]
-                 for m in model.spinn.memories if m.get('t_preds', None) is not None]
-        truth = [m["t_given"]
-                 for m in model.spinn.memories if m.get('t_given', None) is not None]
+        preds = [
+            m["t_preds"] for m in model.spinn.memories if m.get(
+                't_preds', None) is not None]
+        truth = [
+            m["t_given"] for m in model.spinn.memories if m.get(
+                't_given', None) is not None]
         A.add('preds', preds)
         A.add('truth', truth)
 
@@ -194,7 +198,8 @@ def train_format(log_entry, extra=False, rl=False):
     stats_str += " Time: {time:.5f}"
 
     # Extra Component.
-    if extra and log_entry.HasField('learning_rate') or log_entry.HasField('invalid'):
+    if extra and log_entry.HasField(
+            'learning_rate') or log_entry.HasField('invalid'):
         stats_str += "\nTrain Extra:"
         if log_entry.HasField('learning_rate'):
             stats_str += " lr{learning_rate:.7f}"
@@ -272,7 +277,8 @@ def log_formatter(log_entry, extra=False, rl=False):
                 'time': evaluation.time_per_token_seconds,
                 'invalid': evaluation.invalid,
             }
-            log_str += '\n' + eval_format(evaluation, extra).format(**eval_args)
+            log_str += '\n' + \
+                eval_format(evaluation, extra).format(**eval_args)
     if len(log_entry.rl_sampling) > 0:
         for sample in log_entry.rl_sampling:
             sample_args = {
@@ -301,6 +307,7 @@ def prettyprint_tree(tree):
             ' ' + prettyprint_tree(tree[1]) + ' )'
     else:
         return tree
+
 
 def prettyprint_trees(trees):
     strings = [prettyprint_tree(tree) for tree in trees]

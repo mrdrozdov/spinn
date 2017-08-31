@@ -49,7 +49,6 @@ class CatalanTestCase(unittest.TestCase):
             actual = cat.catalan(i)
             assert actual == expected[i], "{} != {}".format(actual, expected)
 
-
     def test_lookup_table_3(self):
         n_tokens = 3
         catalan_pyramid = CatalanPyramid()
@@ -61,7 +60,8 @@ class CatalanTestCase(unittest.TestCase):
             for n_reduces in range(depth):
                 actual = catalan_pyramid.access(n_reduces, i, n_tokens)
                 expected = target_3[n_reduces][i]
-                assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(
+                assert almost_equal(
+                    actual, expected), "\nRet: {}\nExp: {}".format(
                     actual, expected)
 
     def test_lookup_table_3_with_twist(self):
@@ -77,7 +77,8 @@ class CatalanTestCase(unittest.TestCase):
             for n_reduces in range(depth):
                 actual = catalan_pyramid.access(n_reduces, i, n_tokens)
                 expected = target_3[n_reduces][i]
-                assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(
+                assert almost_equal(
+                    actual, expected), "\nRet: {}\nExp: {}".format(
                     actual, expected)
 
     def test_lookup_table_12(self):
@@ -91,7 +92,8 @@ class CatalanTestCase(unittest.TestCase):
             for n_reduces in range(depth):
                 actual = catalan_pyramid.access(n_reduces, i, n_tokens)
                 expected = target_12[n_reduces][i]
-                assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(
+                assert almost_equal(
+                    actual, expected), "\nRet: {}\nExp: {}".format(
                     actual, expected)
 
     def test_lookup_table_12_with_twist(self):
@@ -107,7 +109,8 @@ class CatalanTestCase(unittest.TestCase):
             for n_reduces in range(depth):
                 actual = catalan_pyramid.access(n_reduces, i, n_tokens)
                 expected = target_12[n_reduces][i]
-                assert almost_equal(actual, expected), "\nRet: {}\nExp: {}".format(
+                assert almost_equal(
+                    actual, expected), "\nRet: {}\nExp: {}".format(
                     actual, expected)
 
     def test_lookup_table_12_random_access(self):

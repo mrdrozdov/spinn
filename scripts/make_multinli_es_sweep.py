@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "0811_stnd"
+NAME = "0821_stnd"
 SWEEP_RUNS = 8
 
 LIN = "LIN"
@@ -67,7 +67,7 @@ FIXED_PARAMETERS = {
     "num_samples": "1",
     "evolution": "",
     "embedding_keep_rate": "1.0",
-    "eval_sample_size": "0.3",
+    "eval_sample_size": "0.5",
 }
 
 # Tunable parameters.

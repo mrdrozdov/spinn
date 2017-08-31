@@ -87,7 +87,11 @@ class ProtoLogger(object):
             if self.log_path:  # Write to the log file then close it
                 datetime_string = datetime.datetime.now().strftime(
                     "%y-%m-%d %H:%M:%S ")
-                msg_line = re.sub('^', datetime_string, msg_fmt, flags=re.MULTILINE) + '\n'
+                msg_line = re.sub(
+                    '^',
+                    datetime_string,
+                    msg_fmt,
+                    flags=re.MULTILINE) + '\n'
                 if not self.write_proto:
                     msg_str = msg_line
                 with open(self.log_path, 'a') as f:

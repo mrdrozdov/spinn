@@ -48,7 +48,10 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
 
     # Evaluate
     total_batches = len(dataset)
-    progress_bar = SimpleProgressBar(msg="Run Eval", bar_length=60, enabled=FLAGS.show_progress_bar)
+    progress_bar = SimpleProgressBar(
+        msg="Run Eval",
+        bar_length=60,
+        enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
     total_tokens = 0
     start = time.time()
@@ -65,12 +68,15 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
                        store_parse_masks=show_sample,
                        example_lengths=eval_num_transitions_batch)
 
-        can_sample = (FLAGS.model_type == "RLSPINN" and FLAGS.use_internal_parser)
+        can_sample = (FLAGS.model_type ==
+                      "RLSPINN" and FLAGS.use_internal_parser)
         if show_sample and can_sample:
-            tmp_samples = model.get_samples(eval_X_batch, vocabulary, only_one=not FLAGS.write_eval_report)
+            tmp_samples = model.get_samples(
+                eval_X_batch, vocabulary, only_one=not FLAGS.write_eval_report)
             tree_strs = prettyprint_trees(tmp_samples)
         if not FLAGS.write_eval_report:
-            show_sample = False  # Only show one sample, regardless of the number of batches.
+            # Only show one sample, regardless of the number of batches.
+            show_sample = False
 
         # Normalize output.
         logits = F.log_softmax(output)
@@ -91,15 +97,20 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
 
         if FLAGS.write_eval_report:
             transitions_per_example, _ = model.spinn.get_transitions_per_example(
-                    style="preds" if FLAGS.eval_report_use_preds else "given") if (FLAGS.model_type == "SPINN" and FLAGS.use_internal_parser) else (None, None)
+                style="preds" if FLAGS.eval_report_use_preds else "given") if (
+                FLAGS.model_type == "SPINN" and FLAGS.use_internal_parser) else (
+                None, None)
 
             if model.use_sentence_pair:
                 batch_size = pred.size(0)
-                sent1_transitions = transitions_per_example[:batch_size] if transitions_per_example is not None else None
-                sent2_transitions = transitions_per_example[batch_size:] if transitions_per_example is not None else None
+                sent1_transitions = transitions_per_example[:
+                                                            batch_size] if transitions_per_example is not None else None
+                sent2_transitions = transitions_per_example[batch_size:
+                                                            ] if transitions_per_example is not None else None
 
                 sent1_trees = tree_strs[:batch_size] if tree_strs is not None else None
-                sent2_trees = tree_strs[batch_size:] if tree_strs is not None else None
+                sent2_trees = tree_strs[batch_size:
+                                        ] if tree_strs is not None else None
             else:
                 sent1_transitions = transitions_per_example if transitions_per_example is not None else None
                 sent2_transitions = None
@@ -107,7 +118,15 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
                 sent1_trees = tree_strs if tree_strs is not None else None
                 sent2_trees = None
 
-            reporter.save_batch(pred, target, eval_ids, output.data.cpu().numpy(), sent1_transitions, sent2_transitions, sent1_trees, sent2_trees)
+            reporter.save_batch(
+                pred,
+                target,
+                eval_ids,
+                output.data.cpu().numpy(),
+                sent1_transitions,
+                sent2_transitions,
+                sent1_trees,
+                sent2_trees)
 
         # Print Progress
         progress_bar.step(i + 1, total=total_batches)
@@ -125,7 +144,12 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
     eval_log.filename = filename
 
     if FLAGS.write_eval_report:
-        eval_report_path = os.path.join(FLAGS.log_path, FLAGS.experiment_name + ".eval_set_" + str(eval_index) + ".report")
+        eval_report_path = os.path.join(
+            FLAGS.log_path,
+            FLAGS.experiment_name +
+            ".eval_set_" +
+            str(eval_index) +
+            ".report")
         reporter.write_report(eval_report_path)
 
     eval_class_acc = eval_log.eval_class_accuracy
@@ -134,8 +158,18 @@ def evaluate(FLAGS, model, data_manager, eval_set, log_entry,
     return eval_class_acc, eval_trans_acc
 
 
-def train_loop(FLAGS, data_manager, model, optimizer, trainer,
-               training_data_iter, eval_iterators, logger, step, best_dev_error):
+def train_loop(
+        FLAGS,
+        data_manager,
+        model,
+        optimizer,
+        trainer,
+        training_data_iter,
+        eval_iterators,
+        logger,
+        step,
+        best_dev_error,
+        best_dev_step):
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
 
@@ -164,6 +198,10 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
 
     log_entry = pb.SpinnEntry()
     for step in range(step, FLAGS.training_steps):
+        if (step - best_dev_step) > FLAGS.early_stopping_steps_to_wait:
+            logger.Log('No improvement after ' + str(FLAGS.early_stopping_steps_to_wait) + ' steps. Stopping training.')
+            break
+            
         model.train()
         log_entry.Clear()
         log_entry.step = step
@@ -180,13 +218,20 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         # Reset cached gradients.
         optimizer.zero_grad()
 
-        temperature = math.sin(math.pi / 2 + step /
-                               float(FLAGS.rl_confidence_interval) * 2 * math.pi)
+        temperature = math.sin(
+            math.pi /
+            2 +
+            step /
+            float(
+                FLAGS.rl_confidence_interval) *
+            2 *
+            math.pi)
         temperature = (temperature + 1) / 2
 
         # Confidence Penalty for Transition Predictions.
         if FLAGS.rl_confidence_penalty:
-            epsilon = FLAGS.rl_epsilon * math.exp(-step / float(FLAGS.rl_epsilon_decay))
+            epsilon = FLAGS.rl_epsilon * \
+                math.exp(-step / float(FLAGS.rl_epsilon_decay))
             temp = 1 + \
                 (temperature - .5) * FLAGS.rl_confidence_penalty * epsilon
             model.spinn.temperature = max(1e-3, temp)
@@ -320,20 +365,21 @@ def train_loop(FLAGS, data_manager, model, optimizer, trainer,
         if step > 0 and step % FLAGS.eval_interval_steps == 0:
             should_log = True
             for index, eval_set in enumerate(eval_iterators):
-                acc, tacc = evaluate(
+                acc, _ = evaluate(
                     FLAGS, model, data_manager, eval_set, log_entry, logger, step, eval_index=index)
                 if FLAGS.ckpt_on_best_dev_error and index == 0 and (
                         1 - acc) < 0.99 * best_dev_error and step > FLAGS.ckpt_step:
                     best_dev_error = 1 - acc
+                    best_dev_step = step
                     logger.Log(
                         "Checkpointing with new best dev accuracy of %f" % acc)
-                    trainer.save(best_checkpoint_path, step, best_dev_error)
+                    trainer.save(best_checkpoint_path, step, best_dev_error, best_dev_step)
             progress_bar.reset()
 
         if step > FLAGS.ckpt_step and step % FLAGS.ckpt_interval_steps == 0:
             should_log = True
             logger.Log("Checkpointing.")
-            trainer.save(standard_checkpoint_path, step, best_dev_error)
+            trainer.save(standard_checkpoint_path, step, best_dev_error, best_dev_step)
 
         if should_log:
             logger.LogEntry(log_entry)
@@ -385,13 +431,13 @@ def run(only_forward=False):
     # Load checkpoint if available.
     if FLAGS.load_best and os.path.isfile(best_checkpoint_path):
         logger.Log("Found best checkpoint, restoring.")
-        step, best_dev_error = trainer.load(best_checkpoint_path)
+        step, best_dev_error, best_dev_step = trainer.load(best_checkpoint_path)
         logger.Log(
             "Resuming at step: {} with best dev accuracy: {}".format(
                 step, 1. - best_dev_error))
     elif os.path.isfile(standard_checkpoint_path):
         logger.Log("Found checkpoint, restoring.")
-        step, best_dev_error = trainer.load(standard_checkpoint_path)
+        step, best_dev_error, best_dev_step = trainer.load(standard_checkpoint_path)
         logger.Log(
             "Resuming at step: {} with best dev accuracy: {}".format(
                 step, 1. - best_dev_error))
@@ -399,6 +445,7 @@ def run(only_forward=False):
         assert not only_forward, "Can't run an eval-only run without a checkpoint. Supply a checkpoint."
         step = 0
         best_dev_error = 1.0
+        best_dev_step = 0
     header.start_step = step
     header.start_time = int(time.time())
 
@@ -421,13 +468,32 @@ def run(only_forward=False):
         log_entry = pb.SpinnEntry()
         for index, eval_set in enumerate(eval_iterators):
             log_entry.Clear()
-            acc = evaluate(FLAGS, model, data_manager,
-                           eval_set, log_entry, logger, step, vocabulary, show_sample=True, eval_index=index)
+            acc = evaluate(
+                FLAGS,
+                model,
+                data_manager,
+                eval_set,
+                log_entry,
+                logger,
+                step,
+                vocabulary,
+                show_sample=True,
+                eval_index=index)
             print(log_entry)
             logger.LogEntry(log_entry)
     else:
-        train_loop(FLAGS, data_manager, model, optimizer, trainer,
-                   training_data_iter, eval_iterators, logger, step, best_dev_error)
+        train_loop(
+            FLAGS,
+            data_manager,
+            model,
+            optimizer,
+            trainer,
+            training_data_iter,
+            eval_iterators,
+            logger,
+            step,
+            best_dev_error,
+            best_dev_step)
 
 
 if __name__ == '__main__':

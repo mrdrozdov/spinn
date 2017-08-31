@@ -114,7 +114,8 @@ if __name__ == "__main__":
 
     filename = 'pbl_test.tsv'
     f = open(filename, 'w')
-    for i in range(int((TRAIN_PORTION + DEV_PORTION) * len(outputs)), len(outputs)):
+    for i in range(int((TRAIN_PORTION + DEV_PORTION)
+                       * len(outputs)), len(outputs)):
         output = outputs[i]
         f.write(output + "\n")
     f.close()

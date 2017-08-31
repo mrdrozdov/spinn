@@ -13,4 +13,5 @@ dec_str = '0123456789X'
 
 def sparks(nums, parts=parts):
     fraction = 1. / float(len(parts) - 1)
-    return ''.join(parts[int(round(x / fraction))] for x in nums).encode('utf-8')
+    return ''.join(parts[int(round(x / fraction))]
+                   for x in nums).encode('utf-8')

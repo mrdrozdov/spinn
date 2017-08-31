@@ -69,9 +69,16 @@ class RNNModel(nn.Module):
         vocab.size = initial_embeddings.shape[0] if initial_embeddings is not None else vocab_size
         vocab.vectors = initial_embeddings
 
-        self.embed = Embed(word_embedding_dim, vocab.size, vectors=vocab.vectors)
+        self.embed = Embed(
+            word_embedding_dim,
+            vocab.size,
+            vectors=vocab.vectors)
 
-        self.rnn = nn.LSTM(args.size, model_dim, num_layers=1, batch_first=True)
+        self.rnn = nn.LSTM(
+            args.size,
+            model_dim,
+            num_layers=1,
+            batch_first=True)
 
         mlp_input_dim = self.get_features_dim()
 
@@ -88,15 +95,25 @@ class RNNModel(nn.Module):
         num_layers = 1
         bidirectional = False
         bi = 2 if bidirectional else 1
-        h0 = Variable(to_gpu(torch.zeros(num_layers * bi, batch_size,
-                                         self.model_dim)), volatile=not self.training)
-        c0 = Variable(to_gpu(torch.zeros(num_layers * bi, batch_size,
-                                         self.model_dim)), volatile=not self.training)
+        h0 = Variable(
+            to_gpu(
+                torch.zeros(
+                    num_layers * bi,
+                    batch_size,
+                    self.model_dim)),
+            volatile=not self.training)
+        c0 = Variable(
+            to_gpu(
+                torch.zeros(
+                    num_layers * bi,
+                    batch_size,
+                    self.model_dim)),
+            volatile=not self.training)
 
         # Expects (input, h_0):
         #   input => batch_size x seq_len x model_dim
         #   h_0   => (num_layers x num_directions[1,2]) x batch_size x model_dim
-        #   c_0   => (num_layers x num_directions[1,2]) x batch_size x model_dim
+        # c_0   => (num_layers x num_directions[1,2]) x batch_size x model_dim
         output, (hn, cn) = self.rnn(x, (h0, c0))
 
         return hn
@@ -108,8 +125,12 @@ class RNNModel(nn.Module):
         embeds = self.reshape_input(embeds, batch_size, seq_length)
         embeds = self.encode(embeds)
         embeds = self.reshape_context(embeds, batch_size, seq_length)
-        embeds = torch.cat([b.unsqueeze(0) for b in torch.chunk(embeds, batch_size, 0)], 0)
-        embeds = F.dropout(embeds, self.embedding_dropout_rate, training=self.training)
+        embeds = torch.cat([b.unsqueeze(0)
+                            for b in torch.chunk(embeds, batch_size, 0)], 0)
+        embeds = F.dropout(
+            embeds,
+            self.embedding_dropout_rate,
+            training=self.training)
 
         return embeds
 
@@ -166,7 +187,10 @@ class RNNModel(nn.Module):
         x_hyp = sentences[:, :, 1]
         x = np.concatenate([x_prem, x_hyp], axis=0)
 
-        return to_gpu(Variable(torch.from_numpy(x), volatile=not self.training))
+        return to_gpu(
+            Variable(
+                torch.from_numpy(x),
+                volatile=not self.training))
 
     def wrap_sentence_pair(self, hh):
         batch_size = hh.size(0) / 2
@@ -176,7 +200,10 @@ class RNNModel(nn.Module):
     # --- Sentence Pair Specific ---
 
     def unwrap_sentence(self, sentences, transitions):
-        return to_gpu(Variable(torch.from_numpy(sentences), volatile=not self.training))
+        return to_gpu(
+            Variable(
+                torch.from_numpy(sentences),
+                volatile=not self.training))
 
     def wrap_sentence(self, hh):
         return hh

@@ -20,10 +20,6 @@ class Args(GenericClass):
     pass
 
 
-class EncodeArgs(GenericClass):
-    pass
-
-
 class Vocab(GenericClass):
     pass
 
@@ -57,18 +53,6 @@ class Accumulator(object):
 
     def get_avg(self, key, clear=True):
         return np.array(self.get(key, clear)).mean()
-
-
-class MetricsLogger(object):
-    """MetricsLogger."""
-
-    def __init__(self, metrics_path):
-        self.metrics_path = metrics_path
-
-    def Log(self, key, val, step):
-        log_path = os.path.join(self.metrics_path, key) + ".metrics"
-        with open(log_path, 'a') as f:
-            f.write("{} {}\n".format(step, val))
 
 
 class EvalReporter(object):
