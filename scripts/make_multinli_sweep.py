@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "tree_analysis_enc"
+NAME = "big_enc"
 SWEEP_RUNS = 5
 
 LIN = "LIN"
@@ -38,15 +38,14 @@ FLAGS(sys.argv)
 
 FIXED_PARAMETERS = {
     "data_type":     "nli",
-    "model_type":      "RLSPINN",
-
+    "model_type":      "ChoiPyramid",
     "training_data_path":    FLAGS.training_data_path,
     "eval_data_path":    FLAGS.eval_data_path,
     "embedding_data_path": FLAGS.embedding_data_path,
     "log_path": FLAGS.log_path,
     "ckpt_path":  FLAGS.log_path,
     "word_embedding_dim":   "300",
-    "model_dim":   "600",
+    "model_dim":   "1200",
     "seq_length":   "80",
     "eval_seq_length":  "810",
     "eval_interval_steps": "1000",
@@ -59,22 +58,16 @@ FIXED_PARAMETERS = {
     "mlp_dim": "1024",
     #"nocomposition_ln": "",
     "embedding_keep_rate": "1.0",
-    #"pyramid_trainable_temperature": "",
+    "pyramid_trainable_temperature": "",
     "learning_rate_decay_per_10k_steps": "1.0",
-    #"pyramid_temperature_decay_per_10k_steps": "1.0", 
-    "use_internal_parser": "",
-    "use_tracking_in_composition": "",
-    "transition_weight": "1.0",
+    "pyramid_temperature_decay_per_10k_steps": "1.0", 
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
     "semantic_classifier_keep_rate": ("skr", LIN, 0.5, 1.0),
-    "l2_lambda":          ("l2", EXP, 1e-9, 1e-6),
-    # "learning_rate_decay_per_10k_steps": ("dc", LIN, 0.4, 1.0),
-    "learning_rate": ("lr", EXP, 0.0001, 0.001),
-    'tracking_lstm_hidden_dim': ('tlhd', 'EXP', 8, 64),
-    'rl_weight': ('rlwt', EXP, 1.0, 8.0),
+    "l2_lambda":          ("l2l", EXP, 3e-9, 3e-6),
+    "learning_rate": ("lr", EXP, 0.00003, 0.001),
 }
 
 
@@ -144,5 +137,5 @@ for run_id in range(SWEEP_RUNS):
     if NYU_NON_PBS:
         print "cd spinn/python; python2.7 -m spinn.models.supervised_classifier " + flags
     else:
-        print "SPINNMODEL=\"spinn.models.rl_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh ../scripts/train_spinn.sbatch 1"
+        print "SPINNMODEL=\"spinn.models.supervised_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh ../scripts/train_spinn.sbatch 1"
     print
