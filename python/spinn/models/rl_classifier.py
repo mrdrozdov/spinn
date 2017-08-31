@@ -430,13 +430,13 @@ def run(only_forward=False):
     # Load checkpoint if available.
     if FLAGS.load_best and os.path.isfile(best_checkpoint_path):
         logger.Log("Found best checkpoint, restoring.")
-        step, best_dev_error, best_dev_step = trainer.load(best_checkpoint_path)
+        step, best_dev_error, best_dev_step = trainer.load(best_checkpoint_path, cpu=FLAGS.gpu < 0)
         logger.Log(
             "Resuming at step: {} with best dev accuracy: {}".format(
                 step, 1. - best_dev_error))
     elif os.path.isfile(standard_checkpoint_path):
         logger.Log("Found checkpoint, restoring.")
-        step, best_dev_error, best_dev_step = trainer.load(standard_checkpoint_path)
+        step, best_dev_error, best_dev_step = trainer.load(standard_checkpoint_path, cpu=FLAGS.gpu < 0)
         logger.Log(
             "Resuming at step: {} with best dev accuracy: {}".format(
                 step, 1. - best_dev_error))

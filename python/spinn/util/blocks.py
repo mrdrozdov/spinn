@@ -338,8 +338,12 @@ class ModelTrainer(object):
             recursively_set_device(self.model.state_dict(), gpu=the_gpu())
             recursively_set_device(self.optimizer.state_dict(), gpu=the_gpu())
 
-    def load(self, filename):
-        checkpoint = torch.load(filename)
+    def load(self, filename, cpu=False):
+        if cpu:
+            # Load GPU-based checkpoints on CPU
+            checkpoint = torch.load(filename, map_location=lambda storage, loc: storage)
+        else:
+            checkpoint = torch.load(filename)
         model_state_dict = checkpoint['model_state_dict']
 
         # HACK: Compatability for saving supervised SPINN and loading RL SPINN.
@@ -383,8 +387,13 @@ class ModelTrainer_ES(object):
             recursively_set_device(self.model.state_dict(), gpu=the_gpu())
             recursively_set_device(self.optimizer.state_dict(), gpu=the_gpu())
 
-    def load(self, filename):
-        checkpoint = torch.load(filename)
+    def load(self, filename, cpu=False):
+        if cpu:
+            # Load GPU-based checkpoints on CPU
+            checkpoint = torch.load(filename, map_location=lambda storage, loc: storage)
+        else:
+            checkpoint = torch.load(filename)
+
         model_state_dict = checkpoint['model_state_dict']
 
         # HACK: Compatability for saving supervised SPINN and loading RL SPINN.

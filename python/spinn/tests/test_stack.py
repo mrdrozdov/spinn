@@ -25,7 +25,7 @@ class SPINNTestCase(unittest.TestCase):
         # Save to and load from temporary file.
         temp = tempfile.NamedTemporaryFile()
         torch.save(model_to_save.state_dict(), temp.name)
-        model_to_load.load_state_dict(torch.load(temp.name))
+        model_to_load.load_state_dict(torch.load(temp.name, cpu=True))
 
         compare_models(model_to_save, model_to_load)
 
@@ -48,7 +48,7 @@ class SPINNTestCase(unittest.TestCase):
         # Save to and load from temporary file.
         temp = tempfile.NamedTemporaryFile()
         trainer_to_save.save(temp.name, 0, 0)
-        trainer_to_load.load(temp.name)
+        trainer_to_load.load(temp.name, cpu=True)
 
         compare_models(model_to_save, model_to_load)
 

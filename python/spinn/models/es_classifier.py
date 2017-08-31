@@ -497,7 +497,7 @@ def generate_seeds_and_models(trainer, model, root_id, base=False):
         root_path = os.path.join(FLAGS.ckpt_path, root_name + ".ckpt")
         if not os.path.exists(root_path):
             root_path = root_path + "_best"
-        ev_step, true_step, dev_error, best_dev_step = trainer.load(root_path)
+        ev_step, true_step, dev_error, best_dev_step = trainer.load(root_path, cpu=FLAGS.gpu < 0)
     else:
         true_step = 0
         best_dev_step = 0
@@ -637,7 +637,7 @@ def run(only_forward=False):
         best_id = acc_order[0]
         best_name = FLAGS.experiment_name + "_p" + str(best_id)
         best_path = os.path.join(FLAGS.ckpt_path, best_name + ".ckpt_best")
-        ev_step, true_step, dev_error, best_dev_step = trainer.load(best_path)
+        ev_step, true_step, dev_error, best_dev_step = trainer.load(best_path, cpu=FLAGS.gpu < 0)
 
         print "Picking best perturbation/model %s to run evaluation, with best dev accuracy of %f" % (best_name, 1. - dev_error)
 
