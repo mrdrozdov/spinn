@@ -130,8 +130,8 @@ class Maillard(nn.Module):
         x, example_lengths = self.unwrap(sentences, example_lengths)
 
         emb = self.run_embed(x)
-        print("EMBS:", len(torch.chunk(emb, chunks=emb.size(1), dim=1)))
-        print("Input:", x.size(), "Emb:", emb.size())
+        #print("EMBS:", len(torch.chunk(emb, chunks=emb.size(1), dim=1)))
+        #print("Input:", x.size(), "Emb:", emb.size())
 
         batch_size, seq_len, model_dim = emb.data.size()
         example_lengths_var = to_gpu(
@@ -316,7 +316,7 @@ class BinaryTreeLSTM(nn.Module):
         r_hiddens = r[0].chunk(length, dim=1)
         r_states = r[1].chunk(length, dim=1)
 
-        print("length of list:", length, len(l_hiddens))
+        #print("length of list:", length, len(l_hiddens))
 
         chart = []
         weights = []
@@ -360,7 +360,7 @@ class BinaryTreeLSTM(nn.Module):
 
                 chart[col][row] = (h_new, c_new)
 
-        print len(chart), len(chart[1]), len(chart[1][1])
+        #print len(chart), len(chart[1]), len(chart[1][1])
         return chart[length-1][length-1][0], chart[length-1][length-1][1], weights
 
 
@@ -444,7 +444,8 @@ class BinaryTreeLSTM(nn.Module):
             nodes.append(state[0])
 
         h, c, weights = self.compute_compositions(state)
-        print h.size()
+        #print h.size()
+        
         """
         for i in range(max_depth - 1):
             h, c = state
