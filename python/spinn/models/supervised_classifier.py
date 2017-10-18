@@ -82,8 +82,8 @@ def evaluate(FLAGS, model, eval_set, log_entry,
             store_parse_masks=show_sample,
             example_lengths=eval_num_transitions_batch)
 
-        # TODO: Restore support in Pyramid if using.
-        can_sample = FLAGS.model_type in ["ChoiPyramid", "Maillard"] or (
+        # TODO: Fix so that this works for Maillard!!
+        can_sample = FLAGS.model_type in ["ChoiPyramid"] or (
             FLAGS.model_type == "SPINN" and FLAGS.use_internal_parser)
         if show_sample and can_sample:
             tmp_samples = model.get_samples(
