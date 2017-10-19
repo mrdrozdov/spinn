@@ -1,10 +1,6 @@
-# Stack-augmented Parser-Interpreter Neural Network
+# Sentence Representation with Parsing
 
-This repository contains the source code based on the paper [A Fast Unified Model for Sentence Parsing and Understanding][1] and [original codebase][9]. For a more informal introduction to the ideas behind the model, see this [Stanford NLP blog post][8].
-
-The included implementations are:
-
-- A **Python/Pytorch** implementation of SPINN using a naïve stack representation (named `fat-stack`)
+This repository was forked from [NYU-ML<sup>2</sup>'s SPINN repository](https://github.com/NYU-MLL/spinn).
 
 ## Python code
 
@@ -38,44 +34,6 @@ Here's a sample command that runs a fast, low-dimensional CPU training run, trai
 
 For full runs, you'll also need a copy of the 840B word 300D [GloVe word vectors](http://nlp.stanford.edu/projects/glove/).
 
-## Semi-Supervised Parsing
-
-You can train SPINN using only sentence-level labels. In this case, the integrated parser will randomly sample labels during training time, and will be optimized with the REINFORCE algorithm. The command to run this model looks slightly different:
-
-    PYTHONPATH=spinn/python \
-        python2.7 -m spinn.models.rl_classifier --data_type listops \
-        --training_data_path spinn/python/spinn/data/listops/train_d20a.tsv \
-        --eval_data_path spinn/python/spinn/data/listops/test_d20a.tsv  \
-        --word_embedding_dim 32 --model_dim 32 --mlp_dim 16 --model_type RLSPINN \
-        --rl_baseline value --rl_reward standard --rl_weight 42.0
-
-Note: This model does not yet work well on natural language data, although it does on the included synthetic dataset called `listops`. Please look at the [sweep file][10] for an idea of which hyperparameters to use.
-
-## Log Analysis
-
-This project contains a handful of tools for easier analysis of your model's performance.
-
-For one, after a periodic number of batches, some useful statistics are printed to a file specified by `--log_path`. This is convenient for visual inspection, and the script [parse_logs.py](https://github.com/mrdrozdov/spinn/blob/master/scripts/parse_logs.py) is an example of how to easily parse this log file.
-
-In addition, there is support for realtime summaries using [Visdom](https://github.com/facebookresearch/visdom). This requires a few steps:
-
-1. Run your experiment normally, but specify a `--metrics_path`.
-2. Run Visdom in it's own terminal instance: `python -m visdom.server`
-3. Run this project's [visdom_reporter.py](https://github.com/mrdrozdov/spinn/blob/master/scripts/visdom_reporter.py) script, specifying a root which matches the `--metrics_path` flag: `python scripts/visdom_reporter.py --root $METRICS_PATH`
-
-Then open Visdom in a browser window to see graphs representing accuracy, loss and some other metrics updated in real time. This is most useful when running multiple experiments simultaneously.
-
-## Contributing
-
-If you're interested in proposing a change or fix to SPINN, please submit a Pull Request. In addition, ensure that existing tests pass, and add new tests as you see appropriate. To run tests, simply run this command from the root directory:
-
-    nosetests python/spinn/tests
-
-### Adding Logging Fields
-
-SPINN outputs metrics and statistics into a text [protocol buffer](https://developers.google.com/protocol-buffers/) format. When adding new fields to the proto file, the generated proto code needs to be updated.
-
-    bash python/build.sh
 
 ## License
 
