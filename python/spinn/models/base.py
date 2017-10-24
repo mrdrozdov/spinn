@@ -584,6 +584,19 @@ def get_flags():
         None,
         "Percentage (eg 0.3) of batches to be sampled for evaluation during training (only for ES). If None, use all.")
 
+    # Maillard Pyramid
+    gflags.DEFINE_boolean(
+        "cosine",
+        False,
+        "If true, use cosine similarity instead of dot product in measuring score for compositions.")
+    gflags.DEFINE_enum(
+        "parent_selection",
+        "gumbel",
+        ["gumbel",
+        "st-gumbel",
+        "softmax"],
+        "Which function to use to select or calculate the parent.")
+
 
 def flag_defaults(FLAGS, load_log_flags=False):
     if load_log_flags:
