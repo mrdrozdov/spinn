@@ -130,8 +130,6 @@ class Maillard(nn.Module):
         x, example_lengths = self.unwrap(sentences, example_lengths)
 
         emb = self.run_embed(x)
-        #print("EMBS:", len(torch.chunk(emb, chunks=emb.size(1), dim=1)))
-        #print("Input:", x.size(), "Emb:", emb.size())
 
         batch_size, seq_len, model_dim = emb.data.size()
         example_lengths_var = to_gpu(
@@ -295,7 +293,7 @@ class BinaryTreeLSTM(nn.Module):
         h = dy.cdiv(constituent.h, dy.sqrt(dy.squared_norm(constituent.h)))
         return dy.dot_product(w_score, h)*self.inv_temp
 
-    def compute_compositions(self, state):
+    def compute_compositions_old(self, state):
         """
         (In a parallelized manner) Compute all compositions we will need 
         for the current step.
@@ -315,8 +313,6 @@ class BinaryTreeLSTM(nn.Module):
         l_states = l[1].chunk(length, dim=1)
         r_hiddens = r[0].chunk(length, dim=1)
         r_states = r[1].chunk(length, dim=1)
-
-        #print("length of list:", length, len(l_hiddens))
 
         chart = []
         weights = []
@@ -360,12 +356,70 @@ class BinaryTreeLSTM(nn.Module):
 
                 chart[col][row] = (h_new, c_new)
 
-        #print len(chart), len(chart[1]), len(chart[1][1])
         return chart[length-1][length-1][0], chart[length-1][length-1][1], weights
 
+    def compute_compositions(self, state):
+        """
+        (In a parallelized manner) Compute all compositions we will need 
+        for the current step.
+        Input to || computation: (h,c) l and r.
+        Input to serial computation: list of (h,c) l and r.
+        don't pass full chart around. only values that'll be needed for computation
 
-        #return #current_chart_step = dict of (h,c)s and their scores
-        # dict or list of lists
+        currently: passing full sentence at each laye. FIX!!
+
+        Example:
+        [['A', 'B', 'C', 'D', 'E', 'F', 'G', '.'],
+        ['AB', 'BC', 'CD', 'DE', 'EF', 'FG', 'G.'],
+        ['ABC', 'BCD', 'CDE', 'DEF', 'EFG', 'FG.'],
+        ['ABCD', 'BCDE', 'CDEF', 'DEFG', 'EFG.'],
+        ['ABCDE', 'BCDEF', 'CDEFG', 'DEFG.'],
+        ['ABCDEF', 'BCDEFG', 'CDEFG.'],
+        ['ABCDEFG', 'BCDEFG.'],
+        ['ABCDEFG.']]
+        """
+        h, c = state # batch, length, dim
+
+        length = h.size(1)
+        word_hiddens = h.chunk(length, dim=1)
+        word_cells = c.chunk(length, dim=1)
+
+        chart = [[]]
+        #weights = [[]]
+
+        for i in range(length):
+            chart[0].append((word_hiddens[i], word_cells[i]))
+
+        for row in range(1, length):
+            chart.append([])
+            for col in range(length - row):
+                chart[row].append(None)
+        for row in range(1, length):
+            weights = []
+            for col in range(length - row):
+                versions = []
+                hiddens = []
+                cells = []
+                scores = []
+                for i in range(row):
+                    l = chart[row-i-1][col]
+                    r = chart[i][row+col-i]
+                    versions.append(self.treelstm_layer(l=l, r=r))
+                    hiddens.append(versions[-1][0])
+                    cells.append(versions[-1][1])
+                    comp_weights = dot_nd(
+                        query=self.comp_query.weight.squeeze(),
+                        candidates=hiddens[-1]) # batch, 1
+                    scores.append(comp_weights) # [(batch, 1), ...]
+                
+                weights = gumbel_softmax(torch.cat(scores, dim=1)) # cat: batch, num_versions, out: batch, num_versions
+
+                h_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(hiddens, dim=1)), dim=1)
+                c_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(cells, dim=1)), dim=1) # batch, num, dim
+
+                chart[row][col] = (h_new.unsqueeze(1), c_new.unsqueeze(1))
+
+        return chart[length-1][0][0], chart[length-1][0][1], weights
     
     def get_single_composition():
         pass
@@ -444,7 +498,6 @@ class BinaryTreeLSTM(nn.Module):
             nodes.append(state[0])
 
         h, c, weights = self.compute_compositions(state)
-        #print h.size()
         
         """
         for i in range(max_depth - 1):
