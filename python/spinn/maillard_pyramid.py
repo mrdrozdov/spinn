@@ -420,19 +420,6 @@ class BinaryTreeLSTM(nn.Module):
                 chart[row][col] = (h_new.unsqueeze(1), c_new.unsqueeze(1))
 
         return chart[length-1][0][0], chart[length-1][0][1], weights
-    
-    def get_single_composition():
-        pass
-        """
-        (n-1) rows, where n = seq_length
-        # at row k, there are k possible ways to form each constituent. 
-        First find all sequences which have multiple (h,c)s for a single sequence. Then in ||,
-        given list of (h,c)s,  do ST_gumbel (or regular gumbel) and get single (h,c)
-        """
-        #return # new dict of (h,c)s, without multiple (h,c)s for single seq
-    # Send sequence through compute_compositions and get_single_composition
-    # This will give an updated dict of (h,c)s 
-    # continue to do this in sequence till we have 1 (h,c) for the full sequence.
 
     def select_composition(
             self,
@@ -499,35 +486,6 @@ class BinaryTreeLSTM(nn.Module):
 
         h, c, weights = self.compute_compositions(state)
         
-        """
-        for i in range(max_depth - 1):
-            h, c = state
-            l = (h[:, :-1, :], c[:, :-1, :])
-            r = (h[:, 1:, :], c[:, 1:, :])
-            new_state = self.treelstm_layer(l=l, r=r)
-            if i < max_depth - 2:
-                # We don't need to greedily select the composition in the
-                # last iteration, since it has only one option left.
-                new_h, new_c, select_mask, selected_h, temperature_to_display = self.select_composition(
-                    old_state=state, new_state=new_state,
-                    mask=length_mask[:, i + 1:], temperature_multiplier=temperature_multiplier)
-                new_state = (new_h, new_c)
-
-                #Instead of select_composition,
-                #do compute_compositions
-                #and get_single_computation
-                #for i < max_depth - 1: ...
-                #new_chart = ...
-
-                select_masks.append(select_mask)
-                if self.intra_attention:
-                    nodes.append(selected_h)
-            done_mask = length_mask[:, i + 1]
-            state = self.update_state(old_state=state, new_state=new_state,
-                                      done_mask=done_mask)
-            if self.intra_attention and i >= max_depth - 2:
-                nodes.append(state[0])
-        """
         if self.intra_attention:
             att_mask = torch.cat([length_mask, length_mask[:, 1:]], dim=1)
             att_mask = att_mask.float()
