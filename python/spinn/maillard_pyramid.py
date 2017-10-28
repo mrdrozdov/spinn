@@ -35,6 +35,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      composition_ln=FLAGS.composition_ln,
                      context_args=context_args,
                      trainable_temperature=FLAGS.pyramid_trainable_temperature,
+                     right_branching=FLAGS.right_branching,
                      )
 
 
@@ -56,6 +57,7 @@ class Maillard(nn.Module):
                  composition_ln=None,
                  context_args=None,
                  trainable_temperature=None,
+                 right_branching=None,
                  **kwargs
                  ):
         super(Maillard, self).__init__()
@@ -65,6 +67,7 @@ class Maillard(nn.Module):
         self.use_product_feature = use_product_feature
         self.model_dim = model_dim
         self.trainable_temperature = trainable_temperature
+        self.right_branching = right_branching
 
         self.classifier_dropout_rate = 1. - classifier_keep_rate
         self.embedding_dropout_rate = 1. - embedding_keep_rate
@@ -83,7 +86,8 @@ class Maillard(nn.Module):
             model_dim / 2,
             False,
             composition_ln=composition_ln,
-            trainable_temperature=trainable_temperature)
+            trainable_temperature=trainable_temperature,
+            right_branching = right_branching)
 
         mlp_input_dim = self.get_features_dim()
 
@@ -259,7 +263,7 @@ class Maillard(nn.Module):
 class BinaryTreeLSTM(nn.Module):
 
     def __init__(self, word_dim, hidden_dim, intra_attention,
-                 composition_ln=False, trainable_temperature=False):
+                 composition_ln=False, trainable_temperature=False, right_branching=False):
         super(BinaryTreeLSTM, self).__init__()
         #self.binary_tree_lstm(emb, example_lengths_var, temperature_multiplier=pyramid_temperature_multiplier)
         self.word_dim = word_dim
@@ -267,12 +271,14 @@ class BinaryTreeLSTM(nn.Module):
         self.intra_attention = intra_attention
         self.treelstm_layer = BinaryTreeLSTMLayer(
             hidden_dim, composition_ln=composition_ln)
+        self.right_branching = right_branching
 
         # TODO: Add something to blocks to make this use case more elegant.
         self.comp_query = Linear(
             initializer=HeKaimingInitializer)(
             in_features=hidden_dim,
             out_features=1)
+
         self.trainable_temperature = trainable_temperature
         if self.trainable_temperature:
             self.temperature_param = nn.Parameter(
@@ -345,6 +351,7 @@ class BinaryTreeLSTM(nn.Module):
                     comp_weights = dot_nd(
                         query=self.comp_query.weight.squeeze(),
                         candidates=hiddens[-1])
+
                     scores.append(comp_weights) #--> append(scalar)
                 # we gumbel-softmax the weights, and use them as a weighting mechanism
                 # that strongly prefers assigning probability mass to only one
@@ -358,7 +365,7 @@ class BinaryTreeLSTM(nn.Module):
 
         return chart[length-1][length-1][0], chart[length-1][length-1][1], weights
 
-    def compute_compositions(self, state):
+    def compute_compositions(self, state, mask):
         """
         (In a parallelized manner) Compute all compositions we will need 
         for the current step.
@@ -378,114 +385,92 @@ class BinaryTreeLSTM(nn.Module):
         ['ABCDEFG', 'BCDEFG.'],
         ['ABCDEFG.']]
         """
+        import time
+        start = time.time()
+        # make sure are embeddigns
         h, c = state # batch, length, dim
+        mask = mask # batch, length
 
         length = h.size(1)
         word_hiddens = h.chunk(length, dim=1)
         word_cells = c.chunk(length, dim=1)
+        length_masks = mask.chunk(length, dim=1) # (batch,1), ...
+        
 
-        chart = [[]]
-        #weights = [[]]
+        if self.debug_branching:
+            hiddens = word_hiddens
+            cells = word_cells
+            (h, c) = (hiddens[-1], cells[-1])
+            for i in range(length-1, -1, -1):
+                r = (h, c) #* length_masks[i+1]
+                l  = (hiddens[i], cells[i]) #* length_masks[i+1]
+                h, c = self.treelstm_layer(l=l, r=r)
+            return h, c, None
 
-        for i in range(length):
-            chart[0].append((word_hiddens[i], word_cells[i]))
+        else:  
+            chart = [[]]
 
-        for row in range(1, length):
-            chart.append([])
-            for col in range(length - row):
-                chart[row].append(None)
-        for row in range(1, length):
-            weights = []
-            for col in range(length - row):
-                versions = []
-                hiddens = []
-                cells = []
-                scores = []
-                for i in range(row):
-                    l = chart[row-i-1][col]
-                    r = chart[i][row+col-i]
-                    versions.append(self.treelstm_layer(l=l, r=r))
-                    hiddens.append(versions[-1][0])
-                    cells.append(versions[-1][1])
-                    comp_weights = dot_nd(
-                        query=self.comp_query.weight.squeeze(),
-                        candidates=hiddens[-1]) # batch, 1
-                    scores.append(comp_weights) # [(batch, 1), ...]
-                
-                weights = gumbel_softmax(torch.cat(scores, dim=1)) # cat: batch, num_versions, out: batch, num_versions
+            for i in range(length):
+                chart[0].append((word_hiddens[i], word_cells[i]))
 
-                h_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(hiddens, dim=1)), dim=1)
-                c_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(cells, dim=1)), dim=1) # batch, num, dim
+            for row in range(1, length):
+                chart.append([])
+                for col in range(length - row):
+                    chart[row].append(None)
+            for row in range(1, length):
+                weights = []
+                for col in range(length - row):
+                    states = []
+                    hiddens = []
+                    cells = []
+                    scores = []
+                    for i in range(row):
+                        l = chart[row-i-1][col]
+                        r = chart[i][row+col-i]
+                        states.append(self.treelstm_layer(l=l, r=r))
+                        hiddens.append(states[-1][0])
+                        cells.append(states[-1][1])
+                        comp_weights = dot_nd(
+                            query=self.comp_query.weight.squeeze(),
+                            candidates=hiddens[-1]) # batch, 1
+                        scores.append(comp_weights) # [(batch, 1), ...]
 
-                chart[row][col] = (h_new.unsqueeze(1), c_new.unsqueeze(1))
+                    if self.right_branching:
+                        weights =  Variable(torch.zeros(torch.cat(scores, dim=1).size()))
+                        for k in range(weights.size(0)): 
+                            weights[k, -1] = 1.0
+                    else:
+                        weights = gumbel_softmax(torch.cat(scores, dim=1)) # cat: batch, num_versions, out: batch, num_states
 
-        return chart[length-1][0][0], chart[length-1][0][1], weights
+                    h_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(hiddens, dim=1)), dim=1)
+                    c_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(cells, dim=1)), dim=1) # batch, num_states, dim
 
-    def select_composition(
-            self,
-            old_state,
-            new_state,
-            mask,
-            temperature_multiplier=1.0):
-        new_h, new_c = new_state
-        old_h, old_c = old_state
-        old_h_left, old_h_right = old_h[:, :-1, :], old_h[:, 1:, :]
-        old_c_left, old_c_right = old_c[:, :-1, :], old_c[:, 1:, :]
-        comp_weights = dot_nd(
-            query=self.comp_query.weight.squeeze(),
-            candidates=new_h)
-        if self.training:
-            temperature = temperature_multiplier
-            if self.trainable_temperature:
-                temperature *= F.relu(self.temperature_param)
-            if not isinstance(temperature, float):
-                temperature_to_display = float(temperature.data.cpu().numpy())
-            else:
-                temperature_to_display = temperature
+                    chart[row][col] = (h_new.unsqueeze(1), c_new.unsqueeze(1))
 
-            local_temperature = temperature
-            if not isinstance(local_temperature, float):
-                local_temperature = local_temperature
+            end = time.time()
+            #print end - start
 
-            select_mask = st_gumbel_softmax(
-                logits=comp_weights, temperature=local_temperature,
-                mask=mask)
-        else:
-            select_mask = greedy_select(logits=comp_weights, mask=mask)
-            select_mask = select_mask.float()
-            temperature_to_display = None
-        select_mask_expand = select_mask.unsqueeze(2)
-        select_mask_cumsum = select_mask.cumsum(1)
-        left_mask = 1 - select_mask_cumsum
-        left_mask_expand = left_mask.unsqueeze(2)
-        right_mask_leftmost_col = Variable(
-            select_mask_cumsum.data.new(new_h.size(0), 1).zero_())
-        right_mask = torch.cat(
-            [right_mask_leftmost_col, select_mask_cumsum[:, :-1]], dim=1)
-        right_mask_expand = right_mask.unsqueeze(2)
-        new_h = (select_mask_expand * new_h
-                 + left_mask_expand * old_h_left
-                 + right_mask_expand * old_h_right)
-        new_c = (select_mask_expand * new_c
-                 + left_mask_expand * old_c_left
-                 + right_mask_expand * old_c_right)
-        selected_h = (select_mask_expand * new_h).sum(1)
-        return new_h, new_c, select_mask, selected_h, temperature_to_display
+            return chart[length-1][0][0], chart[length-1][0][1], weights
+
 
     def forward(self, input, length, temperature_multiplier=1.0):
         max_depth = input.size(1)
         length_mask = sequence_mask(sequence_length=length,
                                     max_length=max_depth)
+
         select_masks = []
         state = input.chunk(num_chunks=2, dim=2)
-        nodes = []
+        #nodes = []
         # For one or two-word trees where we never compute a temperature
         temperature_to_display = -1.0
+        """
         if self.intra_attention:
             nodes.append(state[0])
+        """
 
-        h, c, weights = self.compute_compositions(state)
+        h, c, weights = self.compute_compositions(state, length_mask)
         
+        """
         if self.intra_attention:
             att_mask = torch.cat([length_mask, length_mask[:, 1:]], dim=1)
             att_mask = att_mask.float()
@@ -503,10 +488,9 @@ class BinaryTreeLSTM(nn.Module):
             att_weights_expand = att_weights.unsqueeze(2)
             # h: (batch_size, 1, 2 * hidden_dim)
             h = (att_weights_expand * nodes).sum(1)
+        """
         assert h.size(1) == 1 and c.size(1) == 1
         return h.squeeze(1), c.squeeze(1), select_masks, temperature_to_display
-
-    # --- From Choi's 'basic.py' ---
 
 
 def apply_nd(fn, input):
@@ -618,12 +602,7 @@ def st_gumbel_softmax(logits, temperature=1.0, mask=None):
 
 def gumbel_softmax(logits, temperature=1.0, mask=None):
     """
-    Return the result of Straight-Through Gumbel-Softmax Estimation.
-    It approximates the discrete sampling via Gumbel-Softmax trick
-    and applies the biased ST estimator.
-    In the forward propagation, it emits the discrete one-hot result,
-    and in the backward propagation it approximates the categorical
-    distribution via smooth Gumbel-Softmax distribution.
+    Return the result of Gumbel-Softmax Estimation.
 
     Args:
         logits (Variable): A un-normalized probability values,
@@ -643,11 +622,6 @@ def gumbel_softmax(logits, temperature=1.0, mask=None):
     gumbel_noise = Variable(-torch.log(-torch.log(u + eps) + eps))
     y = logits + gumbel_noise
     y = masked_softmax(logits=y / temperature, mask=mask)
-    """y_argmax = y.max(1)[1]
-                y_hard = convert_to_one_hot(
-                    indices=y_argmax,
-                    num_classes=y.size(1)).float()
-                y = (y_hard - y).detach() + y"""
     return y
 
 
