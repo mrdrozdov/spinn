@@ -596,7 +596,14 @@ def get_flags():
         "st-gumbel",
         "softmax"],
         "Which function to use to select or calculate the parent.")
-
+    gflags.DEFINE_boolean(
+        "right_branching",
+        False,
+        "Force right-branching composition.")
+    gflags.DEFINE_boolean(
+        "debug_branching",
+        False,
+        "Force right-branching composition.")
 
 def flag_defaults(FLAGS, load_log_flags=False):
     if load_log_flags:
