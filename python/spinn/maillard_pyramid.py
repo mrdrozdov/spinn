@@ -412,7 +412,7 @@ class BinaryTreeLSTM(nn.Module):
                 h, c = self.treelstm_layer(l=l, r=r)
             return h, c, None
 
-        else:  
+        else: 
             chart = [[]]
 
             for i in range(length):
@@ -441,9 +441,10 @@ class BinaryTreeLSTM(nn.Module):
                         scores.append(comp_weights) # [(batch, 1), ...]
 
                     if self.right_branching:
-                        weights =  Variable(torch.zeros(torch.cat(scores, dim=1).size()))
+                        weights =  to_gpu(Variable(torch.zeros(torch.cat(scores, dim=1).size())))
                         for k in range(weights.size(0)): 
                             weights[k, -1] = 1.0
+
                     else:
                         weights = gumbel_softmax(torch.cat(scores, dim=1)) # cat: batch, num_versions, out: batch, num_states
 
