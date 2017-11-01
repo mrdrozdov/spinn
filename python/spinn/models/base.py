@@ -603,7 +603,7 @@ def get_flags():
     gflags.DEFINE_boolean(
         "debug_branching",
         False,
-        "Force right-branching composition.")
+        "use alternative style of right-branching composition.")
 
 def flag_defaults(FLAGS, load_log_flags=False):
     if load_log_flags:

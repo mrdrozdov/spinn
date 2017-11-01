@@ -36,6 +36,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      context_args=context_args,
                      trainable_temperature=FLAGS.pyramid_trainable_temperature,
                      right_branching=FLAGS.right_branching,
+                     debug_branching=FLAGS.debug_branching,
                      )
 
 
@@ -58,6 +59,7 @@ class Maillard(nn.Module):
                  context_args=None,
                  trainable_temperature=None,
                  right_branching=None,
+                 debug_branching=None,
                  **kwargs
                  ):
         super(Maillard, self).__init__()
@@ -68,6 +70,7 @@ class Maillard(nn.Module):
         self.model_dim = model_dim
         self.trainable_temperature = trainable_temperature
         self.right_branching = right_branching
+        self.debug_branching = debug_branching
 
         self.classifier_dropout_rate = 1. - classifier_keep_rate
         self.embedding_dropout_rate = 1. - embedding_keep_rate
@@ -87,7 +90,8 @@ class Maillard(nn.Module):
             False,
             composition_ln=composition_ln,
             trainable_temperature=trainable_temperature,
-            right_branching = right_branching)
+            right_branching=right_branching,
+            debug_branching=debug_branching)
 
         mlp_input_dim = self.get_features_dim()
 
@@ -263,7 +267,7 @@ class Maillard(nn.Module):
 class BinaryTreeLSTM(nn.Module):
 
     def __init__(self, word_dim, hidden_dim, intra_attention,
-                 composition_ln=False, trainable_temperature=False, right_branching=False):
+                 composition_ln=False, trainable_temperature=False, right_branching=False, debug_branching=False):
         super(BinaryTreeLSTM, self).__init__()
         #self.binary_tree_lstm(emb, example_lengths_var, temperature_multiplier=pyramid_temperature_multiplier)
         self.word_dim = word_dim
@@ -272,6 +276,7 @@ class BinaryTreeLSTM(nn.Module):
         self.treelstm_layer = BinaryTreeLSTMLayer(
             hidden_dim, composition_ln=composition_ln)
         self.right_branching = right_branching
+        self.debug_branching = debug_branching
 
         # TODO: Add something to blocks to make this use case more elegant.
         self.comp_query = Linear(
