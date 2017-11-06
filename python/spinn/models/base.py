@@ -604,6 +604,18 @@ def get_flags():
         "debug_branching",
         False,
         "use alternative style of right-branching composition.")
+    gflags.DEFINE_boolean(
+        "uniform_branching",
+        False,
+        "Uniform distribution instead of gumble softmax weighting during chart parsing.")
+    gflags.DEFINE_boolean(
+        "random_branching",
+        False,
+        "Random weighting instead of gumble softmax weighting during chart parsing.")
+    gflags.DEFINE_boolean(
+        "st_gumbel",
+        False,
+        "ST-gumble softmax weighting during chart parsing.")
 
 def flag_defaults(FLAGS, load_log_flags=False):
     if load_log_flags:
