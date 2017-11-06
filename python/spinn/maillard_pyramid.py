@@ -37,6 +37,9 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      trainable_temperature=FLAGS.pyramid_trainable_temperature,
                      right_branching=FLAGS.right_branching,
                      debug_branching=FLAGS.debug_branching,
+                     uniform_branching=FLAGS.uniform_branching,
+                     random_branching=FLAGS.random_branching,
+                     st_gumbel=FLAGS.st_gumbel
                      )
 
 
@@ -60,6 +63,9 @@ class Maillard(nn.Module):
                  trainable_temperature=None,
                  right_branching=None,
                  debug_branching=None,
+                 uniform_branching=None,
+                 random_branching=None,
+                 st_gumbel=None,
                  **kwargs
                  ):
         super(Maillard, self).__init__()
@@ -71,6 +77,9 @@ class Maillard(nn.Module):
         self.trainable_temperature = trainable_temperature
         self.right_branching = right_branching
         self.debug_branching = debug_branching
+        self.uniform_branching = uniform_branching
+        self.random_branching = random_branching
+        self.st_gumbel = st_gumbel
 
         self.classifier_dropout_rate = 1. - classifier_keep_rate
         self.embedding_dropout_rate = 1. - embedding_keep_rate
@@ -91,7 +100,10 @@ class Maillard(nn.Module):
             composition_ln=composition_ln,
             trainable_temperature=trainable_temperature,
             right_branching=right_branching,
-            debug_branching=debug_branching)
+            debug_branching=debug_branching,
+            uniform_branching=uniform_branching,
+            random_branching=random_branching,
+            st_gumbel=st_gumbel)
 
         mlp_input_dim = self.get_features_dim()
 
@@ -208,11 +220,16 @@ class Maillard(nn.Module):
                     token_sequence[merge] = (
                         token_sequence[merge], token_sequence[merge + 1])
                     del token_sequence[merge + 1]
+                import pdb; pdb.set_trace()
                 assert len(token_sequence) == 1
                 token_sequences.append(token_sequence[0])
         return token_sequences
 
     def get_sample_merge_sequence(self, b, s, batch_size):
+        """
+        TODO: adapt this to Maillard.
+        No mask_memory.
+        """
         merge_sequence = []
         index = b + (s * batch_size)
         for mask in self.mask_memory:
@@ -267,7 +284,7 @@ class Maillard(nn.Module):
 class BinaryTreeLSTM(nn.Module):
 
     def __init__(self, word_dim, hidden_dim, intra_attention,
-                 composition_ln=False, trainable_temperature=False, right_branching=False, debug_branching=False):
+                 composition_ln=False, trainable_temperature=False, right_branching=False, debug_branching=False, uniform_branching=False, random_branching=False, st_gumbel=False):
         super(BinaryTreeLSTM, self).__init__()
         #self.binary_tree_lstm(emb, example_lengths_var, temperature_multiplier=pyramid_temperature_multiplier)
         self.word_dim = word_dim
@@ -277,6 +294,9 @@ class BinaryTreeLSTM(nn.Module):
             hidden_dim, composition_ln=composition_ln)
         self.right_branching = right_branching
         self.debug_branching = debug_branching
+        self.uniform_branching = uniform_branching
+        self.random_branching = random_branching
+        self.st_gumbel = st_gumbel
 
         # TODO: Add something to blocks to make this use case more elegant.
         self.comp_query = Linear(
@@ -417,11 +437,11 @@ class BinaryTreeLSTM(nn.Module):
 
             for i in range(length):
                 chart[0].append((word_hiddens[i], word_cells[i]))
-
             for row in range(1, length):
                 chart.append([])
                 for col in range(length - row):
                     chart[row].append(None)
+
             for row in range(1, length):
                 weights = []
                 for col in range(length - row):
@@ -444,7 +464,14 @@ class BinaryTreeLSTM(nn.Module):
                         weights =  to_gpu(Variable(torch.zeros(torch.cat(scores, dim=1).size())))
                         for k in range(weights.size(0)): 
                             weights[k, -1] = 1.0
-
+                    elif self.uniform_branching:
+                        l = torch.cat(scores, dim=1).size(1)
+                        weights = to_gpu(Variable(torch.ones(torch.cat( scores, dim=1).size()) / l ))
+                    elif self.random_branching:
+                        w_rand = torch.rand(torch.cat(scores, dim=1).size())
+                        weights = to_gpu(Variable(w_rand / w_rand.sum(1).unsqueeze(1)))
+                    elif self.st_gumbel:
+                        weights = st_gumbel_softmax(torch.cat(scores, dim=1))
                     else:
                         weights = gumbel_softmax(torch.cat(scores, dim=1)) # cat: batch, num_versions, out: batch, num_states
 
@@ -457,6 +484,90 @@ class BinaryTreeLSTM(nn.Module):
             #print end - start
 
             return chart[length-1][0][0], chart[length-1][0][1], weights
+
+        """
+        else:
+            from random import shuffle
+            import string
+            def generate_string(length):
+                letters = list(string.ascii_lowercase) + list(string.ascii_uppercase)
+                shuffle(letters)
+                output = []
+                for i in range(length):
+                    output.append(letters[i])
+                return output, output
+
+            def compose(l, r):
+                l_h = l[0]
+                r_h = r[0]
+                l_c = l[0]
+                r_c = r[0]
+                print l_h, r_h
+                return ("(" + l_h + r_h + ")", "(" + l_c + r_c + ")")
+
+            def combine(list_versions):
+                return list_versions[0].replace("(","").replace(")","")
+
+            string_inp_hiddens, string_inp_cells = generate_string(length)
+
+            chart = [[]]
+            string_chart = [[]]
+
+            for i in range(length):
+                chart[0].append((word_hiddens[i], word_cells[i]))
+                string_chart[0].append((string_inp_hiddens[i], string_inp_cells[i]))
+
+            for row in range(1, length):
+                chart.append([])
+                string_chart.append([])
+                for col in range(length - row):
+                    chart[row].append(None)
+                    string_chart[row].append(None)
+            for row in range(1, length):
+                weights = []
+                for col in range(length - row):
+                    states = []
+                    hiddens = []
+                    cells = []
+                    scores = []
+                    string_states = []
+                    string_hiddens = []
+                    string_cells = []
+                    for i in range(row):
+                        l = chart[row-i-1][col]
+                        r = chart[i][row+col-i]
+                        l_s = string_chart[row-i-1][col]
+                        r_s = string_chart[i][row+col-i]
+                        
+                        states.append(self.treelstm_layer(l=l, r=r))
+                        hiddens.append(states[-1][0])
+                        cells.append(states[-1][1])
+
+                        string_states.append(compose(l=l_s, r=r_s))
+                        string_hiddens.append(string_states[-1][0])
+                        string_cells.append(string_states[-1][1])
+                        
+                        comp_weights = dot_nd(
+                            query=self.comp_query.weight.squeeze(),
+                            candidates=hiddens[-1]) # batch, 1
+                        scores.append(comp_weights) # [(batch, 1), ...]
+
+                    weights = gumbel_softmax(torch.cat(scores, dim=1)) # cat: batch, num_versions, out: batch, num_states
+
+                    h_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(hiddens, dim=1)), dim=1)
+                    c_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(cells, dim=1)), dim=1) # batch, num_states, dim
+
+                    string_h_new = combine(string_hiddens)
+                    string_c_new = combine(string_cells)
+
+                    chart[row][col] = (h_new.unsqueeze(1), c_new.unsqueeze(1))
+                    string_chart[row][col] = (string_h_new, string_c_new)
+            import pdb; pdb.set_trace()
+            end = time.time()
+            #print end - start
+
+            return chart[length-1][0][0], chart[length-1][0][1], weights
+        """
 
 
     def forward(self, input, length, temperature_multiplier=1.0):
