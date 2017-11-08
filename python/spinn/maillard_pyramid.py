@@ -220,7 +220,6 @@ class Maillard(nn.Module):
                     token_sequence[merge] = (
                         token_sequence[merge], token_sequence[merge + 1])
                     del token_sequence[merge + 1]
-                import pdb; pdb.set_trace()
                 assert len(token_sequence) == 1
                 token_sequences.append(token_sequence[0])
         return token_sequences
@@ -318,78 +317,6 @@ class BinaryTreeLSTM(nn.Module):
         c = done_mask * new_c + (1 - done_mask) * old_c[:, :-1, :]
         return h, c
 
-    def score_constituent(self, constituent):
-        w_score = dy.parameter(self.w_score)
-        w_score = dy.cdiv(w_score, dy.sqrt(dy.squared_norm(w_score)))
-        h = dy.cdiv(constituent.h, dy.sqrt(dy.squared_norm(constituent.h)))
-        return dy.dot_product(w_score, h)*self.inv_temp
-
-    def compute_compositions_old(self, state):
-        """
-        (In a parallelized manner) Compute all compositions we will need 
-        for the current step.
-        Input to || computation: (h,c) l and r.
-        Input to serial computation: list of (h,c) l and r.
-        don't pass full chart around. only values that'll be needed for computation
-
-        currently: passing full sentence at each laye. FIX!!
-        """
-        h, c = state
-        l = (h[:, :-1, :], c[:, :-1, :])
-        r = (h[:, 1:, :], c[:, 1:, :])
-        #l = state
-        #r = state
-        length = l[0].size(1)
-        l_hiddens = l[0].chunk(length, dim=1)
-        l_states = l[1].chunk(length, dim=1)
-        r_hiddens = r[0].chunk(length, dim=1)
-        r_states = r[1].chunk(length, dim=1)
-
-        chart = []
-        weights = []
-
-        for col in range(length):
-            l = (l_hiddens[col], l_states[col])
-            r = (r_hiddens[col], r_states[col])
-            chart.append([self.treelstm_layer(l=l, r=r)])
-            weights.append([1.0])
-            # initialise the remaining chart cells
-            for row in range(1, col+1):
-                chart[col].append(None)
-                weights[col].append(None)
-
-        for col in range(length):
-            for row in range(1, col+1):
-                # at row k, there are k possible way to form each constituent.
-                # we try all of them, and keep the results around together with
-                # the corresponding scores
-                constituents = []
-                hiddens = []
-                cells = []
-                scores = []
-                for constituent_number in range(0, row):
-                    l = chart[col-row+constituent_number][constituent_number]
-                    r = chart[col][row-1-constituent_number]
-                    constituents.append(self.treelstm_layer(l=l, r=r))
-                    hiddens.append(constituents[-1][0])
-                    cells.append(constituents[-1][1])
-                    comp_weights = dot_nd(
-                        query=self.comp_query.weight.squeeze(),
-                        candidates=hiddens[-1])
-
-                    scores.append(comp_weights) #--> append(scalar)
-                # we gumbel-softmax the weights, and use them as a weighting mechanism
-                # that strongly prefers assigning probability mass to only one
-                # possibility
-                weights[col][row] = gumbel_softmax(torch.stack(scores, dim=2))
-
-                h_new = torch.sum(torch.mul(weights[col][row].unsqueeze(2), torch.stack(hiddens, dim=3)), dim=-1)
-                c_new = torch.sum(torch.mul(weights[col][row].unsqueeze(2), torch.stack(cells, dim=3)), dim=-1)
-
-                chart[col][row] = (h_new, c_new)
-
-        return chart[length-1][length-1][0], chart[length-1][length-1][1], weights
-
     def compute_compositions(self, state, mask):
         """
         (In a parallelized manner) Compute all compositions we will need 
@@ -410,8 +337,6 @@ class BinaryTreeLSTM(nn.Module):
         ['ABCDEFG', 'BCDEFG.'],
         ['ABCDEFG.']]
         """
-        import time
-        start = time.time()
         # make sure are embeddigns
         h, c = state # batch, length, dim
         mask = mask # batch, length
@@ -480,94 +405,7 @@ class BinaryTreeLSTM(nn.Module):
 
                     chart[row][col] = (h_new.unsqueeze(1), c_new.unsqueeze(1))
 
-            end = time.time()
-            #print end - start
-
             return chart[length-1][0][0], chart[length-1][0][1], weights
-
-        """
-        else:
-            from random import shuffle
-            import string
-            def generate_string(length):
-                letters = list(string.ascii_lowercase) + list(string.ascii_uppercase)
-                shuffle(letters)
-                output = []
-                for i in range(length):
-                    output.append(letters[i])
-                return output, output
-
-            def compose(l, r):
-                l_h = l[0]
-                r_h = r[0]
-                l_c = l[0]
-                r_c = r[0]
-                print l_h, r_h
-                return ("(" + l_h + r_h + ")", "(" + l_c + r_c + ")")
-
-            def combine(list_versions):
-                return list_versions[0].replace("(","").replace(")","")
-
-            string_inp_hiddens, string_inp_cells = generate_string(length)
-
-            chart = [[]]
-            string_chart = [[]]
-
-            for i in range(length):
-                chart[0].append((word_hiddens[i], word_cells[i]))
-                string_chart[0].append((string_inp_hiddens[i], string_inp_cells[i]))
-
-            for row in range(1, length):
-                chart.append([])
-                string_chart.append([])
-                for col in range(length - row):
-                    chart[row].append(None)
-                    string_chart[row].append(None)
-            for row in range(1, length):
-                weights = []
-                for col in range(length - row):
-                    states = []
-                    hiddens = []
-                    cells = []
-                    scores = []
-                    string_states = []
-                    string_hiddens = []
-                    string_cells = []
-                    for i in range(row):
-                        l = chart[row-i-1][col]
-                        r = chart[i][row+col-i]
-                        l_s = string_chart[row-i-1][col]
-                        r_s = string_chart[i][row+col-i]
-                        
-                        states.append(self.treelstm_layer(l=l, r=r))
-                        hiddens.append(states[-1][0])
-                        cells.append(states[-1][1])
-
-                        string_states.append(compose(l=l_s, r=r_s))
-                        string_hiddens.append(string_states[-1][0])
-                        string_cells.append(string_states[-1][1])
-                        
-                        comp_weights = dot_nd(
-                            query=self.comp_query.weight.squeeze(),
-                            candidates=hiddens[-1]) # batch, 1
-                        scores.append(comp_weights) # [(batch, 1), ...]
-
-                    weights = gumbel_softmax(torch.cat(scores, dim=1)) # cat: batch, num_versions, out: batch, num_states
-
-                    h_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(hiddens, dim=1)), dim=1)
-                    c_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(cells, dim=1)), dim=1) # batch, num_states, dim
-
-                    string_h_new = combine(string_hiddens)
-                    string_c_new = combine(string_cells)
-
-                    chart[row][col] = (h_new.unsqueeze(1), c_new.unsqueeze(1))
-                    string_chart[row][col] = (string_h_new, string_c_new)
-            import pdb; pdb.set_trace()
-            end = time.time()
-            #print end - start
-
-            return chart[length-1][0][0], chart[length-1][0][1], weights
-        """
 
 
     def forward(self, input, length, temperature_multiplier=1.0):
