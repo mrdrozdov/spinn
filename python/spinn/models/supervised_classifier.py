@@ -83,8 +83,9 @@ def evaluate(FLAGS, model, eval_set, log_entry,
             example_lengths=eval_num_transitions_batch)
 
         # TODO: Fix so that this works for Maillard!!
-        can_sample = FLAGS.model_type in ["ChoiPyramid"] or (
+        can_sample = FLAGS.model_type in ["ChoiPyramid", "Maillard"] or (
             FLAGS.model_type == "SPINN" and FLAGS.use_internal_parser)
+
         if show_sample and can_sample:
             tmp_samples = model.get_samples(
                 eval_X_batch, vocabulary, only_one=not FLAGS.write_eval_report)
@@ -201,6 +202,7 @@ def train_loop(
     model.train()
     X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = get_batch(
         training_data_iter.next())
+    
     model(X_batch, transitions_batch, y_batch,
           use_internal_parser=FLAGS.use_internal_parser,
           validate_transitions=FLAGS.validate_transitions,
@@ -487,6 +489,7 @@ def run(only_forward=False):
                 vocabulary,
                 show_sample=True,
                 eval_index=index)
+            # TODO: FIX return show_sample to True after fixing trees.
             print(log_entry)
             logger.LogEntry(log_entry)
     else:
