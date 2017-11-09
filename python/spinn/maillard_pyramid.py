@@ -159,11 +159,13 @@ class Maillard(nn.Module):
         hh, _, masks, temperature = self.binary_tree_lstm(
             emb, example_lengths_var, temperature_multiplier=pyramid_temperature_multiplier)
 
+        self.mask_memory = masks
+
         if self.training:
             self.temperature_to_display = temperature
 
-        if store_parse_masks:
-            self.mask_memory = [mask.data.cpu().numpy() for mask in masks]
+        #if store_parse_masks:
+        #    self.mask_memory = [mask.data.cpu().numpy() for mask in masks]
 
         h = self.wrap(hh)
         output = self.mlp(self.build_features(h))
@@ -212,30 +214,51 @@ class Maillard(nn.Module):
                 else:
                     token_sequence = [self.inverted_vocabulary[token]
                                       for token in x[b, :]]
-
-                for merge in self.get_sample_merge_sequence(b, s, batch_size):
-                    if len(token_sequence) <= 1:
-                        # For padding quirks around single-word sentences.
-                        break
-                    token_sequence[merge] = (
-                        token_sequence[merge], token_sequence[merge + 1])
-                    del token_sequence[merge + 1]
-                assert len(token_sequence) == 1
-                token_sequences.append(token_sequence[0])
+                
+                token_sequences.append(self.get_sample_merge_sequence(b, s, batch_size, token_sequence))
+        
         return token_sequences
 
+    """
     def get_sample_merge_sequence(self, b, s, batch_size):
-        """
-        TODO: adapt this to Maillard.
-        No mask_memory.
-        """
         merge_sequence = []
         index = b + (s * batch_size)
         for mask in self.mask_memory:
             merge_sequence.append(np.argmax(mask[index, :]))
         merge_sequence.append(0)
         return merge_sequence
+    """
 
+    def get_sample_merge_sequence(self, b, s, batch_size, sent):
+        mask = self.mask_memory
+        index = b + (s * batch_size)
+        def compose(l, r):
+            return "(" + l + " " + r + ")"
+
+        chart = [sent]
+        choices = [sent]
+        for row in range(1, len(sent)): 
+            chart.append([])
+            choices.append([])
+            for col in range(len(sent) - row):
+                chart[row].append(None)
+                choices[row].append(None)
+        
+        for row in range(1, len(sent)): # = len(l_hiddens)
+            for col in range(len(sent) - row):
+                versions = []
+                for i in range(row):
+                    versions.append(compose(chart[row-i-1][col], chart[i][row+col-i]))
+                max_ind = torch.max(self.mask_memory[row][col], dim=1)[1][index]
+                max_ind = int(max_ind.data.numpy())
+                chart[row][col] = versions[max_ind] #.gather(1, ids.view(-1,1))
+                choices[row][col] = versions
+                l = len(versions)
+        
+        max_ind = torch.max(self.mask_memory[-1][-1], dim=1)[1][index]
+        max_ind = int(max_ind.data.numpy())
+        return choices[-1][-1][max_ind]
+    
     # --- Sentence Style Switches ---
 
     def unwrap(self, sentences, lengths=None):
@@ -336,6 +359,8 @@ class BinaryTreeLSTM(nn.Module):
         ['ABCDEF', 'BCDEFG', 'CDEFG.'],
         ['ABCDEFG', 'BCDEFG.'],
         ['ABCDEFG.']]
+
+        TODO: do masking to prevent composing with padding.
         """
         # make sure are embeddigns
         h, c = state # batch, length, dim
@@ -359,16 +384,19 @@ class BinaryTreeLSTM(nn.Module):
 
         else: 
             chart = [[]]
+            all_weights = [[]]
 
             for i in range(length):
                 chart[0].append((word_hiddens[i], word_cells[i]))
+                all_weights[0].append(None)
             for row in range(1, length):
                 chart.append([])
+                all_weights.append([])
                 for col in range(length - row):
                     chart[row].append(None)
+                    all_weights[row].append(None)
 
             for row in range(1, length):
-                weights = []
                 for col in range(length - row):
                     states = []
                     hiddens = []
@@ -404,8 +432,22 @@ class BinaryTreeLSTM(nn.Module):
                     c_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(cells, dim=1)), dim=1) # batch, num_states, dim
 
                     chart[row][col] = (h_new.unsqueeze(1), c_new.unsqueeze(1))
+                    all_weights[row][col] = weights
 
-            return chart[length-1][0][0], chart[length-1][0][1], weights
+            # TODO: FIX, place below into above code. replace all_weights.
+            mask = [[]]
+            for i in range(length):
+                mask[0].append(None)
+            for row in range(1, length):
+                mask.append([])
+                for col in range(length - row):
+                    mask[row].append(None)
+
+            for row in range(1, length):
+                for col in range(length - row):
+                    mask[row][col] = create_max_mask(all_weights[row][col])
+
+            return chart[length-1][0][0], chart[length-1][0][1], mask
 
 
     def forward(self, input, length, temperature_multiplier=1.0):
@@ -413,7 +455,7 @@ class BinaryTreeLSTM(nn.Module):
         length_mask = sequence_mask(sequence_length=length,
                                     max_length=max_depth)
 
-        select_masks = []
+        #select_masks = []
         state = input.chunk(num_chunks=2, dim=2)
         #nodes = []
         # For one or two-word trees where we never compute a temperature
@@ -423,7 +465,7 @@ class BinaryTreeLSTM(nn.Module):
             nodes.append(state[0])
         """
 
-        h, c, weights = self.compute_compositions(state, length_mask)
+        h, c, masks = self.compute_compositions(state, length_mask)
         
         """
         if self.intra_attention:
@@ -445,7 +487,7 @@ class BinaryTreeLSTM(nn.Module):
             h = (att_weights_expand * nodes).sum(1)
         """
         assert h.size(1) == 1 and c.size(1) == 1
-        return h.squeeze(1), c.squeeze(1), select_masks, temperature_to_display
+        return h.squeeze(1), c.squeeze(1), masks, temperature_to_display
 
 
 def apply_nd(fn, input):
@@ -548,6 +590,14 @@ def st_gumbel_softmax(logits, temperature=1.0, mask=None):
     gumbel_noise = Variable(-torch.log(-torch.log(u + eps) + eps))
     y = logits + gumbel_noise
     y = masked_softmax(logits=y / temperature, mask=mask)
+    y_argmax = y.max(1)[1]
+    y_hard = convert_to_one_hot(
+        indices=y_argmax,
+        num_classes=y.size(1)).float()
+    y = (y_hard - y).detach() + y
+    return y
+
+def create_max_mask(y):
     y_argmax = y.max(1)[1]
     y_hard = convert_to_one_hot(
         indices=y_argmax,
