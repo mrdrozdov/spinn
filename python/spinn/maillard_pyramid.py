@@ -216,7 +216,6 @@ class Maillard(nn.Module):
                                       for token in x[b, :]]
                 
                 token_sequences.append(self.get_sample_merge_sequence(b, s, batch_size, token_sequence))
-        
         return token_sequences
 
     """
@@ -233,7 +232,7 @@ class Maillard(nn.Module):
         mask = self.mask_memory
         index = b + (s * batch_size)
         def compose(l, r):
-            return "(" + l + " " + r + ")"
+            return "( " + l + " " + r + " )"
 
         chart = [sent]
         choices = [sent]
@@ -446,7 +445,6 @@ class BinaryTreeLSTM(nn.Module):
             for row in range(1, length):
                 for col in range(length - row):
                     mask[row][col] = create_max_mask(all_weights[row][col])
-
             return chart[length-1][0][0], chart[length-1][0][1], mask
 
 
