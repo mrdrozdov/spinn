@@ -300,10 +300,7 @@ def train_loop(
 
         for p in model.parameters():
             if p.requires_grad:
-                try:
-                    p.grad.data.clamp_(min=-clip, max=clip)
-                except AttributeError:
-                    pass
+                p.grad.data.clamp_(min=-clip, max=clip)
 
         # Learning Rate Decay
         if FLAGS.actively_decay_learning_rate:
