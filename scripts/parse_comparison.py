@@ -27,8 +27,11 @@ LABEL_MAP = {'entailment': 0, 'neutral': 1, 'contradiction': 2}
 
 FLAGS = gflags.FLAGS
 
+def spaceify(parse):
+    return parse #.replace("(", "( ").replace(")", " )")
 
 def tokenize_parse(parse):
+    parse = spaceify(parse)
     return [token for token in parse.split() if token not in ['(', ')']]
 
 
@@ -93,18 +96,20 @@ def average_depth(parse):
 def corpus_average_depth(corpus):
     local_averages = []
     for key in corpus:
-        local_averages.append(average_depth(corpus[key]))
+        s = spaceify(corpus[key])
+        local_averages.append(average_depth(s))
     return float(sum(local_averages)) / len(local_averages)
 
 
 def average_length(parse):
+    parse = spaceify(parse)
     return len(parse.split())
 
 
 def corpus_average_length(corpus):
     local_averages = []
     for key in corpus:
-        local_averages.append(average_length(corpus[key]))
+        local_averages.append(average_length(s))
     return float(sum(local_averages)) / len(local_averages)
 
 
@@ -137,7 +142,8 @@ def corpus_stats(corpus_1, corpus_2, first_two=False, neg_pair=False):
             three_count += 1 
         if neg_pair:
             word_index = 0
-            tokens = corpus_1[key].split()
+            s = spaceify(corpus_1[key])
+            tokens = s.split()
             for token_index, token in enumerate(tokens):
                 if token in ['(', ')']:
                     continue
@@ -155,6 +161,9 @@ def corpus_stats(corpus_1, corpus_2, first_two=False, neg_pair=False):
 
 
 def to_indexed_contituents(parse):
+    if parse.count("(") != parse.count(")"):
+        print parse
+    parse = spaceify(parse)
     sp = parse.split()
     if len(sp) == 1:
         return set([(0, 1)])
@@ -166,6 +175,9 @@ def to_indexed_contituents(parse):
         if token == '(':
             backpointers.append(word_index)
         elif token == ')':
+            #if len(backpointers) == 0:
+            #    pass
+            #else:
             start = backpointers.pop()
             end = word_index
             constituent = (start, end)
@@ -173,7 +185,6 @@ def to_indexed_contituents(parse):
         else:
             word_index += 1
     return indexed_constituents
-
 
 def example_f1(c1, c2):
     prec = float(len(c1.intersection(c2))) / len(c2)  # TODO: More efficient.
@@ -217,8 +228,9 @@ def read_ptb_report(path):
             report[loaded_example['example_id']] = unpad(loaded_example['sent1_tree'])
     return report
 
-
+"""
 def unpad(parse):
+    parse = spaceify(parse)
     tokens = parse.split()
     to_drop = 0
     for i in range(len(tokens) - 1, -1, -1):
@@ -226,12 +238,33 @@ def unpad(parse):
             to_drop += 1
         elif tokens[i] == ")":
             continue
-        else:
-            break
+        #else:
+        #    break
     if to_drop == 0:
         return parse
     else:
         return " ".join(tokens[to_drop:-2 * to_drop])
+"""
+
+def unpad(parse):
+    ok = ["(", ")", "_PAD"]
+    unpadded = []
+    tokens = parse.split()
+    cur = [i for i in range(len(tokens)) if tokens[i] == "_PAD"]
+    
+    if len(cur) != 0:
+        if tokens[cur[0]-1] in ok:
+            unpad = tokens[:cur[0]-1]
+        else: 
+            unpad = tokens[:cur[0]]
+    else:
+        unpad = tokens
+    
+    sent = " ".join(unpad)
+    while sent.count("(") != sent.count(")"):
+        sent += " )"
+    
+    return sent
 
 
 def run():
@@ -315,6 +348,7 @@ def run():
                 print to_latex(gt[sentence])
                 print to_latex(report[sentence])
                 print
+        #import pdb; pdb.set_trace()
         print str(corpus_stats(report, lb)) + '\t' + str(corpus_stats(report, rb)) + '\t' + str(corpus_stats(report, gt, first_two=FLAGS.first_two, neg_pair=FLAGS.neg_pair)) + '\t' + str(corpus_average_depth(report))
 
     for i, report in enumerate(ptb_reports):
