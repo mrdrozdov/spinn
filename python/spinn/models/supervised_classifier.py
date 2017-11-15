@@ -122,10 +122,8 @@ def evaluate(FLAGS, model, eval_set, log_entry,
 
             if model.use_sentence_pair:
                 batch_size = pred.size(0)
-                sent1_transitions = transitions_per_example[:batch_size] if \
-                transitions_per_example is not None else None
-                sent2_transitions = transitions_per_example[batch_size:] if \
-                transitions_per_example is not None else None
+                sent1_transitions = transitions_per_example[:batch_size] if transitions_per_example is not None else None
+                sent2_transitions = transitions_per_example[batch_size:] if transitions_per_example is not None else None
 
                 sent1_trees = tree_strs[:batch_size] if tree_strs is not None else None
                 sent2_trees = tree_strs[batch_size:
@@ -293,49 +291,19 @@ def train_loop(
             total_loss += transition_loss
         aux_loss = auxiliary_loss(model)
         total_loss += aux_loss
+        
         # Backward pass.
-        grads = {}
-        def save_grad(name):
-            def hook(grad):
-                grads[name] = grad
-            return hook
-
-        for p in model.named_parameters():
-            if p[0] == "binary_tree_lstm.comp_query.bias":
-                p[1].register_hook(save_grad(p[0]))
-            if p[0] == "binary_tree_lstm.comp_query.weight":
-                p[1].register_hook(save_grad(p[0]))
-
         total_loss.backward()
 
         # Hard Gradient Clipping
         clip = FLAGS.clipping_max_value
-        """
-        for p in model.named_parameters():
-            if p[1].requires_grad:
-                try:
-                    p[1].grad.data.clamp_(min=-clip, max=clip)
-                    print p[0], p[1].grad.data.abs().sum()
-                except AttributeError:
-                    print "BROKEN:", p[0]
-                    pass
-        """
-        print(grads['binary_tree_lstm.comp_query.bias'], grads['binary_tree_lstm.comp_query.weight'])
+
         for p in model.parameters():
             if p.requires_grad:
-                #try:
-                p.grad.data.clamp_(min=-clip, max=clip)
-                #except AttributeError:
-                #    pass
-
-        """
-        for p in model.named_parameters():
-            if p[0] == "binary_tree_lstm.comp_query.weight":
-                print "comp_query grad:", p[1].grad.data
-                print "abs sum:", p[1].grad.data.abs().sum()
-            if p[0] == "binary_tree_lstm.comp_query.bias":
-                p[0].register_hook(print)
-        """
+                try:
+                    p.grad.data.clamp_(min=-clip, max=clip)
+                except AttributeError:
+                    pass
 
         # Learning Rate Decay
         if FLAGS.actively_decay_learning_rate:
