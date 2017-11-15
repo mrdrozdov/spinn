@@ -249,13 +249,13 @@ class Maillard(nn.Module):
                 for i in range(row):
                     versions.append(compose(chart[row-i-1][col], chart[i][row+col-i]))
                 max_ind = torch.max(self.mask_memory[row][col], dim=1)[1][index]
-                max_ind = int(max_ind.data.numpy())
+                max_ind = int(max_ind.data.cpu().numpy())
                 chart[row][col] = versions[max_ind] #.gather(1, ids.view(-1,1))
                 choices[row][col] = versions
                 l = len(versions)
         
         max_ind = torch.max(self.mask_memory[-1][-1], dim=1)[1][index]
-        max_ind = int(max_ind.data.numpy())
+        max_ind = int(max_ind.data.cpu().numpy())
         return choices[-1][-1][max_ind]
     
     # --- Sentence Style Switches ---
