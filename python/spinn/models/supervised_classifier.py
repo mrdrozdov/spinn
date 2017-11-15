@@ -294,6 +294,18 @@ def train_loop(
         aux_loss = auxiliary_loss(model)
         total_loss += aux_loss
         # Backward pass.
+        grads = {}
+        def save_grad(name):
+            def hook(grad):
+                grads[name] = grad
+            return hook
+
+        for p in model.named_parameters():
+            if p[0] == "binary_tree_lstm.comp_query.bias":
+                p[1].register_hook(save_grad(p[0]))
+            if p[0] == "binary_tree_lstm.comp_query.weight":
+                p[1].register_hook(save_grad(p[0]))
+
         total_loss.backward()
 
         # Hard Gradient Clipping
@@ -308,21 +320,23 @@ def train_loop(
                     print "BROKEN:", p[0]
                     pass
         """
-
+        print(grads['binary_tree_lstm.comp_query.bias'], grads['binary_tree_lstm.comp_query.weight'])
         for p in model.parameters():
             if p.requires_grad:
-                try:
-                    p.grad.data.clamp_(min=-clip, max=clip)
-                except AttributeError:
-                    pass
+                #try:
+                p.grad.data.clamp_(min=-clip, max=clip)
+                #except AttributeError:
+                #    pass
 
         """
         for p in model.named_parameters():
             if p[0] == "binary_tree_lstm.comp_query.weight":
                 print "comp_query grad:", p[1].grad.data
                 print "abs sum:", p[1].grad.data.abs().sum()
+            if p[0] == "binary_tree_lstm.comp_query.bias":
+                p[0].register_hook(print)
         """
-        
+
         # Learning Rate Decay
         if FLAGS.actively_decay_learning_rate:
             optimizer.lr = FLAGS.learning_rate * \
