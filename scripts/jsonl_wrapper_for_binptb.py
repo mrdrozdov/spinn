@@ -23,20 +23,23 @@ def run():
                 except UnicodeError as e:
                     print "ENCODING ERROR:", line, e
                     line = "{}"
+                binparse, parse = line.strip().split('\t')
                 item = {
                     'genre': 'ptb_wsj',
                     'gold_label': 'neutral',
                     'pairID': 'ptb' + str(idx),
                     'sentence1': '-',
                     'sentence2': '-',
-                    'sentence1_binary_parse': line.strip(),
+                    'sentence1_binary_parse': binparse,
                     'sentence2_binary_parse': '-',
+                    'sentence1_parse': parse,
+                    'sentence2_parse': '-',
                 }
                 json.dump(item, outfile, sort_keys=True)
                 outfile.write('\n')
 
 if __name__ == '__main__':
-    gflags.DEFINE_string("read_path", "/Users/Bowman/Drive/Parser/stanford-corenlp-full-2015-04-20/wsj.txt", "")
+    gflags.DEFINE_string("read_path", "/Users/Bowman/Drive/Parser/stanford-corenlp-full-2015-04-20/wsj_tab.txt", "")
     gflags.DEFINE_string("write_path", "ptb.jsonl", "")
 
     FLAGS(sys.argv)

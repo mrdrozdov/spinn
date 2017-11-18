@@ -173,10 +173,7 @@ def corpus_stats_labeled(corpus_unlabeled, corpus_labeled):
         ex_correct, ex_total = example_labeled_acc(c1, c2)
         correct.update(ex_correct)
         total.update(ex_total)
-
-    for key in sorted(total):
-        print key, correct[key] * 1. / total[key]
-    return 0.0
+    return correct, total
 
 
 def to_indexed_contituents(parse):
@@ -295,7 +292,7 @@ def unpad(parse):
 
 def run():
     gt = {}
-    gt_labeled = {} 
+    # gt_labeled = {} 
     with codecs.open(FLAGS.main_data_path, encoding='utf-8') as f:
         for line in f:
             try:
@@ -315,8 +312,8 @@ def run():
                continue # Stanford parser tree binarizer doesn't handle phone numbers properly.
             gt[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_binary_parse']
             gt[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_binary_parse']
-            gt_labeled[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_parse']
-            gt_labeled[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_parse']
+            # gt_labeled[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_parse']
+            # gt_labeled[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_parse']
 
     lb = to_lb(gt)
     rb = to_rb(gt)
@@ -324,6 +321,7 @@ def run():
     print "GT average depth", corpus_average_depth(gt)
 
     ptb = {}
+    ptb_labeled = {}
     if FLAGS.ptb_data_path != "_":
         with codecs.open(FLAGS.ptb_data_path, encoding='utf-8') as f:
             for line in f:
@@ -336,6 +334,7 @@ def run():
                 if loaded_example["gold_label"] not in LABEL_MAP:
                     continue
                 ptb[loaded_example['pairID']] = loaded_example['sentence1_binary_parse']
+                ptb_labeled[loaded_example['pairID']] = loaded_example['sentence1_parse']
 
     reports = []
     ptb_reports = []
@@ -387,8 +386,9 @@ def run():
                 print to_latex(report[sentence])
                 print
         print str(corpus_stats(report, lb)) + '\t' + str(corpus_stats(report, rb)) + '\t' + str(corpus_stats(report, gt, first_two=FLAGS.first_two, neg_pair=FLAGS.neg_pair)) + '\t' + str(corpus_average_depth(report))
-        corpus_stats_labeled(report, gt_labeled)
-
+        
+    correct = Counter()
+    total = Counter()
     for i, report in enumerate(ptb_reports):
         print ptb_report_paths[i]
         if FLAGS.print_latex > 0:
@@ -399,6 +399,12 @@ def run():
                 print to_latex(report[sentence])
                 print
         print  str(corpus_stats(report, ptb)) + '\t' + str(corpus_average_depth(report))
+        set_correct, set_total = corpus_stats_labeled(report, ptb_labeled)
+        correct.update(set_correct)
+        total.update(set_total)
+
+    for key in sorted(total):
+        print key + '\t' + str(correct[key] * 1. / total[key])
 
 
 if __name__ == '__main__':
