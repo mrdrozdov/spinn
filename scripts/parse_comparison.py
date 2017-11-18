@@ -22,6 +22,7 @@ import json
 import random
 import re
 import glob
+from collections import Counter
 
 LABEL_MAP = {'entailment': 0, 'neutral': 1, 'contradiction': 2}
 
@@ -121,7 +122,7 @@ def corpus_stats(corpus_1, corpus_2, first_two=False, neg_pair=False):
     three_count = 0.0
     neg_pair_count = 0.0
     neg_count = 0.0
-    for key in corpus_1:     
+    for key in corpus_2:     
         c1 = to_indexed_contituents(corpus_1[key])
         c2 = to_indexed_contituents(corpus_2[key])
 
@@ -154,6 +155,30 @@ def corpus_stats(corpus_1, corpus_2, first_two=False, neg_pair=False):
     return stats
 
 
+def corpus_stats_labeled(corpus_unlabeled, corpus_labeled):
+    """ 
+    Note: If a few examples in one dataset are missing from the other (i.e., some examples from the source corpus were not included 
+      in a model corpus), the shorter dataset must be supplied as corpus_1.
+    """
+
+    correct = Counter()
+    total = Counter()
+
+    for key in corpus_labeled:     
+        c1 = to_indexed_contituents(corpus_unlabeled[key])
+        c2 = to_indexed_contituents_labeled(corpus_labeled[key])
+        if len(c2) == 0:
+            continue
+
+        ex_correct, ex_total = example_labeled_acc(c1, c2)
+        correct.update(ex_correct)
+        total.update(ex_total)
+
+    for key in sorted(total):
+        print key, correct[key] * 1. / total[key]
+    return 0.0
+
+
 def to_indexed_contituents(parse):
     sp = parse.split()
     if len(sp) == 1:
@@ -175,9 +200,43 @@ def to_indexed_contituents(parse):
     return indexed_constituents
 
 
+def to_indexed_contituents_labeled(parse):
+    sp = re.findall(r'\([^ ]+| [^\(\) ]+|\)', parse)
+    if len(sp) == 1:
+        return set([(0, 1)])
+
+    backpointers = []
+    indexed_constituents = set()
+    word_index = 0
+    for index, token in enumerate(sp):
+        if token[0] == '(':
+            backpointers.append((word_index, token[1:]))
+        elif token == ')':
+            start, typ = backpointers.pop()
+            end = word_index
+            constituent = (start, end, typ)
+            if end - start > 1:
+                indexed_constituents.add(constituent)
+        else:
+            word_index += 1
+    return indexed_constituents
+
+
 def example_f1(c1, c2):
     prec = float(len(c1.intersection(c2))) / len(c2)  # TODO: More efficient.
     return prec  # For strictly binary trees, P = R = F1
+
+
+def example_labeled_acc(c1, c2):
+    '''Compute the number of non-unary constituents of each type in the labeled (non-binirized) parse appear in the model output.'''
+    correct = Counter()
+    total = Counter()
+    for constituent in c2:
+        if (constituent[0], constituent[1]) in c1:
+            correct[constituent[2]] += 1
+        total[constituent[2]] += 1
+    return correct, total
+
 
 def randomize(parse):
     tokens = tokenize_parse(parse)
@@ -236,6 +295,7 @@ def unpad(parse):
 
 def run():
     gt = {}
+    gt_labeled = {} 
     with codecs.open(FLAGS.main_data_path, encoding='utf-8') as f:
         for line in f:
             try:
@@ -246,11 +306,22 @@ def run():
             loaded_example = json.loads(line)
             if loaded_example["gold_label"] not in LABEL_MAP:
                 continue
+            if '512-4841' in loaded_example['sentence1_binary_parse'] \
+               or '512-8581' in loaded_example['sentence1_binary_parse'] \
+               or '412-4841' in loaded_example['sentence1_binary_parse'] \
+               or '512-4841' in loaded_example['sentence2_binary_parse'] \
+               or '512-8581' in loaded_example['sentence2_binary_parse'] \
+               or '412-4841' in loaded_example['sentence2_binary_parse']:
+               continue # Stanford parser tree binarizer doesn't handle phone numbers properly.
             gt[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_binary_parse']
             gt[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_binary_parse']
+            gt_labeled[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_parse']
+            gt_labeled[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_parse']
 
     lb = to_lb(gt)
     rb = to_rb(gt)
+
+    print "GT average depth", corpus_average_depth(gt)
 
     ptb = {}
     if FLAGS.ptb_data_path != "_":
@@ -316,6 +387,7 @@ def run():
                 print to_latex(report[sentence])
                 print
         print str(corpus_stats(report, lb)) + '\t' + str(corpus_stats(report, rb)) + '\t' + str(corpus_stats(report, gt, first_two=FLAGS.first_two, neg_pair=FLAGS.neg_pair)) + '\t' + str(corpus_average_depth(report))
+        corpus_stats_labeled(report, gt_labeled)
 
     for i, report in enumerate(ptb_reports):
         print ptb_report_paths[i]
