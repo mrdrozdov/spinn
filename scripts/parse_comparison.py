@@ -93,7 +93,6 @@ def average_depth(parse):
             depths.append(current_depth)
     if len(depths) == 0:
         pass
-        #import pdb; pdb.set_trace()
     else:
         return float(sum(depths)) / len(depths)
 
@@ -462,7 +461,6 @@ def run():
         correct.update(set_correct_ptb)
         total.update(set_total_ptb)
 
-    import pdb; pdb.set_trace()
     for key in sorted(total_ptb):
         print key + '_ptb' + '\t' + str(correct_ptb[key] * 1. / total_ptb[key]), '\t', total[key]
 
