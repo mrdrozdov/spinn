@@ -214,7 +214,7 @@ class Maillard(nn.Module):
                 else:
                     token_sequence = [self.inverted_vocabulary[token]
                                       for token in x[b, :]]
-                
+                                      
                 token_sequences.append(self.get_sample_merge_sequence(b, s, batch_size, token_sequence))
         return token_sequences
 

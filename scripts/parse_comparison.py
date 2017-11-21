@@ -300,27 +300,8 @@ def read_ptb_report(path):
                 print "ENCODING ERROR:", line, e
                 line = "{}"
             loaded_example = json.loads(line)
-            #report[loaded_example['pairID']] = unpad(loaded_example['sentence1_parse'])
             report[loaded_example['example_id']] = unpad(loaded_example['sent1_tree'])
     return report
-
-"""
-def unpad(parse):
-    parse = spaceify(parse)
-    tokens = parse.split()
-    to_drop = 0
-    for i in range(len(tokens) - 1, -1, -1):
-        if tokens[i] == "_PAD":
-            to_drop += 1
-        elif tokens[i] == ")":
-            continue
-        #else:
-        #    break
-    if to_drop == 0:
-        return parse
-    else:
-        return " ".join(tokens[to_drop:-2 * to_drop])
-"""
 
 def unpad(parse):
     ok = ["(", ")", "_PAD"]
@@ -444,7 +425,6 @@ def run():
     for key in sorted(total):
         print key + '\t' + str(correct[key] * 1. / total[key]) #+ '\t' + str(total[key])
 
-
     correct_ptb = Counter()
     total_ptb = Counter()
     for i, report in enumerate(ptb_reports):
@@ -456,27 +436,14 @@ def run():
                 print to_latex(ptb[sentence])
                 print to_latex(report[sentence])
                 print
-        print  str(corpus_stats(report, ptb)) + '\t' + str(corpus_average_depth(report))
+        print "GT average depth", corpus_average_depth(ptb)
+        print  "F1 w/ ground truth trees:", str(corpus_stats(report, ptb)) + '\t' + "average tree depth", str(corpus_average_depth(report))
         set_correct_ptb, set_total_ptb = corpus_stats_labeled(report, ptb_labeled)
-        correct.update(set_correct_ptb)
-        total.update(set_total_ptb)
+        correct_ptb.update(set_correct_ptb)
+        total_ptb.update(set_total_ptb)
 
     for key in sorted(total_ptb):
-        print key + '_ptb' + '\t' + str(correct_ptb[key] * 1. / total_ptb[key]), '\t', total[key]
-
-    """
-    for i, report in enumerate(ptb_reports):
-        print ptb_report_paths[i]
-        if FLAGS.print_latex > 0:
-            for index, sentence in enumerate(ptb):
-                if index == FLAGS.print_latex:
-                    break
-                print to_latex(ptb[sentence])
-                print to_latex(report[sentence])
-                print
-        print  str(corpus_stats(report, ptb)) + '\t' + str(corpus_average_depth(report))
-    """
-
+        print key + '_ptb' + '\t' + str(correct_ptb[key] * 1. / total_ptb[key]), '\t', total_ptb[key]
 
     report_paths = glob.glob(FLAGS.main_report_path_template)
     for path in report_paths:
@@ -494,33 +461,11 @@ def run():
             for i in range(len(tokens)):
                 if tokens[i] == "_PAD":
                     if tokens[i-1] not in ok:
-                        #print tokens[i-1], tokens[i]
                         count += 1
                         bads.append(parse)
                     if tokens[i-1] not in meh:
                         v_bads.append(parse)
         print "(. _PAD):", float(len(bads))/len(report), '\t',  "(word _PAD):", float(len(v_bads))/len(report)
-
-    """
-    correct = Counter()
-    total = Counter()
-    for i, report in enumerate(reports):
-        print report_paths[i]
-        if FLAGS.print_latex > 0:
-            for index, sentence in enumerate(gt):
-                if index == FLAGS.print_latex:
-                    break
-                print to_latex(gt[sentence])
-                print to_latex(report[sentence])
-                print
-        print  str(corpus_stats(report, gt)) + '\t' + str(corpus_average_depth(report))
-        set_correct, set_total = corpus_stats_labeled(report, gt_labeled)
-        correct.update(set_correct)
-        total.update(set_total)
-
-    for key in sorted(total):
-        print key + '\t' + str(correct[key] * 1. / total[key])
-    """
 
 
 if __name__ == '__main__':
