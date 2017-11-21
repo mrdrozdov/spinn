@@ -22,6 +22,7 @@ import json
 import random
 import re
 import glob
+from collections import Counter
 
 LABEL_MAP = {'entailment': 0, 'neutral': 1, 'contradiction': 2}
 
@@ -90,14 +91,21 @@ def average_depth(parse):
             current_depth -= 1
         else:
             depths.append(current_depth)
-    return float(sum(depths)) / len(depths)
+    if len(depths) == 0:
+        pass
+        #import pdb; pdb.set_trace()
+    else:
+        return float(sum(depths)) / len(depths)
 
 
 def corpus_average_depth(corpus):
     local_averages = []
     for key in corpus:
-        s = spaceify(corpus[key])
-        local_averages.append(average_depth(s))
+        s = corpus[key]
+        if average_depth(s) is not None:
+            local_averages.append(average_depth(s))
+        else:
+            pass
     return float(sum(local_averages)) / len(local_averages)
 
 
@@ -109,7 +117,10 @@ def average_length(parse):
 def corpus_average_length(corpus):
     local_averages = []
     for key in corpus:
-        local_averages.append(average_length(s))
+        if average_length(s) is not None:
+            local_averages.append(average_length(s))
+        else:
+            pass
     return float(sum(local_averages)) / len(local_averages)
 
 
@@ -159,6 +170,26 @@ def corpus_stats(corpus_1, corpus_2, first_two=False, neg_pair=False):
         stats = str(stats) + '\t' + str(neg_pair_count / neg_count)
     return stats
 
+def corpus_stats_labeled(corpus_unlabeled, corpus_labeled):
+    """ 
+    Note: If a few examples in one dataset are missing from the other (i.e., some examples from the source corpus were not included 
+      in a model corpus), the shorter dataset must be supplied as corpus_1.
+    """
+
+    correct = Counter()
+    total = Counter()
+
+    for key in corpus_labeled:     
+        c1 = to_indexed_contituents(corpus_unlabeled[key])
+        c2 = to_indexed_contituents_labeled(corpus_labeled[key])
+        if len(c2) == 0:
+            continue
+
+        ex_correct, ex_total = example_labeled_acc(c1, c2)
+        correct.update(ex_correct)
+        total.update(ex_total)
+    return correct, total
+
 
 def to_indexed_contituents(parse):
     if parse.count("(") != parse.count(")"):
@@ -186,9 +217,40 @@ def to_indexed_contituents(parse):
             word_index += 1
     return indexed_constituents
 
+def to_indexed_contituents_labeled(parse):
+    sp = re.findall(r'\([^ ]+| [^\(\) ]+|\)', parse)
+    if len(sp) == 1:
+        return set([(0, 1)])
+
+    backpointers = []
+    indexed_constituents = set()
+    word_index = 0
+    for index, token in enumerate(sp):
+        if token[0] == '(':
+            backpointers.append((word_index, token[1:]))
+        elif token == ')':
+            start, typ = backpointers.pop()
+            end = word_index
+            constituent = (start, end, typ)
+            if end - start > 1:
+                indexed_constituents.add(constituent)
+        else:
+            word_index += 1
+    return indexed_constituents
+
 def example_f1(c1, c2):
     prec = float(len(c1.intersection(c2))) / len(c2)  # TODO: More efficient.
     return prec  # For strictly binary trees, P = R = F1
+
+def example_labeled_acc(c1, c2):
+    '''Compute the number of non-unary constituents of each type in the labeled (non-binirized) parse appear in the model output.'''
+    correct = Counter()
+    total = Counter()
+    for constituent in c2:
+        if (constituent[0], constituent[1]) in c1:
+            correct[constituent[2]] += 1
+        total[constituent[2]] += 1
+    return correct, total
 
 def randomize(parse):
     tokens = tokenize_parse(parse)
@@ -215,6 +277,20 @@ def read_nli_report(path):
             report[loaded_example['example_id'] + "_2"] = unpad(loaded_example['sent2_tree'])
     return report
 
+def read_nli_report_padded(path):
+    report = {}
+    with codecs.open(path, encoding='utf-8') as f:
+        for line in f:
+            try:
+                line = line.encode('UTF-8')
+            except UnicodeError as e:
+                print "ENCODING ERROR:", line, e
+                line = "{}"
+            loaded_example = json.loads(line)
+            report[loaded_example['example_id'] + "_1"] = loaded_example['sent1_tree']
+            report[loaded_example['example_id'] + "_2"] = loaded_example['sent2_tree']
+    return report
+
 def read_ptb_report(path):
     report = {}
     with codecs.open(path, encoding='utf-8') as f:
@@ -225,6 +301,7 @@ def read_ptb_report(path):
                 print "ENCODING ERROR:", line, e
                 line = "{}"
             loaded_example = json.loads(line)
+            #report[loaded_example['pairID']] = unpad(loaded_example['sentence1_parse'])
             report[loaded_example['example_id']] = unpad(loaded_example['sent1_tree'])
     return report
 
@@ -269,6 +346,7 @@ def unpad(parse):
 
 def run():
     gt = {}
+    gt_labeled = {}
     with codecs.open(FLAGS.main_data_path, encoding='utf-8') as f:
         for line in f:
             try:
@@ -282,10 +360,16 @@ def run():
             gt[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_binary_parse']
             gt[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_binary_parse']
 
+            gt_labeled[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_parse']
+            gt_labeled[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_parse']
+
     lb = to_lb(gt)
     rb = to_rb(gt)
 
+    print "GT average depth", corpus_average_depth(gt)
+
     ptb = {}
+    ptb_labeled = {}
     if FLAGS.ptb_data_path != "_":
         with codecs.open(FLAGS.ptb_data_path, encoding='utf-8') as f:
             for line in f:
@@ -298,6 +382,7 @@ def run():
                 if loaded_example["gold_label"] not in LABEL_MAP:
                     continue
                 ptb[loaded_example['pairID']] = loaded_example['sentence1_binary_parse']
+                ptb_labeled[loaded_example['pairID']] = loaded_example['sentence1_parse']
 
     reports = []
     ptb_reports = []
@@ -339,6 +424,9 @@ def run():
                 f1s.append(f1)
         print "Mean Self F1:\t" + str(sum(f1s) / len(f1s))
 
+    correct = Counter()
+    total = Counter()
+
     for i, report in enumerate(reports):
         print report_paths[i]
         if FLAGS.print_latex > 0:
@@ -348,9 +436,18 @@ def run():
                 print to_latex(gt[sentence])
                 print to_latex(report[sentence])
                 print
-        #import pdb; pdb.set_trace()
-        print str(corpus_stats(report, lb)) + '\t' + str(corpus_stats(report, rb)) + '\t' + str(corpus_stats(report, gt, first_two=FLAGS.first_two, neg_pair=FLAGS.neg_pair)) + '\t' + str(corpus_average_depth(report))
+        print "left-branching:", str(corpus_stats(report, lb)) + '\t' + "right-branching:",  str(corpus_stats(report, rb)) + '\t' + "ground truth trees:", str(corpus_stats(report, gt, first_two=FLAGS.first_two, neg_pair=FLAGS.neg_pair)) + '\t' + "average tree depth:", str(corpus_average_depth(report))
 
+        set_correct, set_total = corpus_stats_labeled(report, gt_labeled)
+        correct.update(set_correct)
+        total.update(set_total)
+
+    for key in sorted(total):
+        print key + '\t' + str(correct[key] * 1. / total[key]) #+ '\t' + str(total[key])
+
+
+    correct_ptb = Counter()
+    total_ptb = Counter()
     for i, report in enumerate(ptb_reports):
         print ptb_report_paths[i]
         if FLAGS.print_latex > 0:
@@ -361,6 +458,71 @@ def run():
                 print to_latex(report[sentence])
                 print
         print  str(corpus_stats(report, ptb)) + '\t' + str(corpus_average_depth(report))
+        set_correct_ptb, set_total_ptb = corpus_stats_labeled(report, ptb_labeled)
+        correct.update(set_correct_ptb)
+        total.update(set_total_ptb)
+
+    import pdb; pdb.set_trace()
+    for key in sorted(total_ptb):
+        print key + '_ptb' + '\t' + str(correct_ptb[key] * 1. / total_ptb[key]), '\t', total[key]
+
+    """
+    for i, report in enumerate(ptb_reports):
+        print ptb_report_paths[i]
+        if FLAGS.print_latex > 0:
+            for index, sentence in enumerate(ptb):
+                if index == FLAGS.print_latex:
+                    break
+                print to_latex(ptb[sentence])
+                print to_latex(report[sentence])
+                print
+        print  str(corpus_stats(report, ptb)) + '\t' + str(corpus_average_depth(report))
+    """
+
+
+    report_paths = glob.glob(FLAGS.main_report_path_template)
+    for path in report_paths:
+        reports.append(read_nli_report_padded(path))
+
+    for report in reports:
+        ok = ["(", ")", "_PAD"]
+        meh = ["(", ")", "_PAD", "."]
+        count = 0
+        bads = []
+        v_bads = []
+        for key in report:
+            parse = report[key]
+            tokens = parse.split()
+            for i in range(len(tokens)):
+                if tokens[i] == "_PAD":
+                    if tokens[i-1] not in ok:
+                        #print tokens[i-1], tokens[i]
+                        count += 1
+                        bads.append(parse)
+                    if tokens[i-1] not in meh:
+                        v_bads.append(parse)
+        print "(. _PAD):", float(len(bads))/len(report), '\t',  "(word _PAD):", float(len(v_bads))/len(report)
+
+    """
+    correct = Counter()
+    total = Counter()
+    for i, report in enumerate(reports):
+        print report_paths[i]
+        if FLAGS.print_latex > 0:
+            for index, sentence in enumerate(gt):
+                if index == FLAGS.print_latex:
+                    break
+                print to_latex(gt[sentence])
+                print to_latex(report[sentence])
+                print
+        print  str(corpus_stats(report, gt)) + '\t' + str(corpus_average_depth(report))
+        set_correct, set_total = corpus_stats_labeled(report, gt_labeled)
+        correct.update(set_correct)
+        total.update(set_total)
+
+    for key in sorted(total):
+        print key + '\t' + str(correct[key] * 1. / total[key])
+    """
 
 
 if __name__ == '__main__':
