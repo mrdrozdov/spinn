@@ -142,13 +142,12 @@ class Maillard(nn.Module):
             __=None,
             example_lengths=None,
             store_parse_masks=False,
-            pyramid_temperature_multiplier=1.0,
+            pyramid_temperature_multiplier=None,
             **kwargs):
         # Useful when investigating dynamic batching:
         # self.seq_lengths = sentences.shape[1] - (sentences == 0).sum(1)
 
         x, example_lengths = self.unwrap(sentences, example_lengths)
-
         emb = self.run_embed(x)
 
         batch_size, seq_len, model_dim = emb.data.size()
@@ -214,7 +213,7 @@ class Maillard(nn.Module):
                 else:
                     token_sequence = [self.inverted_vocabulary[token]
                                       for token in x[b, :]]
-                                      
+
                 token_sequences.append(self.get_sample_merge_sequence(b, s, batch_size, token_sequence))
         return token_sequences
 
@@ -339,7 +338,11 @@ class BinaryTreeLSTM(nn.Module):
         c = done_mask * new_c + (1 - done_mask) * old_c[:, :-1, :]
         return h, c
 
-    def compute_compositions(self, state, mask):
+    def compute_compositions(
+            self,
+            state,
+            mask,
+            temperature_multiplier=1.0):
         """
         (In a parallelized manner) Compute all compositions we will need 
         for the current step.
@@ -369,6 +372,7 @@ class BinaryTreeLSTM(nn.Module):
         word_hiddens = h.chunk(length, dim=1)
         word_cells = c.chunk(length, dim=1)
         length_masks = mask.chunk(length, dim=1) # (batch,1), ...
+        temperature = temperature_multiplier
         
 
         if self.debug_branching:
@@ -423,9 +427,9 @@ class BinaryTreeLSTM(nn.Module):
                         w_rand = torch.rand(torch.cat(scores, dim=1).size())
                         weights = to_gpu(Variable(w_rand / w_rand.sum(1).unsqueeze(1)))
                     elif self.st_gumbel:
-                        weights = st_gumbel_softmax(torch.cat(scores, dim=1))
+                        weights = st_gumbel_softmax(torch.cat(scores, dim=1), temperature)
                     else:
-                        weights = gumbel_softmax(torch.cat(scores, dim=1)) # cat: batch, num_versions, out: batch, num_states
+                        weights = gumbel_softmax(torch.cat(scores, dim=1), temperature) # cat: batch, num_versions, out: batch, num_states
 
                     h_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(hiddens, dim=1)), dim=1)
                     c_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(cells, dim=1)), dim=1) # batch, num_states, dim
@@ -448,7 +452,7 @@ class BinaryTreeLSTM(nn.Module):
             return chart[length-1][0][0], chart[length-1][0][1], mask
 
 
-    def forward(self, input, length, temperature_multiplier=1.0):
+    def forward(self, input, length, temperature_multiplier=None):
         max_depth = input.size(1)
         length_mask = sequence_mask(sequence_length=length,
                                     max_length=max_depth)
@@ -463,7 +467,7 @@ class BinaryTreeLSTM(nn.Module):
             nodes.append(state[0])
         """
 
-        h, c, masks = self.compute_compositions(state, length_mask)
+        h, c, masks = self.compute_compositions(state, length_mask, temperature_multiplier)
         
         """
         if self.intra_attention:
@@ -582,7 +586,6 @@ def st_gumbel_softmax(logits, temperature=1.0, mask=None):
     Returns:
         y: The sampled output, which has the property explained above.
     """
-
     eps = 1e-20
     u = logits.data.new(*logits.size()).uniform_()
     gumbel_noise = Variable(-torch.log(-torch.log(u + eps) + eps))
