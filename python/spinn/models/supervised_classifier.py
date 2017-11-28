@@ -253,6 +253,7 @@ def train_loop(
         else:
             pyramid_temperature_multiplier = None
 
+        print "HERE:", pyramid_temperature_multiplier
         # Run model.
         output = model(
             X_batch,
