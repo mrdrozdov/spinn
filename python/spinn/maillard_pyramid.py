@@ -590,6 +590,8 @@ def st_gumbel_softmax(logits, temperature=1.0, mask=None):
     u = logits.data.new(*logits.size()).uniform_()
     gumbel_noise = Variable(-torch.log(-torch.log(u + eps) + eps))
     y = logits + gumbel_noise
+    if temperature == 0.0:
+        temperature = 1.0
     y = masked_softmax(logits=y / temperature, mask=mask)
     y_argmax = y.max(1)[1]
     y_hard = convert_to_one_hot(
@@ -627,6 +629,8 @@ def gumbel_softmax(logits, temperature=1.0, mask=None):
     u = logits.data.new(*logits.size()).uniform_()
     gumbel_noise = Variable(-torch.log(-torch.log(u + eps) + eps))
     y = logits + gumbel_noise
+    if temperature == 0.0:
+        temperature = 1.0
     y = masked_softmax(logits=y / temperature, mask=mask)
     return y
 
