@@ -130,7 +130,7 @@ def CropAndPadExample(
         if pad_from_left:
             example[key] = example[key][-padding_amount:]
         else:
-            example[key] = example[key]example[key][:padding_amount]
+            example[key] = example[key][:padding_amount]
         padding_amount = 0
     alternate_side_padding = target_length - \
         (padding_amount + len(example[key]))
