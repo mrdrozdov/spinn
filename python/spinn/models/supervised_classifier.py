@@ -244,7 +244,6 @@ def train_loop(
             if FLAGS.pyramid_temperature_decay_per_10k_steps > 0.0:
                 pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (
                     step / 10000.0)
-                print "HERE", pyramid_temperature_multiplier
             else: 
                 pyramid_temperature_multiplier = 1.0
             if FLAGS.pyramid_temperature_cycle_length > 0.0:
