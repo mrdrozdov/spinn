@@ -12,8 +12,8 @@ I have results for a few variations of the model on SNLI which show that the cha
 Overall, it's hard to say if the model is doing anything very informative just yet. I've printed and looked at tens of trees and haven't found anything too interpretable yet.
 
 The current step is running models on an aritificial dataset and I've started work on this. This will allow for much shorter experimental run time and will allow me to quickly dia  few things,
-- If a model that does superviised parsing doing sentence representation can solve this dataset, i.e. achieve high accuracy, but a standard RNN without parsing ability can not, is out CP model able to solve it too without the supervision?
+- If a model that does supervised parsing while building sentence representation can solve this dataset (SPINN model), i.e. achieve high accuracy, but a standard RNN without parsing ability can not, is our CP model able to solve it as well without the parsing supervision?
 - If so, then why do our trees with natural language look so strange?
-- If not, what hill clinbing can we do? Does temeprature annealing help? Can we switch up the composition function to help?
+- If not, what hill clinbing can we do? Does temeprature annealing help? Can we switch up the composition function to help? (Hoping this is what we will find)
 
 
