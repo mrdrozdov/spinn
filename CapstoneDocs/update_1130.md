@@ -1,4 +1,4 @@
-# Capstone Update: Nov 10th, 2017
+# Capstone Update: Nov 30th, 2017
 
 ### Nutshell Version
 Making progress but feeling less optimistic than a few days ago. Currently working on running expeirments with the artifical dataset named listops.
