@@ -8,10 +8,10 @@ FIRST = "[FIRST"
 LAST = "[LAST"
 SUM_MOD = "[SM"
 PROD_MOD = "[PM"
-FL_SUM = "[FLSUM"
+FL_SUM_MOD = "[FLSUM"
 END = "]"
 
-OPERATORS = [MIN, MAX, MED, SUM_MOD, FIRST, LAST, PROD_MOD, FL_SUM]
+OPERATORS = [MIN, MAX, MED, SUM_MOD, FIRST, LAST, PROD_MOD, FL_SUM_MOD]
 VALUES = range(10)
 
 VALUE_P = 0.25
@@ -76,8 +76,8 @@ def to_value(t):
             return (np.sum(l[1]) % 10)
         elif l[0] == PROD_MOD:
             return (np.prod(l[1]) % 10)
-        elif l[0] == FL_SUM:
-            return l[1][0] + l[1][1]
+        elif l[0] == FL_SUM_MOD:
+            return (l[1][0] + l[1][1]) % 10
     # We've hit an unsaturated function and an argument.
     elif isinstance(l, tuple):
         return (l[0], l[1] + [r])
