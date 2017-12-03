@@ -486,6 +486,7 @@ def PreprocessDataset(
             num_transitions = np.array(
                 [example["num_transitions"] for example in dataset],
                 dtype=np.int32)
+
     y = np.array(
         [data_manager.LABEL_MAP[example["label"]] for example in dataset],
         dtype=np.int32)

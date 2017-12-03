@@ -64,4 +64,3 @@ def load_data(path, lowercase=None):
 
             examples.append(example)
     return examples
-    
