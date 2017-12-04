@@ -22,11 +22,75 @@ import json
 import random
 import re
 import glob
+import math
 from collections import Counter
 
 LABEL_MAP = {'entailment': 0, 'neutral': 1, 'contradiction': 2}
 
 FLAGS = gflags.FLAGS
+
+
+def balance(parse, lowercase=False):
+    # Modified to provided a "half-full" binary tree without padding.
+    # Difference between the other method is the right subtrees are
+    # the half full ones.
+    tokens = tokenize_parse(parse)
+    if len(tokens) > 1:
+        transitions = full_transitions(len(tokens), right_full=True)
+        stack = []
+        for transition in transitions:
+            if transition == 0:
+                stack.append(tokens.pop(0))
+            elif transition == 1:
+                right = stack.pop()
+                left = stack.pop()
+                stack.append("( " + left + " " + right + " )")
+        assert len(stack) == 1
+    else: 
+        stack = tokens
+    return stack[0]
+
+
+def roundup2(N):
+    """ Round up using factors of 2. """
+    return int(2 ** math.ceil(math.log(N, 2)))
+
+
+def full_transitions(N, left_full=False, right_full=False):
+    """
+    Recursively creates a full binary tree of with N
+    leaves using shift reduce transitions.
+    """
+
+    if N == 1:
+        return [0]
+
+    if N == 2:
+        return [0, 0, 1]
+
+    assert not (left_full and right_full), "Please only choose one."
+
+    if not left_full and not right_full:
+        N = float(N)
+
+        # Constrain to full binary trees.
+        assert math.log(N, 2) % 1 == 0, \
+            "Bad value. N={}".format(N)
+
+        left_N = N / 2
+        right_N = N - left_N
+
+    if left_full:
+        left_N = roundup2(N) / 2
+        right_N = N - left_N
+
+    if right_full:
+        right_N = roundup2(N) / 2
+        left_N = N - right_N
+
+    return full_transitions(left_N, left_full=left_full, right_full=right_full) + \
+           full_transitions(right_N, left_full=left_full, right_full=right_full) + \
+           [1]
 
 
 def tokenize_parse(parse):
@@ -354,6 +418,22 @@ def run():
             for sentence in ptb:
                 report[sentence] = randomize(ptb[sentence])
             ptb_reports.append(report)
+    if FLAGS.use_balanced_parses:
+        print "Creating five sets of balanced binary parses for the main data."
+        report_paths = range(5)
+        for _ in report_paths:
+            report = {}
+            for sentence in gt:
+                report[sentence] = balance(gt[sentence])
+            reports.append(report)  
+
+        print "Creating five sets of balanced binary parses for the PTB data."
+        ptb_report_paths = range(5)
+        for _ in report_paths:
+            report = {}
+            for sentence in ptb:
+                report[sentence] = balance(ptb[sentence])
+            ptb_reports.append(report)
     else:
         report_paths = glob.glob(FLAGS.main_report_path_template)
         for path in report_paths:
@@ -414,6 +494,7 @@ if __name__ == '__main__':
     gflags.DEFINE_string("ptb_data_path", "_", "The path to the PTB data in SNLI format, or '_' if not available.")
     gflags.DEFINE_boolean("compute_self_f1", True, "Compute self F1 over all reports matching main_report_path_template.")
     gflags.DEFINE_boolean("use_random_parses", False, "Replace all report trees with randomly generated trees. Report path template flags are not used when this is set.")
+    gflags.DEFINE_boolean("use_balanced_parses", False, "Replace all report trees with roughly-balanced binary trees. Report path template flags are not used when this is set.")
     gflags.DEFINE_boolean("first_two", False, "Show 'first two' and 'last two' metrics.")
     gflags.DEFINE_boolean("neg_pair", False, "Show 'neg_pair' metric.")
     gflags.DEFINE_integer("print_latex", 0, "Print this many trees in LaTeX format for each report.")
