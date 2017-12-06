@@ -16,7 +16,8 @@ VALUES = range(10)
 
 VALUE_P = 0.25
 MAX_ARGS = 6
-MAX_DEPTH = 10
+MAX_DEPTH = 5
+MAX_SEQ_LEN = 35
 
 DATA_POINTS = 100000
 
@@ -85,7 +86,16 @@ def to_value(t):
 
 data = set()
 while len(data) < DATA_POINTS:
-    data.add(generate_tree(1))
+    #data.add(generate_tree(1))
+    cur = generate_tree(1)
+    if type(cur) == tuple:
+        testl = str(cur[0]).replace("(", "").replace(")", "").replace(",", "").split()
+        if (len(testl) + 1) > MAX_SEQ_LEN:
+            pass
+        else:
+            data.add(cur)
+    else:
+        pass
 
 for example in data:
     print str(to_value(example)) + '\t' + to_string(example)
