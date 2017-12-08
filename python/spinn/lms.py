@@ -18,18 +18,6 @@ from spinn.util.catalan import ShiftProbabilities
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
 
-
-# from spinn.util.blocks import Reduce, ReduceTensor
-# from spinn.util.blocks import LSTMState, Embed, MLP, Linear, LSTM, Lift
-# from spinn.util.blocks import reverse_tensor
-# from spinn.util.blocks import bundle, unbundle, to_cpu, to_gpu, treelstm, lstm
-# from spinn.util.blocks import get_h, get_c
-# from spinn.util.misc import Args, Vocab, Example
-# from spinn.util.blocks import HeKaimingInitializer
-
-# from spinn.data import T_SHIFT, T_REDUCE, T_SKIP, T_STRUCT
-
-
 def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, context_args, composition_args, **kwargs):
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
@@ -490,11 +478,8 @@ class BaseModel(nn.Module):
             training=self.training)
 
         embeds = self.lift(embeds)
-        # embeds = torch.chunk(to_cpu(embeds), b, 0)
 
         # Make Buffers
-        # embeds = [torch.chunk(x, l, 0) for x in embeds]
-        # buffers = [list(reversed(x)) for x in embeds]
         ee = torch.chunk(embeds, b * l, 0)[::-1]
         bb = []
         for ii in range(b):
@@ -554,9 +539,6 @@ class BaseModel(nn.Module):
     def wrap_sentence(self, items):
         h = self.extract_h(self.wrap_items(items))
         return [h]
-        # hidden_dim = self.hidden_dim * self.hidden_dim
-        # h = get_h(torch.cat(h_list, 0), hidden_dim)
-        # return [h]
 
     # --- Sentence Pair Model Specific ---
 
@@ -585,11 +567,6 @@ class BaseModel(nn.Module):
         h_premise = self.extract_h(self.wrap_items(items[:batch_size]))
         h_hypothesis = self.extract_h(self.wrap_items(items[batch_size:]))
         return [h_premise, h_hypothesis]
-        # hidden_dim = self.hidden_dim * self.hidden_dim
-        # batch_size = len(h_list) / 2
-        # h_premise = get_h(torch.cat(h_list[:batch_size], 0), hidden_dim)
-        # h_hypothesis = get_h(torch.cat(h_list[batch_size:], 0), hidden_dim)
-        # return [h_premise, h_hypothesis]
 
     def get_samples(self, x, vocabulary, only_one=False):
         # n=-1: Show all samples.
