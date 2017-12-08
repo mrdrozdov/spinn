@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
+from torch.nn.init import kaiming_normal
 
 from spinn.util.misc import recursively_set_device
 from functools import reduce
@@ -247,12 +248,12 @@ class ReduceTreeGRU(nn.Module):
                  use_tracking_in_composition=None):
         super(ReduceTreeGRU, self).__init__()
         self.size = size
-        self.W = Linear(initializer=HeKaimingInitializer)(size, 2 * size)
-        self.Vl = Linear(initializer=HeKaimingInitializer)(size, size)
-        self.Vr = Linear(initializer=HeKaimingInitializer)(size, size)
+        self.W = Linear(initializer=kaiming_normal)(size, 2 * size)
+        self.Vl = Linear(initializer=kaiming_normal)(size, size)
+        self.Vr = Linear(initializer=kaiming_normal)(size, size)
         if tracker_size is not None and use_tracking_in_composition:
             self.U = Linear(
-                initializer=HeKaimingInitializer)(
+                initializer=kaiming_normal)(
                 tracker_size,
                 3 * size)
 
@@ -658,15 +659,15 @@ class ReduceTreeLSTM(nn.Module):
                  use_tracking_in_composition=None, composition_ln=True):
         super(ReduceTreeLSTM, self).__init__()
         self.composition_ln = composition_ln
-        self.left = Linear(initializer=HeKaimingInitializer)(size, 5 * size)
+        self.left = Linear(initializer=kaiming_normal)(size, 5 * size)
         self.right = Linear(
-            initializer=HeKaimingInitializer)(
+            initializer=kaiming_normal)(
             size, 5 * size, bias=False)
         if composition_ln:
             self.left_ln = LayerNormalization(size)
             self.right_ln = LayerNormalization(size)
         if tracker_size is not None and use_tracking_in_composition:
-            self.track = Linear(initializer=HeKaimingInitializer)(
+            self.track = Linear(initializer=kaiming_normal)(
                 tracker_size, 5 * size, bias=False)
             if composition_ln:
                 self.track_ln = LayerNormalization(tracker_size)
@@ -731,9 +732,9 @@ class SimpleTreeLSTM(nn.Module):
         super(SimpleTreeLSTM, self).__init__()
         self.composition_ln = composition_ln
         self.hidden_dim = size
-        self.left = Linear(initializer=HeKaimingInitializer)(size, 5 * size)
+        self.left = Linear(initializer=kaiming_normal)(size, 5 * size)
         self.right = Linear(
-            initializer=HeKaimingInitializer)(
+            initializer=kaiming_normal)(
             size, 5 * size, bias=False)
         if composition_ln:
             self.left_ln = LayerNormalization(size)
@@ -788,12 +789,12 @@ class MLP(nn.Module):
 
         for i in range(num_mlp_layers):
             setattr(self, 'l{}'.format(i), Linear(
-                initializer=HeKaimingInitializer)(features_dim, mlp_dim))
+                initializer=kaiming_normal)(features_dim, mlp_dim))
             if mlp_ln:
                 setattr(self, 'ln{}'.format(i), LayerNormalization(mlp_dim))
             features_dim = mlp_dim
         setattr(self, 'l{}'.format(num_mlp_layers), Linear(
-            initializer=HeKaimingInitializer)(features_dim, num_classes))
+            initializer=kaiming_normal)(features_dim, num_classes))
 
     def forward(self, h):
         if self.mlp_ln:
@@ -815,23 +816,9 @@ class MLP(nn.Module):
         return y
 
 
-class HeKaimingLinear(nn.Linear):
-    def reset_parameters(self):
-        HeKaimingInitializer(self.weight)
-        if self.bias is not None:
-            ZeroInitializer(self.bias)
-
-
 def DefaultUniformInitializer(param):
     stdv = 1. / math.sqrt(param.size(1))
     UniformInitializer(param, stdv)
-
-
-def HeKaimingInitializer(param):
-    fan = param.size()
-    init = np.random.normal(scale=np.sqrt(4.0 / (fan[0] + fan[1])),
-                            size=fan).astype(np.float32)
-    param.data.set_(torch.from_numpy(init))
 
 
 def UniformInitializer(param, range):

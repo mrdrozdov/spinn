@@ -9,8 +9,9 @@ import torch.nn as nn
 from torch.nn import init
 from torch.autograd import Variable
 import torch.nn.functional as F
+from torch.nn.init import kaiming_normal
 
-from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer, LayerNormalization
+from spinn.util.blocks import Embed, to_gpu, MLP, Linear, LayerNormalization
 from spinn.util.misc import Args, Vocab
 
 
@@ -268,7 +269,7 @@ class BinaryTreeLSTM(nn.Module):
 
         # TODO: Add something to blocks to make this use case more elegant.
         self.comp_query = Linear(
-            initializer=HeKaimingInitializer)(
+            initializer=kaiming_normal)(
             in_features=hidden_dim,
             out_features=1)
         self.trainable_temperature = trainable_temperature
@@ -519,7 +520,7 @@ class BinaryTreeLSTMLayer(nn.Module):
         super(BinaryTreeLSTMLayer, self).__init__()
         self.hidden_dim = hidden_dim
         self.comp_linear = Linear(
-            initializer=HeKaimingInitializer)(
+            initializer=kaiming_normal)(
             in_features=2 * hidden_dim,
             out_features=5 * hidden_dim)
         self.composition_ln = composition_ln

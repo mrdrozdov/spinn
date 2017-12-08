@@ -7,12 +7,12 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
+from torch.nn.init import kaiming_normal
 
 from spinn.util.blocks import Embed, Linear, MLP
 from spinn.util.blocks import bundle, lstm, to_gpu, unbundle
 from spinn.util.blocks import LayerNormalization
 from spinn.util.misc import Example, Vocab
-from spinn.util.blocks import HeKaimingInitializer
 from spinn.util.catalan import ShiftProbabilities
 
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
@@ -71,7 +71,7 @@ class Tracker(nn.Module):
             self.buf = Linear()(size, 4 * tracker_size, bias=True)
             self.stack1 = Linear()(size, 4 * tracker_size, bias=False)
             self.stack2 = Linear()(size, 4 * tracker_size, bias=False)
-            self.lateral = Linear(initializer=HeKaimingInitializer)(
+            self.lateral = Linear(initializer=kaiming_normal)(
                 tracker_size, 4 * tracker_size, bias=False)
             self.state_size = tracker_size
         else:
