@@ -102,13 +102,13 @@ def evaluate(
             show_sample = False
 
         # Normalize output.
-        logits = F.log_softmax(output)
+        logprobs = F.log_softmax(output)
 
         # Calculate class accuracy.
         target = torch.from_numpy(eval_y_batch).long()
 
         # get the index of the max log-probability
-        pred = logits.data.max(1, keepdim=False)[1].cpu()
+        pred = logprobs.data.max(1, keepdim=False)[1].cpu()
 
         eval_accumulate(model, A, batch)
         A.add('class_correct', pred.eq(target).sum())
@@ -261,18 +261,18 @@ def train_loop(
                        )
 
         # Normalize output.
-        logits = F.log_softmax(output)
+        logprobs = F.log_softmax(output)
 
         # Calculate class accuracy.
         target = torch.from_numpy(y_batch).long()
 
         # get the index of the max log-probability
-        pred = logits.data.max(1, keepdim=False)[1].cpu()
+        pred = logprobs.data.max(1, keepdim=False)[1].cpu()
 
         class_acc = pred.eq(target).sum() / float(target.size(0))
 
         # Calculate class loss.
-        xent_loss = nn.NLLLoss()(logits, to_gpu(Variable(target, volatile=False)))
+        xent_loss = nn.NLLLoss()(logprobs, to_gpu(Variable(target, volatile=False)))
 
         # Optionally calculate transition loss.
         transition_loss = model.transition_loss if hasattr(
