@@ -291,10 +291,7 @@ def train_loop(
         total_loss.backward()
 
         # Hard Gradient Clipping
-        clip = FLAGS.clipping_max_value
-        for p in model.parameters():
-            if p.requires_grad:
-                p.grad.data.clamp_(min=-clip, max=clip)
+        nn.utils.clip_grad_norm(model.parameters(), FLAGS.clipping_max_value)
 
         # Learning Rate Decay
         if FLAGS.actively_decay_learning_rate:

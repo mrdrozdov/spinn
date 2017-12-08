@@ -271,7 +271,8 @@ class BinaryTreeLSTM(nn.Module):
         self.comp_query = Linear(
             initializer=kaiming_normal)(
             in_features=hidden_dim,
-            out_features=1)
+            out_features=1,
+            bias=False)
         self.trainable_temperature = trainable_temperature
         if self.trainable_temperature:
             self.temperature_param = nn.Parameter(
