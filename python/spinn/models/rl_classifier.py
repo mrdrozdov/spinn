@@ -10,7 +10,7 @@ import numpy as np
 
 from spinn.util import afs_safe_logger
 from spinn.util.data import SimpleProgressBar
-from spinn.util.blocks import get_l2_loss, the_gpu, to_gpu
+from spinn.util.blocks import the_gpu, to_gpu
 from spinn.util.misc import Accumulator, EvalReporter
 from spinn.util.misc import recursively_set_device
 from spinn.util.logging import stats, train_accumulate, create_log_formatter
@@ -198,9 +198,11 @@ def train_loop(
     log_entry = pb.SpinnEntry()
     for step in range(step, FLAGS.training_steps):
         if (step - best_dev_step) > FLAGS.early_stopping_steps_to_wait:
-            logger.Log('No improvement after ' + str(FLAGS.early_stopping_steps_to_wait) + ' steps. Stopping training.')
+            logger.Log('No improvement after ' +
+                       str(FLAGS.early_stopping_steps_to_wait) +
+                       ' steps. Stopping training.')
             break
-            
+
         model.train()
         log_entry.Clear()
         log_entry.step = step
@@ -264,15 +266,9 @@ def train_loop(
         transition_loss = model.transition_loss if hasattr(
             model, 'transition_loss') else None
 
-        # Extract L2 Cost
-        l2_loss = get_l2_loss(
-            model, FLAGS.l2_lambda) if FLAGS.use_l2_loss else None
-
         # Accumulate Total Loss Variable
         total_loss = 0.0
         total_loss += xent_loss
-        if l2_loss is not None:
-            total_loss += l2_loss
         if transition_loss is not None and model.optimize_transition_loss:
             total_loss += transition_loss
         aux_loss = auxiliary_loss(model)
@@ -312,7 +308,6 @@ def train_loop(
             progress_bar.finish()
 
             A.add('xent_cost', xent_loss.data[0])
-            A.add('l2_cost', l2_loss.data[0])
             stats(model, optimizer, A, step, log_entry)
             should_log = True
 
@@ -372,13 +367,21 @@ def train_loop(
                     best_dev_step = step
                     logger.Log(
                         "Checkpointing with new best dev accuracy of %f" % acc)
-                    trainer.save(best_checkpoint_path, step, best_dev_error, best_dev_step)
+                    trainer.save(
+                        best_checkpoint_path,
+                        step,
+                        best_dev_error,
+                        best_dev_step)
             progress_bar.reset()
 
         if step > FLAGS.ckpt_step and step % FLAGS.ckpt_interval_steps == 0:
             should_log = True
             logger.Log("Checkpointing.")
-            trainer.save(standard_checkpoint_path, step, best_dev_error, best_dev_step)
+            trainer.save(
+                standard_checkpoint_path,
+                step,
+                best_dev_error,
+                best_dev_step)
 
         if should_log:
             logger.LogEntry(log_entry)
@@ -430,13 +433,15 @@ def run(only_forward=False):
     # Load checkpoint if available.
     if FLAGS.load_best and os.path.isfile(best_checkpoint_path):
         logger.Log("Found best checkpoint, restoring.")
-        step, best_dev_error, best_dev_step = trainer.load(best_checkpoint_path, cpu=FLAGS.gpu < 0)
+        step, best_dev_error, best_dev_step = trainer.load(
+            best_checkpoint_path, cpu=FLAGS.gpu < 0)
         logger.Log(
             "Resuming at step: {} with best dev accuracy: {}".format(
                 step, 1. - best_dev_error))
     elif os.path.isfile(standard_checkpoint_path):
         logger.Log("Found checkpoint, restoring.")
-        step, best_dev_error, best_dev_step = trainer.load(standard_checkpoint_path, cpu=FLAGS.gpu < 0)
+        step, best_dev_error, best_dev_step = trainer.load(
+            standard_checkpoint_path, cpu=FLAGS.gpu < 0)
         logger.Log(
             "Resuming at step: {} with best dev accuracy: {}".format(
                 step, 1. - best_dev_error))

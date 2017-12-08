@@ -40,13 +40,6 @@ def reverse_tensor(var, dim):
     return inverted_tensor
 
 
-def get_l2_loss(model, l2_lambda):
-    loss = 0.0
-    for w in model.parameters():
-        loss += l2_lambda * torch.sum(torch.pow(w, 2))
-    return loss
-
-
 def flatten(l):
     if hasattr(l, '__len__'):
         return reduce(lambda x, y: x + flatten(y), l, [])
@@ -342,7 +335,8 @@ class ModelTrainer(object):
     def load(self, filename, cpu=False):
         if cpu:
             # Load GPU-based checkpoints on CPU
-            checkpoint = torch.load(filename, map_location=lambda storage, loc: storage)
+            checkpoint = torch.load(
+                filename, map_location=lambda storage, loc: storage)
         else:
             checkpoint = torch.load(filename)
         model_state_dict = checkpoint['model_state_dict']
@@ -369,7 +363,13 @@ class ModelTrainer_ES(object):
         self.model = model
         self.optimizer = optimizer
 
-    def save(self, filename, step, best_dev_error, evolution_step, best_dev_step):
+    def save(
+            self,
+            filename,
+            step,
+            best_dev_error,
+            evolution_step,
+            best_dev_step):
         if the_gpu() >= 0:
             recursively_set_device(self.model.state_dict(), gpu=-1)
             recursively_set_device(self.optimizer.state_dict(), gpu=-1)
@@ -391,7 +391,8 @@ class ModelTrainer_ES(object):
     def load(self, filename, cpu=False):
         if cpu:
             # Load GPU-based checkpoints on CPU
-            checkpoint = torch.load(filename, map_location=lambda storage, loc: storage)
+            checkpoint = torch.load(
+                filename, map_location=lambda storage, loc: storage)
         else:
             checkpoint = torch.load(filename)
 
@@ -482,7 +483,7 @@ class IntraAttention(nn.Module):
         super(IntraAttention, self).__init__()
         self.outp_size = outp_size
         self.distance_bias = distance_bias
-        self.f = nn.Linear(inp_size, outp_size)
+        self.f = Linear()(inp_size, outp_size)
 
     def d(self, batch_size, seq_len, max_distance=10, scale=0.01):
         """

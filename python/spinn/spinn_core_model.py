@@ -160,7 +160,9 @@ class SPINN(nn.Module):
                         2 if predict_use_cell else self.tracker.state_size
                 else:
                     tinp_size = self.tracker.state_size
-                self.transition_net = nn.Linear(tinp_size, 2)
+                self.transition_net = Linear(
+                    initializer=kaiming_normal)(
+                    tinp_size, 2)
 
         self.choices = np.array([T_SHIFT, T_REDUCE], dtype=np.int32)
 
@@ -459,7 +461,8 @@ class SPINN(nn.Module):
             # Pre-Action Phase
             # ================
 
-            # TODO: See if PyTorch's 'Advanced Indexing for Tensors and Variables' features would simplify this.
+            # TODO: See if PyTorch's 'Advanced Indexing for Tensors and
+            # Variables' features would simplify this.
 
             # For SHIFT
             s_stacks, s_tops, s_trackings, s_idxs = [], [], [], []

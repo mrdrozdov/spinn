@@ -28,8 +28,6 @@ import spinn.plain_rnn
 import spinn.cbow
 import spinn.choi_pyramid
 
-from tuner_utils.yellowfin import YFOptimizer
-
 # PyTorch
 import torch
 import torch.nn as nn
@@ -354,7 +352,6 @@ def get_flags():
         "embedding_keep_rate",
         0.9,
         "Used for dropout on transformed embeddings and in the encoder RNN.")
-    gflags.DEFINE_boolean("use_l2_loss", True, "")
     gflags.DEFINE_boolean("use_difference_feature", True, "")
     gflags.DEFINE_boolean("use_product_feature", True, "")
 
@@ -487,8 +484,7 @@ def get_flags():
 
     # Optimization settings.
     gflags.DEFINE_enum(
-        "optimizer_type", "Adam", [
-            "Adam", "RMSprop", "YellowFin"], "")
+        "optimizer_type", "Adam", ["Adam", "RMSprop"], "")
     gflags.DEFINE_integer(
         "training_steps",
         500000,
@@ -748,11 +744,6 @@ def init_model(
             model.parameters(),
             lr=FLAGS.learning_rate,
             eps=1e-08)
-    elif FLAGS.optimizer_type == "YellowFin":
-        optimizer = YFOptimizer(model.parameters(), lr=FLAGS.learning_rate)
-        if FLAGS.actively_decay_learning_rate:
-            logger.Log(
-                "WARNING: Ignoring actively_decay_learning_rate and learning_rate_decay_per_10k_steps. Not implemeted for YellowFin.")
     else:
         raise NotImplementedError
 

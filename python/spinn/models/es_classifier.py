@@ -23,7 +23,7 @@ import numpy as np
 
 from spinn.util import afs_safe_logger
 from spinn.util.data import SimpleProgressBar
-from spinn.util.blocks import get_l2_loss, the_gpu, to_gpu
+from spinn.util.blocks import the_gpu, to_gpu
 from spinn.util.misc import Accumulator, EvalReporter
 from spinn.util.misc import recursively_set_device
 from spinn.util.logging import stats, train_accumulate, create_log_formatter
@@ -98,7 +98,8 @@ def evaluate(
                 eval_X_batch, vocabulary, only_one=not FLAGS.write_eval_report)
             tree_strs = prettyprint_trees(tmp_samples)
         if not FLAGS.write_eval_report:
-            show_sample = False  # Only show one sample, regardless of the number of batches.
+            # Only show one sample, regardless of the number of batches.
+            show_sample = False
 
         # Normalize output.
         logits = F.log_softmax(output)
@@ -117,8 +118,8 @@ def evaluate(
         model.transition_loss if hasattr(model, 'transition_loss') else None
 
         # Update Aggregate Accuracies
-        total_tokens += sum([(nt + 1) / \
-                            2 for nt in eval_num_transitions_batch.reshape(-1)])
+        total_tokens += sum([(nt + 1) /
+                             2 for nt in eval_num_transitions_batch.reshape(-1)])
 
         if FLAGS.write_eval_report:
             transitions_per_example, _ = model.spinn.get_transitions_per_example(
@@ -277,15 +278,9 @@ def train_loop(
         transition_loss = model.transition_loss if hasattr(
             model, 'transition_loss') else None
 
-        # Extract L2 Cost
-        l2_loss = get_l2_loss(
-            model, FLAGS.l2_lambda) if FLAGS.use_l2_loss else None
-
         # Accumulate Total Loss Variable
         total_loss = 0.0
         total_loss += xent_loss
-        if l2_loss is not None:
-            total_loss += l2_loss
         if transition_loss is not None and model.optimize_transition_loss:
             total_loss += transition_loss
         aux_loss = auxiliary_loss(model)
@@ -322,7 +317,6 @@ def train_loop(
             progress_bar.finish()
 
             A.add('xent_cost', xent_loss.data[0])
-            A.add('l2_cost', l2_loss.data[0])
             stats(model, optimizer, A, true_step, log_entry)
             should_log = True
 
@@ -450,11 +444,11 @@ def rollout(
         copyfile(root_best_checkpoint_path, best_checkpoint_path)
 
     ev_step, true_step, perturbation_id, dev_error, best_dev_step = train_loop(FLAGS,
-                            perturbed_model, optimizer,
-                            trainer, training_data_iter, eval_iterators,
-                            logger, true_step, best_dev_error,
-                            perturbation_id, ev_step, header,
-                            root_id, vocabulary, best_dev_step)
+                                                                               perturbed_model, optimizer,
+                                                                               trainer, training_data_iter, eval_iterators,
+                                                                               logger, true_step, best_dev_error,
+                                                                               perturbation_id, ev_step, header,
+                                                                               root_id, vocabulary, best_dev_step)
 
     logger.Log(
         "Best dev accuracy of model: Step %i, %f" %
@@ -497,7 +491,8 @@ def generate_seeds_and_models(trainer, model, root_id, base=False):
         root_path = os.path.join(FLAGS.ckpt_path, root_name + ".ckpt")
         if not os.path.exists(root_path):
             root_path = root_path + "_best"
-        ev_step, true_step, dev_error, best_dev_step = trainer.load(root_path, cpu=FLAGS.gpu < 0)
+        ev_step, true_step, dev_error, best_dev_step = trainer.load(
+            root_path, cpu=FLAGS.gpu < 0)
     else:
         true_step = 0
         best_dev_step = 0
@@ -535,9 +530,9 @@ def restore(logger, trainer, queue, FLAGS, name, path):
 
 
 def run(only_forward=False):
-    logger = afs_safe_logger.ProtoLogger(log_path(FLAGS),
-                                         print_formatter=create_log_formatter(True, False),
-                                         write_proto=FLAGS.write_proto_to_log)
+    logger = afs_safe_logger.ProtoLogger(
+        log_path(FLAGS), print_formatter=create_log_formatter(
+            True, False), write_proto=FLAGS.write_proto_to_log)
 
     header = pb.SpinnHeader()
 
@@ -637,7 +632,8 @@ def run(only_forward=False):
         best_id = acc_order[0]
         best_name = FLAGS.experiment_name + "_p" + str(best_id)
         best_path = os.path.join(FLAGS.ckpt_path, best_name + ".ckpt_best")
-        ev_step, true_step, dev_error, best_dev_step = trainer.load(best_path, cpu=FLAGS.gpu < 0)
+        ev_step, true_step, dev_error, best_dev_step = trainer.load(
+            best_path, cpu=FLAGS.gpu < 0)
 
         print "Picking best perturbation/model %s to run evaluation, with best dev accuracy of %f" % (best_name, 1. - dev_error)
 
@@ -673,7 +669,12 @@ def run(only_forward=False):
 
         else:
             id_ = "B"
-            chosen_models = [(reload_ev_step, true_step, id_, best_dev_error, best_dev_step)]
+            chosen_models = [
+                (reload_ev_step,
+                 true_step,
+                 id_,
+                 best_dev_error,
+                 best_dev_step)]
             base = True  # This is the "base" model
             results = []
 
@@ -708,10 +709,13 @@ def run(only_forward=False):
 
                 # Early stopping based on current best model
                 best_current = chosen_models[0]
-                best_current_step = best_current[1] # true_step
-                best_current_dev_step = best_current[4] # best_dev_step
-                if (best_current_step - best_current_dev_step) > FLAGS.early_stopping_steps_to_wait:
-                    logger.Log('No improvement after ' + str(FLAGS.early_stopping_steps_to_wait) + ' steps. Stopping training.')
+                best_current_step = best_current[1]  # true_step
+                best_current_dev_step = best_current[4]  # best_dev_step
+                if (best_current_step -
+                        best_current_dev_step) > FLAGS.early_stopping_steps_to_wait:
+                    logger.Log('No improvement after ' +
+                               str(FLAGS.early_stopping_steps_to_wait) +
+                               ' steps. Stopping training.')
                     break
 
             # Flush results from previous generatrion
@@ -722,7 +726,7 @@ def run(only_forward=False):
                 [] for i in range(6))
             for chosen_model in chosen_models:
                 perturbation_id = chosen_model[2]
-                random_seed, models, true_step, best_dev_step  = generate_seeds_and_models(
+                random_seed, models, true_step, best_dev_step = generate_seeds_and_models(
                     trainer, model, perturbation_id, base=base)
                 for i in range(len(models)):
                     all_seeds.append(random_seed)
@@ -773,7 +777,8 @@ def run(only_forward=False):
 
             results = [queue.get() for p in processes]
 
-            # Check to ensure the correct number of models where trained and saved
+            # Check to ensure the correct number of models where trained and
+            # saved
             if ev_step == 0:
                 assert len(results) == true_num_episodes
             else:
