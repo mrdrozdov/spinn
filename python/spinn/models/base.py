@@ -18,7 +18,7 @@ from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.nli import load_nli_data
 from spinn.util.blocks import ModelTrainer, bundle
-from spinn.util.blocks import EncodeGRU, IntraAttention, Linear, ReduceTreeGRU, ReduceTreeLSTM
+from spinn.util.blocks import EncodeGRU, IntraAttention, Linear, ReduceTreeGRU, ReduceTreeLSTM, ReduceTensor
 from spinn.util.misc import Args
 from spinn.util.logparse import parse_flags
 
@@ -27,6 +27,7 @@ import spinn.spinn_core_model
 import spinn.plain_rnn
 import spinn.cbow
 import spinn.choi_pyramid
+import spinn.lms
 
 # PyTorch
 import torch
@@ -341,7 +342,7 @@ def get_flags():
     # Model architecture settings.
     gflags.DEFINE_enum(
         "model_type", "RNN", [
-            "CBOW", "RNN", "SPINN", "RLSPINN", "ChoiPyramid"], "")
+            "CBOW", "RNN", "SPINN", "RLSPINN", "ChoiPyramid", "LMS"], "")
     gflags.DEFINE_integer("gpu", -1, "")
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")
@@ -387,7 +388,7 @@ def get_flags():
     # Reduce settings.
     gflags.DEFINE_enum(
         "reduce", "treelstm", [
-            "treelstm", "treegru", "tanh"], "Specify composition function.")
+            "treelstm", "treegru", "tanh", "lms"], "Specify composition function.")
 
     # Pyramid model settings
     gflags.DEFINE_boolean(
@@ -618,6 +619,8 @@ def init_model(
         build_model = spinn.rl_spinn.build_model
     elif FLAGS.model_type == "ChoiPyramid":
         build_model = spinn.choi_pyramid.build_model
+    elif FLAGS.model_type == "LMS":
+        build_model = spinn.lms.build_model
     else:
         raise NotImplementedError
 
@@ -692,6 +695,12 @@ def init_model(
         composition = ReduceTreeGRU(FLAGS.model_dim,
                                     FLAGS.tracking_lstm_hidden_dim,
                                     FLAGS.use_tracking_in_composition)
+    elif FLAGS.reduce == "lms":
+        composition_args.wrap_items = lambda x: bundle(x)
+        composition_args.extract_h = lambda x: x.h
+        composition_args.extract_c = lambda x: x.c
+        composition_args.size = FLAGS.model_dim
+        composition = ReduceTensor(FLAGS.model_dim)
     else:
         raise NotImplementedError
 

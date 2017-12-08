@@ -6,7 +6,11 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
+<<<<<<< HEAD
 from torch.nn.init import kaiming_normal
+=======
+from torch.nn.parameter import Parameter
+>>>>>>> LMS support
 
 from spinn.util.misc import recursively_set_device
 from functools import reduce
@@ -636,6 +640,90 @@ class ReduceTreeLSTM(nn.Module):
                 lstm_in += self.track(tracking.h)
 
         return unbundle(treelstm(left.c, right.c, lstm_in))
+
+
+class Lift(nn.Module):
+    def __init__(self, in_features, out_features):
+        super(Lift, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.lift = Linear(initializer=HeKaimingInitializer)(self.in_features, self.out_features * 2)
+
+    def forward(self, input):
+        return F.tanh(self.lift(input))
+
+
+def treelstmtensor(c_left, c_right, gates, cell_inp, use_dropout=False, training=None):
+    hidden_dim = c_left.size()[1]
+
+    assert gates.size()[1] == hidden_dim * 4, "Need to have 4 gates."
+
+    def slice_gate(gate_data, i):
+        return gate_data[:, i * hidden_dim:(i + 1) * hidden_dim]
+
+    # Compute and slice gate values
+    i_gate, fl_gate, fr_gate, o_gate = [slice_gate(gates, i) for i in range(4)]
+
+    # Apply nonlinearities
+    i_gate = F.sigmoid(i_gate)
+    fl_gate = F.sigmoid(fl_gate)
+    fr_gate = F.sigmoid(fr_gate)
+    o_gate = F.sigmoid(o_gate)
+
+    # Compute new cell and hidden value
+    i_val = i_gate * cell_inp
+    dropout_rate = 0.1
+    if use_dropout:
+        i_val = F.dropout(i_val, dropout_rate, training=training)
+    c_t = fl_gate * c_left + fr_gate * c_right + i_val
+    h_t = o_gate * F.tanh(c_t)
+
+    return (c_t, h_t)
+
+
+class ReduceTensor(nn.Module):
+    def __init__(self, size):
+        super(ReduceTensor, self).__init__()
+        
+        assert size is not None
+
+        self.dim = size
+        self.weight = Parameter(torch.Tensor(self.dim, self.dim))
+        self.b1 = Parameter(torch.Tensor(self.dim, self.dim))
+        self.b2 = Parameter(torch.Tensor(self.dim, self.dim))
+
+        self.left = Linear(initializer=HeKaimingInitializer)(self.dim * self.dim, 4 * (self.dim * self.dim))
+        self.right = Linear(initializer=HeKaimingInitializer)(self.dim * self.dim, 4 * (self.dim * self.dim))
+
+        self.reset_parameters()
+        
+    def reset_parameters(self):
+        HeKaimingInitializer(self.weight)
+        ZeroInitializer(self.b1)
+        ZeroInitializer(self.b2)
+
+    def forward(self, left_in, right_in):
+        left, right = bundle(left_in), bundle(right_in)
+        lstm_gates = self.left(left.h)
+        lstm_gates += self.right(right.h)
+
+        # Core composition
+        # Retrieve hidden state from left_in and feed it into weight matrix
+        cell_inp = []
+        hidden_dim = self.dim * self.dim
+
+        h = left.h.contiguous().view(-1, self.dim, self.dim)
+        cell_inp = torch.matmul(self.weight, h)
+        cell_inp = F.tanh(torch.add(cell_inp, self.b1))
+
+        # Retrieve hidden state from right_in
+        h = right.h.contiguous().view(-1, self.dim, self.dim)
+        cell_inp = F.tanh(torch.baddbmm(self.b2, cell_inp, h))
+        cell_inp = cell_inp.view(-1, hidden_dim)
+
+        out = unbundle(treelstmtensor(left.c, right.c, lstm_gates, cell_inp, training=self.training))
+
+        return out
 
 
 class MLP(nn.Module):
