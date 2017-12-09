@@ -146,7 +146,7 @@ def load_data_and_embeddings(
         else:
             # Load the data.
             raw_training_data = data_manager.load_data(
-                training_data_path, FLAGS.lowercase)
+                training_data_path, FLAGS.lowercase, eval_mode=False)
     else:
         raw_training_data = None
 
@@ -161,7 +161,7 @@ def load_data_and_embeddings(
         # Load the eval data.
         raw_eval_sets = []
         for path in eval_data_path.split(':'):
-            raw_eval_data = data_manager.load_data(path, FLAGS.lowercase)
+            raw_eval_data = data_manager.load_data(path, FLAGS.lowercase, eval_mode=True)
             raw_eval_sets.append((path, raw_eval_data))
 
     # Prepare the vocabulary.

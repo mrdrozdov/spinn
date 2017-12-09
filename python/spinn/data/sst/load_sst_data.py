@@ -25,10 +25,10 @@ def load_data(
         path,
         vocabulary=None,
         seq_length=None,
-        batch_size=32,
+        batch_size=None,
         eval_mode=False,
         logger=None):
-    dataset = convert_unary_binary_bracketed_data(path)
+    dataset = convert_unary_binary_bracketed_data(path, top_node_only=eval_mode)
     return dataset
 
 
