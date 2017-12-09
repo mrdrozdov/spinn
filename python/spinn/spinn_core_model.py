@@ -257,7 +257,8 @@ class SPINN(nn.Module):
         return _preds, _invalid
 
     def predict_actions(self, transition_output):
-        transition_logdist = F.log_softmax(transition_output)
+        print transition_output
+        transition_logdist = F.log_softmax(transition_output, dim=1)
         transition_preds = transition_logdist.data.cpu().numpy().argmax(axis=1)
         return transition_logdist, transition_preds
 
