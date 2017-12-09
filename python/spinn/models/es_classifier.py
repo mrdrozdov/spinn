@@ -101,14 +101,11 @@ def evaluate(
             # Only show one sample, regardless of the number of batches.
             show_sample = False
 
-        # Normalize output.
-        logprobs = F.log_softmax(output)
-
         # Calculate class accuracy.
         target = torch.from_numpy(eval_y_batch).long()
 
         # get the index of the max log-probability
-        pred = logprobs.data.max(1, keepdim=False)[1].cpu()
+        pred = output.data.max(1, keepdim=False)[1].cpu()
 
         eval_accumulate(model, A, batch)
         A.add('class_correct', pred.eq(target).sum())
@@ -260,19 +257,16 @@ def train_loop(
                        validate_transitions=FLAGS.validate_transitions
                        )
 
-        # Normalize output.
-        logprobs = F.log_softmax(output)
-
         # Calculate class accuracy.
         target = torch.from_numpy(y_batch).long()
 
         # get the index of the max log-probability
-        pred = logprobs.data.max(1, keepdim=False)[1].cpu()
+        pred = output.data.max(1, keepdim=False)[1].cpu()
 
         class_acc = pred.eq(target).sum() / float(target.size(0))
 
         # Calculate class loss.
-        xent_loss = nn.NLLLoss()(logprobs, to_gpu(Variable(target, volatile=False)))
+        xent_loss = nn.CrossEntropyLoss()(output, to_gpu(Variable(target, volatile=False)))
 
         # Optionally calculate transition loss.
         transition_loss = model.transition_loss if hasattr(
