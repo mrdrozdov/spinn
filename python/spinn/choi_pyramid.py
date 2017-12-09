@@ -451,7 +451,7 @@ def convert_to_one_hot(indices, num_classes):
 
 def masked_softmax(logits, mask=None):
     eps = 1e-20
-    probs = F.softmax(logits)
+    probs = F.softmax(logits, dim=1)
     if mask is not None:
         mask = mask.float()
         probs = probs * mask + eps
