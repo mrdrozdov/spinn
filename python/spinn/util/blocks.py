@@ -274,8 +274,8 @@ def treelstm(c_left, c_right, gates):
 
     # Apply nonlinearities
     i_gate = F.sigmoid(i_gate)
-    fl_gate = F.sigmoid(fl_gate)
-    fr_gate = F.sigmoid(fr_gate)
+    fl_gate = F.sigmoid(fl_gate + 1.) # Lazy alternative to bias initialization, from Choi
+    fr_gate = F.sigmoid(fr_gate + 1.) # Lazy alternative to bias initialization, from Choi
     o_gate = F.sigmoid(o_gate)
     cell_inp = F.tanh(cell_inp)
 
