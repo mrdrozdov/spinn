@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "3"
+NAME = "5"
 SWEEP_RUNS = 12
 
 LIN = "LIN"
@@ -28,7 +28,7 @@ gflags.DEFINE_string("log_path", "/scratch/sb6065/logs/spinn", "")
 FLAGS(sys.argv)
 
 # Instructions: Configure the variables in this block, then run
-# the following on a machine with qsub access:
+# the following on a machine with sbatch access:
 # python make_sweep.py > my_sweep.sh
 # bash my_sweep.sh
 
@@ -45,28 +45,21 @@ FIXED_PARAMETERS = {
     "data_type":     "sst",
     "model_type":      "SPINN",
     "word_embedding_dim":   "300",
-    "seq_length":   "80",
-    "eval_seq_length":  "810",
-    "eval_interval_steps": "1000",
-    "sample_interval_steps": "1000",
-    "statistics_interval_steps": "100",
-    "batch_size":  "128",
-    "encode": "projection",
-    "num_mlp_layers": "1",
+    "seq_length":   "100",
+    "eval_seq_length":  "200",
     "nocomposition_ln": "",
-    "embedding_keep_rate": "1.0",
-    "pyramid_temperature_decay_per_10k_steps": "1.0", 
-    "clipping_max_value": "10.0",
+    "pyramid_temperature_decay_per_10k_steps": "1.0",
+    "early_stopping_steps_to_wait": "10000", 
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
     "semantic_classifier_keep_rate": ("skr", LIN, 0.5, 1.0),
     "l2_lambda":          ("l2", EXP, 3e-9, 1e-5),
-    "learning_rate": ("lr", EXP, 0.0001, 0.01),
-    "model_dim": ("s", CHOICE, ['64', '96', '128', '192', '256', '384'], None),
-    "mlp_dim": ("md", CHOICE, ['128', '256', '384'], None),
-    "learning_rate_decay_per_10k_steps": ("ldc", EXP, 0.3, 3.0),
+    "learning_rate": ("lr", EXP, 0.00003, 0.01),
+    "model_dim": ("s", CHOICE, ['128', '192', '256', '384', '512'], None),
+    "mlp_dim": ("md", CHOICE, ['128', '256', '384', '512'], None),
+    "learning_rate_decay_per_10k_steps": ("ldc", EXP, 0.1, 1.0),
     "fine_tune_loaded_embeddings": ("ft", BOOL, None, None),
 }
 

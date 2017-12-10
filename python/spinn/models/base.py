@@ -353,7 +353,7 @@ def get_flags():
         "Constrain predicted transitions to ones that give a valid parse tree.")
     gflags.DEFINE_float(
         "embedding_keep_rate",
-        0.9,
+        1.0,
         "Used for dropout on transformed embeddings and in the encoder RNN.")
     gflags.DEFINE_boolean("use_difference_feature", True, "")
     gflags.DEFINE_boolean("use_product_feature", True, "")
@@ -477,7 +477,7 @@ def get_flags():
         "mlp_dim",
         1024,
         "Dimension of intermediate MLP layers.")
-    gflags.DEFINE_integer("num_mlp_layers", 2, "Number of MLP layers.")
+    gflags.DEFINE_integer("num_mlp_layers", 1, "Number of MLP layers.")
     gflags.DEFINE_boolean(
         "mlp_ln",
         True,
