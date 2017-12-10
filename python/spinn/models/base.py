@@ -557,20 +557,6 @@ def get_flags():
         False,
         "Detach transition decision from backprop.")
     gflags.DEFINE_boolean("evolution", False, "Use evolution to train parser.")
-    gflags.DEFINE_float(
-        "es_sigma",
-        0.05,
-        "Standard deviation for Gaussian noise.")
-    gflags.DEFINE_integer(
-        "es_num_episodes",
-        2,
-        "Number of simultaneous episodes to run.")
-    gflags.DEFINE_integer(
-        "es_num_roots",
-        2,
-        "Number of simultaneous episodes to run.")
-    gflags.DEFINE_integer("es_episode_length", 1000, "Length of each episode.")
-    gflags.DEFINE_integer("es_steps", 1000, "Number of evolution steps.")
     gflags.DEFINE_boolean(
         "mirror",
         False,
