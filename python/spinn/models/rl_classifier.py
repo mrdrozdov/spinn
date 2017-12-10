@@ -159,6 +159,7 @@ def train_loop(
         FLAGS,
         model,
         optimizer,
+        sparse_optimizer,
         trainer,
         training_data_iter,
         eval_iterators,
@@ -215,6 +216,8 @@ def train_loop(
 
         # Reset cached gradients.
         optimizer.zero_grad()
+        if sparse_optimizer is not None:
+            sparse_optimizer.zero_grad()
 
         temperature = math.sin(
             math.pi /
@@ -280,6 +283,8 @@ def train_loop(
 
         # Gradient descent step.
         optimizer.step()
+        if sparse_optimizer is not None:
+            sparse_optimizer.step()
 
         end = time.time()
 
@@ -406,7 +411,7 @@ def run(only_forward=False):
     vocab_size = len(vocabulary)
     num_classes = len(set(data_manager.LABEL_MAP.values()))
 
-    model, optimizer, trainer = init_model(
+    model, optimizer, sparse_optimizer, trainer = init_model(
         FLAGS,
         logger,
         initial_embeddings,
@@ -479,6 +484,7 @@ def run(only_forward=False):
             FLAGS,
             model,
             optimizer,
+            sparse_optimizer,
             trainer,
             training_data_iter,
             eval_iterators,

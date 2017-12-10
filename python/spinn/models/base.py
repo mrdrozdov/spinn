@@ -724,4 +724,4 @@ def init_model(
     if logfile_header:
         logfile_header.total_params = int(total_params)
 
-    return model, optimizer, trainer
+    return model, optimizer, sparse_optimizer, trainer

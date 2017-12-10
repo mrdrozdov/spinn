@@ -177,6 +177,7 @@ def train_loop(
         FLAGS,
         model,
         optimizer,
+        sparse_optimizer,
         trainer,
         training_data_iter,
         eval_iterators,
@@ -238,6 +239,8 @@ def train_loop(
 
         # Reset cached gradients.
         optimizer.zero_grad()
+        if sparse_optimizer is not None:
+            sparse_optimizer.zero_grad()
 
         if FLAGS.model_type in ["ChoiPyramid"]:
             pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (
@@ -294,6 +297,8 @@ def train_loop(
 
         # Gradient descent step.
         optimizer.step()
+        if sparse_optimizer is not None:
+            sparse_optimizer.step()
 
         end = time.time()
 
@@ -423,7 +428,7 @@ def run(only_forward=False):
     vocab_size = len(vocabulary)
     num_classes = len(set(data_manager.LABEL_MAP.values()))
 
-    model, optimizer, trainer = init_model(
+    model, optimizer, sparse_optimizer, trainer = init_model(
         FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_manager, header)
 
     standard_checkpoint_path = get_checkpoint_path(
@@ -490,6 +495,7 @@ def run(only_forward=False):
             FLAGS,
             model,
             optimizer,
+            sparse_optimizer,
             trainer,
             training_data_iter,
             eval_iterators,
