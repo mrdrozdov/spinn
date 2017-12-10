@@ -17,7 +17,7 @@ from spinn.data.boolean import load_boolean_data
 from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.nli import load_nli_data
-from spinn.util.blocks import ModelTrainer, ModelTrainer_ES, bundle
+from spinn.util.blocks import ModelTrainer, bundle
 from spinn.util.blocks import EncodeGRU, IntraAttention, Linear, ReduceTreeGRU, ReduceTreeLSTM
 from spinn.util.misc import Args
 from spinn.util.logparse import parse_flags
@@ -502,10 +502,6 @@ def get_flags():
         "Used in optimizer.")
     gflags.DEFINE_float("clipping_max_value", 5.0, "")
     gflags.DEFINE_float("l2_lambda", 1e-5, "")
-    gflags.DEFINE_float(
-        "init_range",
-        0.005,
-        "Mainly used for softmax parameters. Range for uniform random init.")
 
     # Display settings.
     gflags.DEFINE_integer(
@@ -550,21 +546,6 @@ def get_flags():
         "eval_report_use_preds", True, "If False, use the given transitions in the report, "
         "otherwise use predicted transitions. Note that when predicting transitions but not using them, the "
         "reported predictions will look very odd / not valid.")  # TODO: Remove.
-
-    # Evolution Strategy
-    gflags.DEFINE_boolean(
-        "transition_detach",
-        False,
-        "Detach transition decision from backprop.")
-    gflags.DEFINE_boolean("evolution", False, "Use evolution to train parser.")
-    gflags.DEFINE_boolean(
-        "mirror",
-        False,
-        "Do mirrored/antithetic sampling. If doing mirrored sampling, number of perturbtations will be double es_num_episodes.")
-    gflags.DEFINE_float(
-        "eval_sample_size",
-        None,
-        "Percentage (eg 0.3) of batches to be sampled for evaluation during training (only for ES). If None, use all.")
 
 
 def flag_defaults(FLAGS, load_log_flags=False):
@@ -686,9 +667,6 @@ def init_model(
     composition_args.wrap_items = lambda x: torch.cat(x, 0)
     composition_args.extract_h = lambda x: x
 
-    composition_args.detach = FLAGS.transition_detach
-    composition_args.evolution = FLAGS.evolution
-
     if FLAGS.reduce == "treelstm":
         assert FLAGS.model_dim % 2 == 0, 'model_dim must be an even number.'
         if FLAGS.model_dim != FLAGS.word_embedding_dim:
@@ -735,10 +713,7 @@ def init_model(
         raise NotImplementedError
 
     # Build trainer.
-    if FLAGS.evolution:
-        trainer = ModelTrainer_ES(model, optimizer)
-    else:
-        trainer = ModelTrainer(model, optimizer)
+    trainer = ModelTrainer(model, optimizer)
 
     # Print model size.
     logger.Log("Architecture: {}".format(model))

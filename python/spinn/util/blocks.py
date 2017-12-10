@@ -322,63 +322,6 @@ class ModelTrainer(object):
         return checkpoint['step'], checkpoint['best_dev_error'], best_dev_step
 
 
-class ModelTrainer_ES(object):
-
-    def __init__(self, model, optimizer):
-        self.model = model
-        self.optimizer = optimizer
-
-    def save(
-            self,
-            filename,
-            step,
-            best_dev_error,
-            evolution_step,
-            best_dev_step):
-        if the_gpu() >= 0:
-            recursively_set_device(self.model.state_dict(), gpu=-1)
-            recursively_set_device(self.optimizer.state_dict(), gpu=-1)
-
-        # Always sends Tensors to CPU.
-        torch.save({
-            'step': step,
-            'best_dev_error': best_dev_error,
-            'evolution_step': evolution_step,
-            'best_dev_step': best_dev_step,
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-        }, filename)
-
-        if the_gpu() >= 0:
-            recursively_set_device(self.model.state_dict(), gpu=the_gpu())
-            recursively_set_device(self.optimizer.state_dict(), gpu=the_gpu())
-
-    def load(self, filename, cpu=False):
-        if cpu:
-            # Load GPU-based checkpoints on CPU
-            checkpoint = torch.load(
-                filename, map_location=lambda storage, loc: storage)
-        else:
-            checkpoint = torch.load(filename)
-
-        model_state_dict = checkpoint['model_state_dict']
-
-        # HACK: Compatability for saving supervised SPINN and loading RL SPINN.
-        if 'baseline' in self.model.state_dict().keys(
-        ) and 'baseline' not in model_state_dict:
-            model_state_dict['baseline'] = torch.FloatTensor([0.0])
-
-        self.model.load_state_dict(model_state_dict)
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-
-        if 'best_dev_step' in checkpoint:
-            best_dev_step = checkpoint['best_dev_step']
-        else:
-            best_dev_step = 0
-
-        return checkpoint['evolution_step'], checkpoint['step'], checkpoint['best_dev_error'], checkpoint['best_dev_step']
-
-
 class Embed(nn.Module):
     def __init__(self, size, vocab_size, vectors):
         super(Embed, self).__init__()

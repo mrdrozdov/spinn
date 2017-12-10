@@ -45,8 +45,6 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         mlp_ln=FLAGS.mlp_ln,
         context_args=context_args,
         composition_args=composition_args,
-        detach=FLAGS.transition_detach,
-        evolution=FLAGS.evolution,
     )
 
 
@@ -136,8 +134,6 @@ class SPINN(nn.Module):
 
         # Optional debug mode.
         self.debug = False
-        self.detach = args.detach
-        self.evolution = args.evolution
 
         self.transition_weight = args.transition_weight
 
@@ -337,13 +333,6 @@ class SPINN(nn.Module):
     def loss_phase_hook(self):
         pass
 
-    def evolution_params(self):
-        """
-        The parameters trained by evolution strategy
-        """
-        return [(k, v) for k, v in zip(self.transition_net.state_dict(
-        ).keys(), self.transition_net.state_dict().values())]
-
     def run(self, inp_transitions, run_internal_parser=False,
             use_internal_parser=False, validate_transitions=True):
         transition_loss = None
@@ -405,10 +394,7 @@ class SPINN(nn.Module):
                     transition_inp = [tracker_h]
                     if self.tracker.lateral_tracking and self.predict_use_cell:
                         transition_inp += [tracker_c]
-                    if self.detach or self.evolution:
-                        transition_inp = torch.cat(transition_inp, 1).detach()
-                    else:
-                        transition_inp = torch.cat(transition_inp, 1)
+                    transition_inp = torch.cat(transition_inp, 1)
 
                     transition_output = self.transition_net(transition_inp)
 
@@ -589,8 +575,6 @@ class BaseModel(nn.Module):
                  classifier_keep_rate=None,
                  context_args=None,
                  composition_args=None,
-                 detach=None,
-                 evolution=None,
                  **kwargs
                  ):
         super(BaseModel, self).__init__()
