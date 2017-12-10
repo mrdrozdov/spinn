@@ -282,8 +282,6 @@ class ModelTrainer(object):
         if the_gpu() >= 0:
             recursively_set_device(self.model.state_dict(), gpu=-1)
             recursively_set_device(self.optimizer.state_dict(), gpu=-1)
-            if self.sparse_optimizer is not None:
-                recursively_set_device(self.sparse_optimizer.state_dict(), gpu=-1)
 
         # Always sends Tensors to CPU.
         save_dict = {
