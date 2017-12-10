@@ -395,7 +395,7 @@ def get_flags():
         None,
         "If set, add a scalar trained temperature parameter.")
     gflags.DEFINE_float("pyramid_temperature_decay_per_10k_steps",
-                        0.5, "What it says on the box.")
+                        0.5, "What it says on the box. Does not impact SparseAdam (for word embedding fine-tuning).")
     gflags.DEFINE_float(
         "pyramid_temperature_cycle_length",
         0.0,
