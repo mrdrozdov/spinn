@@ -160,8 +160,7 @@ class SPINN(nn.Module):
                         2 if predict_use_cell else self.tracker.state_size
                 else:
                     tinp_size = self.tracker.state_size
-                self.transition_net = Linear(
-                    initializer=kaiming_normal)(
+                self.transition_net = Linear()(
                     tinp_size, 2)
 
         self.choices = np.array([T_SHIFT, T_REDUCE], dtype=np.int32)

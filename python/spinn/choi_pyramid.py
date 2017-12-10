@@ -268,8 +268,7 @@ class BinaryTreeLSTM(nn.Module):
             hidden_dim, composition_ln=composition_ln)
 
         # TODO: Add something to blocks to make this use case more elegant.
-        self.comp_query = Linear(
-            initializer=kaiming_normal)(
+        self.comp_query = Linear()(
             in_features=hidden_dim,
             out_features=1,
             bias=False)
@@ -520,8 +519,7 @@ class BinaryTreeLSTMLayer(nn.Module):
     def __init__(self, hidden_dim, composition_ln=False):
         super(BinaryTreeLSTMLayer, self).__init__()
         self.hidden_dim = hidden_dim
-        self.comp_linear = Linear(
-            initializer=kaiming_normal)(
+        self.comp_linear = Linear()(
             in_features=2 * hidden_dim,
             out_features=5 * hidden_dim)
         self.composition_ln = composition_ln
