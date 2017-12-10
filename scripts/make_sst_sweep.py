@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "sst"
-SWEEP_RUNS = 20
+NAME = "sec"
+SWEEP_RUNS = 12
 
 LIN = "LIN"
 EXP = "EXP"
@@ -55,7 +55,6 @@ FIXED_PARAMETERS = {
     "num_mlp_layers": "1",
     "nocomposition_ln": "",
     "embedding_keep_rate": "1.0",
-    "learning_rate_decay_per_10k_steps": "1.0",
     "pyramid_temperature_decay_per_10k_steps": "1.0", 
 }
 
@@ -63,10 +62,12 @@ FIXED_PARAMETERS = {
 SWEEP_PARAMETERS = {
     "semantic_classifier_keep_rate": ("skr", LIN, 0.5, 1.0),
     "l2_lambda":          ("l2", EXP, 3e-9, 3e-5),
-    "learning_rate": ("lr", EXP, 0.00003, 0.001),
-    "model_dim": ("s", CHOICE, ['32', '64', '96', '128', '256'], None),
-    "mlp_dim": ("md", CHOICE, ['64', '128', '256'], None),
-    "num_mlp_layers": ("ml", CHOICE, ['1', '2'], None),
+    "learning_rate": ("lr", EXP, 0.0001, 0.01),
+    "model_dim": ("s", CHOICE, ['32', '64', '96', '128', '192', '256', '384'], None),
+    "mlp_dim": ("md", CHOICE, ['128', '256', '384'], None),
+    "clipping_max_value": ("c", EXP, 0.1, 10.0),
+    "learning_rate_decay_per_10k_steps": ("ldc", LIN, 0.3, 3.0),
+    "predict_use_cell": ("pdc", BOOL, None, None),
 }
 
 
