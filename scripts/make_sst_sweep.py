@@ -5,10 +5,27 @@ import getpass
 import os
 import random
 import numpy as np
+import gflags
+import sys
+
+NYU_NON_PBS = False
+NAME = "sst"
+SWEEP_RUNS = 20
 
 LIN = "LIN"
 EXP = "EXP"
 SS_BASE = "SS_BASE"
+BOOL = "BOOL"
+CHOICE = "CHOICE"
+
+FLAGS = gflags.FLAGS
+
+gflags.DEFINE_string("training_data_path", "/home/sb6065/trees/train.txt", "")
+gflags.DEFINE_string("eval_data_path", "/home/sb6065/trees/dev.txt", "")
+gflags.DEFINE_string("embedding_data_path", "/home/sb6065/glove/glove.840B.300d.txt", "")
+gflags.DEFINE_string("log_path", "/scratch/sb6065/logs/spinn", "")
+
+FLAGS(sys.argv)
 
 # Instructions: Configure the variables in this block, then run
 # the following on a machine with qsub access:
@@ -20,82 +37,115 @@ SS_BASE = "SS_BASE"
 # Non-tunable flags that must be passed in.
 
 FIXED_PARAMETERS = {
+    "training_data_path":    FLAGS.training_data_path,
+    "eval_data_path":    FLAGS.eval_data_path,
+    "embedding_data_path": FLAGS.embedding_data_path,
+    "log_path": FLAGS.log_path,
+    "ckpt_path":  FLAGS.log_path,
     "data_type":     "sst",
-    "model_type":     "Model0",
-    "training_data_path":    "sst-data/train_expanded.txt",
-    "eval_data_path":    "sst-data/dev.txt:sst-data/train_sample.txt",
-    "embedding_data_path": "/scr/nlp/data/glove_vecs/glove.840B.300d.txt",
-    "word_embedding_dim":	"300",
-    "model_dim":   "300",
-    "seq_length":	"100",
-    "eval_seq_length":	"100",
-    "batch_size":  "32",
-    "ckpt_path":    os.path.join("/scr/", getpass.getuser(), "/"),  # Launching user's home scr dir
-    "log_path":    os.path.join("/scr/", getpass.getuser(),  "/")  # Launching user's home scr dir
+    "model_type":      "SPINN",
+    "word_embedding_dim":   "300",
+    "seq_length":   "80",
+    "eval_seq_length":  "810",
+    "eval_interval_steps": "1000",
+    "sample_interval_steps": "1000",
+    "statistics_interval_steps": "100",
+    "batch_size":  "128",
+    "encode": "projection",
+    "num_mlp_layers": "1",
+    "nocomposition_ln": "",
+    "embedding_keep_rate": "1.0",
+    "learning_rate_decay_per_10k_steps": "1.0",
+    "pyramid_temperature_decay_per_10k_steps": "1.0", 
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "learning_rate":      (EXP, 0.00005, 0.001),
-    "l2_lambda":   		  (EXP, 4e-6, 8e-5),
-    "semantic_classifier_keep_rate": (LIN, 0.3, 0.6),
-    "embedding_keep_rate": (LIN, 0.3, 0.6),
-    "scheduled_sampling_exponent_base": (SS_BASE, 1e-5, 1e-4),
-    "transition_loss_scale": (LIN, 18.0, 28.0),
-    "tracking_lstm_hidden_dim": (EXP, 1, 32)
+    "semantic_classifier_keep_rate": ("skr", LIN, 0.5, 1.0),
+    "l2_lambda":          ("l2", EXP, 3e-9, 3e-5),
+    "learning_rate": ("lr", EXP, 0.00003, 0.001),
+    "model_dim": ("s", CHOICE, ['32', '64', '96', '128', '256'], None),
+    "mlp_dim": ("md", CHOICE, ['64', '128', '256'], None),
+    "num_mlp_layers": ("ml", CHOICE, ['1', '2'], None),
 }
 
 
-sweep_name = "sweep_" + \
+sweep_name = "sweep_" + NAME + "_" + \
     FIXED_PARAMETERS["data_type"] + "_" + FIXED_PARAMETERS["model_type"]
-sweep_runs = 6
-queue = "jag"
 
 # - #
 print "# NAME: " + sweep_name
-print "# NUM RUNS: " + str(sweep_runs)
+print "# NUM RUNS: " + str(SWEEP_RUNS)
 print "# SWEEP PARAMETERS: " + str(SWEEP_PARAMETERS)
 print "# FIXED_PARAMETERS: " + str(FIXED_PARAMETERS)
 print
 
-for run_id in range(sweep_runs):
+# Print training paths as variables so they can be easily changed without
+# having to change this script.
+print "# Adjust these to your own setup."
+print "TRAINING_DATA_PATH=" + FLAGS.training_data_path
+print "EVAL_DATA_PATH=" + FLAGS.eval_data_path
+print "EMBEDDING_DATA_PATH=" + FLAGS.embedding_data_path
+print "LOG_PATH=" + FLAGS.log_path
+print
+
+for run_id in range(SWEEP_RUNS):
     params = {}
+    name = sweep_name + "_" + str(run_id)
+
     params.update(FIXED_PARAMETERS)
+    # Any param appearing in both sets will be overwritten by the sweep value.
+
     for param in SWEEP_PARAMETERS:
         config = SWEEP_PARAMETERS[param]
-        t = config[0]
-        mn = config[1]
-        mx = config[2]
+        t = config[1]
+        mn = config[2]
+        mx = config[3]
 
         r = random.uniform(0, 1)
         if t == EXP:
             lmn = np.log(mn)
             lmx = np.log(mx)
             sample = np.exp(lmn + (lmx - lmn) * r)
+        elif t == BOOL:
+            sample = r > 0.5
         elif t==SS_BASE:
             lmn = np.log(mn)
             lmx = np.log(mx)
             sample = 1 - np.exp(lmn + (lmx - lmn) * r)
+        elif t==CHOICE:
+            sample = random.choice(mn)
         else:
             sample = mn + (mx - mn) * r
 
         if isinstance(mn, int):
             sample = int(round(sample, 0))
+            val_disp = str(sample)
+            params[param] = sample
+        elif isinstance(mn, float):
+            val_disp = "%.2g" % sample
+            params[param] = sample
+        elif t==BOOL:
+            val_disp = str(int(sample))
+            if not sample:
+                params['no' + param] = ''
+            else:
+                params[param] = ''
+        else:
+            val_disp = sample
+            params[param] = sample
+        name += "-" + config[0] + val_disp
 
-        params[param] = sample
-
-    name = sweep_name + "_" + str(run_id)
     flags = ""
     for param in params:
         value = params[param]
-        val_str = ""
         flags += " --" + param + " " + str(value)
-        if param not in FIXED_PARAMETERS:
-            if isinstance(value, int):
-                val_disp = str(value)
-            else:
-                val_disp = "%.2g" % value
-            name += "-" + param + val_disp
+
     flags += " --experiment_name " + name
-    print "export SPINN_FLAGS=\"" + flags + "\"; export DEVICE=gpuX; qsub -v SPINN_FLAGS,DEVICE ../scripts/train_spinn_classifier.sh -q " + queue + " -l host=jagupardX"
+    if NYU_NON_PBS:
+        print "cd spinn/python; python2.7 -m spinn.models.supervised_classifier " + flags
+    else:
+        print "SPINNMODEL=\"spinn.models.supervised_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh ../scripts/train_spinn.sbatch 1"
     print
+
+
