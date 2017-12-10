@@ -25,6 +25,7 @@ def the_gpu():
 
 the_gpu.gpu = -1
 
+
 def to_gpu(var):
     if the_gpu.gpu >= 0:
         return var.cuda(the_gpu.gpu)
@@ -255,8 +256,10 @@ def treelstm(c_left, c_right, gates):
 
     # Apply nonlinearities
     i_gate = F.sigmoid(i_gate)
-    fl_gate = F.sigmoid(fl_gate + 1.) # Lazy alternative to bias initialization, from Choi
-    fr_gate = F.sigmoid(fr_gate + 1.) # Lazy alternative to bias initialization, from Choi
+    # Lazy alternative to bias initialization, from Choi
+    fl_gate = F.sigmoid(fl_gate + 1.)
+    # Lazy alternative to bias initialization, from Choi
+    fr_gate = F.sigmoid(fr_gate + 1.)
     o_gate = F.sigmoid(o_gate)
     cell_inp = F.tanh(cell_inp)
 
@@ -707,7 +710,12 @@ class MLP(nn.Module):
             if mlp_ln:
                 setattr(self, 'ln{}'.format(i), LayerNormalization(mlp_dim))
             features_dim = mlp_dim
-        setattr(self, 'l{}'.format(num_mlp_layers), Linear()(features_dim, num_classes))
+        setattr(
+            self,
+            'l{}'.format(num_mlp_layers),
+            Linear()(
+                features_dim,
+                num_classes))
 
     def forward(self, h):
         if self.mlp_ln:

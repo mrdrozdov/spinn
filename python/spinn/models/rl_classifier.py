@@ -254,7 +254,7 @@ def train_loop(
 
         # Calculate class loss.
         xent_loss = nn.CrossEntropyLoss()(output, to_gpu(Variable(target, volatile=False)))
-        
+
         # Optionally calculate transition loss.
         transition_loss = model.transition_loss if hasattr(
             model, 'transition_loss') else None
