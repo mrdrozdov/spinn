@@ -5,6 +5,24 @@ import os
 import logging_pb2 as pb
 
 
+def debug_gradient(model, losses):
+    model.zero_grad()
+
+    for name, loss in losses:
+        print(name)
+        loss.backward(retain_variables=True)
+        stats = [
+            (p.grad.norm().data[0],
+             p.grad.max().data[0],
+             p.grad.min().data[0],
+             p.size()) for p in model.parameters()]
+        for s in stats:
+            print(s)
+        print
+
+        model.zero_grad()
+
+
 class GenericClass(object):
     def __init__(self, **kwargs):
         super(GenericClass, self).__init__()
