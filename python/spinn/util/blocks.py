@@ -700,54 +700,6 @@ class ReduceTreeLSTM(nn.Module):
         return unbundle(treelstm(left.c, right.c, lstm_in))
 
 
-class SimpleTreeLSTM(nn.Module):
-    """TreeLSTM composition module for Pyramid.
-
-    The TreeLSTM has two inputs: the left and right children being composed.
-
-    Args:
-        size: The size of the model state.
-        composition_ln: Whether to use layer normalization.
-    """
-
-    def __init__(self, size, composition_ln=True):
-        super(SimpleTreeLSTM, self).__init__()
-        self.composition_ln = composition_ln
-        self.hidden_dim = size
-        self.left = Linear()(size, 5 * size)
-        self.right = Linear()(
-            size, 5 * size, bias=False)
-        if composition_ln:
-            self.left_ln = LayerNormalization(size)
-            self.right_ln = LayerNormalization(size)
-
-    def forward(self, left, right):
-        """Perform batched TreeLSTM composition.
-
-        Args:
-            left: A B-by-(2 x D) tensor containing h and c states.
-            right: A B-by-(2 x D) tensor containing h and c states.
-
-        Returns:
-            out: A B-by-(2 x D) tensor containing h and c states.
-
-        """
-
-        left_h = get_h(left, self.hidden_dim)
-        left_c = get_c(left, self.hidden_dim)
-        right_h = get_h(right, self.hidden_dim)
-        right_c = get_c(right, self.hidden_dim)
-
-        if self.composition_ln:
-            lstm_in = self.left(self.left_ln(left_h))
-            lstm_in += self.right(self.right_ln(right_h))
-        else:
-            lstm_in = self.left(left_h)
-            lstm_in += self.right(right_h)
-
-        return torch.cat(treelstm(left_c, right_c, lstm_in), 1)
-
-
 class MLP(nn.Module):
     def __init__(
             self,
@@ -793,7 +745,7 @@ class MLP(nn.Module):
         layer = getattr(self, 'l{}'.format(self.num_mlp_layers))
         y = layer(h)
         return y
-        
+
 
 def ZeroInitializer(param):
     shape = param.size()
