@@ -50,6 +50,7 @@ FIXED_PARAMETERS = {
     "nocomposition_ln": "",
     "pyramid_temperature_decay_per_10k_steps": "1.0",
     "early_stopping_steps_to_wait": "10000", 
+    "fine_tune_loaded_embeddings": "",
 }
 
 # Tunable parameters.
@@ -57,10 +58,9 @@ SWEEP_PARAMETERS = {
     "semantic_classifier_keep_rate": ("skr", LIN, 0.5, 1.0),
     "l2_lambda":          ("l2", EXP, 3e-9, 1e-5),
     "learning_rate": ("lr", EXP, 0.00003, 0.01),
-    "model_dim": ("s", CHOICE, ['128', '192', '256', '384', '512'], None),
+    "model_dim": ("s", CHOICE, ['192', '256', '384', '512', '768'], None),
     "mlp_dim": ("md", CHOICE, ['128', '256', '384', '512'], None),
     "learning_rate_decay_per_10k_steps": ("ldc", EXP, 0.1, 1.0),
-    "fine_tune_loaded_embeddings": ("ft", BOOL, None, None),
 }
 
 
