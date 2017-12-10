@@ -24,6 +24,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      word_embedding_dim=FLAGS.word_embedding_dim,
                      vocab_size=vocab_size,
                      initial_embeddings=initial_embeddings,
+                     fine_tune_loaded_embeddings=FLAGS.fine_tune_loaded_embeddings,
                      num_classes=num_classes,
                      embedding_keep_rate=FLAGS.embedding_keep_rate,
                      use_sentence_pair=use_sentence_pair,
@@ -47,6 +48,7 @@ class ChoiPyramid(nn.Module):
                  use_product_feature=None,
                  use_difference_feature=None,
                  initial_embeddings=None,
+                 fine_tune_loaded_embeddings=None,
                  num_classes=None,
                  embedding_keep_rate=None,
                  use_sentence_pair=False,
@@ -77,7 +79,8 @@ class ChoiPyramid(nn.Module):
         self.embed = Embed(
             word_embedding_dim,
             vocab.size,
-            vectors=vocab.vectors)
+            vectors=vocab.vectors,
+            fine_tune=fine_tune_loaded_embeddings)
 
         self.binary_tree_lstm = BinaryTreeLSTM(
             word_embedding_dim,

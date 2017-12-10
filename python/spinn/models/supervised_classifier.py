@@ -56,7 +56,7 @@ def evaluate(FLAGS, model, eval_set, log_entry,
     total_tokens = 0
     start = time.time()
 
-    if FLAGS.model_type in ["Pyramid", "ChoiPyramid"]:
+    if FLAGS.model_type in ["ChoiPyramid"]:
         pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (
             step / 10000.0)
         if FLAGS.pyramid_temperature_cycle_length > 0.0:
@@ -239,7 +239,7 @@ def train_loop(
         # Reset cached gradients.
         optimizer.zero_grad()
 
-        if FLAGS.model_type in ["Pyramid", "ChoiPyramid"]:
+        if FLAGS.model_type in ["ChoiPyramid"]:
             pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (
                 step / 10000.0)
             if FLAGS.pyramid_temperature_cycle_length > 0.0:
@@ -285,7 +285,7 @@ def train_loop(
         total_loss.backward()
 
         # Hard Gradient Clipping
-        nn.utils.clip_grad_norm(model.parameters(), FLAGS.clipping_max_value)
+        nn.utils.clip_grad_norm([param for name, param in model.named_parameters() if name not in ["embed.embed.weight"]], FLAGS.clipping_max_value)
 
         # Learning Rate Decay
         if FLAGS.actively_decay_learning_rate:

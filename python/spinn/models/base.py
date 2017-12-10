@@ -168,7 +168,7 @@ def load_data_and_embeddings(
     # Prepare the vocabulary.
     if not data_manager.FIXED_VOCABULARY:
         logger.Log(
-            "In open vocabulary mode. Using loaded embeddings without fine-tuning.")
+            "Using loaded embeddings.")
         vocabulary = util.BuildVocabulary(
             raw_training_data,
             raw_eval_sets,
@@ -177,7 +177,7 @@ def load_data_and_embeddings(
             sentence_pair_data=data_manager.SENTENCE_PAIR_DATA)
     else:
         vocabulary = data_manager.FIXED_VOCABULARY
-        logger.Log("In fixed vocabulary mode. Training embeddings.")
+        logger.Log("In fixed vocabulary mode. Training embeddings from scratch.")
 
     # Load pretrained embeddings.
     if FLAGS.embedding_data_path:
@@ -335,6 +335,8 @@ def get_flags():
         "Seed shuffling of eval data.")
     gflags.DEFINE_string("embedding_data_path", None,
                          "If set, load GloVe-formatted embeddings from here.")
+    gflags.DEFINE_boolean("fine_tune_loaded_embeddings", False,
+                          "If set, backpropagate into embeddings even when initializing from pretrained.")
 
     # Model architecture settings.
     gflags.DEFINE_enum(
@@ -484,8 +486,6 @@ def get_flags():
                         "Used for dropout in the semantic task classifier.")
 
     # Optimization settings.
-    gflags.DEFINE_enum(
-        "optimizer_type", "Adam", ["Adam", "RMSprop"], "")
     gflags.DEFINE_integer(
         "training_steps",
         500000,
@@ -701,19 +701,18 @@ def init_model(
                         num_classes, FLAGS, context_args, composition_args)
 
     # Build optimizer.
-    if FLAGS.optimizer_type == "Adam":
-        optimizer = optim.Adam(model.parameters(), lr=FLAGS.learning_rate,
-                               betas=(0.9, 0.999), eps=1e-08)
-    elif FLAGS.optimizer_type == "RMSprop":
-        optimizer = optim.RMSprop(
-            model.parameters(),
-            lr=FLAGS.learning_rate,
-            eps=1e-08)
+    optimizer = optim.Adam([param for name, param in model.named_parameters() if name not in ["embed.embed.weight"]], lr=FLAGS.learning_rate, 
+        betas=(0.9, 0.999), eps=1e-08)
+
+    sparse_parameters = [param for name, param in model.named_parameters() if name in ["embed.embed.weight"]]
+    if len(sparse_parameters) > 0:
+        sparse_optimizer = optim.SparseAdam(sparse_parameters, lr=FLAGS.learning_rate, 
+            betas=(0.9, 0.999), eps=1e-08)
     else:
-        raise NotImplementedError
+        sparse_optimizer = None
 
     # Build trainer.
-    trainer = ModelTrainer(model, optimizer)
+    trainer = ModelTrainer(model, optimizer, sparse_optimizer)
 
     # Print model size.
     logger.Log("Architecture: {}".format(model))

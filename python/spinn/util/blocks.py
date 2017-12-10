@@ -273,25 +273,29 @@ def treelstm(c_left, c_right, gates):
 
 class ModelTrainer(object):
 
-    def __init__(self, model, optimizer):
+    def __init__(self, model, optimizer, sparse_optimizer=None):
         self.model = model
         self.optimizer = optimizer
+        self.sparse_optimizer = sparse_optimizer
 
     def save(self, filename, step, best_dev_error, best_dev_step):
-        optimizer_state_dict = self.optimizer.state_dict()
-
         if the_gpu() >= 0:
             recursively_set_device(self.model.state_dict(), gpu=-1)
             recursively_set_device(self.optimizer.state_dict(), gpu=-1)
+            if self.sparse_optimizer is not None:
+                recursively_set_device(self.sparse_optimizer.state_dict(), gpu=-1)
 
         # Always sends Tensors to CPU.
-        torch.save({
+        save_dict = {
             'step': step,
             'best_dev_error': best_dev_error,
             'best_dev_step': best_dev_step,
             'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': optimizer_state_dict,
-        }, filename)
+            'optimizer_state_dict': self.optimizer.state_dict()
+            }
+        if self.sparse_optimizer is not None:
+            save_dict['sparse_optimizer_state_dict'] = self.sparse_optimizer.state_dict()
+        torch.save(save_dict, filename)
 
         if the_gpu() >= 0:
             recursively_set_device(self.model.state_dict(), gpu=the_gpu())
@@ -313,6 +317,8 @@ class ModelTrainer(object):
 
         self.model.load_state_dict(model_state_dict)
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        if self.sparse_optimizer is not None:
+            self.sparse_optimizer.load_state_dict(checkpoint['sparse_optimizer_state_dict'])
 
         if 'best_dev_step' in checkpoint:
             best_dev_step = checkpoint['best_dev_step']
@@ -323,14 +329,21 @@ class ModelTrainer(object):
 
 
 class Embed(nn.Module):
-    def __init__(self, size, vocab_size, vectors):
+    def __init__(self, size, vocab_size, vectors, fine_tune=False):
         super(Embed, self).__init__()
+
         if vectors is None:
             self.embed = nn.Embedding(vocab_size, size)
-        self.vectors = vectors
+        else:
+            if fine_tune:
+                self.embed = nn.Embedding(vocab_size, size, sparse=True)
+                self.embed.weight.data.copy_(torch.from_numpy(vectors))
+            else:
+                self.vectors = vectors
+                self.embed = None
 
     def forward(self, tokens):
-        if self.vectors is None:
+        if self.embed is not None:
             embeds = self.embed(tokens.contiguous().view(-1).long())
         else:
             embeds = self.vectors.take(
@@ -339,7 +352,6 @@ class Embed(nn.Module):
                 Variable(
                     torch.from_numpy(embeds),
                     volatile=tokens.volatile))
-
         return embeds
 
 
