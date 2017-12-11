@@ -290,7 +290,7 @@ def train_loop(
         nn.utils.clip_grad_norm([param for name, param in model.named_parameters() if name not in ["embed.embed.weight"]], FLAGS.clipping_max_value)
 
         # Learning Rate Decay
-        if FLAGS.actively_decay_learning_rate:
+        if FLAGS.learning_rate_decay_per_10k_steps != 1.0:
             optimizer.lr = FLAGS.learning_rate * \
                 (FLAGS.learning_rate_decay_per_10k_steps ** (step / 10000.0))
 

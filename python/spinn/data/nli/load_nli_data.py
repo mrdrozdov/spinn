@@ -33,7 +33,7 @@ def convert_binary_bracketing(parse, lowercase=False):
     return tokens, transitions
 
 
-def load_data(path, lowercase=False, choose=lambda x: True):
+def load_data(path, lowercase=False, choose=lambda x: True, eval_mode=False):
     print "Loading", path
     examples = []
     failed_parse = 0

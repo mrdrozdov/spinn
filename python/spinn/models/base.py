@@ -8,8 +8,7 @@ import numpy as np
 from spinn import util
 from spinn.data.arithmetic import load_sign_data
 from spinn.data.arithmetic import load_simple_data
-from spinn.data.dual_arithmetic import load_eq_data
-from spinn.data.dual_arithmetic import load_relational_data
+from spinn.data.dual_arithmetic import load_eq_data, load_relational_data
 from spinn.data.boolean import load_boolean_data
 from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
@@ -137,36 +136,19 @@ def load_data_and_embeddings(
         def choose_eval(x): return x.get('genre') == FLAGS.eval_genre
 
     if not FLAGS.expanded_eval_only_mode:
-        if FLAGS.data_type == "nli":
-            # Load the data.
-            raw_training_data = data_manager.load_data(
-                training_data_path, FLAGS.lowercase, choose_train)
-        else:
-            # Load the data.
-            raw_training_data = data_manager.load_data(
-                training_data_path, FLAGS.lowercase, eval_mode=False)
+        raw_training_data = data_manager.load_data(
+            training_data_path, FLAGS.lowercase, eval_mode=False)
     else:
         raw_training_data = None
 
-    if FLAGS.data_type == "nli":
-        # Load the eval data.
-        raw_eval_sets = []
-        for path in eval_data_path.split(':'):
-            raw_eval_data = data_manager.load_data(
-                path, FLAGS.lowercase, choose_eval)
-            raw_eval_sets.append((path, raw_eval_data))
-    else:
-        # Load the eval data.
-        raw_eval_sets = []
-        for path in eval_data_path.split(':'):
-            raw_eval_data = data_manager.load_data(
-                path, FLAGS.lowercase, eval_mode=True)
-            raw_eval_sets.append((path, raw_eval_data))
+    raw_eval_sets = []
+    for path in eval_data_path.split(':'):
+        raw_eval_data = data_manager.load_data(
+            path, FLAGS.lowercase, choose_eval)
+        raw_eval_sets.append((path, raw_eval_data))
 
     # Prepare the vocabulary.
     if not data_manager.FIXED_VOCABULARY:
-        logger.Log(
-            "Using loaded embeddings.")
         vocabulary = util.BuildVocabulary(
             raw_training_data,
             raw_eval_sets,
@@ -275,7 +257,7 @@ def get_flags():
     gflags.DEFINE_string(
         "load_log_path",
         None,
-        "A directory in which to write logs.")
+        "A directory from which to read logs.")
     gflags.DEFINE_boolean(
         "write_proto_to_log",
         False,
@@ -284,10 +266,6 @@ def get_flags():
         "ckpt_path", None, "Where to save/load checkpoints. Can be either "
         "a filename or a directory. In the latter case, the experiment name serves as the "
         "base for the filename.")
-    gflags.DEFINE_string(
-        "metrics_path",
-        None,
-        "A directory in which to write metrics.")
     gflags.DEFINE_integer(
         "ckpt_step",
         1000,
@@ -356,7 +334,7 @@ def get_flags():
     gflags.DEFINE_boolean("use_difference_feature", True, "")
     gflags.DEFINE_boolean("use_product_feature", True, "")
 
-    # Tracker settings.
+    # SPINN tracking LSTM settings.
     gflags.DEFINE_integer(
         "tracking_lstm_hidden_dim",
         None,
@@ -382,12 +360,12 @@ def get_flags():
     gflags.DEFINE_boolean("predict_use_cell", True,
                           "Use cell output as feature for transition net.")
 
-    # Reduce settings.
+    # SPINN composition function settings.
     gflags.DEFINE_enum(
         "reduce", "treelstm", [
             "treelstm", "treegru", "tanh", "lms"], "Specify composition function.")
 
-    # Pyramid model settings
+    # ChoiPyramid/ST-Gumbel model settings
     gflags.DEFINE_boolean(
         "pyramid_trainable_temperature",
         None,
@@ -399,7 +377,7 @@ def get_flags():
         0.0,
         "For wake-sleep-style experiments. 0.0 disables this feature.")
 
-    # Encode settings.
+    # Embedding preprocessing settings.
     gflags.DEFINE_enum("encode",
                        "projection",
                        ["pass",
@@ -585,9 +563,6 @@ def flag_defaults(FLAGS, load_log_flags=False):
 
     if not FLAGS.sample_interval_steps:
         FLAGS.sample_interval_steps = FLAGS.statistics_interval_steps
-
-    if not FLAGS.metrics_path:
-        FLAGS.metrics_path = FLAGS.log_path
 
     if FLAGS.model_type in ["CBOW", "RNN", "ChoiPyramid", "LMS"]:
         FLAGS.num_samples = 0
