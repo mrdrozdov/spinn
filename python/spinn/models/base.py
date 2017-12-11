@@ -592,7 +592,7 @@ def flag_defaults(FLAGS, load_log_flags=False):
     if not FLAGS.metrics_path:
         FLAGS.metrics_path = FLAGS.log_path
 
-    if FLAGS.model_type == "CBOW" or FLAGS.model_type == "RNN" or FLAGS.model_type == "ChoiPyramid":
+    if FLAGS.model_type in ["CBOW", "RNN", "ChoiPyramid", "LMS"]:
         FLAGS.num_samples = 0
 
     if not torch.cuda.is_available():
