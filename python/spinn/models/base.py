@@ -595,6 +595,9 @@ def flag_defaults(FLAGS, load_log_flags=False):
     if FLAGS.model_type in ["CBOW", "RNN", "ChoiPyramid", "LMS"]:
         FLAGS.num_samples = 0
 
+    if FLAGS.model_type == "LMS":
+        FLAGS.reduce = "lms"
+
     if not torch.cuda.is_available():
         FLAGS.gpu = -1
 
