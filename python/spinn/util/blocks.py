@@ -6,11 +6,8 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
-<<<<<<< HEAD
 from torch.nn.init import kaiming_normal
-=======
 from torch.nn.parameter import Parameter
->>>>>>> LMS support
 
 from spinn.util.misc import recursively_set_device
 from functools import reduce
@@ -647,7 +644,7 @@ class Lift(nn.Module):
         super(Lift, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.lift = Linear(initializer=HeKaimingInitializer)(self.in_features, self.out_features * 2)
+        self.lift = Linear()(self.in_features, self.out_features * 2)
 
     def forward(self, input):
         return F.tanh(self.lift(input))
@@ -692,13 +689,13 @@ class ReduceTensor(nn.Module):
         self.b1 = Parameter(torch.Tensor(self.dim, self.dim))
         self.b2 = Parameter(torch.Tensor(self.dim, self.dim))
 
-        self.left = Linear(initializer=HeKaimingInitializer)(self.dim * self.dim, 4 * (self.dim * self.dim))
-        self.right = Linear(initializer=HeKaimingInitializer)(self.dim * self.dim, 4 * (self.dim * self.dim))
+        self.left = Linear()(self.dim * self.dim, 4 * (self.dim * self.dim))
+        self.right = Linear()(self.dim * self.dim, 4 * (self.dim * self.dim))
 
         self.reset_parameters()
         
     def reset_parameters(self):
-        HeKaimingInitializer(self.weight)
+        kaiming_normal(self.weight)
         ZeroInitializer(self.b1)
         ZeroInitializer(self.b2)
 
