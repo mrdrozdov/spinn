@@ -18,7 +18,7 @@ from spinn.data.listops import load_listops_data
 from spinn.data.sst import load_sst_data, load_sst_binary_data
 from spinn.data.nli import load_nli_data
 from spinn.util.blocks import ModelTrainer, bundle
-from spinn.util.blocks import EncodeGRU, IntraAttention, Linear, ReduceTreeGRU, ReduceTreeLSTM
+from spinn.util.blocks import EncodeGRU, IntraAttention, Linear, ReduceTreeGRU, ReduceTreeLSTM, ReduceTensor
 from spinn.util.misc import Args
 from spinn.util.logparse import parse_flags
 
@@ -27,6 +27,7 @@ import spinn.spinn_core_model
 import spinn.plain_rnn
 import spinn.cbow
 import spinn.choi_pyramid
+import spinn.lms
 
 # PyTorch
 import torch
@@ -341,7 +342,7 @@ def get_flags():
     # Model architecture settings.
     gflags.DEFINE_enum(
         "model_type", "RNN", [
-            "CBOW", "RNN", "SPINN", "RLSPINN", "ChoiPyramid"], "")
+            "CBOW", "RNN", "SPINN", "RLSPINN", "ChoiPyramid", "LMS"], "")
     gflags.DEFINE_integer("gpu", -1, "")
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")
@@ -387,7 +388,7 @@ def get_flags():
     # Reduce settings.
     gflags.DEFINE_enum(
         "reduce", "treelstm", [
-            "treelstm", "treegru", "tanh"], "Specify composition function.")
+            "treelstm", "treegru", "tanh", "lms"], "Specify composition function.")
 
     # Pyramid model settings
     gflags.DEFINE_boolean(
@@ -475,7 +476,7 @@ def get_flags():
     # MLP settings.
     gflags.DEFINE_integer(
         "mlp_dim",
-        1024,
+        256,
         "Dimension of intermediate MLP layers.")
     gflags.DEFINE_integer("num_mlp_layers", 1, "Number of MLP layers.")
     gflags.DEFINE_boolean(
@@ -591,7 +592,7 @@ def flag_defaults(FLAGS, load_log_flags=False):
     if not FLAGS.metrics_path:
         FLAGS.metrics_path = FLAGS.log_path
 
-    if FLAGS.model_type == "CBOW" or FLAGS.model_type == "RNN" or FLAGS.model_type == "ChoiPyramid":
+    if FLAGS.model_type in ["CBOW", "RNN", "ChoiPyramid", "LMS"]:
         FLAGS.num_samples = 0
 
     if not torch.cuda.is_available():
@@ -618,25 +619,30 @@ def init_model(
         build_model = spinn.rl_spinn.build_model
     elif FLAGS.model_type == "ChoiPyramid":
         build_model = spinn.choi_pyramid.build_model
+    elif FLAGS.model_type == "LMS":
+        build_model = spinn.lms.build_model
     else:
         raise NotImplementedError
 
     # Input Encoder.
     context_args = Args()
-    context_args.reshape_input = lambda x, batch_size, seq_length: x
-    context_args.reshape_context = lambda x, batch_size, seq_length: x
-    context_args.input_dim = FLAGS.word_embedding_dim
+    if FLAGS.model_type == "LMS":
+        intermediate_dim = FLAGS.model_dim * FLAGS.model_dim
+    else:
+        intermediate_dim = FLAGS.model_dim
 
     if FLAGS.encode == "projection":
-        encoder = Linear()(FLAGS.word_embedding_dim, FLAGS.model_dim)
-        context_args.input_dim = FLAGS.model_dim
+        context_args.reshape_input = lambda x, batch_size, seq_length: x
+        context_args.reshape_context = lambda x, batch_size, seq_length: x
+        encoder = Linear()(FLAGS.word_embedding_dim, intermediate_dim)
+        context_args.input_dim = intermediate_dim
     elif FLAGS.encode == "gru":
         context_args.reshape_input = lambda x, batch_size, seq_length: x.view(
             batch_size, seq_length, -1)
         context_args.reshape_context = lambda x, batch_size, seq_length: x.view(
             batch_size * seq_length, -1)
-        context_args.input_dim = FLAGS.model_dim
-        encoder = EncodeGRU(FLAGS.word_embedding_dim, FLAGS.model_dim,
+        context_args.input_dim = intermediate_dim
+        encoder = EncodeGRU(FLAGS.word_embedding_dim, intermediate_dim,
                             num_layers=FLAGS.encode_num_layers,
                             bidirectional=FLAGS.encode_bidirectional,
                             reverse=FLAGS.encode_reverse,
@@ -646,9 +652,12 @@ def init_model(
             batch_size, seq_length, -1)
         context_args.reshape_context = lambda x, batch_size, seq_length: x.view(
             batch_size * seq_length, -1)
-        context_args.input_dim = FLAGS.model_dim
-        encoder = IntraAttention(FLAGS.word_embedding_dim, FLAGS.model_dim)
+        context_args.input_dim = intermediate_dim
+        encoder = IntraAttention(FLAGS.word_embedding_dim, intermediate_dim)
     elif FLAGS.encode == "pass":
+        context_args.reshape_input = lambda x, batch_size, seq_length: x
+        context_args.reshape_context = lambda x, batch_size, seq_length: x
+        context_args.input_dim = FLAGS.word_embedding_dim
         def encoder(x): return x
     else:
         raise NotImplementedError
@@ -669,6 +678,7 @@ def init_model(
 
     if FLAGS.reduce == "treelstm":
         assert FLAGS.model_dim % 2 == 0, 'model_dim must be an even number.'
+        assert FLAGS.model_type != 'LMS', 'Must use reduce=lms for LMS.'
         if FLAGS.model_dim != FLAGS.word_embedding_dim:
             print('If you are setting different hidden layer and word '
                   'embedding sizes, make sure you specify an encoder')
@@ -692,6 +702,12 @@ def init_model(
         composition = ReduceTreeGRU(FLAGS.model_dim,
                                     FLAGS.tracking_lstm_hidden_dim,
                                     FLAGS.use_tracking_in_composition)
+    elif FLAGS.reduce == "lms":
+        composition_args.wrap_items = lambda x: bundle(x)
+        composition_args.extract_h = lambda x: x.h
+        composition_args.extract_c = lambda x: x.c
+        composition_args.size = FLAGS.model_dim
+        composition = ReduceTensor(FLAGS.model_dim)
     else:
         raise NotImplementedError
 
