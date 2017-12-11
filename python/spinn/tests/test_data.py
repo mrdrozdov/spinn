@@ -346,7 +346,7 @@ class SSTTestCase(unittest.TestCase):
 
     def test_load(self):
         data_manager = load_sst_data
-        raw_data = data_manager.load_data(sst_data_path)
+        raw_data = data_manager.load_data(sst_data_path, eval_mode=True)
         assert len(raw_data) == 30
 
         seq_lengths = Counter([len(x['transitions']) for x in raw_data])
@@ -375,7 +375,7 @@ class SSTTestCase(unittest.TestCase):
         simple = False
 
         data_manager = load_sst_data
-        raw_data = data_manager.load_data(sst_data_path)
+        raw_data = data_manager.load_data(sst_data_path, eval_mode=True)
         data_sets = [(sst_data_path, raw_data)]
         vocabulary = util.BuildVocabulary(
             raw_data, data_sets, embedding_data_path, logger=MockLogger(),
