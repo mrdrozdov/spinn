@@ -9,7 +9,7 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "5"
+NAME = "5c"
 SWEEP_RUNS = 12
 
 LIN = "LIN"
@@ -43,7 +43,7 @@ FIXED_PARAMETERS = {
     "log_path": FLAGS.log_path,
     "ckpt_path":  FLAGS.log_path,
     "data_type":     "sst",
-    "model_type":      "SPINN",
+    "model_type":      "LMS",
     "word_embedding_dim":   "300",
     "seq_length":   "100",
     "eval_seq_length":  "200",
@@ -58,7 +58,7 @@ SWEEP_PARAMETERS = {
     "semantic_classifier_keep_rate": ("skr", LIN, 0.5, 1.0),
     "l2_lambda":          ("l2", EXP, 3e-9, 1e-5),
     "learning_rate": ("lr", EXP, 0.00003, 0.01),
-    "model_dim": ("s", CHOICE, ['192', '256', '384', '512', '768'], None),
+    "model_dim": ("s", CHOICE, ['13', '17', '19', '21', '25'], None),
     "mlp_dim": ("md", CHOICE, ['128', '256', '384', '512'], None),
     "learning_rate_decay_per_10k_steps": ("ldc", EXP, 0.1, 1.0),
 }
