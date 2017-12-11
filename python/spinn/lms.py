@@ -347,10 +347,7 @@ class BaseModel(nn.Module):
                  word_embedding_dim=None,
                  vocab_size=None,
                  initial_embeddings=None,
-<<<<<<< HEAD
                  fine_tune_loaded_embeddings=None,
-=======
->>>>>>> origin/lms
                  num_classes=None,
                  embedding_keep_rate=None,
                  encode_reverse=None,
@@ -404,12 +401,8 @@ class BaseModel(nn.Module):
         self.embed = Embed(
             word_embedding_dim,
             vocab.size,
-<<<<<<< HEAD
             vectors=vocab.vectors,
             fine_tune=fine_tune_loaded_embeddings)
-=======
-            vectors=vocab.vectors)
->>>>>>> origin/lms
 
         self.input_dim = context_args.input_dim
 
