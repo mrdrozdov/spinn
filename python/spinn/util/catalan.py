@@ -77,7 +77,6 @@ class CatalanPyramid(object):
 
     def access(self, n_reduces, i, n_tokens):
         depth = n_tokens - 1
-        width = depth * 2 + 1
         n_shifts = i - n_reduces
         n_stack = n_shifts - n_reduces
 

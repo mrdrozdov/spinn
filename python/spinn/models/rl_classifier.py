@@ -41,7 +41,6 @@ def evaluate(FLAGS, model, eval_set, log_entry,
     filename, dataset = eval_set
 
     A = Accumulator()
-    index = len(log_entry.evaluation)
     eval_log = log_entry.evaluation.add()
     reporter = EvalReporter()
     tree_strs = None

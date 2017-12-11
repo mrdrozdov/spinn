@@ -15,22 +15,23 @@ def build_model(data_manager, initial_embeddings, vocab_size,
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
-    return model_cls(model_dim=FLAGS.model_dim,
-                     word_embedding_dim=FLAGS.word_embedding_dim,
-                     vocab_size=vocab_size,
-                     initial_embeddings=initial_embeddings,
-                     fine_tune_loaded_embeddings=FLAGS.fine_tune_loaded_embeddings,
-                     num_classes=num_classes,
-                     embedding_keep_rate=FLAGS.embedding_keep_rate,
-                     use_sentence_pair=use_sentence_pair,
-                     use_difference_feature=FLAGS.use_difference_feature,
-                     use_product_feature=FLAGS.use_product_feature,
-                     classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
-                     mlp_dim=FLAGS.mlp_dim,
-                     num_mlp_layers=FLAGS.num_mlp_layers,
-                     mlp_ln=FLAGS.mlp_ln,
-                     context_args=context_args,
-                     )
+    return model_cls(
+        model_dim=FLAGS.model_dim,
+        word_embedding_dim=FLAGS.word_embedding_dim,
+        vocab_size=vocab_size,
+        initial_embeddings=initial_embeddings,
+        fine_tune_loaded_embeddings=FLAGS.fine_tune_loaded_embeddings,
+        num_classes=num_classes,
+        embedding_keep_rate=FLAGS.embedding_keep_rate,
+        use_sentence_pair=use_sentence_pair,
+        use_difference_feature=FLAGS.use_difference_feature,
+        use_product_feature=FLAGS.use_product_feature,
+        classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
+        mlp_dim=FLAGS.mlp_dim,
+        num_mlp_layers=FLAGS.num_mlp_layers,
+        mlp_ln=FLAGS.mlp_ln,
+        context_args=context_args,
+    )
 
 
 class BaseModel(nn.Module):

@@ -16,9 +16,19 @@ from spinn.util.catalan import ShiftProbabilities
 
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
-# TODO/NOTE: This code contains some skeleton code for Tracking LSTM/parsing support, but no full implementation.
+# TODO/NOTE: This code contains some skeleton code for Tracking
+# LSTM/parsing support, but no full implementation.
 
-def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS, context_args, composition_args, **kwargs):
+
+def build_model(
+        data_manager,
+        initial_embeddings,
+        vocab_size,
+        num_classes,
+        FLAGS,
+        context_args,
+        composition_args,
+        **kwargs):
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
@@ -59,7 +69,11 @@ class LMS(nn.Module):
     def reset_state(self):
         self.memories = []
 
-    def forward(self, example, use_internal_parser=False, validate_transitions=True):
+    def forward(
+            self,
+            example,
+            use_internal_parser=False,
+            validate_transitions=True):
         self.n_tokens = (
             example.tokens.data != 0).long().sum(
             1, keepdim=False).tolist()
@@ -93,7 +107,8 @@ class LMS(nn.Module):
         self.n_steps = np.zeros(len(self.bufs), dtype=np.int32)
 
         if not hasattr(example, 'transitions'):
-            # TODO: Support no transitions. In the meantime, must at least pass dummy transitions.
+            # TODO: Support no transitions. In the meantime, must at least pass
+            # dummy transitions.
             raise ValueError('Transitions must be included.')
         return self.run(example.transitions,
                         run_internal_parser=True,
@@ -115,7 +130,8 @@ class LMS(nn.Module):
 
         # Fixup predicted skips.
         if len(self.choices) > 2:
-            raise NotImplementedError("Can only validate actions for 2 choices right now.")
+            raise NotImplementedError(
+                "Can only validate actions for 2 choices right now.")
 
         buf_lens = [len(buf) - buf_adjust for buf in bufs]
         stack_lens = [len(stack) - stack_adjust for stack in stacks]
@@ -225,7 +241,6 @@ class LMS(nn.Module):
         transition_acc = 0.0
         num_transitions = inp_transitions.shape[1]
         batch_size = inp_transitions.shape[0]
-        invalid_count = np.zeros(batch_size)
 
         # Transition Loop
         # ===============
@@ -267,7 +282,8 @@ class LMS(nn.Module):
             # Pre-Action Phase
             # ================
 
-            # TODO: See if PyTorch's 'Advanced Indexing for Tensors and Variables' features would simplify this.
+            # TODO: See if PyTorch's 'Advanced Indexing for Tensors and
+            # Variables' features would simplify this.
 
             # For SHIFT
             s_stacks, s_tops, s_trackings, s_idxs = [], [], [], []
@@ -275,15 +291,19 @@ class LMS(nn.Module):
             # For REDUCE
             r_stacks, r_lefts, r_rights, r_trackings = [], [], [], []
 
-            batch = zip(transition_arr, self.bufs, self.stacks, itertools.repeat(None))
+            batch = zip(
+                transition_arr,
+                self.bufs,
+                self.stacks,
+                itertools.repeat(None))
 
             for batch_idx, (transition, buf, stack,
                             tracking) in enumerate(batch):
-                if transition == T_SHIFT: # shift
+                if transition == T_SHIFT:  # shift
                     self.t_shift(buf, stack, tracking, s_tops, s_trackings)
                     s_idxs.append(batch_idx)
                     s_stacks.append(stack)
-                elif transition == T_REDUCE: # reduce
+                elif transition == T_REDUCE:  # reduce
                     self.t_reduce(
                         buf,
                         stack,
@@ -292,7 +312,7 @@ class LMS(nn.Module):
                         r_rights,
                         r_trackings)
                     r_stacks.append(stack)
-                elif transition == T_SKIP: # skip
+                elif transition == T_SKIP:  # skip
                     self.t_skip()
 
             # Action Phase
@@ -382,7 +402,7 @@ class BaseModel(nn.Module):
         # Build classiifer.
         features_dim = self.get_features_dim()
         self.mlp = MLP(features_dim, mlp_dim, num_classes,
-                        num_mlp_layers, mlp_ln, classifier_dropout_rate)
+                       num_mlp_layers, mlp_ln, classifier_dropout_rate)
 
         self.embedding_dropout_rate = 1. - embedding_keep_rate
 
@@ -405,7 +425,12 @@ class BaseModel(nn.Module):
         self.lift = Lift(context_args.input_dim, model_dim * model_dim)
 
     def get_features_dim(self):
-        features_dim = (self.hidden_dim * self.hidden_dim * 2) if self.use_sentence_pair else (self.hidden_dim * self.hidden_dim)
+        features_dim = (
+            self.hidden_dim *
+            self.hidden_dim *
+            2) if self.use_sentence_pair else (
+            self.hidden_dim *
+            self.hidden_dim)
         if self.use_sentence_pair:
             if self.use_difference_feature:
                 features_dim += (self.hidden_dim * self.hidden_dim)
@@ -443,7 +468,13 @@ class BaseModel(nn.Module):
     def forward_hook(self, embeds, batch_size, seq_length):
         pass
 
-    def output_hook(self, output, sentences, transitions, y_batch=None, embeds=None):
+    def output_hook(
+            self,
+            output,
+            sentences,
+            transitions,
+            y_batch=None,
+            embeds=None):
         pass
 
     def forward(
@@ -558,4 +589,3 @@ class BaseModel(nn.Module):
         h_premise = self.extract_h(self.wrap_items(items[:batch_size]))
         h_hypothesis = self.extract_h(self.wrap_items(items[batch_size:]))
         return [h_premise, h_hypothesis]
-

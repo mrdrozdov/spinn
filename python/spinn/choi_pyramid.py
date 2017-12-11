@@ -20,24 +20,25 @@ def build_model(data_manager, initial_embeddings, vocab_size,
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
     model_cls = ChoiPyramid
 
-    return model_cls(model_dim=FLAGS.model_dim,
-                     word_embedding_dim=FLAGS.word_embedding_dim,
-                     vocab_size=vocab_size,
-                     initial_embeddings=initial_embeddings,
-                     fine_tune_loaded_embeddings=FLAGS.fine_tune_loaded_embeddings,
-                     num_classes=num_classes,
-                     embedding_keep_rate=FLAGS.embedding_keep_rate,
-                     use_sentence_pair=use_sentence_pair,
-                     use_difference_feature=FLAGS.use_difference_feature,
-                     use_product_feature=FLAGS.use_product_feature,
-                     classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
-                     mlp_dim=FLAGS.mlp_dim,
-                     num_mlp_layers=FLAGS.num_mlp_layers,
-                     mlp_ln=FLAGS.mlp_ln,
-                     composition_ln=FLAGS.composition_ln,
-                     context_args=context_args,
-                     trainable_temperature=FLAGS.pyramid_trainable_temperature,
-                     )
+    return model_cls(
+        model_dim=FLAGS.model_dim,
+        word_embedding_dim=FLAGS.word_embedding_dim,
+        vocab_size=vocab_size,
+        initial_embeddings=initial_embeddings,
+        fine_tune_loaded_embeddings=FLAGS.fine_tune_loaded_embeddings,
+        num_classes=num_classes,
+        embedding_keep_rate=FLAGS.embedding_keep_rate,
+        use_sentence_pair=use_sentence_pair,
+        use_difference_feature=FLAGS.use_difference_feature,
+        use_product_feature=FLAGS.use_product_feature,
+        classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
+        mlp_dim=FLAGS.mlp_dim,
+        num_mlp_layers=FLAGS.num_mlp_layers,
+        mlp_ln=FLAGS.mlp_ln,
+        composition_ln=FLAGS.composition_ln,
+        context_args=context_args,
+        trainable_temperature=FLAGS.pyramid_trainable_temperature,
+    )
 
 
 class ChoiPyramid(nn.Module):

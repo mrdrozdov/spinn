@@ -1,7 +1,6 @@
 import numpy as np
 from collections import deque
 import json
-import os
 import logging_pb2 as pb
 
 
