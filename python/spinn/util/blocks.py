@@ -6,10 +6,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
-<<<<<<< HEAD
 from torch.nn.init import kaiming_normal
-=======
->>>>>>> origin/lms
 from torch.nn.parameter import Parameter
 
 from spinn.util.misc import recursively_set_device
