@@ -626,20 +626,23 @@ def init_model(
 
     # Input Encoder.
     context_args = Args()
-    context_args.reshape_input = lambda x, batch_size, seq_length: x
-    context_args.reshape_context = lambda x, batch_size, seq_length: x
-    context_args.input_dim = FLAGS.word_embedding_dim
+    if FLAGS.model_type == "LMS":
+        intermediate_dim = FLAGS.model_dim * FLAGS.model_dim
+    else:
+        intermediate_dim = FLAGS.model_dim
 
     if FLAGS.encode == "projection":
-        encoder = Linear()(FLAGS.word_embedding_dim, FLAGS.model_dim)
-        context_args.input_dim = FLAGS.model_dim
+        context_args.reshape_input = lambda x, batch_size, seq_length: x
+        context_args.reshape_context = lambda x, batch_size, seq_length: x
+        encoder = Linear()(FLAGS.word_embedding_dim, intermediate_dim)
+        context_args.input_dim = intermediate_dim
     elif FLAGS.encode == "gru":
         context_args.reshape_input = lambda x, batch_size, seq_length: x.view(
             batch_size, seq_length, -1)
         context_args.reshape_context = lambda x, batch_size, seq_length: x.view(
             batch_size * seq_length, -1)
-        context_args.input_dim = FLAGS.model_dim
-        encoder = EncodeGRU(FLAGS.word_embedding_dim, FLAGS.model_dim,
+        context_args.input_dim = intermediate_dim
+        encoder = EncodeGRU(FLAGS.word_embedding_dim, intermediate_dim,
                             num_layers=FLAGS.encode_num_layers,
                             bidirectional=FLAGS.encode_bidirectional,
                             reverse=FLAGS.encode_reverse,
@@ -649,11 +652,13 @@ def init_model(
             batch_size, seq_length, -1)
         context_args.reshape_context = lambda x, batch_size, seq_length: x.view(
             batch_size * seq_length, -1)
-        context_args.input_dim = FLAGS.model_dim
-        encoder = IntraAttention(FLAGS.word_embedding_dim, FLAGS.model_dim)
+        context_args.input_dim = intermediate_dim
+        encoder = IntraAttention(FLAGS.word_embedding_dim, intermediate_dim)
     elif FLAGS.encode == "pass":
-        def encoder(x): return x
+        context_args.reshape_input = lambda x, batch_size, seq_length: x
+        context_args.reshape_context = lambda x, batch_size, seq_length: x
         context_args.input_dim = FLAGS.word_embedding_dim
+        def encoder(x): return x
     else:
         raise NotImplementedError
 
