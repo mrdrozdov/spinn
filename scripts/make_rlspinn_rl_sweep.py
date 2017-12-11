@@ -48,7 +48,6 @@ FIXED_PARAMETERS = {
     "eval_interval_steps": "1000",
     "eval_seq_length":  "810",
     "log_path": FLAGS.log_path,
-    "metrics_path": FLAGS.log_path,
     "mlp_dim": "1024",
     "model_dim":   "300",
     "model_type":      "RLSPINN",

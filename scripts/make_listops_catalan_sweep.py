@@ -46,7 +46,6 @@ FIXED_PARAMETERS = {
     "eval_seq_length":  "3000",
     "gpu":  "0",
     "log_path": FLAGS.log_path,
-    "metrics_path": FLAGS.metrics_path,
     "mlp_dim": "16",
     "model_dim":   "32",
     "model_type":      "RLSPINN",

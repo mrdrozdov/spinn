@@ -37,6 +37,11 @@ FLAGS(sys.argv)
 # Non-tunable flags that must be passed in.
 
 FIXED_PARAMETERS = {
+    "training_data_path":    FLAGS.training_data_path,
+    "eval_data_path":    FLAGS.eval_data_path,
+    "embedding_data_path": FLAGS.embedding_data_path,
+    "log_path": FLAGS.log_path,
+    "ckpt_path":  FLAGS.log_path,
     "data_type":     "nli",
     "model_type":      "ChoiPyramid",
     "word_embedding_dim":   "300",

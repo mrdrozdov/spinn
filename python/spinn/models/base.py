@@ -472,10 +472,6 @@ def get_flags():
         "learning_rate_decay_per_10k_steps",
         0.75,
         "Used in optimizer.")
-    gflags.DEFINE_boolean(
-        "actively_decay_learning_rate",
-        True,
-        "Used in optimizer.")
     gflags.DEFINE_float("clipping_max_value", 5.0, "")
     gflags.DEFINE_float("l2_lambda", 1e-5, "")
 

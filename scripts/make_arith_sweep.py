@@ -39,7 +39,6 @@ FIXED_PARAMETERS = {
     "training_data_path":    FLAGS.training_data_path,
     "eval_data_path":    FLAGS.eval_data_path,
     "log_path": FLAGS.log_path,
-    "metrics_path": FLAGS.log_path,
     "ckpt_path":  FLAGS.log_path,
     "word_embedding_dim":   "40",
     "model_dim":   "64",
