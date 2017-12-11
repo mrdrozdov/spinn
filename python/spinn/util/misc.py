@@ -1,7 +1,6 @@
 import numpy as np
 from collections import deque
 import json
-import logging_pb2 as pb
 
 
 def debug_gradient(model, losses):

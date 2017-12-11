@@ -8,11 +8,9 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 
-from spinn.util.blocks import Embed, Linear, MLP, Lift
-from spinn.util.blocks import bundle, lstm, to_gpu, unbundle
-from spinn.util.blocks import LayerNormalization
+from spinn.util.blocks import Embed, Lift, MLP
+from spinn.util.blocks import to_gpu
 from spinn.util.misc import Example, Vocab
-from spinn.util.catalan import ShiftProbabilities
 
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
@@ -240,7 +238,6 @@ class LMS(nn.Module):
         transition_loss = None
         transition_acc = 0.0
         num_transitions = inp_transitions.shape[1]
-        batch_size = inp_transitions.shape[0]
 
         # Transition Loop
         # ===============

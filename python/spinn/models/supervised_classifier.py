@@ -24,7 +24,6 @@ import spinn.util.logging_pb2 as pb
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-import torch.nn.functional as F
 
 
 from spinn.models.base import get_data_manager, get_flags, get_batch

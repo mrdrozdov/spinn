@@ -6,13 +6,11 @@ import numpy as np
 # PyTorch
 import torch
 import torch.nn as nn
-from torch.nn import init
 from torch.autograd import Variable
 import torch.nn.functional as F
-from torch.nn.init import kaiming_normal
 
 from spinn.util.blocks import Embed, to_gpu, MLP, Linear, LayerNormalization
-from spinn.util.misc import Args, Vocab
+from spinn.util.misc import Vocab
 
 
 def build_model(data_manager, initial_embeddings, vocab_size,
