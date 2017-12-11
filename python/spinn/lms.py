@@ -38,8 +38,6 @@ def build_model(data_manager, initial_embeddings, vocab_size, num_classes, FLAGS
         mlp_ln=FLAGS.mlp_ln,
         context_args=context_args,
         composition_args=composition_args,
-        detach=FLAGS.transition_detach,
-        evolution=FLAGS.evolution,
     )
 
 
@@ -221,13 +219,6 @@ class LMS(nn.Module):
     def loss_phase_hook(self):
         pass
 
-    def evolution_params(self):
-        """
-        The parameters trained by evolution strategy
-        """
-        return [(k, v) for k, v in zip(self.transition_net.state_dict(
-        ).keys(), self.transition_net.state_dict().values())]
-
     def run(self, inp_transitions, run_internal_parser=False,
             use_internal_parser=False, validate_transitions=True):
         transition_loss = None
@@ -362,8 +353,6 @@ class BaseModel(nn.Module):
                  classifier_keep_rate=None,
                  context_args=None,
                  composition_args=None,
-                 detach=None,
-                 evolution=None,
                  **kwargs
                  ):
         super(BaseModel, self).__init__()
@@ -413,7 +402,7 @@ class BaseModel(nn.Module):
         self.inverted_vocabulary = None
 
         # Create Lift layer
-        self.lift = Lift(vocab.vectors.shape[1], model_dim * model_dim)
+        self.lift = Lift(context_args.input_dim, model_dim * model_dim)
 
     def get_features_dim(self):
         features_dim = (self.hidden_dim * self.hidden_dim * 2) if self.use_sentence_pair else (self.hidden_dim * self.hidden_dim)

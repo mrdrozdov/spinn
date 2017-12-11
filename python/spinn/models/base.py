@@ -476,7 +476,7 @@ def get_flags():
     # MLP settings.
     gflags.DEFINE_integer(
         "mlp_dim",
-        1024,
+        256,
         "Dimension of intermediate MLP layers.")
     gflags.DEFINE_integer("num_mlp_layers", 1, "Number of MLP layers.")
     gflags.DEFINE_boolean(
@@ -653,6 +653,7 @@ def init_model(
         encoder = IntraAttention(FLAGS.word_embedding_dim, FLAGS.model_dim)
     elif FLAGS.encode == "pass":
         def encoder(x): return x
+        context_args.input_dim = FLAGS.word_embedding_dim
     else:
         raise NotImplementedError
 
@@ -672,6 +673,7 @@ def init_model(
 
     if FLAGS.reduce == "treelstm":
         assert FLAGS.model_dim % 2 == 0, 'model_dim must be an even number.'
+        assert FLAGS.model_type != 'LMS', 'Must use reduce=lms for LMS.'
         if FLAGS.model_dim != FLAGS.word_embedding_dim:
             print('If you are setting different hidden layer and word '
                   'embedding sizes, make sure you specify an encoder')
