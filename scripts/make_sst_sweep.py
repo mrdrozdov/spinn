@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "5c"
-SWEEP_RUNS = 12
+NAME = "8c"
+SWEEP_RUNS = 16
 
 LIN = "LIN"
 EXP = "EXP"
@@ -20,10 +20,10 @@ CHOICE = "CHOICE"
 
 FLAGS = gflags.FLAGS
 
-gflags.DEFINE_string("training_data_path", "/home/sb6065/trees/train.txt", "")
-gflags.DEFINE_string("eval_data_path", "/home/sb6065/trees/dev.txt", "")
-gflags.DEFINE_string("embedding_data_path", "/home/sb6065/glove/glove.840B.300d.txt", "")
-gflags.DEFINE_string("log_path", "/scratch/sb6065/logs/spinn", "")
+gflags.DEFINE_string("training_data_path", "/home/sbowman/trees/train.txt", "")
+gflags.DEFINE_string("eval_data_path", "/home/sbowman/trees/dev.txt", "")
+gflags.DEFINE_string("embedding_data_path", "/home/sbowman/glove/glove.840B.300d.txt", "")
+gflags.DEFINE_string("log_path", "/scratch/sbowman/logs", "")
 
 FLAGS(sys.argv)
 
@@ -55,11 +55,11 @@ FIXED_PARAMETERS = {
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
-    "semantic_classifier_keep_rate": ("skr", LIN, 0.5, 1.0),
-    "l2_lambda":          ("l2", EXP, 3e-9, 1e-5),
-    "learning_rate": ("lr", EXP, 0.00003, 0.01),
+    "semantic_classifier_keep_rate": ("skr", LIN, 0.4, 1.0),
+    "l2_lambda":          ("l2", EXP, 1e-11, 1e-6),
+    "learning_rate": ("lr", EXP, 0.00003, 0.001),
     "model_dim": ("s", CHOICE, ['13', '17', '19', '21', '25'], None),
-    "mlp_dim": ("md", CHOICE, ['128', '256', '384', '512'], None),
+    "mlp_dim": ("md", CHOICE, ['64', '128', '256', '384'], None),
     "learning_rate_decay_per_10k_steps": ("ldc", EXP, 0.1, 1.0),
 }
 
