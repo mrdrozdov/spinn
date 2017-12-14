@@ -297,7 +297,7 @@ def train_loop(
 
         if trainer.step % FLAGS.statistics_interval_steps == 0:
             A.add('xent_cost', xent_loss.data[0])
-            stats(model, trainer, A, trainer.step, log_entry)
+            stats(model, trainer, A, log_entry)
             should_log = True
             progress_bar.finish()
 

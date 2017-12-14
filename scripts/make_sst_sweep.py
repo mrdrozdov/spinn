@@ -48,7 +48,7 @@ FIXED_PARAMETERS = {
     "seq_length":   "100",
     "eval_seq_length":  "200",
     "nocomposition_ln": "",
-    "pyramid_temperature_decay_per_10k_steps": "1.0",
+    "pyramid_temperature_decay_when_no_progress": "1.0",
     "early_stopping_steps_to_wait": "10000", 
     "fine_tune_loaded_embeddings": "",
 }
@@ -60,7 +60,7 @@ SWEEP_PARAMETERS = {
     "learning_rate": ("lr", EXP, 0.0001, 0.003),
     "model_dim": ("s", CHOICE, ['140', '168', '288', '360', '440'], None),
     "mlp_dim": ("md", CHOICE, ['64', '128', '256', '384'], None),
-    "learning_rate_decay_per_10k_steps": ("ldc", EXP, 0.1, 1.0),
+    "learning_rate_decay_when_no_progress": ("ldc", EXP, 0.1, 1.0),
 }
 
 

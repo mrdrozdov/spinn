@@ -68,7 +68,7 @@ SWEEP_PARAMETERS = {
     "rl_weight":  ("rlwt", EXP, 0.5, 5.0),
     "learning_rate":      ("lr", EXP, 0.002, 0.02),
     "l2_lambda":          ("l2", EXP, 8e-7, 1e-5),
-    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.7, 1.0),
+    "learning_rate_decay_when_no_progress": ("dec", EXP, 0.7, 1.0),
     "rl_epsilon": ("eps", LIN, 0.1, 1.0),
     "rl_epsilon_decay": ("epsd", EXP, 1000, 1000000),
     "rl_confidence_penalty": ("rlconf", EXP, 0.00001, 0.01),

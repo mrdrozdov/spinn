@@ -279,7 +279,6 @@ class ModelTrainer(object):
         self.sparse_parameters = [param for name, param in model.named_parameters() if name in ["embed.embed.weight"]]
         self.optimizer_type = optimizer_type
         self.l2_lambda = l2_lambda
-        self.learning_rate = learning_rate
 
         # GPU support.
         self.gpu = gpu
@@ -289,7 +288,7 @@ class ModelTrainer(object):
         else:
             model.cpu()
 
-        self.optimizer_reset(self.learning_rate)
+        self.optimizer_reset(learning_rate)
 
         self.step = 0
         self.best_dev_error = 1.0

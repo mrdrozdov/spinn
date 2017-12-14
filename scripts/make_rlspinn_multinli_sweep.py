@@ -70,7 +70,7 @@ SWEEP_PARAMETERS = {
     "learning_rate":      ("lr", EXP, 0.00003, 0.01),  # RNN likes higher, but below 009.
     "rl_weight":  ("rlwt", EXP, 1.0, 5.0),
     "l2_lambda":          ("l2", EXP, 1e-7, 1e-5),
-    "learning_rate_decay_per_10k_steps": ("dec", LIN, 0.5, 1.0),
+    "learning_rate_decay_when_no_progress": ("dec", LIN, 0.5, 1.0),
     "tracking_lstm_hidden_dim": ("tdim", EXP, 8, 64),
     "semantic_classifier_keep_rate": ("skr", LIN, 0.8, 1.0),  # NB: Keep rates may depend considerably on dims.
     "embedding_keep_rate": ("ekr", LIN, 0.8, 1.0),

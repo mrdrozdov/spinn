@@ -63,7 +63,7 @@ FIXED_PARAMETERS = {
     "transition_weight": "1.0",
     "use_internal_parser": "",
     "word_embedding_dim":   "300",
-    "learning_rate_decay_per_10k_steps": "0.906176807691",
+    "learning_rate_decay_when_no_progress": "0.906176807691",
     "semantic_classifier_keep_rate": "1.0",
     "embedding_keep_rate": "1.0",
     "gpu": "0",

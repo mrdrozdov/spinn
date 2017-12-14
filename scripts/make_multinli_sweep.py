@@ -59,8 +59,8 @@ FIXED_PARAMETERS = {
     #"nocomposition_ln": "",
     "embedding_keep_rate": "1.0",
     "pyramid_trainable_temperature": "",
-    "learning_rate_decay_per_10k_steps": "1.0",
-    "pyramid_temperature_decay_per_10k_steps": "1.0", 
+    "learning_rate_decay_when_no_progress": "1.0",
+    "pyramid_temperature_decay_when_no_progress": "1.0", 
 }
 
 # Tunable parameters.

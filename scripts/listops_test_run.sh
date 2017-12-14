@@ -16,7 +16,7 @@ FLAGS="  --eval_seq_length 3000
   --learning_rate 0.00641719241862
   --training_data_path spinn/data/listops/train_d20a.tsv
   --batch_size 19
-  --learning_rate_decay_per_10k_steps 0.553467172659
+  --learning_rate_decay_when_no_progress 0.553467172659
   --mlp_dim 23
   --nouse_tracking_in_composition  
   --nolateral_tracking

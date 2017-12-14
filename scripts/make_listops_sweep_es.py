@@ -63,7 +63,7 @@ FIXED_PARAMETERS = {
 SWEEP_PARAMETERS = {
     "l2_lambda":          ("l2", EXP, 8e-7, 1e-3),
     "learning_rate" : ("lr", EXP, 1e-2, 8e-2),
-    "learning_rate_decay_per_10k_steps": ("dc", LIN, 0.3, 1.0),
+    "learning_rate_decay_when_no_progress": ("dc", LIN, 0.3, 1.0),
     "es_num_episodes" : ("eps", LIN, 4, 6),
     "es_num_roots" : ("roots", LIN, 2, 5),
     "es_episode_length" : ("lng", LIN, 200, 800),
