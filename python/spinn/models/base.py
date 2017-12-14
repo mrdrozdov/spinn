@@ -462,12 +462,13 @@ def get_flags():
                         "Used for dropout in the semantic task classifier.")
 
     # Optimization settings.
+    gflags.DEFINE_enum("optimizer_type", "Adam", ["Adam", "SGD"], "")
     gflags.DEFINE_integer(
         "training_steps",
-        500000,
+        1000000,
         "Stop training after this point.")
     gflags.DEFINE_integer("batch_size", 32, "SGD minibatch size.")
-    gflags.DEFINE_float("learning_rate", 0.001, "Used in optimizer.")
+    gflags.DEFINE_float("learning_rate", 0.0003, "Used in optimizer.")  # https://twitter.com/karpathy/status/801621764144971776
     gflags.DEFINE_float(
         "learning_rate_decay_per_10k_steps",
         0.75,
@@ -688,15 +689,24 @@ def init_model(
                         num_classes, FLAGS, context_args, composition_args)
 
     # Build optimizer.
-    optimizer = optim.Adam([param for name, param in model.named_parameters() if name not in ["embed.embed.weight"]], lr=FLAGS.learning_rate, 
-        betas=(0.9, 0.999), eps=1e-08)
-
+    dense_parameters = [param for name, param in model.named_parameters() if name not in ["embed.embed.weight"]]
     sparse_parameters = [param for name, param in model.named_parameters() if name in ["embed.embed.weight"]]
-    if len(sparse_parameters) > 0:
-        sparse_optimizer = optim.SparseAdam(sparse_parameters, lr=FLAGS.learning_rate, 
-            betas=(0.9, 0.999), eps=1e-08)
-    else:
-        sparse_optimizer = None
+    if FLAGS.optimizer_type == "Adam":
+        optimizer = optim.Adam(dense_parameters, lr=FLAGS.learning_rate, 
+            betas=(0.9, 0.999), eps=1e-08, weight_decay=FLAGS.l2_lambda)
+
+        if len(sparse_parameters) > 0:
+            sparse_optimizer = optim.SparseAdam(sparse_parameters, lr=FLAGS.learning_rate, 
+                betas=(0.9, 0.999), eps=1e-08)
+        else:
+            sparse_optimizer = None
+    elif FLAGS.optimizer_type == "SGD":
+        optimizer = optim.SGD(dense_parameters, lr=FLAGS.learning_rate, 
+            weight_decay=FLAGS.l2_lambda)
+        if len(sparse_parameters) > 0:
+            sparse_optimizer = optim.SGD(sparse_parameters, lr=FLAGS.learning_rate)
+        else:
+            sparse_optimizer = None
 
     # Build trainer.
     trainer = ModelTrainer(model, optimizer, sparse_optimizer)
