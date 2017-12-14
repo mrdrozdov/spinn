@@ -3,6 +3,7 @@ import numpy as np
 # PyTorch
 import torch
 import torch.nn as nn
+import torch.optim as optim
 from torch.autograd import Variable
 import torch.nn.functional as F
 from torch.nn.init import kaiming_normal
@@ -272,22 +273,73 @@ def treelstm(c_left, c_right, gates):
 
 
 class ModelTrainer(object):
-
-    def __init__(self, model, optimizer, sparse_optimizer=None):
+    def __init__(self, model, optimizer_type, learning_rate, l2_lambda, gpu):
         self.model = model
-        self.optimizer = optimizer
-        self.sparse_optimizer = sparse_optimizer
+        self.dense_parameters = [param for name, param in model.named_parameters() if name not in ["embed.embed.weight"]]
+        self.sparse_parameters = [param for name, param in model.named_parameters() if name in ["embed.embed.weight"]]
+        self.optimizer_type = optimizer_type
+        self.l2_lambda = l2_lambda
+        self.learning_rate = learning_rate
 
-    def save(self, filename, step, best_dev_error, best_dev_step):
+        # GPU support.
+        self.gpu = gpu
+        the_gpu.gpu = gpu
+        if gpu >= 0:
+            model.cuda()
+        else:
+            model.cpu()
+
+        self.optimizer_reset(self.learning_rate)
+
+        self.step = 0
+        self.best_dev_error = 1.0
+        self.best_dev_step = 0
+
+    def optimizer_reset(self, learning_rate):
+        self.learning_rate = learning_rate
+
+        if self.optimizer_type == "Adam":
+            self.optimizer = optim.Adam(self.dense_parameters, lr=learning_rate, 
+                weight_decay=self.l2_lambda)
+
+            if len(self.sparse_parameters) > 0:
+                self.sparse_optimizer = optim.SparseAdam(self.sparse_parameters, lr=learning_rate)
+            else:
+                self.sparse_optimizer = None
+        elif self.optimizer_type == "SGD":
+            self.optimizer = optim.SGD(self.dense_parameters, lr=learning_rate, 
+                weight_decay=self.l2_lambda)
+            if len(self.sparse_parameters) > 0:
+                self.sparse_optimizer = optim.SGD(self.sparse_parameters, lr=learning_rate)
+            else:
+                self.sparse_optimizer = None
+
+        if the_gpu() >= 0:
+            recursively_set_device(self.optimizer.state_dict(), the_gpu())
+            if self.sparse_optimizer is not None:
+                recursively_set_device(self.sparse_optimizer.state_dict(), the_gpu())
+
+    def optimizer_step(self):
+        self.optimizer.step()
+        if self.sparse_optimizer is not None:
+            self.sparse_optimizer.step()
+        self.step += 1
+
+    def optimizer_zero_grad(self):
+        self.optimizer.zero_grad()
+        if self.sparse_optimizer is not None:
+            self.sparse_optimizer.zero_grad()
+
+    def save(self, filename):
         if the_gpu() >= 0:
             recursively_set_device(self.model.state_dict(), gpu=-1)
             recursively_set_device(self.optimizer.state_dict(), gpu=-1)
 
         # Always sends Tensors to CPU.
         save_dict = {
-            'step': step,
-            'best_dev_error': best_dev_error,
-            'best_dev_step': best_dev_step,
+            'step': self.step,
+            'best_dev_error': self.best_dev_error,
+            'best_dev_step': self.best_dev_step,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict()
             }
@@ -318,12 +370,9 @@ class ModelTrainer(object):
         if self.sparse_optimizer is not None:
             self.sparse_optimizer.load_state_dict(checkpoint['sparse_optimizer_state_dict'])
 
-        if 'best_dev_step' in checkpoint:
-            best_dev_step = checkpoint['best_dev_step']
-        else:
-            best_dev_step = 0
-
-        return checkpoint['step'], checkpoint['best_dev_error'], best_dev_step
+        self.step = checkpoint['step']
+        self.best_dev_step = checkpoint['best_dev_step']
+        self.best_dev_error = checkpoint['best_dev_error']
 
 
 class Embed(nn.Module):

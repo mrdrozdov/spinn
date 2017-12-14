@@ -29,7 +29,6 @@ import spinn.lms
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
 from functools import reduce
 
 
@@ -206,7 +205,7 @@ def load_data_and_embeddings(
             rseed=FLAGS.shuffle_eval_seed)
         eval_iterators.append((filename, eval_it))
 
-    return vocabulary, initial_embeddings, training_data_iter, eval_iterators
+    return vocabulary, initial_embeddings, training_data_iter, eval_iterators, len(training_data[0])
 
 
 def get_flags():
@@ -469,10 +468,8 @@ def get_flags():
         "Stop training after this point.")
     gflags.DEFINE_integer("batch_size", 32, "SGD minibatch size.")
     gflags.DEFINE_float("learning_rate", 0.0003, "Used in optimizer.")  # https://twitter.com/karpathy/status/801621764144971776
-    gflags.DEFINE_float(
-        "learning_rate_decay_per_10k_steps",
-        0.75,
-        "Used in optimizer.")
+    gflags.DEFINE_float("learning_rate_decay_when_no_progress", 0.5,
+        "Used in optimizer. Decay the LR by this much every epoch steps if a new best has not been set in the last epoch.")
     gflags.DEFINE_float("clipping_max_value", 5.0, "")
     gflags.DEFINE_float("l2_lambda", 1e-5, "")
 
@@ -688,28 +685,7 @@ def init_model(
     model = build_model(data_manager, initial_embeddings, vocab_size,
                         num_classes, FLAGS, context_args, composition_args)
 
-    # Build optimizer.
-    dense_parameters = [param for name, param in model.named_parameters() if name not in ["embed.embed.weight"]]
-    sparse_parameters = [param for name, param in model.named_parameters() if name in ["embed.embed.weight"]]
-    if FLAGS.optimizer_type == "Adam":
-        optimizer = optim.Adam(dense_parameters, lr=FLAGS.learning_rate, 
-            betas=(0.9, 0.999), eps=1e-08, weight_decay=FLAGS.l2_lambda)
-
-        if len(sparse_parameters) > 0:
-            sparse_optimizer = optim.SparseAdam(sparse_parameters, lr=FLAGS.learning_rate, 
-                betas=(0.9, 0.999), eps=1e-08)
-        else:
-            sparse_optimizer = None
-    elif FLAGS.optimizer_type == "SGD":
-        optimizer = optim.SGD(dense_parameters, lr=FLAGS.learning_rate, 
-            weight_decay=FLAGS.l2_lambda)
-        if len(sparse_parameters) > 0:
-            sparse_optimizer = optim.SGD(sparse_parameters, lr=FLAGS.learning_rate)
-        else:
-            sparse_optimizer = None
-
-    # Build trainer.
-    trainer = ModelTrainer(model, optimizer, sparse_optimizer)
+    trainer = ModelTrainer(model, FLAGS.optimizer_type, FLAGS.learning_rate, FLAGS.l2_lambda, FLAGS.gpu)
 
     # Print model size.
     logger.Log("Architecture: {}".format(model))
@@ -721,4 +697,4 @@ def init_model(
     if logfile_header:
         logfile_header.total_params = int(total_params)
 
-    return model, optimizer, sparse_optimizer, trainer
+    return model, trainer
