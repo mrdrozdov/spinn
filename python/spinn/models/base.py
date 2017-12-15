@@ -34,6 +34,10 @@ from functools import reduce
 
 FLAGS = gflags.FLAGS
 
+def log_path(FLAGS, load=False):
+    lp = FLAGS.load_log_path if load else FLAGS.log_path
+    en = FLAGS.load_experiment_name if load else FLAGS.experiment_name
+    return os.path.join(lp, en) + ".log"
 
 def sequential_only():
     return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW" or FLAGS.model_type == "ChoiPyramid"
@@ -41,12 +45,6 @@ def sequential_only():
 
 def pad_from_left():
     return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW"
-
-
-def log_path(FLAGS, load=False):
-    lp = FLAGS.load_log_path if load else FLAGS.log_path
-    en = FLAGS.load_experiment_name if load else FLAGS.experiment_name
-    return os.path.join(lp, en) + ".log"
 
 
 def get_batch(batch):
@@ -98,25 +96,6 @@ def get_data_manager(data_type):
         raise NotImplementedError
 
     return data_manager
-
-
-def get_checkpoint_path(
-        ckpt_path,
-        experiment_name,
-        suffix=".ckpt",
-        best=False):
-    # Set checkpoint path.
-
-    if FLAGS.expanded_eval_only_mode and FLAGS.expanded_eval_only_mode_use_best_checkpoint:
-        best = True
-
-    if ckpt_path.endswith(".ckpt") or ckpt_path.endswith(".ckpt_best"):
-        checkpoint_path = ckpt_path
-    else:
-        checkpoint_path = os.path.join(ckpt_path, experiment_name + suffix)
-    if best:
-        checkpoint_path += "_best"
-    return checkpoint_path
 
 
 def load_data_and_embeddings(
@@ -685,7 +664,10 @@ def init_model(
     model = build_model(data_manager, initial_embeddings, vocab_size,
                         num_classes, FLAGS, context_args, composition_args)
 
-    trainer = ModelTrainer(model, FLAGS.optimizer_type, FLAGS.learning_rate, FLAGS.l2_lambda, FLAGS.gpu)
+    # Debug
+    def set_debug(self):
+        self.debug = FLAGS.debug
+    model.apply(set_debug)
 
     # Print model size.
     logger.Log("Architecture: {}".format(model))
@@ -696,5 +678,7 @@ def init_model(
     logger.Log("Total params: {}".format(total_params))
     if logfile_header:
         logfile_header.total_params = int(total_params)
+
+    trainer = ModelTrainer(model, logger, FLAGS)
 
     return model, trainer

@@ -10,9 +10,8 @@ import numpy as np
 
 from spinn.util import afs_safe_logger
 from spinn.util.data import SimpleProgressBar
-from spinn.util.blocks import the_gpu, to_gpu
+from spinn.util.blocks import to_gpu
 from spinn.util.misc import Accumulator, EvalReporter
-from spinn.util.misc import recursively_set_device
 from spinn.util.logging import stats, train_accumulate, create_log_formatter
 from spinn.util.logging import eval_stats, eval_accumulate, prettyprint_trees
 from spinn.util.loss import auxiliary_loss
@@ -27,8 +26,7 @@ from torch.autograd import Variable
 
 
 from spinn.models.base import get_data_manager, get_flags, get_batch
-from spinn.models.base import flag_defaults, init_model
-from spinn.models.base import get_checkpoint_path, log_path
+from spinn.models.base import flag_defaults, init_model, log_path
 from spinn.models.base import load_data_and_embeddings
 
 
@@ -177,18 +175,11 @@ def train_loop(
         model,
         trainer,
         training_data_iter,
-        training_data_length,
         eval_iterators,
         logger,
         vocabulary):
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
-
-    # Checkpoint paths.
-    standard_checkpoint_path = get_checkpoint_path(
-        FLAGS.ckpt_path, FLAGS.experiment_name)
-    best_checkpoint_path = get_checkpoint_path(
-        FLAGS.ckpt_path, FLAGS.experiment_name, best=True)
 
     # Build log format strings.
     model.train()
@@ -359,28 +350,13 @@ def train_loop(
                     FLAGS, model, eval_set, log_entry, logger, trainer, show_sample=(
                         trainer.step %
                         FLAGS.sample_interval_steps == 0), vocabulary=vocabulary, eval_index=index)
-                if  index == 0 and (1 - acc) < 0.99 * trainer.best_dev_error:
-                    trainer.best_dev_error = 1 - acc
-                    trainer.best_dev_step = trainer.step
-                    if FLAGS.ckpt_on_best_dev_error and trainer.step > FLAGS.ckpt_step:
-                        logger.Log(
-                            "Checkpointing with new best dev accuracy of %f" %
-                            acc)
-                        trainer.save(best_checkpoint_path)
-
-            # Learning rate decay
-            epoch_length = int(training_data_length / FLAGS.batch_size)
-            if (FLAGS.learning_rate_decay_when_no_progress != 1.0) and (trainer.step % epoch_length <= FLAGS.eval_interval_steps):
-                if trainer.best_dev_step < (trainer.step - epoch_length):
-                    logger.Log('No improvement after one epoch. Lowering learning rate.')
-                    trainer.optimizer_reset(trainer.learning_rate * FLAGS.learning_rate_decay_when_no_progress)
-
+                if  index == 0:
+                    trainer.new_dev_accuracy(acc)
             progress_bar.reset()
 
         if trainer.step > FLAGS.ckpt_step and trainer.step % FLAGS.ckpt_interval_steps == 0:
             should_log = True
-            logger.Log("Checkpointing.")
-            trainer.save(standard_checkpoint_path)
+            trainer.checkpoint()
 
         if should_log:
             logger.LogEntry(log_entry)
@@ -416,35 +392,10 @@ def run(only_forward=False):
 
     model, trainer = init_model(
         FLAGS, logger, initial_embeddings, vocab_size, num_classes, data_manager, header)
+    trainer.set_epoch_length(int(training_data_length / FLAGS.batch_size))
 
-    standard_checkpoint_path = get_checkpoint_path(
-        FLAGS.ckpt_path, FLAGS.experiment_name)
-    best_checkpoint_path = get_checkpoint_path(
-        FLAGS.ckpt_path, FLAGS.experiment_name, best=True)
-
-    # Load checkpoint if available.
-    if FLAGS.load_best and os.path.isfile(best_checkpoint_path):
-        logger.Log("Found best checkpoint, restoring.")
-        trainer.load(best_checkpoint_path, cpu=FLAGS.gpu < 0)
-        logger.Log(
-            "Resuming at step: {} with best dev accuracy: {}".format(
-                trainer.step, 1. - trainer.best_dev_error))
-    elif os.path.isfile(standard_checkpoint_path):
-        logger.Log("Found checkpoint, restoring.")
-        trainer.load(
-            standard_checkpoint_path, cpu=FLAGS.gpu < 0)
-        logger.Log(
-            "Resuming at step: {} with best dev accuracy: {}".format(
-                trainer.step, 1. - trainer.best_dev_error))
-    else:
-        assert not only_forward, "Can't run an eval-only run without a checkpoint. Supply a checkpoint."
     header.start_step = trainer.step
     header.start_time = int(time.time())
-
-    # Debug
-    def set_debug(self):
-        self.debug = FLAGS.debug
-    model.apply(set_debug)
 
     # Do an evaluation-only run.
     logger.LogHeader(header)  # Start log_entry logging.
@@ -470,7 +421,6 @@ def run(only_forward=False):
             model,
             trainer,
             training_data_iter,
-            training_data_length,
             eval_iterators,
             logger,
             vocabulary)

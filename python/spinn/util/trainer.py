@@ -1,29 +1,71 @@
+import torch
 import torch.optim as optim
 from spinn.util.blocks import the_gpu
 from spinn.util.misc import recursively_set_device
 
+import os
+
+def get_checkpoint_path(FLAGS, suffix=".ckpt", best=False):
+    # Set checkpoint path.
+
+    if FLAGS.expanded_eval_only_mode and FLAGS.expanded_eval_only_mode_use_best_checkpoint:
+        best = True
+
+    if FLAGS.ckpt_path.endswith(".ckpt") or FLAGS.ckpt_path.endswith(".ckpt_best"):
+        checkpoint_path = FLAGS.ckpt_path
+    else:
+        checkpoint_path = os.path.join(FLAGS.ckpt_path, FLAGS.experiment_name + suffix)
+    if best:
+        checkpoint_path += "_best"
+    return checkpoint_path
+
 
 class ModelTrainer(object):
-    def __init__(self, model, optimizer_type, learning_rate, l2_lambda, gpu):
+    def __init__(self, model, logger, FLAGS):
         self.model = model
+        self.logger = logger
+
         self.dense_parameters = [param for name, param in model.named_parameters() if name not in ["embed.embed.weight"]]
         self.sparse_parameters = [param for name, param in model.named_parameters() if name in ["embed.embed.weight"]]
-        self.optimizer_type = optimizer_type
-        self.l2_lambda = l2_lambda
+        self.optimizer_type = FLAGS.optimizer_type
+        self.l2_lambda = FLAGS.l2_lambda
+        self.ckpt_step = FLAGS.ckpt_step
+        self.ckpt_on_best_dev_error = FLAGS.ckpt_on_best_dev_error
+        self.learning_rate_decay_when_no_progress = FLAGS.learning_rate_decay_when_no_progress
+        self.training_data_length = None
+        self.eval_interval_steps = FLAGS.eval_interval_steps
 
         # GPU support.
-        self.gpu = gpu
-        the_gpu.gpu = gpu
-        if gpu >= 0:
+        self.gpu = FLAGS.gpu
+        the_gpu.gpu = FLAGS.gpu
+        if self.gpu >= 0:
             model.cuda()
         else:
             model.cpu()
 
-        self.optimizer_reset(learning_rate)
-
         self.step = 0
         self.best_dev_error = 1.0
         self.best_dev_step = 0
+
+        self.optimizer_reset(FLAGS.learning_rate)
+
+        self.standard_checkpoint_path = get_checkpoint_path(FLAGS)
+        self.best_checkpoint_path = get_checkpoint_path(FLAGS, best=True)
+
+        # Load checkpoint if available.
+        if FLAGS.load_best and os.path.isfile(best_checkpoint_path):
+            self.logger.Log("Found best checkpoint, restoring.")
+            self.load(self.best_checkpoint_path, cpu=FLAGS.gpu < 0)
+            self.logger.Log(
+                "Resuming at step: {} with best dev accuracy: {}".format(
+                    self.step, 1. - self.best_dev_error))
+        elif os.path.isfile(self.standard_checkpoint_path):
+            self.logger.Log("Found checkpoint, restoring.")
+            self.load(self.standard_checkpoint_path, cpu=FLAGS.gpu < 0)
+            self.logger.Log(
+                "Resuming at step: {} with best dev accuracy: {}".format(
+                    self.step, 1. - self.best_dev_error))
+
 
     def optimizer_reset(self, learning_rate):
         self.learning_rate = learning_rate
@@ -59,6 +101,32 @@ class ModelTrainer(object):
         self.optimizer.zero_grad()
         if self.sparse_optimizer is not None:
             self.sparse_optimizer.zero_grad()
+
+    def new_dev_accuracy(self, acc):
+        # Track best dev error
+        if (1 - acc) < 0.99 * self.best_dev_error:
+            self.best_dev_error = 1 - acc
+            self.best_dev_step = self.step
+            if self.ckpt_on_best_dev_error and self.step > self.ckpt_step:
+                self.logger.Log(
+                    "Checkpointing with new best dev accuracy of %f" %
+                    acc)
+                self.save(self.best_checkpoint_path)
+
+        # Learning rate decay
+        if (self.learning_rate_decay_when_no_progress != 1.0) and (self.step % self.epoch_length <= self.eval_interval_steps):
+            if self.best_dev_step < (self.step - self.epoch_length):
+                self.logger.Log('No improvement after one epoch. Lowering learning rate.')
+                self.optimizer_reset(self.learning_rate * self.learning_rate_decay_when_no_progress)
+
+
+    def set_epoch_length(self, epoch_length):
+        self.epoch_length = epoch_length
+
+
+    def checkpoint(self):
+        self.logger.Log("Checkpointing.")
+        self.save(self.standard_checkpoint_path)
 
     def save(self, filename):
         if the_gpu() >= 0:
