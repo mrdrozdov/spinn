@@ -181,17 +181,6 @@ def train_loop(
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
 
-    # Build log format strings.
-    model.train()
-    X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = get_batch(
-        training_data_iter.next())
-    model(X_batch, transitions_batch, y_batch,
-          use_internal_parser=FLAGS.use_internal_parser,
-          validate_transitions=FLAGS.validate_transitions,
-          pyramid_temperature_multiplier=1.0,
-          example_lengths=num_transitions_batch
-          )
-
     # Train.
     logger.Log("Training.")
 
