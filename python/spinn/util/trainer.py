@@ -114,14 +114,15 @@ class ModelTrainer(object):
                 self.save(self.best_checkpoint_path)
 
         # Learning rate decay
-        if (self.learning_rate_decay_when_no_progress != 1.0) and (self.step % self.epoch_length <= self.eval_interval_steps):
-            if self.best_dev_step < (self.step - self.epoch_length):
-                self.logger.Log('No improvement after one epoch. Lowering learning rate.')
-                self.optimizer_reset(self.learning_rate * self.learning_rate_decay_when_no_progress)
-
+        if self.learning_rate_decay_when_no_progress != 1.0:
+            last_epoch_start = self.step - (self.step % self.epoch_length)
+            if self.step - last_epoch_start <= self.eval_interval_steps and self.best_dev_step < (last_epoch_start - self.epoch_length):
+                    self.logger.Log('No improvement after one epoch. Lowering learning rate.')
+                    self.optimizer_reset(self.learning_rate * self.learning_rate_decay_when_no_progress)
 
     def set_epoch_length(self, epoch_length):
         self.epoch_length = epoch_length
+        self.logger.Log('One epoch is ' + str(self.epoch_length) + ' steps.')
 
 
     def checkpoint(self):
