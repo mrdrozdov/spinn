@@ -66,7 +66,7 @@ SWEEP_PARAMETERS = {
     "l2_lambda":          ("l2", EXP, 8e-7, 1e-3),
     "learning_rate_decay_when_no_progress": ("dc", LIN, 0.3, 1.0),
     "pyramid_trainable_temperature": ("tt", BOOL, None, None),
-    "pyramid_temperature_decay_when_no_progress": ("tdc", EXP, 0.2, 1.0),
+    "pyramid_temperature_decay_per_10k_steps": ("tdc", EXP, 0.2, 1.0),
     "pyramid_temperature_cycle_length": ("cl", CHOICE, ['0', '0', '300', '3000'], None),
     "learning_rate": ("lr", EXP, 0.0001, 0.01),
 }

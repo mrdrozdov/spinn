@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "8a"
-SWEEP_RUNS = 16
+NAME = "9sgd"
+SWEEP_RUNS = 8
 
 LIN = "LIN"
 EXP = "EXP"
@@ -23,7 +23,7 @@ FLAGS = gflags.FLAGS
 gflags.DEFINE_string("training_data_path", "/home/sbowman/trees/train.txt", "")
 gflags.DEFINE_string("eval_data_path", "/home/sbowman/trees/dev.txt", "")
 gflags.DEFINE_string("embedding_data_path", "/home/sbowman/glove/glove.840B.300d.txt", "")
-gflags.DEFINE_string("log_path", "/scratch/sbowman/logs", "")
+gflags.DEFINE_string("log_path", "/home/sbowman/logs", "")
 
 FLAGS(sys.argv)
 
@@ -48,19 +48,19 @@ FIXED_PARAMETERS = {
     "seq_length":   "100",
     "eval_seq_length":  "200",
     "nocomposition_ln": "",
-    "pyramid_temperature_decay_when_no_progress": "1.0",
     "early_stopping_steps_to_wait": "10000", 
     "fine_tune_loaded_embeddings": "",
+    "mlp_dim": "128",
+    "optimizer": "SGD",
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
     "semantic_classifier_keep_rate": ("skr", LIN, 0.4, 1.0),
-    "l2_lambda":          ("l2", EXP, 1e-11, 1e-6),
-    "learning_rate": ("lr", EXP, 0.0001, 0.003),
-    "model_dim": ("s", CHOICE, ['140', '168', '288', '360', '440'], None),
-    "mlp_dim": ("md", CHOICE, ['64', '128', '256', '384'], None),
-    "learning_rate_decay_when_no_progress": ("ldc", EXP, 0.1, 1.0),
+    "l2_lambda":          ("l2", EXP, 1e-8, 1e-6),
+    "learning_rate": ("lr", EXP, 0.1, 2.0),
+    "model_dim": ("s", CHOICE, ['168', '288'], None),
+    "learning_rate_decay_when_no_progress": ("ld", CHOICE, ['0.1', '0.5', '1.0'], None),
 }
 
 
