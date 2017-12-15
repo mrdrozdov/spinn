@@ -51,7 +51,7 @@ gflags.DEFINE_boolean("ec2", False, "")
 
 FLAGS(sys.argv)
 
-print(FLAGS.FlagValuesDict())
+print((FLAGS.FlagValuesDict()))
 
 # - #
 

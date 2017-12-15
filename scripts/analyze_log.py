@@ -163,8 +163,8 @@ class Failed(object):
 def Analyze(limit=10):
     log_paths = FLAGS.path.split(',')
     for i, lp in enumerate(log_paths):
-        print("{:03}: {}".format(i, lp))
-    print
+        print(("{:03}: {}".format(i, lp)))
+    print()
 
     summary_keys = [
     'best_train_acc',
@@ -208,10 +208,10 @@ def Analyze(limit=10):
         else:
             top_eval, last_eval = Failed(), Failed()
 
-        print("{:03}: Train: {:.5f} {:.5f} {:6} {:6} {:.5f} {:.5f} Eval: {:.5f} {:.5f} {:6} {:6} {:.5f} {:.5f}".format(i,
+        print(("{:03}: Train: {:.5f} {:.5f} {:6} {:6} {:.5f} {:.5f} Eval: {:.5f} {:.5f} {:6} {:6} {:.5f} {:.5f}".format(i,
             best_train.acc, best_train.transition_acc, best_train.step, last_train[-1].step, last_avg_train_acc, last_avg_train_transition_acc,
             best_eval.acc, best_eval.transition_acc, best_eval.step, last_eval[-1].step, last_avg_eval_acc, last_avg_eval_transition_acc,
-            ))
+            )))
         summary_dict['best_train_acc'].append(best_train.acc)
         summary_dict['best_train_transition_acc'].append(best_train.transition_acc)
         summary_dict['best_train_step'].append(best_train.step)
@@ -224,17 +224,17 @@ def Analyze(limit=10):
         summary_dict['last_eval_step'].append(last_eval[-1].step)
         summary_dict['last_avg_eval_acc'].append(last_avg_eval_acc)
         summary_dict['last_avg_eval_transition_acc'].append(last_avg_eval_transition_acc)
-    print
+    print()
 
     flag_vals_0 = FLAGS.flag_vals_0.split(',')
     flag_vals_1 = FLAGS.flag_vals_1.split(',')
-    print("job_id,{flags_0},{stats},{flags_1}".format(flags_0=",".join(flag_vals_0), flags_1=",".join(flag_vals_1), stats=",".join(summary_keys)))
+    print(("job_id,{flags_0},{stats},{flags_1}".format(flags_0=",".join(flag_vals_0), flags_1=",".join(flag_vals_1), stats=",".join(summary_keys))))
     for i, lp in enumerate(log_paths):
         job_flags = GetFLAGS(lp)
         flags_str_0 = ",".join([str(job_flags[v]) for v in flag_vals_0])
         flags_str_1 = ",".join([str(job_flags[v]) for v in flag_vals_1])
         stats_str = ",".join([str(summary_dict[k][i]) for k in summary_keys])
-        print("{:03},{flags_0},{stats},{flags_1}".format(i, stats=stats_str, flags_0=flags_str_0, flags_1=flags_str_1))
+        print(("{:03},{flags_0},{stats},{flags_1}".format(i, stats=stats_str, flags_0=flags_str_0, flags_1=flags_str_1)))
 
 
 if __name__ == '__main__':
