@@ -306,7 +306,7 @@ class GRU(nn.Module):
         self.bidirectional = bidirectional
         self.bi = 2 if self.bidirectional else 1
         self.num_layers = num_layers
-        self.rnn = nn.GRU(inp_dim, model_dim / self.bi, num_layers=num_layers,
+        self.rnn = nn.GRU(inp_dim, model_dim // self.bi, num_layers=num_layers,
                           batch_first=True,
                           bidirectional=self.bidirectional)
 
@@ -326,7 +326,7 @@ class GRU(nn.Module):
                     torch.zeros(
                         num_layers * bi,
                         batch_size,
-                        model_dim / bi),
+                        model_dim // bi),
                     volatile=not self.training))
 
         # Expects (input, h_0):
@@ -427,7 +427,7 @@ class EncodeGRU(GRU):
         if mix and bidirectional:
             self.mix = True
             assert model_dim % 4 == 0, "Model dim must be divisible by 4 to use bidirectional GRU encoder."
-            self.half_state_dim = model_dim / 4
+            self.half_state_dim = model_dim // 4
         else:
             self.mix = False
         super(
@@ -461,7 +461,7 @@ class LSTM(nn.Module):
         self.bidirectional = bidirectional
         self.bi = 2 if self.bidirectional else 1
         self.num_layers = num_layers
-        self.rnn = nn.LSTM(inp_dim, model_dim / self.bi, num_layers=num_layers,
+        self.rnn = nn.LSTM(inp_dim, model_dim // self.bi, num_layers=num_layers,
                            batch_first=True,
                            bidirectional=self.bidirectional,
                            dropout=dropout)
@@ -482,7 +482,7 @@ class LSTM(nn.Module):
                     torch.zeros(
                         num_layers * bi,
                         batch_size,
-                        model_dim / bi),
+                        model_dim // bi),
                     volatile=not self.training))
         if c0 is None:
             c0 = to_gpu(
@@ -490,7 +490,7 @@ class LSTM(nn.Module):
                     torch.zeros(
                         num_layers * bi,
                         batch_size,
-                        model_dim / bi),
+                        model_dim // bi),
                     volatile=not self.training))
 
         # Expects (input, h_0, c_0):

@@ -114,9 +114,9 @@ if __name__ == '__main__':
                         skip_counter += 1
                         continue
 
-                print "{}\t{}\t{}".format(data_type.LABELS[label],
+                print("{}\t{}\t{}".format(data_type.LABELS[label],
                                           " ".join(dataset.convert_to_sexpr(seq1)),
                                           " ".join(dataset.convert_to_sexpr(seq2)),
-                                          )
+                                          ))
                 break
-    print skip_counter
+    print(skip_counter)

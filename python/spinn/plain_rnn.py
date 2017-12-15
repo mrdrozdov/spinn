@@ -197,7 +197,7 @@ class RNNModel(nn.Module):
                 volatile=not self.training))
 
     def wrap_sentence_pair(self, hh):
-        batch_size = hh.size(0) / 2
+        batch_size = hh.size(0) // 2
         h = ([hh[:batch_size], hh[batch_size:]])
         return h
 

@@ -10,7 +10,7 @@ SUM_MOD = "[SM"
 END = "]"
 
 OPERATORS = [MIN, MAX, MED, SUM_MOD]  # , FIRST, LAST]
-VALUES = range(10)
+VALUES = list(range(10))
 
 VALUE_P = 0.25
 MAX_ARGS = 5
@@ -82,4 +82,4 @@ while len(data) < DATA_POINTS:
     data.add(generate_tree(1))
 
 for example in data:
-    print str(to_value(example)) + '\t' + to_string(example)
+    print(str(to_value(example)) + '\t' + to_string(example))

@@ -184,7 +184,7 @@ def train_loop(
 
         start = time.time()
 
-        batch = get_batch(training_data_iter.next())
+        batch = get_batch(next(training_data_iter))
         X_batch, transitions_batch, y_batch, num_transitions_batch, train_ids = batch
 
         total_tokens = sum(
@@ -297,7 +297,7 @@ def train_loop(
 
             # This could be done prior to running the batch for a tiny speed
             # boost.
-            t_idxs = range(FLAGS.num_samples)
+            t_idxs = list(range(FLAGS.num_samples))
             random.shuffle(t_idxs)
             t_idxs = sorted(t_idxs[:FLAGS.num_samples])
             for t_idx in t_idxs:
@@ -315,8 +315,8 @@ def train_loop(
                 log.gold_lb = "".join(map(str, gold))
                 log.pred_tr = "".join(map(str, pred_tr))
                 log.pred_ev = "".join(map(str, pred_ev))
-                log.strg_tr = strength_tr[1:].encode('utf-8')
-                log.strg_ev = strength_ev[1:].encode('utf-8')
+                log.strg_tr = strength_tr[1:]
+                log.strg_ev = strength_ev[1:]
 
         if trainer.step > 0 and trainer.step % FLAGS.eval_interval_steps == 0:
             should_log = True

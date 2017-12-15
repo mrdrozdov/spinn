@@ -160,8 +160,8 @@ class ModelTrainer(object):
         model_state_dict = checkpoint['model_state_dict']
 
         # HACK: Compatability for saving supervised SPINN and loading RL SPINN.
-        if 'baseline' in self.model.state_dict().keys(
-        ) and 'baseline' not in model_state_dict:
+        if 'baseline' in list(self.model.state_dict().keys(
+        )) and 'baseline' not in model_state_dict:
             model_state_dict['baseline'] = torch.FloatTensor([0.0])
 
         self.model.load_state_dict(model_state_dict)

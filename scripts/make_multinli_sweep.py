@@ -75,20 +75,20 @@ sweep_name = "sweep_" + NAME + "_" + \
     FIXED_PARAMETERS["data_type"] + "_" + FIXED_PARAMETERS["model_type"]
 
 # - #
-print "# NAME: " + sweep_name
-print "# NUM RUNS: " + str(SWEEP_RUNS)
-print "# SWEEP PARAMETERS: " + str(SWEEP_PARAMETERS)
-print "# FIXED_PARAMETERS: " + str(FIXED_PARAMETERS)
-print
+print("# NAME: " + sweep_name)
+print("# NUM RUNS: " + str(SWEEP_RUNS))
+print("# SWEEP PARAMETERS: " + str(SWEEP_PARAMETERS))
+print("# FIXED_PARAMETERS: " + str(FIXED_PARAMETERS))
+print()
 
 # Print training paths as variables so they can be easily changed without
 # having to change this script.
-print "# Adjust these to your own setup."
-print "TRAINING_DATA_PATH=" + FLAGS.training_data_path
-print "EVAL_DATA_PATH=" + FLAGS.eval_data_path
-print "EMBEDDING_DATA_PATH=" + FLAGS.embedding_data_path
-print "LOG_PATH=" + FLAGS.log_path
-print
+print("# Adjust these to your own setup.")
+print("TRAINING_DATA_PATH=" + FLAGS.training_data_path)
+print("EVAL_DATA_PATH=" + FLAGS.eval_data_path)
+print("EMBEDDING_DATA_PATH=" + FLAGS.embedding_data_path)
+print("LOG_PATH=" + FLAGS.log_path)
+print()
 
 for run_id in range(SWEEP_RUNS):
     params = {}
@@ -144,7 +144,7 @@ for run_id in range(SWEEP_RUNS):
 
     flags += " --experiment_name " + name
     if NYU_NON_PBS:
-        print "cd spinn/python; python2.7 -m spinn.models.supervised_classifier " + flags
+        print("cd spinn/python; python2.7 -m spinn.models.supervised_classifier " + flags)
     else:
-        print "SPINNMODEL=\"spinn.models.supervised_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh ../scripts/train_spinn.sbatch 1"
-    print
+        print("SPINNMODEL=\"spinn.models.supervised_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh ../scripts/train_spinn.sbatch 1")
+    print()

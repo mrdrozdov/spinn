@@ -36,7 +36,7 @@ def convert_unary_binary_bracketed_data(
     # leaf node is wrapped as a unary constituent, as here:
     #   (4 (2 (2 The ) (2 actors ) ) (3 (4 (2 are ) (3 fantastic ) ) (2 . ) ) )
     if top_node_only:
-        print "SST eval mode: Preserving only top node label."
+        print("SST eval mode: Preserving only top node label.")
     examples = []
     with open(filename, 'r') as f:
         for line in f:

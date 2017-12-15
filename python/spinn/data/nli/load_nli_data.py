@@ -34,16 +34,11 @@ def convert_binary_bracketing(parse, lowercase=False):
 
 
 def load_data(path, lowercase=False, choose=lambda x: True, eval_mode=False):
-    print "Loading", path
+    print("Loading", path)
     examples = []
     failed_parse = 0
     with codecs.open(path, encoding='utf-8') as f:
         for line in f:
-            try:
-                line = line.encode('UTF-8')
-            except UnicodeError as e:
-                print "ENCODING ERROR:", line, e
-                line = "{}"
             loaded_example = json.loads(line)
             if loaded_example["gold_label"] not in LABEL_MAP:
                 continue
@@ -65,12 +60,12 @@ def load_data(path, lowercase=False, choose=lambda x: True, eval_mode=False):
             else:
                 failed_parse += 1
     if failed_parse > 0:
-        print(
-            "Warning: Failed to convert binary parse for {} examples.".format(failed_parse))
+        print((
+            "Warning: Failed to convert binary parse for {} examples.".format(failed_parse)))
     return examples
 
 
 if __name__ == "__main__":
     # Demo:
     examples = load_data('snli-data/snli_1.0_dev.jsonl')
-    print examples[0]
+    print(examples[0])

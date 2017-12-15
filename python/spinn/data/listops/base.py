@@ -1,6 +1,6 @@
 from spinn import util
 
-NUMBERS = range(10)
+NUMBERS = list(range(10))
 
 FIXED_VOCABULARY = {str(x): i + 1 for i, x in enumerate(NUMBERS)}
 FIXED_VOCABULARY.update({
@@ -13,4 +13,4 @@ FIXED_VOCABULARY.update({
     "[SM": len(FIXED_VOCABULARY) + 6,
     "]": len(FIXED_VOCABULARY) + 7
 })
-assert len(set(FIXED_VOCABULARY.values())) == len(FIXED_VOCABULARY.values())
+assert len(set(FIXED_VOCABULARY.values())) == len(list(FIXED_VOCABULARY.values()))

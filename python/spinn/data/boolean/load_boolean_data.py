@@ -60,4 +60,4 @@ def load_data(path):
 if __name__ == "__main__":
     # Demo:
     examples = import_binary_bracketed_data('bl-data/bl_dev.tsv')
-    print examples[0]
+    print(examples[0])

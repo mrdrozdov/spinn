@@ -11,9 +11,9 @@ def convert(inpt, outp, gpu=-1):
     ckpt = torch.load(inpt)
 
     if gpu < 0:
-        ckpt['model_state_dict'] = {k: v.cpu() for k, v in ckpt['model_state_dict'].iteritems()}
+        ckpt['model_state_dict'] = {k: v.cpu() for k, v in ckpt['model_state_dict'].items()}
     else:
-        ckpt['model_state_dict'] = {k: v.cuda() for k, v in ckpt['model_state_dict'].iteritems()}
+        ckpt['model_state_dict'] = {k: v.cuda() for k, v in ckpt['model_state_dict'].items()}
     ckpt['optimizer_state_dict'] = recursively_set_device(ckpt['optimizer_state_dict'], gpu)
 
     torch.save(ckpt, FLAGS.outp)

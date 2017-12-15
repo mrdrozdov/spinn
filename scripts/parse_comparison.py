@@ -302,7 +302,7 @@ def example_labeled_acc(c1, c2):
 def randomize(parse):
     tokens = tokenize_parse(parse)
     while len(tokens) > 1:
-        merge = random.choice(range(len(tokens) - 1))
+        merge = random.choice(list(range(len(tokens) - 1)))
         tokens[merge] = "( " + tokens[merge] + " " + tokens[merge + 1] + " )"
         del tokens[merge + 1]
     return tokens[0]
@@ -314,11 +314,6 @@ def read_nli_report(path):
     report = {}
     with codecs.open(path, encoding='utf-8') as f:
         for line in f:
-            try:
-                line = line.encode('UTF-8')
-            except UnicodeError as e:
-                print "ENCODING ERROR:", line, e
-                line = "{}"
             loaded_example = json.loads(line)
             report[loaded_example['example_id'] + "_1"] = unpad(loaded_example['sent1_tree'])
             report[loaded_example['example_id'] + "_2"] = unpad(loaded_example['sent2_tree'])
@@ -328,11 +323,6 @@ def read_ptb_report(path):
     report = {}
     with codecs.open(path, encoding='utf-8') as f:
         for line in f:
-            try:
-                line = line.encode('UTF-8')
-            except UnicodeError as e:
-                print "ENCODING ERROR:", line, e
-                line = "{}"
             loaded_example = json.loads(line)
             report[loaded_example['example_id']] = unpad(loaded_example['sent1_tree'])
     return report
@@ -359,11 +349,6 @@ def run():
     # gt_labeled = {} 
     with codecs.open(FLAGS.main_data_path, encoding='utf-8') as f:
         for line in f:
-            try:
-                line = line.encode('UTF-8')
-            except UnicodeError as e:
-                print "ENCODING ERROR:", line, e
-                line = "{}"
             loaded_example = json.loads(line)
             if loaded_example["gold_label"] not in LABEL_MAP:
                 continue
@@ -382,18 +367,13 @@ def run():
     lb = to_lb(gt)
     rb = to_rb(gt)
 
-    print "GT average depth", corpus_average_depth(gt)
+    print("GT average depth", corpus_average_depth(gt))
 
     ptb = {}
     ptb_labeled = {}
     if FLAGS.ptb_data_path != "_":
         with codecs.open(FLAGS.ptb_data_path, encoding='utf-8') as f:
             for line in f:
-                try:
-                    line = line.encode('UTF-8')
-                except UnicodeError as e:
-                    print "ENCODING ERROR:", line, e
-                    line = "{}"
                 loaded_example = json.loads(line)
                 if loaded_example["gold_label"] not in LABEL_MAP:
                     continue
@@ -403,32 +383,32 @@ def run():
     reports = []
     ptb_reports = []
     if FLAGS.use_random_parses:
-        print "Creating five sets of random parses for the main data."
-        report_paths = range(5)
+        print("Creating five sets of random parses for the main data.")
+        report_paths = list(range(5))
         for _ in report_paths:
             report = {}
             for sentence in gt:
                 report[sentence] = randomize(gt[sentence])
             reports.append(report)  
 
-        print "Creating five sets of random parses for the PTB data."
-        ptb_report_paths = range(5)
+        print("Creating five sets of random parses for the PTB data.")
+        ptb_report_paths = list(range(5))
         for _ in report_paths:
             report = {}
             for sentence in ptb:
                 report[sentence] = randomize(ptb[sentence])
             ptb_reports.append(report)
     if FLAGS.use_balanced_parses:
-        print "Creating five sets of balanced binary parses for the main data."
-        report_paths = range(5)
+        print("Creating five sets of balanced binary parses for the main data.")
+        report_paths = list(range(5))
         for _ in report_paths:
             report = {}
             for sentence in gt:
                 report[sentence] = balance(gt[sentence])
             reports.append(report)  
 
-        print "Creating five sets of balanced binary parses for the PTB data."
-        ptb_report_paths = range(5)
+        print("Creating five sets of balanced binary parses for the PTB data.")
+        ptb_report_paths = list(range(5))
         for _ in report_paths:
             report = {}
             for sentence in ptb:
@@ -437,13 +417,13 @@ def run():
     else:
         report_paths = glob.glob(FLAGS.main_report_path_template)
         for path in report_paths:
-            print "Loading", path
+            print("Loading", path)
             reports.append(read_nli_report(path))
 
         if FLAGS.main_report_path_template != "_":
             ptb_report_paths = glob.glob(FLAGS.ptb_report_path_template)
             for path in ptb_report_paths:
-                print "Loading", path
+                print("Loading", path)
                 ptb_reports.append(read_ptb_report(path))
 
     if len(reports) > 1 and FLAGS.compute_self_f1:
@@ -454,37 +434,37 @@ def run():
                 path_2 = report_paths[j]
                 f1 = corpus_stats(reports[i], reports[j])
                 f1s.append(f1)
-        print "Mean Self F1:\t" + str(sum(f1s) / len(f1s))
+        print("Mean Self F1:\t" + str(sum(f1s) / len(f1s)))
 
     for i, report in enumerate(reports):
-        print report_paths[i]
+        print(report_paths[i])
         if FLAGS.print_latex > 0:
             for index, sentence in enumerate(gt):
                 if index == FLAGS.print_latex:
                     break
-                print to_latex(gt[sentence])
-                print to_latex(report[sentence])
-                print
-        print str(corpus_stats(report, lb)) + '\t' + str(corpus_stats(report, rb)) + '\t' + str(corpus_stats(report, gt, first_two=FLAGS.first_two, neg_pair=FLAGS.neg_pair)) + '\t' + str(corpus_average_depth(report))
+                print(to_latex(gt[sentence]))
+                print(to_latex(report[sentence]))
+                print()
+        print(str(corpus_stats(report, lb)) + '\t' + str(corpus_stats(report, rb)) + '\t' + str(corpus_stats(report, gt, first_two=FLAGS.first_two, neg_pair=FLAGS.neg_pair)) + '\t' + str(corpus_average_depth(report)))
         
     correct = Counter()
     total = Counter()
     for i, report in enumerate(ptb_reports):
-        print ptb_report_paths[i]
+        print(ptb_report_paths[i])
         if FLAGS.print_latex > 0:
             for index, sentence in enumerate(ptb):
                 if index == FLAGS.print_latex:
                     break
-                print to_latex(ptb[sentence])
-                print to_latex(report[sentence])
-                print
-        print  str(corpus_stats(report, ptb)) + '\t' + str(corpus_average_depth(report))
+                print(to_latex(ptb[sentence]))
+                print(to_latex(report[sentence]))
+                print()
+        print(str(corpus_stats(report, ptb)) + '\t' + str(corpus_average_depth(report)))
         set_correct, set_total = corpus_stats_labeled(report, ptb_labeled)
         correct.update(set_correct)
         total.update(set_total)
 
     for key in sorted(total):
-        print key + '\t' + str(correct[key] * 1. / total[key])
+        print(key + '\t' + str(correct[key] * 1. / total[key]))
 
 
 if __name__ == '__main__':

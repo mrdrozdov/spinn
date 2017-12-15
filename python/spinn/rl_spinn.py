@@ -171,7 +171,7 @@ class BaseModel(_BaseModel):
             output, (hn, _) = self.v_rnn(x, (h0, c0))
             if self.use_sentence_pair:
                 hn = hn.squeeze()
-                h1, h2 = hn[:batch_size / 2], hn[batch_size / 2:]
+                h1, h2 = hn[:batch_size // 2], hn[batch_size // 2:]
                 hn_both = torch.cat([h1, h2], 1)
                 self.baseline_outp = self.v_mlp(hn_both.squeeze())
             else:
@@ -277,7 +277,7 @@ class BaseModel(_BaseModel):
 
         batch_size = advantage.size(0)
 
-        seq_length = t_preds.shape[0] / batch_size
+        seq_length = t_preds.shape[0] // batch_size
 
         a_index = np.arange(batch_size)
         a_index = a_index.reshape(1, -1).repeat(seq_length, axis=0).flatten()

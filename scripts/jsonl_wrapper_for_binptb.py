@@ -18,11 +18,6 @@ def run():
     with open(FLAGS.write_path, 'w') as outfile:
         with codecs.open(FLAGS.read_path, encoding='utf-8') as f:
             for idx, line in enumerate(f):
-                try:
-                    line = line.encode('UTF-8')
-                except UnicodeError as e:
-                    print "ENCODING ERROR:", line, e
-                    line = "{}"
                 binparse, parse = line.strip().split('\t')
                 item = {
                     'genre': 'ptb_wsj',

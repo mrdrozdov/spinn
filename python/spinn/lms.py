@@ -288,11 +288,11 @@ class LMS(nn.Module):
             # For REDUCE
             r_stacks, r_lefts, r_rights, r_trackings = [], [], [], []
 
-            batch = zip(
+            batch = list(zip(
                 transition_arr,
                 self.bufs,
                 self.stacks,
-                itertools.repeat(None))
+                itertools.repeat(None)))
 
             for batch_idx, (transition, buf, stack,
                             tracking) in enumerate(batch):
@@ -582,7 +582,7 @@ class BaseModel(nn.Module):
         return example
 
     def wrap_sentence_pair(self, items):
-        batch_size = len(items) / 2
+        batch_size = len(items) // 2
         h_premise = self.extract_h(self.wrap_items(items[:batch_size]))
         h_hypothesis = self.extract_h(self.wrap_items(items[batch_size:]))
         return [h_premise, h_hypothesis]
