@@ -375,11 +375,6 @@ def run(only_forward=False):
 
     logger.Log("Flag Values:\n" +
                json.dumps(FLAGS.FlagValuesDict(), indent=4, sort_keys=True))
-    flags_dict = sorted(list(FLAGS.FlagValuesDict().items()))
-    for k, v in flags_dict:
-        flag = header.flags.add()
-        flag.key = k
-        flag.value = str(v)
 
     # Get Data and Embeddings
     vocabulary, initial_embeddings, training_data_iter, eval_iterators, training_data_length = \
