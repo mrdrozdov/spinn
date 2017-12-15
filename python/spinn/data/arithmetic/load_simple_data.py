@@ -4,16 +4,16 @@ from spinn import util
 from spinn.data.arithmetic.base import FIXED_VOCABULARY
 
 SENTENCE_PAIR_DATA = False
-OUTPUTS = range(-10, 11)
+OUTPUTS = list(range(-10, 11))
 LABEL_MAP = {str(x): i for i, x in enumerate(OUTPUTS)}
 
 Node = namedtuple('Node', 'tag span')
 
 
 def spans(transitions, tokens=None):
-    n = (len(transitions) + 1) / 2
+    n = (len(transitions) + 1) // 2
     stack = []
-    buf = [Node("leaf", (l, r)) for l, r in zip(range(n), range(1, n + 1))]
+    buf = [Node("leaf", (l, r)) for l, r in zip(list(range(n)), list(range(1, n + 1)))]
     buf = list(reversed(buf))
 
     nodes = []

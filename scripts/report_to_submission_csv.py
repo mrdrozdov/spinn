@@ -20,11 +20,6 @@ def run():
     report = {}
     with codecs.open(FLAGS.report_path, encoding='utf-8') as f:
         for line in f:
-            try:
-                line = line.encode('UTF-8')
-            except UnicodeError as e:
-                print "ENCODING ERROR:", line, e
-                line = "{}"
             loaded_example = json.loads(line)
             label = LABEL_MAP[loaded_example['prediction']]
             pair_id = loaded_example['example_id']

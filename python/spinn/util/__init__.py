@@ -1,5 +1,4 @@
 from collections import namedtuple
-from spinn.util.data import *
 
 
 ModelSpec_ = namedtuple("ModelSpec", ["model_dim", "word_embedding_dim",
@@ -8,7 +7,7 @@ ModelSpec_ = namedtuple("ModelSpec", ["model_dim", "word_embedding_dim",
 
 
 def ModelSpec(*args, **kwargs):
-    args = dict(zip(ModelSpec_._fields, args))
+    args = dict(list(zip(ModelSpec_._fields, args)))
     args.update(kwargs)
 
     # Defaults

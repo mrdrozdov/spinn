@@ -1,6 +1,6 @@
 import datetime
 import sys
-import logging_pb2 as pb
+from . import logging_pb2 as pb
 import re
 
 

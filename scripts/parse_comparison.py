@@ -314,11 +314,6 @@ def read_nli_report(path):
     report = {}
     with codecs.open(path, encoding='utf-8') as f:
         for line in f:
-            try:
-                line = line.encode('UTF-8')
-            except UnicodeError as e:
-                print "ENCODING ERROR:", line, e
-                line = "{}"
             loaded_example = json.loads(line)
             report[loaded_example['example_id'] + "_1"] = unpad(loaded_example['sent1_tree'])
             report[loaded_example['example_id'] + "_2"] = unpad(loaded_example['sent2_tree'])
@@ -328,11 +323,6 @@ def read_ptb_report(path):
     report = {}
     with codecs.open(path, encoding='utf-8') as f:
         for line in f:
-            try:
-                line = line.encode('UTF-8')
-            except UnicodeError as e:
-                print "ENCODING ERROR:", line, e
-                line = "{}"
             loaded_example = json.loads(line)
             report[loaded_example['example_id']] = unpad(loaded_example['sent1_tree'])
     return report
@@ -359,11 +349,6 @@ def run():
     # gt_labeled = {} 
     with codecs.open(FLAGS.main_data_path, encoding='utf-8') as f:
         for line in f:
-            try:
-                line = line.encode('UTF-8')
-            except UnicodeError as e:
-                print "ENCODING ERROR:", line, e
-                line = "{}"
             loaded_example = json.loads(line)
             if loaded_example["gold_label"] not in LABEL_MAP:
                 continue
@@ -389,11 +374,6 @@ def run():
     if FLAGS.ptb_data_path != "_":
         with codecs.open(FLAGS.ptb_data_path, encoding='utf-8') as f:
             for line in f:
-                try:
-                    line = line.encode('UTF-8')
-                except UnicodeError as e:
-                    print "ENCODING ERROR:", line, e
-                    line = "{}"
                 loaded_example = json.loads(line)
                 if loaded_example["gold_label"] not in LABEL_MAP:
                     continue

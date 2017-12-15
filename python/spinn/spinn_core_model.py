@@ -456,8 +456,8 @@ class SPINN(nn.Module):
             # For REDUCE
             r_stacks, r_lefts, r_rights, r_trackings = [], [], [], []
 
-            batch = zip(transition_arr, self.bufs, self.stacks, self.tracker.states if hasattr(
-                self, 'tracker') and self.tracker.h is not None else itertools.repeat(None))
+            batch = list(zip(transition_arr, self.bufs, self.stacks, self.tracker.states if hasattr(
+                self, 'tracker') and self.tracker.h is not None else itertools.repeat(None)))
 
             for batch_idx, (transition, buf, stack,
                             tracking) in enumerate(batch):
@@ -779,7 +779,7 @@ class BaseModel(nn.Module):
         return example
 
     def wrap_sentence_pair(self, items):
-        batch_size = len(items) / 2
+        batch_size = len(items) // 2
         h_premise = self.extract_h(self.wrap_items(items[:batch_size]))
         h_hypothesis = self.extract_h(self.wrap_items(items[batch_size:]))
         return [h_premise, h_hypothesis]
@@ -794,9 +794,9 @@ class BaseModel(nn.Module):
 
         token_sequences = []
         batch_size = x.shape[0]
-        for s in (range(int(self.use_sentence_pair) + 1)
+        for s in (list(range(int(self.use_sentence_pair) + 1))
                   if not only_one else [0]):
-            for b in (range(batch_size) if not only_one else [0]):
+            for b in (list(range(batch_size)) if not only_one else [0]):
                 if self.use_sentence_pair:
                     token_sequence = [self.inverted_vocabulary[token]
                                       for token in x[b, :, s]]

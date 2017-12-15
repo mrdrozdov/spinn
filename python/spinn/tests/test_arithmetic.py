@@ -4,7 +4,7 @@ from collections import deque
 from spinn.data.util import arithmetic
 
 
-NUMBERS = range(-10, 11)
+NUMBERS = list(range(-10, 11))
 
 
 class ArithmeticTestCase(unittest.TestCase):

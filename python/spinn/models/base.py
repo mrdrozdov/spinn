@@ -501,7 +501,7 @@ def flag_defaults(FLAGS, load_log_flags=False):
     if load_log_flags:
         if FLAGS.load_log_path and os.path.exists(log_path(FLAGS, load=True)):
             log_flags = parse_flags(log_path(FLAGS, load=True))
-            for k in log_flags.keys():
+            for k in list(log_flags.keys()):
                 setattr(FLAGS, k, log_flags[k])
 
             # Optionally override flags from log file.
@@ -633,9 +633,9 @@ def init_model(
         composition_args.wrap_items = lambda x: bundle(x)
         composition_args.extract_h = lambda x: x.h
         composition_args.extract_c = lambda x: x.c
-        composition_args.size = FLAGS.model_dim / 2
+        composition_args.size = FLAGS.model_dim // 2
         composition = ReduceTreeLSTM(
-            FLAGS.model_dim / 2,
+            FLAGS.model_dim // 2,
             tracker_size=FLAGS.tracking_lstm_hidden_dim,
             use_tracking_in_composition=FLAGS.use_tracking_in_composition,
             composition_ln=FLAGS.composition_ln)

@@ -72,7 +72,7 @@ def default_args(**kwargs):
 
     args['composition_args'] = composition_args
 
-    for k in kwargs.keys():
+    for k in list(kwargs.keys()):
         args[k] = kwargs[k]
 
     return args
@@ -115,7 +115,7 @@ def get_batch_pair():
 
 def MockModel(model_cls, default_args, **kwargs):
     _kwargs = default_args
-    for k, v in kwargs.iteritems():
+    for k, v in kwargs.items():
         _kwargs[k] = v
     return model_cls(**_kwargs)
 
