@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "9sgd"
-SWEEP_RUNS = 8
+NAME = "10adam"
+SWEEP_RUNS = 16
 
 LIN = "LIN"
 EXP = "EXP"
@@ -20,10 +20,10 @@ CHOICE = "CHOICE"
 
 FLAGS = gflags.FLAGS
 
-gflags.DEFINE_string("training_data_path", "/home/sbowman/trees/train.txt", "")
-gflags.DEFINE_string("eval_data_path", "/home/sbowman/trees/dev.txt", "")
-gflags.DEFINE_string("embedding_data_path", "/home/sbowman/glove/glove.840B.300d.txt", "")
-gflags.DEFINE_string("log_path", "/home/sbowman/logs", "")
+gflags.DEFINE_string("training_data_path", "/home/sb6065/trees/train.txt", "")
+gflags.DEFINE_string("eval_data_path", "/home/sb6065/trees/dev.txt", "")
+gflags.DEFINE_string("embedding_data_path", "/home/sb6065/glove/glove.840B.300d.txt", "")
+gflags.DEFINE_string("log_path", "/scratch/sb6065/logs/spinn", "")
 
 FLAGS(sys.argv)
 
@@ -48,17 +48,17 @@ FIXED_PARAMETERS = {
     "seq_length":   "100",
     "eval_seq_length":  "200",
     "nocomposition_ln": "",
-    "early_stopping_steps_to_wait": "10000", 
+    "early_stopping_steps_to_wait": "50000", 
     "fine_tune_loaded_embeddings": "",
     "mlp_dim": "128",
-    "optimizer": "SGD",
+    "optimizer_type": "Adam",
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
     "semantic_classifier_keep_rate": ("skr", LIN, 0.4, 1.0),
     "l2_lambda":          ("l2", EXP, 1e-8, 1e-6),
-    "learning_rate": ("lr", EXP, 0.1, 2.0),
+    "learning_rate": ("lr", EXP, 0.00003, 0.001),
     "model_dim": ("s", CHOICE, ['168', '288'], None),
     "learning_rate_decay_when_no_progress": ("ld", CHOICE, ['0.1', '0.5', '1.0'], None),
 }
@@ -72,7 +72,7 @@ print("# NAME: " + sweep_name)
 print("# NUM RUNS: " + str(SWEEP_RUNS))
 print("# SWEEP PARAMETERS: " + str(SWEEP_PARAMETERS))
 print("# FIXED_PARAMETERS: " + str(FIXED_PARAMETERS))
-print()
+print("")
 
 # Print training paths as variables so they can be easily changed without
 # having to change this script.
@@ -81,7 +81,7 @@ print("TRAINING_DATA_PATH=" + FLAGS.training_data_path)
 print("EVAL_DATA_PATH=" + FLAGS.eval_data_path)
 print("EMBEDDING_DATA_PATH=" + FLAGS.embedding_data_path)
 print("LOG_PATH=" + FLAGS.log_path)
-print()
+print("")
 
 for run_id in range(SWEEP_RUNS):
     params = {}
@@ -139,7 +139,7 @@ for run_id in range(SWEEP_RUNS):
     if NYU_NON_PBS:
         print("cd spinn/python; python2.7 -m spinn.models.supervised_classifier " + flags)
     else:
-        print("SPINNMODEL=\"spinn.models.supervised_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh ../scripts/train_spinn_cilvr.sbatch 1")
-    print()
+        print("SPINNMODEL=\"spinn.models.supervised_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh ../scripts/train_spinn.sbatch 1")
+    print("")
 
 
