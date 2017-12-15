@@ -1,5 +1,5 @@
 from collections import namedtuple
-
+from spinn.util.data import *
 
 ModelSpec_ = namedtuple("ModelSpec", ["model_dim", "word_embedding_dim",
                                       "batch_size", "vocab_size", "seq_length",
