@@ -5,6 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=16000
 #SBATCH -t24:00:00
+#SBATCH --constraint=gpu_12gb
 
 
 # Log what we're running and where.
