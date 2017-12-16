@@ -144,7 +144,7 @@ for run_id in range(SWEEP_RUNS):
     print("export CUDA_VISIBLE_DEVICES={}; export PYTHONPATH=./python; cd ~/Developer/spinn; ".format(cuda) + \
         "nohup python -m spinn.models.rl_classifier {} &> nohup_{}.out &".format(flags, name))
     # if NYU_NON_PBS:
-    #     print "cd spinn/python; python2.7 -m spinn.models.rl_classifier " + flags
+    #     print "cd spinn/python; python3 -m spinn.models.rl_classifier " + flags
     # else:
     #     print "SPINNMODEL=\"spinn.models.rl_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_cpu_only.sh"
     print()

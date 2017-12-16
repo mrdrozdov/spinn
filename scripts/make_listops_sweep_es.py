@@ -137,7 +137,7 @@ for run_id in range(SWEEP_RUNS):
 
     flags += " --experiment_name " + name
     if NYU_NON_PBS:
-        print("cd spinn/python; python2.7 -m spinn.models.supervised_classifier " + flags)
+        print("cd spinn/python; python3 -m spinn.models.supervised_classifier " + flags)
     else:
         print("SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_es_cpu_only.sh")
         print(a * b)
