@@ -554,12 +554,13 @@ def LoadEmbeddingsFromText(vocabulary, embedding_dim, path):
         (len(vocabulary), embedding_dim), dtype=np.float32)
     with open(path, 'r') as f:
         for line in f:
-            spl = line.split(" ")
-            if len(spl) < embedding_dim + 1:
-                # Header row or final row
-                continue
-            word = spl[0]
+            pre_spl = line.split(" ", maxsplit=1)
+            word = pre_spl[0]
             if word in vocabulary:
+                spl = line.split(" ")
+                if len(spl) < embedding_dim + 1:
+                    # Header row or final row
+                    continue
                 emb[vocabulary[word], :] = [
                     float(e) for e in spl[1:embedding_dim + 1]]
                 loaded += 1
