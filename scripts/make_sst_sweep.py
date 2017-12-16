@@ -51,14 +51,14 @@ FIXED_PARAMETERS = {
     "early_stopping_steps_to_wait": "50000", 
     "fine_tune_loaded_embeddings": "",
     "mlp_dim": "128",
-    "optimizer_type": "Adam",
+    "optimizer_type": "SGD",
 }
 
 # Tunable parameters.
 SWEEP_PARAMETERS = {
     "semantic_classifier_keep_rate": ("skr", LIN, 0.4, 1.0),
     "l2_lambda":          ("l2", EXP, 1e-8, 1e-6),
-    "learning_rate": ("lr", EXP, 0.00003, 0.001),
+    "learning_rate": ("lr", EXP, 0.1, 1.0),
     "model_dim": ("s", CHOICE, ['168', '288'], None),
     "learning_rate_decay_when_no_progress": ("ld", CHOICE, ['0.1', '0.5', '1.0'], None),
 }

@@ -440,13 +440,13 @@ def get_flags():
                         "Used for dropout in the semantic task classifier.")
 
     # Optimization settings.
-    gflags.DEFINE_enum("optimizer_type", "Adam", ["Adam", "SGD"], "")
+    gflags.DEFINE_enum("optimizer_type", "SGD", ["Adam", "SGD"], "")
     gflags.DEFINE_integer(
         "training_steps",
         1000000,
         "Stop training after this point.")
-    gflags.DEFINE_integer("batch_size", 32, "SGD minibatch size.")
-    gflags.DEFINE_float("learning_rate", 0.0003, "Used in optimizer.")  # https://twitter.com/karpathy/status/801621764144971776
+    gflags.DEFINE_integer("batch_size", 32, "Minibatch size.")
+    gflags.DEFINE_float("learning_rate", 0.5, "Used in optimizer.")  # https://twitter.com/karpathy/status/801621764144971776
     gflags.DEFINE_float("learning_rate_decay_when_no_progress", 0.5,
         "Used in optimizer. Decay the LR by this much every epoch steps if a new best has not been set in the last epoch.")
     gflags.DEFINE_float("clipping_max_value", 5.0, "")
