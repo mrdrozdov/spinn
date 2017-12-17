@@ -19,6 +19,7 @@ from spinn.util.loss import auxiliary_loss
 from spinn.util.sparks import sparks, dec_str
 import spinn.util.evalb as evalb
 import spinn.util.logging_pb2 as pb
+from spinn.util.trainer import ModelTrainer
 
 # PyTorch
 import torch
@@ -360,7 +361,7 @@ def run(only_forward=False):
     vocab_size = len(vocabulary)
     num_classes = len(set(data_manager.LABEL_MAP.values()))
 
-    model, trainer = init_model(
+    model = init_model(
         FLAGS,
         logger,
         initial_embeddings,
@@ -368,8 +369,9 @@ def run(only_forward=False):
         num_classes,
         data_manager,
         header)
-    trainer.set_epoch_length(int(training_data_length / FLAGS.batch_size))
-
+    epoch_length = int(training_data_length / FLAGS.batch_size)
+    trainer = ModelTrainer(model, logger, epoch_length, vocabulary, FLAGS) 
+    
     header.start_step = trainer.step
     header.start_time = int(time.time())
 
