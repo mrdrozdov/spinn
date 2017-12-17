@@ -113,11 +113,8 @@ def load_data_and_embeddings(
     if FLAGS.eval_genre is not None:
         def choose_eval(x): return x.get('genre') == FLAGS.eval_genre
 
-    if not FLAGS.expanded_eval_only_mode:
-        raw_training_data = data_manager.load_data(
-            training_data_path, FLAGS.lowercase, eval_mode=False)
-    else:
-        raw_training_data = None
+    raw_training_data = data_manager.load_data(
+        training_data_path, FLAGS.lowercase, eval_mode=False)
 
     raw_eval_sets = []
     for path in eval_data_path.split(':'):
