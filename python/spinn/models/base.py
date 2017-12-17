@@ -16,7 +16,6 @@ from spinn.data.nli import load_nli_data
 from spinn.util.blocks import EncodeGRU, IntraAttention, Linear, ReduceTreeGRU, ReduceTreeLSTM, ReduceTensor,  bundle
 from spinn.util.misc import Args
 from spinn.util.logparse import parse_flags
-from spinn.util.trainer import ModelTrainer
 
 import spinn.rl_spinn
 import spinn.spinn_core_model
@@ -676,6 +675,4 @@ def init_model(
     if logfile_header:
         logfile_header.total_params = int(total_params)
 
-    trainer = ModelTrainer(model, logger, FLAGS)
-
-    return model, trainer
+    return model

@@ -21,9 +21,13 @@ def get_checkpoint_path(FLAGS, suffix=".ckpt", best=False):
 
 
 class ModelTrainer(object):
-    def __init__(self, model, logger, FLAGS):
+    def __init__(self, model, logger, epoch_length, vocabulary, FLAGS):
         self.model = model
         self.logger = logger
+        self.epoch_length = epoch_length
+        self.vocabulary = vocabulary
+
+        self.logger.Log('One epoch is ' + str(self.epoch_length) + ' steps.')
 
         self.dense_parameters = [param for name, param in model.named_parameters() if name not in ["embed.embed.weight"]]
         self.sparse_parameters = [param for name, param in model.named_parameters() if name in ["embed.embed.weight"]]
@@ -120,11 +124,6 @@ class ModelTrainer(object):
                     self.logger.Log('No improvement after one epoch. Lowering learning rate.')
                     self.optimizer_reset(self.learning_rate * self.learning_rate_decay_when_no_progress)
 
-    def set_epoch_length(self, epoch_length):
-        self.epoch_length = epoch_length
-        self.logger.Log('One epoch is ' + str(self.epoch_length) + ' steps.')
-
-
     def checkpoint(self):
         self.logger.Log("Checkpointing.")
         self.save(self.standard_checkpoint_path)
@@ -140,7 +139,8 @@ class ModelTrainer(object):
             'best_dev_error': self.best_dev_error,
             'best_dev_step': self.best_dev_step,
             'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict()
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'vocabulary': self.vocabulary
             }
         if self.sparse_optimizer is not None:
             save_dict['sparse_optimizer_state_dict'] = self.sparse_optimizer.state_dict()
@@ -164,7 +164,22 @@ class ModelTrainer(object):
         )) and 'baseline' not in model_state_dict:
             model_state_dict['baseline'] = torch.FloatTensor([0.0])
 
-        self.model.load_state_dict(model_state_dict)
+        if 'embed.embed.weight' in model_state_dict:
+            loaded_embeddings = model_state_dict['embed.embed.weight']
+            del(model_state_dict['embed.embed.weight'])
+
+            count = 0
+            for word in checkpoint['vocabulary']:
+                if word in self.vocabulary:
+                    self_index = self.vocabulary[word]
+                    loaded_index = checkpoint['vocabulary'][word]
+                    self.model.embed.embed.weight.data[self_index, :] = loaded_embeddings[loaded_index, :]
+                    count += 1
+            self.logger.Log('Restored ' + str(count) + ' words from checkpoint.')
+
+        # "    (embed): Embedding(5759, 300, sparse=True)"
+
+        self.model.load_state_dict(model_state_dict, strict=False)
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         if self.sparse_optimizer is not None:
             self.sparse_optimizer.load_state_dict(checkpoint['sparse_optimizer_state_dict'])
