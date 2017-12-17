@@ -149,20 +149,25 @@ def load_data_and_embeddings(
     # Trim dataset, convert token sequences to integer sequences, crop, and
     # pad.
     logger.Log("Preprocessing training data.")
-    training_data = util.PreprocessDataset(
-        raw_training_data,
-        vocabulary,
-        FLAGS.seq_length,
-        data_manager,
-        eval_mode=False,
-        logger=logger,
-        sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
-        simple=sequential_only(),
-        allow_cropping=FLAGS.allow_cropping,
-        pad_from_left=pad_from_left()) if raw_training_data is not None else None
-    training_data_iter = util.MakeTrainingIterator(
-        training_data, FLAGS.batch_size, FLAGS.smart_batching, FLAGS.use_peano,
-        sentence_pair_data=data_manager.SENTENCE_PAIR_DATA) if raw_training_data is not None else None
+    if raw_training_data is not None:
+        training_data = util.PreprocessDataset(
+            raw_training_data,
+            vocabulary,
+            FLAGS.seq_length,
+            data_manager,
+            eval_mode=False,
+            logger=logger,
+            sentence_pair_data=data_manager.SENTENCE_PAIR_DATA,
+            simple=sequential_only(),
+            allow_cropping=FLAGS.allow_cropping,
+            pad_from_left=pad_from_left()) if raw_training_data is not None else None
+        training_data_iter = util.MakeTrainingIterator(
+            training_data, FLAGS.batch_size, FLAGS.smart_batching, FLAGS.use_peano,
+            sentence_pair_data=data_manager.SENTENCE_PAIR_DATA) if raw_training_data is not None else None
+        training_data_length = len(training_data[0])
+    else:
+        training_data_iter = None
+        training_data_length = 0
 
     # Preprocess eval sets.
     eval_iterators = []
@@ -184,7 +189,7 @@ def load_data_and_embeddings(
             rseed=FLAGS.shuffle_eval_seed)
         eval_iterators.append((filename, eval_it))
 
-    return vocabulary, initial_embeddings, training_data_iter, eval_iterators, len(training_data[0])
+    return vocabulary, initial_embeddings, training_data_iter, eval_iterators, training_data_length
 
 
 def get_flags():
