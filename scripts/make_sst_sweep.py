@@ -9,8 +9,8 @@ import gflags
 import sys
 
 NYU_NON_PBS = False
-NAME = "11s"
-SWEEP_RUNS = 16
+NAME = "12s"
+SWEEP_RUNS = 8
 
 NYU_CILVR = True
 
@@ -66,8 +66,8 @@ FIXED_PARAMETERS = {
 SWEEP_PARAMETERS = {
     "semantic_classifier_keep_rate": ("skr", LIN, 0.5, 1.0),
     "l2_lambda":          ("l2", EXP, 1e-9, 1e-6),
-    "learning_rate": ("lr", EXP, 0.1, 1.0),
-    "model_dim": ("s", CHOICE, ['168', '288', '360', '440', '624'], None),
+    "learning_rate": ("lr", EXP, 0.2, 0.6),
+    "model_dim": ("s", CHOICE, ['360', '440', '624'], None),
     "mlp_dim": ("m", CHOICE, ['168', '288', '360', '440', '624'], None),
     "learning_rate_decay_when_no_progress": ("ld", CHOICE, ['0.1', '0.5', '1.0'], None),
 }
