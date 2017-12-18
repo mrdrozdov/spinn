@@ -369,8 +369,8 @@ def run(only_forward=False):
         num_classes,
         data_manager,
         header)
-    epoch_length = int(training_data_length / FLAGS.batch_size)
-    trainer = ModelTrainer(model, logger, epoch_length, vocabulary, FLAGS) 
+    time_to_wait_to_lower_lr = min(10000, int(training_data_length / FLAGS.batch_size))
+    trainer = ModelTrainer(model, logger, time_to_wait_to_lower_lr, vocabulary, FLAGS) 
     
     header.start_step = trainer.step
     header.start_time = int(time.time())
