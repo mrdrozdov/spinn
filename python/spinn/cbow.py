@@ -15,21 +15,23 @@ def build_model(data_manager, initial_embeddings, vocab_size,
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
-    return model_cls(model_dim=FLAGS.model_dim,
-                     word_embedding_dim=FLAGS.word_embedding_dim,
-                     vocab_size=vocab_size,
-                     initial_embeddings=initial_embeddings,
-                     num_classes=num_classes,
-                     embedding_keep_rate=FLAGS.embedding_keep_rate,
-                     use_sentence_pair=use_sentence_pair,
-                     use_difference_feature=FLAGS.use_difference_feature,
-                     use_product_feature=FLAGS.use_product_feature,
-                     classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
-                     mlp_dim=FLAGS.mlp_dim,
-                     num_mlp_layers=FLAGS.num_mlp_layers,
-                     mlp_ln=FLAGS.mlp_ln,
-                     context_args=context_args,
-                     )
+    return model_cls(
+        model_dim=FLAGS.model_dim,
+        word_embedding_dim=FLAGS.word_embedding_dim,
+        vocab_size=vocab_size,
+        initial_embeddings=initial_embeddings,
+        fine_tune_loaded_embeddings=FLAGS.fine_tune_loaded_embeddings,
+        num_classes=num_classes,
+        embedding_keep_rate=FLAGS.embedding_keep_rate,
+        use_sentence_pair=use_sentence_pair,
+        use_difference_feature=FLAGS.use_difference_feature,
+        use_product_feature=FLAGS.use_product_feature,
+        classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
+        mlp_dim=FLAGS.mlp_dim,
+        num_mlp_layers=FLAGS.num_mlp_layers,
+        mlp_ln=FLAGS.mlp_ln,
+        context_args=context_args,
+    )
 
 
 class BaseModel(nn.Module):
@@ -39,6 +41,7 @@ class BaseModel(nn.Module):
                  word_embedding_dim=None,
                  vocab_size=None,
                  initial_embeddings=None,
+                 fine_tune_loaded_embeddings=None,
                  use_difference_feature=None,
                  use_product_feature=None,
                  num_classes=None,
@@ -71,7 +74,8 @@ class BaseModel(nn.Module):
         self.embed = Embed(
             word_embedding_dim,
             vocab.size,
-            vectors=vocab.vectors)
+            vectors=vocab.vectors,
+            fine_tune=fine_tune_loaded_embeddings)
 
         mlp_input_dim = self.get_features_dim()
 
@@ -154,7 +158,7 @@ class BaseModel(nn.Module):
                 volatile=not self.training))
 
     def wrap_sentence_pair(self, hh):
-        batch_size = hh.size(0) / 2
+        batch_size = hh.size(0) // 2
         h = ([hh[:batch_size], hh[batch_size:]])
         return h
 

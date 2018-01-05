@@ -1,49 +1,14 @@
 import numpy as np
-import math
 
 # PyTorch
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
+from torch.nn.init import kaiming_normal
+from torch.nn.parameter import Parameter
 
-from spinn.util.misc import recursively_set_device
 from functools import reduce
-
-
-def debug_gradient(model, losses):
-    model.zero_grad()
-
-    for name, loss in losses:
-        print(name)
-        loss.backward(retain_variables=True)
-        stats = [
-            (p.grad.norm().data[0],
-             p.grad.max().data[0],
-             p.grad.min().data[0],
-             p.size()) for p in model.parameters()]
-        for s in stats:
-            print(s)
-        print
-
-        model.zero_grad()
-
-
-def reverse_tensor(var, dim):
-    dim_size = var.size(dim)
-    index = [i for i in range(dim_size - 1, -1, -1)]
-    index = torch.LongTensor(index)
-    if isinstance(var, Variable):
-        index = to_gpu(Variable(index, volatile=var.volatile))
-    inverted_tensor = var.index_select(dim, index)
-    return inverted_tensor
-
-
-def get_l2_loss(model, l2_lambda):
-    loss = 0.0
-    for w in model.parameters():
-        loss += l2_lambda * torch.sum(torch.pow(w, 2))
-    return loss
 
 
 def flatten(l):
@@ -60,18 +25,10 @@ def the_gpu():
 the_gpu.gpu = -1
 
 
-def to_cuda(var, gpu):
-    if gpu >= 0:
-        return var.cuda()
-    return var
-
-
 def to_gpu(var):
-    return to_cuda(var, the_gpu())
-
-
-def to_cpu(var):
-    return to_cuda(var, -1)
+    if the_gpu.gpu >= 0:
+        return var.cuda(the_gpu.gpu)
+    return var
 
 
 class LSTMState:
@@ -118,7 +75,7 @@ class LSTMState:
     def both(self):
         if not hasattr(self, '_both'):
             self._both = torch.cat(
-                (to_cpu(self._c), to_cpu(self._h)), 1)
+                (self._c, self._h), 1)
         return self._both
 
 
@@ -247,12 +204,11 @@ class ReduceTreeGRU(nn.Module):
                  use_tracking_in_composition=None):
         super(ReduceTreeGRU, self).__init__()
         self.size = size
-        self.W = Linear(initializer=HeKaimingInitializer)(size, 2 * size)
-        self.Vl = Linear(initializer=HeKaimingInitializer)(size, size)
-        self.Vr = Linear(initializer=HeKaimingInitializer)(size, size)
+        self.W = Linear()(size, 2 * size)
+        self.Vl = Linear()(size, size)
+        self.Vr = Linear()(size, size)
         if tracker_size is not None and use_tracking_in_composition:
-            self.U = Linear(
-                initializer=HeKaimingInitializer)(
+            self.U = Linear()(
                 tracker_size,
                 3 * size)
 
@@ -299,8 +255,10 @@ def treelstm(c_left, c_right, gates):
 
     # Apply nonlinearities
     i_gate = F.sigmoid(i_gate)
-    fl_gate = F.sigmoid(fl_gate)
-    fr_gate = F.sigmoid(fr_gate)
+    # Lazy alternative to bias initialization, from Choi
+    fl_gate = F.sigmoid(fl_gate + 1.)
+    # Lazy alternative to bias initialization, from Choi
+    fr_gate = F.sigmoid(fr_gate + 1.)
     o_gate = F.sigmoid(o_gate)
     cell_inp = F.tanh(cell_inp)
 
@@ -312,115 +270,22 @@ def treelstm(c_left, c_right, gates):
     return (c_t, h_t)
 
 
-class ModelTrainer(object):
-
-    def __init__(self, model, optimizer):
-        self.model = model
-        self.optimizer = optimizer
-
-    def save(self, filename, step, best_dev_error, best_dev_step):
-        optimizer_state_dict = self.optimizer.state_dict()
-
-        if the_gpu() >= 0:
-            recursively_set_device(self.model.state_dict(), gpu=-1)
-            recursively_set_device(self.optimizer.state_dict(), gpu=-1)
-
-        # Always sends Tensors to CPU.
-        torch.save({
-            'step': step,
-            'best_dev_error': best_dev_error,
-            'best_dev_step': best_dev_step,
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': optimizer_state_dict,
-        }, filename)
-
-        if the_gpu() >= 0:
-            recursively_set_device(self.model.state_dict(), gpu=the_gpu())
-            recursively_set_device(self.optimizer.state_dict(), gpu=the_gpu())
-
-    def load(self, filename, cpu=False):
-        if cpu:
-            # Load GPU-based checkpoints on CPU
-            checkpoint = torch.load(filename, map_location=lambda storage, loc: storage)
-        else:
-            checkpoint = torch.load(filename)
-        model_state_dict = checkpoint['model_state_dict']
-
-        # HACK: Compatability for saving supervised SPINN and loading RL SPINN.
-        if 'baseline' in self.model.state_dict().keys(
-        ) and 'baseline' not in model_state_dict:
-            model_state_dict['baseline'] = torch.FloatTensor([0.0])
-
-        self.model.load_state_dict(model_state_dict)
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-
-        if 'best_dev_step' in checkpoint:
-            best_dev_step = checkpoint['best_dev_step']
-        else:
-            best_dev_step = 0
-
-        return checkpoint['step'], checkpoint['best_dev_error'], best_dev_step
-
-
-class ModelTrainer_ES(object):
-
-    def __init__(self, model, optimizer):
-        self.model = model
-        self.optimizer = optimizer
-
-    def save(self, filename, step, best_dev_error, evolution_step, best_dev_step):
-        if the_gpu() >= 0:
-            recursively_set_device(self.model.state_dict(), gpu=-1)
-            recursively_set_device(self.optimizer.state_dict(), gpu=-1)
-
-        # Always sends Tensors to CPU.
-        torch.save({
-            'step': step,
-            'best_dev_error': best_dev_error,
-            'evolution_step': evolution_step,
-            'best_dev_step': best_dev_step,
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-        }, filename)
-
-        if the_gpu() >= 0:
-            recursively_set_device(self.model.state_dict(), gpu=the_gpu())
-            recursively_set_device(self.optimizer.state_dict(), gpu=the_gpu())
-
-    def load(self, filename, cpu=False):
-        if cpu:
-            # Load GPU-based checkpoints on CPU
-            checkpoint = torch.load(filename, map_location=lambda storage, loc: storage)
-        else:
-            checkpoint = torch.load(filename)
-
-        model_state_dict = checkpoint['model_state_dict']
-
-        # HACK: Compatability for saving supervised SPINN and loading RL SPINN.
-        if 'baseline' in self.model.state_dict().keys(
-        ) and 'baseline' not in model_state_dict:
-            model_state_dict['baseline'] = torch.FloatTensor([0.0])
-
-        self.model.load_state_dict(model_state_dict)
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-
-        if 'best_dev_step' in checkpoint:
-            best_dev_step = checkpoint['best_dev_step']
-        else:
-            best_dev_step = 0
-
-        return checkpoint['evolution_step'], checkpoint['step'], checkpoint['best_dev_error'], checkpoint['best_dev_step']
-
-
 class Embed(nn.Module):
-    def __init__(self, size, vocab_size, vectors):
+    def __init__(self, size, vocab_size, vectors, fine_tune=False):
         super(Embed, self).__init__()
+
         if vectors is None:
             self.embed = nn.Embedding(vocab_size, size)
-        self.vectors = vectors
+        else:
+            if fine_tune:
+                self.embed = nn.Embedding(vocab_size, size, sparse=True)
+                self.embed.weight.data.copy_(torch.from_numpy(vectors))
+            else:
+                self.vectors = vectors
+                self.embed = None
 
     def forward(self, tokens):
-        if self.vectors is None:
+        if self.embed is not None:
             embeds = self.embed(tokens.contiguous().view(-1).long())
         else:
             embeds = self.vectors.take(
@@ -429,7 +294,6 @@ class Embed(nn.Module):
                 Variable(
                     torch.from_numpy(embeds),
                     volatile=tokens.volatile))
-
         return embeds
 
 
@@ -442,7 +306,7 @@ class GRU(nn.Module):
         self.bidirectional = bidirectional
         self.bi = 2 if self.bidirectional else 1
         self.num_layers = num_layers
-        self.rnn = nn.GRU(inp_dim, model_dim / self.bi, num_layers=num_layers,
+        self.rnn = nn.GRU(inp_dim, model_dim // self.bi, num_layers=num_layers,
                           batch_first=True,
                           bidirectional=self.bidirectional)
 
@@ -462,7 +326,7 @@ class GRU(nn.Module):
                     torch.zeros(
                         num_layers * bi,
                         batch_size,
-                        model_dim / bi),
+                        model_dim // bi),
                     volatile=not self.training))
 
         # Expects (input, h_0):
@@ -481,7 +345,7 @@ class IntraAttention(nn.Module):
         super(IntraAttention, self).__init__()
         self.outp_size = outp_size
         self.distance_bias = distance_bias
-        self.f = nn.Linear(inp_size, outp_size)
+        self.f = Linear()(inp_size, outp_size)
 
     def d(self, batch_size, seq_len, max_distance=10, scale=0.01):
         """
@@ -563,7 +427,9 @@ class EncodeGRU(GRU):
         if mix and bidirectional:
             self.mix = True
             assert model_dim % 4 == 0, "Model dim must be divisible by 4 to use bidirectional GRU encoder."
-            self.half_state_dim = model_dim / 4
+            self.half_state_dim = model_dim // 4
+        else:
+            self.mix = False
         super(
             EncodeGRU,
             self).__init__(
@@ -595,7 +461,7 @@ class LSTM(nn.Module):
         self.bidirectional = bidirectional
         self.bi = 2 if self.bidirectional else 1
         self.num_layers = num_layers
-        self.rnn = nn.LSTM(inp_dim, model_dim / self.bi, num_layers=num_layers,
+        self.rnn = nn.LSTM(inp_dim, model_dim // self.bi, num_layers=num_layers,
                            batch_first=True,
                            bidirectional=self.bidirectional,
                            dropout=dropout)
@@ -616,7 +482,7 @@ class LSTM(nn.Module):
                     torch.zeros(
                         num_layers * bi,
                         batch_size,
-                        model_dim / bi),
+                        model_dim // bi),
                     volatile=not self.training))
         if c0 is None:
             c0 = to_gpu(
@@ -624,7 +490,7 @@ class LSTM(nn.Module):
                     torch.zeros(
                         num_layers * bi,
                         batch_size,
-                        model_dim / bi),
+                        model_dim // bi),
                     volatile=not self.training))
 
         # Expects (input, h_0, c_0):
@@ -658,15 +524,14 @@ class ReduceTreeLSTM(nn.Module):
                  use_tracking_in_composition=None, composition_ln=True):
         super(ReduceTreeLSTM, self).__init__()
         self.composition_ln = composition_ln
-        self.left = Linear(initializer=HeKaimingInitializer)(size, 5 * size)
-        self.right = Linear(
-            initializer=HeKaimingInitializer)(
+        self.left = Linear()(size, 5 * size)
+        self.right = Linear()(
             size, 5 * size, bias=False)
         if composition_ln:
             self.left_ln = LayerNormalization(size)
             self.right_ln = LayerNormalization(size)
         if tracker_size is not None and use_tracking_in_composition:
-            self.track = Linear(initializer=HeKaimingInitializer)(
+            self.track = Linear()(
                 tracker_size, 5 * size, bias=False)
             if composition_ln:
                 self.track_ln = LayerNormalization(tracker_size)
@@ -717,53 +582,88 @@ class ReduceTreeLSTM(nn.Module):
         return unbundle(treelstm(left.c, right.c, lstm_in))
 
 
-class SimpleTreeLSTM(nn.Module):
-    """TreeLSTM composition module for Pyramid.
+class Lift(nn.Module):
+    def __init__(self, in_features, out_features):
+        super(Lift, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.lift = Linear()(self.in_features, self.out_features * 2)
 
-    The TreeLSTM has two inputs: the left and right children being composed.
+    def forward(self, input):
+        return F.tanh(self.lift(input))
 
-    Args:
-        size: The size of the model state.
-        composition_ln: Whether to use layer normalization.
-    """
 
-    def __init__(self, size, composition_ln=True):
-        super(SimpleTreeLSTM, self).__init__()
-        self.composition_ln = composition_ln
-        self.hidden_dim = size
-        self.left = Linear(initializer=HeKaimingInitializer)(size, 5 * size)
-        self.right = Linear(
-            initializer=HeKaimingInitializer)(
-            size, 5 * size, bias=False)
-        if composition_ln:
-            self.left_ln = LayerNormalization(size)
-            self.right_ln = LayerNormalization(size)
+class ReduceTensor(nn.Module):
+    def __init__(self, size):
+        super(ReduceTensor, self).__init__()
+        
+        assert size is not None
 
-    def forward(self, left, right):
-        """Perform batched TreeLSTM composition.
+        self.dim = size
+        self.weight = Parameter(torch.Tensor(self.dim, self.dim))
+        self.b1 = Parameter(torch.Tensor(self.dim, self.dim))
+        self.b2 = Parameter(torch.Tensor(self.dim, self.dim))
 
-        Args:
-            left: A B-by-(2 x D) tensor containing h and c states.
-            right: A B-by-(2 x D) tensor containing h and c states.
+        self.left = Linear()(self.dim * self.dim, 4 * (self.dim * self.dim))
+        self.right = Linear()(self.dim * self.dim, 4 * (self.dim * self.dim))
 
-        Returns:
-            out: A B-by-(2 x D) tensor containing h and c states.
+        self.reset_parameters()
+        
+    def reset_parameters(self):
+        kaiming_normal(self.weight)
+        ZeroInitializer(self.b1)
+        ZeroInitializer(self.b2)
 
-        """
+    def forward(self, left_in, right_in):
+        left, right = bundle(left_in), bundle(right_in)
+        lstm_gates = self.left(left.h)
+        lstm_gates += self.right(right.h)
 
-        left_h = get_h(left, self.hidden_dim)
-        left_c = get_c(left, self.hidden_dim)
-        right_h = get_h(right, self.hidden_dim)
-        right_c = get_c(right, self.hidden_dim)
+        # Core composition
+        # Retrieve hidden state from left_in and feed it into weight matrix
+        cell_inp = []
+        hidden_dim = self.dim * self.dim
 
-        if self.composition_ln:
-            lstm_in = self.left(self.left_ln(left_h))
-            lstm_in += self.right(self.right_ln(right_h))
-        else:
-            lstm_in = self.left(left_h)
-            lstm_in += self.right(right_h)
+        h = left.h.contiguous().view(-1, self.dim, self.dim)
+        cell_inp = torch.matmul(self.weight, h)
+        cell_inp = F.tanh(torch.add(cell_inp, self.b1))
 
-        return torch.cat(treelstm(left_c, right_c, lstm_in), 1)
+        # Retrieve hidden state from right_in
+        h = right.h.contiguous().view(-1, self.dim, self.dim)
+        cell_inp = F.tanh(torch.baddbmm(self.b2, cell_inp, h))
+        cell_inp = cell_inp.view(-1, hidden_dim)
+
+        out = unbundle(treelstmtensor(left.c, right.c, lstm_gates, cell_inp, training=self.training))
+
+        return out
+
+
+def treelstmtensor(c_left, c_right, gates, cell_inp, use_dropout=False, training=None):
+    hidden_dim = c_left.size()[1]
+
+    assert gates.size()[1] == hidden_dim * 4, "Need to have 4 gates."
+
+    def slice_gate(gate_data, i):
+        return gate_data[:, i * hidden_dim:(i + 1) * hidden_dim]
+
+    # Compute and slice gate values
+    i_gate, fl_gate, fr_gate, o_gate = [slice_gate(gates, i) for i in range(4)]
+
+    # Apply nonlinearities
+    i_gate = F.sigmoid(i_gate)
+    fl_gate = F.sigmoid(fl_gate)
+    fr_gate = F.sigmoid(fr_gate)
+    o_gate = F.sigmoid(o_gate)
+
+    # Compute new cell and hidden value
+    i_val = i_gate * cell_inp
+    dropout_rate = 0.1
+    if use_dropout:
+        i_val = F.dropout(i_val, dropout_rate, training=training)
+    c_t = fl_gate * c_left + fr_gate * c_right + i_val
+    h_t = o_gate * F.tanh(c_t)
+
+    return (c_t, h_t)
 
 
 class MLP(nn.Module):
@@ -787,13 +687,16 @@ class MLP(nn.Module):
             self.ln_inp = LayerNormalization(mlp_input_dim)
 
         for i in range(num_mlp_layers):
-            setattr(self, 'l{}'.format(i), Linear(
-                initializer=HeKaimingInitializer)(features_dim, mlp_dim))
+            setattr(self, 'l{}'.format(i), Linear()(features_dim, mlp_dim))
             if mlp_ln:
                 setattr(self, 'ln{}'.format(i), LayerNormalization(mlp_dim))
             features_dim = mlp_dim
-        setattr(self, 'l{}'.format(num_mlp_layers), Linear(
-            initializer=HeKaimingInitializer)(features_dim, num_classes))
+        setattr(
+            self,
+            'l{}'.format(num_mlp_layers),
+            Linear()(
+                features_dim,
+                num_classes))
 
     def forward(self, h):
         if self.mlp_ln:
@@ -815,38 +718,13 @@ class MLP(nn.Module):
         return y
 
 
-class HeKaimingLinear(nn.Linear):
-    def reset_parameters(self):
-        HeKaimingInitializer(self.weight)
-        if self.bias is not None:
-            ZeroInitializer(self.bias)
-
-
-def DefaultUniformInitializer(param):
-    stdv = 1. / math.sqrt(param.size(1))
-    UniformInitializer(param, stdv)
-
-
-def HeKaimingInitializer(param):
-    fan = param.size()
-    init = np.random.normal(scale=np.sqrt(4.0 / (fan[0] + fan[1])),
-                            size=fan).astype(np.float32)
-    param.data.set_(torch.from_numpy(init))
-
-
-def UniformInitializer(param, range):
-    shape = param.size()
-    init = np.random.uniform(-range, range, shape).astype(np.float32)
-    param.data.set_(torch.from_numpy(init))
-
-
 def ZeroInitializer(param):
     shape = param.size()
     init = np.zeros(shape).astype(np.float32)
     param.data.set_(torch.from_numpy(init))
 
 
-def Linear(initializer=DefaultUniformInitializer,
+def Linear(initializer=kaiming_normal,
            bias_initializer=ZeroInitializer):
     class CustomLinear(nn.Linear):
         def reset_parameters(self):

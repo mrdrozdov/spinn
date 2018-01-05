@@ -107,16 +107,16 @@ if __name__ == '__main__':
 
     dtrain, dtrain_extra, deval, deval_extra, flags = read_file(FLAGS.path)
 
-    print "Flags:"
-    print "Model={model_type}\nLearning_Rate={learning_rate}".format(**flags)
-    print
+    print("Flags:")
+    print("Model={model_type}\nLearning_Rate={learning_rate}".format(**flags))
+    print()
 
-    print "Train:"
+    print("Train:")
     for d in dtrain:
-        print("Step: {} Acc: {}".format(d['step'], d['class_acc']))
-    print
+        print(("Step: {} Acc: {}".format(d['step'], d['class_acc'])))
+    print()
 
-    print "Eval:"
+    print("Eval:")
     for d in deval:
-        print("Step: {} Acc: {}".format(d['step'], d['class_acc']))
+        print(("Step: {} Acc: {}".format(d['step'], d['class_acc'])))
 

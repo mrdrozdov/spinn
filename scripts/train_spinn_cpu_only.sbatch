@@ -10,7 +10,7 @@
 echo $SLURM_JOBID - `hostname` - $SPINN_FLAGS >> ~/spinn_machine_assignments.txt
 
 # Make sure we have access to HPC-managed libraries.
-module load python/intel/2.7.12 pytorch/0.2.0_1 protobuf/intel/3.1.0
+module load python3/intel/3.6.3 pytorch/python3.6/0.3.0_4
 
 # Default model.
 MODEL="spinn.models.supervised_classifier"
@@ -25,7 +25,7 @@ export IFS=';'
 for SUB_FLAGS in $SPINN_FLAGS
 do
 	unset IFS
-	python -m $MODEL --noshow_progress_bar $SUB_FLAGS
+	python3 -m $MODEL --noshow_progress_bar $SUB_FLAGS
 done
 
 wait

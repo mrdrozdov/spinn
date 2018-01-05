@@ -16,21 +16,23 @@ def build_model(data_manager, initial_embeddings, vocab_size,
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
     model_cls = RNNModel
 
-    return model_cls(model_dim=FLAGS.model_dim,
-                     word_embedding_dim=FLAGS.word_embedding_dim,
-                     vocab_size=vocab_size,
-                     initial_embeddings=initial_embeddings,
-                     num_classes=num_classes,
-                     embedding_keep_rate=FLAGS.embedding_keep_rate,
-                     use_sentence_pair=use_sentence_pair,
-                     use_difference_feature=FLAGS.use_difference_feature,
-                     use_product_feature=FLAGS.use_product_feature,
-                     classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
-                     mlp_dim=FLAGS.mlp_dim,
-                     num_mlp_layers=FLAGS.num_mlp_layers,
-                     mlp_ln=FLAGS.mlp_ln,
-                     context_args=context_args,
-                     )
+    return model_cls(
+        model_dim=FLAGS.model_dim,
+        word_embedding_dim=FLAGS.word_embedding_dim,
+        vocab_size=vocab_size,
+        initial_embeddings=initial_embeddings,
+        fine_tune_loaded_embeddings=FLAGS.fine_tune_loaded_embeddings,
+        num_classes=num_classes,
+        embedding_keep_rate=FLAGS.embedding_keep_rate,
+        use_sentence_pair=use_sentence_pair,
+        use_difference_feature=FLAGS.use_difference_feature,
+        use_product_feature=FLAGS.use_product_feature,
+        classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
+        mlp_dim=FLAGS.mlp_dim,
+        num_mlp_layers=FLAGS.num_mlp_layers,
+        mlp_ln=FLAGS.mlp_ln,
+        context_args=context_args,
+    )
 
 
 class RNNModel(nn.Module):
@@ -41,6 +43,7 @@ class RNNModel(nn.Module):
                  use_product_feature=None,
                  use_difference_feature=None,
                  initial_embeddings=None,
+                 fine_tune_loaded_embeddings=None,
                  num_classes=None,
                  embedding_keep_rate=None,
                  use_sentence_pair=False,
@@ -72,7 +75,8 @@ class RNNModel(nn.Module):
         self.embed = Embed(
             word_embedding_dim,
             vocab.size,
-            vectors=vocab.vectors)
+            vectors=vocab.vectors,
+            fine_tune=fine_tune_loaded_embeddings)
 
         self.rnn = nn.LSTM(
             args.size,
@@ -193,7 +197,7 @@ class RNNModel(nn.Module):
                 volatile=not self.training))
 
     def wrap_sentence_pair(self, hh):
-        batch_size = hh.size(0) / 2
+        batch_size = hh.size(0) // 2
         h = ([hh[:batch_size], hh[batch_size:]])
         return h
 

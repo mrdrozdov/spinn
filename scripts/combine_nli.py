@@ -35,18 +35,18 @@ def is_okay(line):
 
 for filename in FLAGS.inputs.split(','):
     filename = os.path.expanduser(filename)
-    print("Reading: {}".format(filename))
+    print(("Reading: {}".format(filename)))
     db[filename] = []
     with open(filename) as f:
         for ii, line in enumerate(f):
             if is_okay(line):
                 db[filename].append(line)
 
-    print("Read {} lines. Kept {}.".format(ii + 1, len(db[filename])))
+    print(("Read {} lines. Kept {}.".format(ii + 1, len(db[filename]))))
 
 output = os.path.expanduser(FLAGS.output)
 with open(output, 'w') as f_out:
-    for filename in db.keys():
+    for filename in list(db.keys()):
         with open(filename) as f_in:
             for line in f_in:
                 f_out.write(line)

@@ -22,6 +22,7 @@ import json
 import random
 import re
 import glob
+import math
 from collections import Counter
 
 LABEL_MAP = {'entailment': 0, 'neutral': 1, 'contradiction': 2}
@@ -30,6 +31,69 @@ FLAGS = gflags.FLAGS
 
 def spaceify(parse):
     return parse #.replace("(", "( ").replace(")", " )")
+
+def balance(parse, lowercase=False):
+    # Modified to provided a "half-full" binary tree without padding.
+    # Difference between the other method is the right subtrees are
+    # the half full ones.
+    tokens = tokenize_parse(parse)
+    if len(tokens) > 1:
+        transitions = full_transitions(len(tokens), right_full=True)
+        stack = []
+        for transition in transitions:
+            if transition == 0:
+                stack.append(tokens.pop(0))
+            elif transition == 1:
+                right = stack.pop()
+                left = stack.pop()
+                stack.append("( " + left + " " + right + " )")
+        assert len(stack) == 1
+    else: 
+        stack = tokens
+    return stack[0]
+
+
+def roundup2(N):
+    """ Round up using factors of 2. """
+    return int(2 ** math.ceil(math.log(N, 2)))
+
+
+def full_transitions(N, left_full=False, right_full=False):
+    """
+    Recursively creates a full binary tree of with N
+    leaves using shift reduce transitions.
+    """
+
+    if N == 1:
+        return [0]
+
+    if N == 2:
+        return [0, 0, 1]
+
+    assert not (left_full and right_full), "Please only choose one."
+
+    if not left_full and not right_full:
+        N = float(N)
+
+        # Constrain to full binary trees.
+        assert math.log(N, 2) % 1 == 0, \
+            "Bad value. N={}".format(N)
+
+        left_N = N / 2
+        right_N = N - left_N
+
+    if left_full:
+        left_N = roundup2(N) / 2
+        right_N = N - left_N
+
+    if right_full:
+        right_N = roundup2(N) / 2
+        left_N = N - right_N
+
+    return full_transitions(left_N, left_full=left_full, right_full=right_full) + \
+           full_transitions(right_N, left_full=left_full, right_full=right_full) + \
+           [1]
+
 
 def tokenize_parse(parse):
     parse = spaceify(parse)
@@ -136,7 +200,7 @@ def corpus_stats(corpus_1, corpus_2, first_two=False, neg_pair=False):
     three_count = 0.0
     neg_pair_count = 0.0
     neg_count = 0.0
-    for key in corpus_1:     
+    for key in corpus_2:     
         c1 = to_indexed_contituents(corpus_1[key])
         c2 = to_indexed_contituents(corpus_2[key])
 
@@ -168,6 +232,27 @@ def corpus_stats(corpus_1, corpus_2, first_two=False, neg_pair=False):
     if neg_pair:
         stats = str(stats) + '\t' + str(neg_pair_count / neg_count)
     return stats
+
+def corpus_stats_labeled(corpus_unlabeled, corpus_labeled):
+    """ 
+    Note: If a few examples in one dataset are missing from the other (i.e., some examples from the source corpus were not included 
+      in a model corpus), the shorter dataset must be supplied as corpus_1.
+    """
+
+    correct = Counter()
+    total = Counter()
+
+    for key in corpus_labeled:     
+        c1 = to_indexed_contituents(corpus_unlabeled[key])
+        c2 = to_indexed_contituents_labeled(corpus_labeled[key])
+        if len(c2) == 0:
+            continue
+
+        ex_correct, ex_total = example_labeled_acc(c1, c2)
+        correct.update(ex_correct)
+        total.update(ex_total)
+    return correct, total
+
 
 def corpus_stats_labeled(corpus_unlabeled, corpus_labeled):
     """ 
@@ -237,9 +322,32 @@ def to_indexed_contituents_labeled(parse):
             word_index += 1
     return indexed_constituents
 
+def to_indexed_contituents_labeled(parse):
+    sp = re.findall(r'\([^ ]+| [^\(\) ]+|\)', parse)
+    if len(sp) == 1:
+        return set([(0, 1)])
+
+    backpointers = []
+    indexed_constituents = set()
+    word_index = 0
+    for index, token in enumerate(sp):
+        if token[0] == '(':
+            backpointers.append((word_index, token[1:]))
+        elif token == ')':
+            start, typ = backpointers.pop()
+            end = word_index
+            constituent = (start, end, typ)
+            if end - start > 1:
+                indexed_constituents.add(constituent)
+        else:
+            word_index += 1
+    return indexed_constituents
+
+
 def example_f1(c1, c2):
     prec = float(len(c1.intersection(c2))) / len(c2)  # TODO: More efficient.
     return prec  # For strictly binary trees, P = R = F1
+
 
 def example_labeled_acc(c1, c2):
     '''Compute the number of non-unary constituents of each type in the labeled (non-binirized) parse appear in the model output.'''
@@ -251,10 +359,11 @@ def example_labeled_acc(c1, c2):
         total[constituent[2]] += 1
     return correct, total
 
+
 def randomize(parse):
     tokens = tokenize_parse(parse)
     while len(tokens) > 1:
-        merge = random.choice(range(len(tokens) - 1))
+        merge = random.choice(list(range(len(tokens) - 1)))
         tokens[merge] = "( " + tokens[merge] + " " + tokens[merge + 1] + " )"
         del tokens[merge + 1]
     return tokens[0]
@@ -266,11 +375,6 @@ def read_nli_report(path):
     report = {}
     with codecs.open(path, encoding='utf-8') as f:
         for line in f:
-            try:
-                line = line.encode('UTF-8')
-            except UnicodeError as e:
-                print "ENCODING ERROR:", line, e
-                line = "{}"
             loaded_example = json.loads(line)
             report[loaded_example['example_id'] + "_1"] = unpad(loaded_example['sent1_tree'])
             report[loaded_example['example_id'] + "_2"] = unpad(loaded_example['sent2_tree'])
@@ -294,11 +398,6 @@ def read_ptb_report(path):
     report = {}
     with codecs.open(path, encoding='utf-8') as f:
         for line in f:
-            try:
-                line = line.encode('UTF-8')
-            except UnicodeError as e:
-                print "ENCODING ERROR:", line, e
-                line = "{}"
             loaded_example = json.loads(line)
             report[loaded_example['example_id']] = unpad(loaded_example['sent1_tree'])
     return report
@@ -326,19 +425,23 @@ def unpad(parse):
 
 def run():
     gt = {}
-    gt_labeled = {}
+    # gt_labeled = {} x
     with codecs.open(FLAGS.main_data_path, encoding='utf-8') as f:
         for line in f:
-            try:
-                line = line.encode('UTF-8')
-            except UnicodeError as e:
-                print "ENCODING ERROR:", line, e
-                line = "{}"
             loaded_example = json.loads(line)
             if loaded_example["gold_label"] not in LABEL_MAP:
                 continue
+            if '512-4841' in loaded_example['sentence1_binary_parse'] \
+               or '512-8581' in loaded_example['sentence1_binary_parse'] \
+               or '412-4841' in loaded_example['sentence1_binary_parse'] \
+               or '512-4841' in loaded_example['sentence2_binary_parse'] \
+               or '512-8581' in loaded_example['sentence2_binary_parse'] \
+               or '412-4841' in loaded_example['sentence2_binary_parse']:
+               continue # Stanford parser tree binarizer doesn't handle phone numbers properly.
             gt[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_binary_parse']
             gt[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_binary_parse']
+            # gt_labeled[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_parse']
+            # gt_labeled[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_parse']
 
             gt_labeled[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_parse']
             gt_labeled[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_parse']
@@ -346,18 +449,13 @@ def run():
     lb = to_lb(gt)
     rb = to_rb(gt)
 
-    print "GT average depth", corpus_average_depth(gt)
+    print("GT average depth", corpus_average_depth(gt))
 
     ptb = {}
     ptb_labeled = {}
     if FLAGS.ptb_data_path != "_":
         with codecs.open(FLAGS.ptb_data_path, encoding='utf-8') as f:
             for line in f:
-                try:
-                    line = line.encode('UTF-8')
-                except UnicodeError as e:
-                    print "ENCODING ERROR:", line, e
-                    line = "{}"
                 loaded_example = json.loads(line)
                 if loaded_example["gold_label"] not in LABEL_MAP:
                     continue
@@ -367,31 +465,47 @@ def run():
     reports = []
     ptb_reports = []
     if FLAGS.use_random_parses:
-        print "Creating five sets of random parses for the main data."
-        report_paths = range(5)
+        print("Creating five sets of random parses for the main data.")
+        report_paths = list(range(5))
         for _ in report_paths:
             report = {}
             for sentence in gt:
                 report[sentence] = randomize(gt[sentence])
             reports.append(report)  
 
-        print "Creating five sets of random parses for the PTB data."
-        ptb_report_paths = range(5)
+        print("Creating five sets of random parses for the PTB data.")
+        ptb_report_paths = list(range(5))
         for _ in report_paths:
             report = {}
             for sentence in ptb:
                 report[sentence] = randomize(ptb[sentence])
             ptb_reports.append(report)
+    if FLAGS.use_balanced_parses:
+        print("Creating five sets of balanced binary parses for the main data.")
+        report_paths = list(range(5))
+        for _ in report_paths:
+            report = {}
+            for sentence in gt:
+                report[sentence] = balance(gt[sentence])
+            reports.append(report)  
+
+        print("Creating five sets of balanced binary parses for the PTB data.")
+        ptb_report_paths = list(range(5))
+        for _ in report_paths:
+            report = {}
+            for sentence in ptb:
+                report[sentence] = balance(ptb[sentence])
+            ptb_reports.append(report)
     else:
         report_paths = glob.glob(FLAGS.main_report_path_template)
         for path in report_paths:
-            print "Loading", path
+            print("Loading", path)
             reports.append(read_nli_report(path))
 
         if FLAGS.main_report_path_template != "_":
             ptb_report_paths = glob.glob(FLAGS.ptb_report_path_template)
             for path in ptb_report_paths:
-                print "Loading", path
+                print("Loading", path)
                 ptb_reports.append(read_ptb_report(path))
 
     if len(reports) > 1 and FLAGS.compute_self_f1:
@@ -402,70 +516,40 @@ def run():
                 path_2 = report_paths[j]
                 f1 = corpus_stats(reports[i], reports[j])
                 f1s.append(f1)
-        print "Mean Self F1:\t" + str(sum(f1s) / len(f1s))
+        print("Mean Self F1:\t" + str(sum(f1s) / len(f1s)))
 
     correct = Counter()
     total = Counter()
 
     for i, report in enumerate(reports):
-        print report_paths[i]
+        print(report_paths[i])
         if FLAGS.print_latex > 0:
             for index, sentence in enumerate(gt):
                 if index == FLAGS.print_latex:
                     break
-                print to_latex(gt[sentence])
-                print to_latex(report[sentence])
-                print
-        print "left-branching:", str(corpus_stats(report, lb)) + '\t' + "right-branching:",  str(corpus_stats(report, rb)) + '\t' + "ground truth trees:", str(corpus_stats(report, gt, first_two=FLAGS.first_two, neg_pair=FLAGS.neg_pair)) + '\t' + "average tree depth:", str(corpus_average_depth(report))
-
-        set_correct, set_total = corpus_stats_labeled(report, gt_labeled)
-        correct.update(set_correct)
-        total.update(set_total)
-
-    for key in sorted(total):
-        print key + '\t' + str(correct[key] * 1. / total[key]) #+ '\t' + str(total[key])
-
-    correct_ptb = Counter()
-    total_ptb = Counter()
+                print(to_latex(gt[sentence]))
+                print(to_latex(report[sentence]))
+                print()
+        print(str(corpus_stats(report, lb)) + '\t' + str(corpus_stats(report, rb)) + '\t' + str(corpus_stats(report, gt, first_two=FLAGS.first_two, neg_pair=FLAGS.neg_pair)) + '\t' + str(corpus_average_depth(report)))
+        
+    correct = Counter()
+    total = Counter()
     for i, report in enumerate(ptb_reports):
-        print ptb_report_paths[i]
+        print(ptb_report_paths[i])
         if FLAGS.print_latex > 0:
             for index, sentence in enumerate(ptb):
                 if index == FLAGS.print_latex:
                     break
-                print to_latex(ptb[sentence])
-                print to_latex(report[sentence])
-                print
-        print "GT average depth", corpus_average_depth(ptb)
-        print  "F1 w/ ground truth trees:", str(corpus_stats(report, ptb)) + '\t' + "average tree depth", str(corpus_average_depth(report))
-        set_correct_ptb, set_total_ptb = corpus_stats_labeled(report, ptb_labeled)
-        correct_ptb.update(set_correct_ptb)
-        total_ptb.update(set_total_ptb)
+                print(to_latex(ptb[sentence]))
+                print(to_latex(report[sentence]))
+                print()
+        print(str(corpus_stats(report, ptb)) + '\t' + str(corpus_average_depth(report)))
+        set_correct, set_total = corpus_stats_labeled(report, ptb_labeled)
+        correct.update(set_correct)
+        total.update(set_total)
 
-    for key in sorted(total_ptb):
-        print key + '_ptb' + '\t' + str(correct_ptb[key] * 1. / total_ptb[key]), '\t', total_ptb[key]
-
-    report_paths = glob.glob(FLAGS.main_report_path_template)
-    for path in report_paths:
-        reports.append(read_nli_report_padded(path))
-
-    for report in reports:
-        ok = ["(", ")", "_PAD"]
-        meh = ["(", ")", "_PAD", "."]
-        count = 0
-        bads = []
-        v_bads = []
-        for key in report:
-            parse = report[key]
-            tokens = parse.split()
-            for i in range(len(tokens)):
-                if tokens[i] == "_PAD":
-                    if tokens[i-1] not in ok:
-                        count += 1
-                        bads.append(parse)
-                    if tokens[i-1] not in meh:
-                        v_bads.append(parse)
-        print "(. _PAD):", float(len(bads))/len(report), '\t',  "(word _PAD):", float(len(v_bads))/len(report)
+    for key in sorted(total):
+        print(key + '\t' + str(correct[key] * 1. / total[key]))
 
 
 if __name__ == '__main__':
@@ -475,6 +559,7 @@ if __name__ == '__main__':
     gflags.DEFINE_string("ptb_data_path", "_", "The path to the PTB data in SNLI format, or '_' if not available.")
     gflags.DEFINE_boolean("compute_self_f1", True, "Compute self F1 over all reports matching main_report_path_template.")
     gflags.DEFINE_boolean("use_random_parses", False, "Replace all report trees with randomly generated trees. Report path template flags are not used when this is set.")
+    gflags.DEFINE_boolean("use_balanced_parses", False, "Replace all report trees with roughly-balanced binary trees. Report path template flags are not used when this is set.")
     gflags.DEFINE_boolean("first_two", False, "Show 'first two' and 'last two' metrics.")
     gflags.DEFINE_boolean("neg_pair", False, "Show 'neg_pair' metric.")
     gflags.DEFINE_integer("print_latex", 0, "Print this many trees in LaTeX format for each report.")

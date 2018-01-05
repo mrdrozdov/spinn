@@ -1,14 +1,30 @@
 import numpy as np
 from collections import deque
 import json
-import os
-import logging_pb2 as pb
+
+
+def debug_gradient(model, losses):
+    model.zero_grad()
+
+    for name, loss in losses:
+        print(name)
+        loss.backward(retain_variables=True)
+        stats = [
+            (p.grad.norm().data[0],
+             p.grad.max().data[0],
+             p.grad.min().data[0],
+             p.size()) for p in model.parameters()]
+        for s in stats:
+            print(s)
+        print()
+
+        model.zero_grad()
 
 
 class GenericClass(object):
     def __init__(self, **kwargs):
         super(GenericClass, self).__init__()
-        for k, v in kwargs.iteritems():
+        for k, v in kwargs.items():
             setattr(self, k, v)
 
     def __repr__(self):
@@ -100,16 +116,16 @@ class EvalReporter(object):
 
 def PrintParamStatistics(name, param):
     data = param.data.cpu().numpy()
-    print name,
-    print "Mean:", np.mean(data),
-    print "Std:", np.std(data),
-    print "Min:", np.min(data),
-    print "Max:", np.max(data)
+    print(name, end=' ')
+    print("Mean:", np.mean(data), end=' ')
+    print("Std:", np.std(data), end=' ')
+    print("Min:", np.min(data), end=' ')
+    print("Max:", np.max(data))
 
 
 def recursively_set_device(inp, gpu):
     if hasattr(inp, 'keys'):
-        for k in inp.keys():
+        for k in list(inp.keys()):
             inp[k] = recursively_set_device(inp[k], gpu)
     elif isinstance(inp, list):
         return [recursively_set_device(ii, gpu) for ii in inp]

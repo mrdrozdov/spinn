@@ -101,7 +101,7 @@ def TokensToIDs(vocabulary, dataset, sentence_pair_data=False):
                         example[key][i] = unk_id
                         unks += 1
                     tokens += 1
-            print "Unk rate {:2.6f}%, downcase rate {:2.6f}%, upcase rate {:2.6f}%".format((unks * 100.0 / tokens), (lowers * 100.0 / tokens), (raises * 100.0 / tokens))
+            print("Unk rate {:2.6f}%, downcase rate {:2.6f}%, upcase rate {:2.6f}%".format((unks * 100.0 / tokens), (lowers * 100.0 / tokens), (raises * 100.0 / tokens)))
         else:
             for example in dataset:
                 example[key] = [vocabulary[token]
@@ -130,8 +130,7 @@ def CropAndPadExample(
         if pad_from_left:
             example[key] = example[key][-padding_amount:]
         else:
-            example[key] = example[key][:padding_amount]#[:-padding_amount]
-        # TODO: check to make sure above change is sane.
+            example[key] = example[key][:padding_amount]
         padding_amount = 0
     alternate_side_padding = target_length - \
         (padding_amount + len(example[key]))
@@ -253,12 +252,12 @@ def MakeTrainingIterator(
 
     def build_batches():
         dataset_size = len(sources[0])
-        order = range(dataset_size)
+        order = list(range(dataset_size))
         random.shuffle(order)
         order = np.array(order)
 
         num_splits = 10  # TODO: Should we be smarter about split size?
-        order_limit = len(order) / num_splits * num_splits
+        order_limit = len(order) // num_splits * num_splits
         order = order[:order_limit]
         order_splits = np.split(order, num_splits)
         batches = []
@@ -286,7 +285,7 @@ def MakeTrainingIterator(
         batches = build_batches()
         num_batches = len(batches)
         idx = -1
-        order = range(num_batches)
+        order = list(range(num_batches))
         random.shuffle(order)
 
         while True:
@@ -296,7 +295,7 @@ def MakeTrainingIterator(
                 batches = build_batches()
                 num_batches = len(batches)
                 idx = 0
-                order = range(num_batches)
+                order = list(range(num_batches))
                 random.shuffle(order)
             batch_indices = batches[order[idx]]
             yield tuple(source[batch_indices] for source in sources)
@@ -304,7 +303,7 @@ def MakeTrainingIterator(
     def data_iter():
         dataset_size = len(sources[0])
         start = -1 * batch_size
-        order = range(dataset_size)
+        order = list(range(dataset_size))
         random.shuffle(order)
 
         while True:
@@ -345,10 +344,10 @@ def MakeStandardEvalIterator(
     # TODO(SB): Pad out the last few examples in the eval set if they don't
     # form a batch.
 
-    print "Warning: May be discarding eval examples at batch ends."
+    print("Warning: May be discarding eval examples at batch ends.")
 
     dataset_size = limit if limit >= 0 else len(sources[0])
-    order = range(dataset_size)
+    order = list(range(dataset_size))
     if shuffle:
         random.seed(rseed)
         random.shuffle(order)
@@ -367,7 +366,7 @@ def MakeStandardEvalIterator(
         if len(candidate_batch[0]) == batch_size:
             data_iter.append(candidate_batch)
         else:
-            print "Skipping " + str(len(candidate_batch[0])) + " examples."
+            print("Skipping " + str(len(candidate_batch[0])) + " examples.")
     return data_iter
 
 
@@ -388,7 +387,7 @@ def MakeBucketEvalIterator(sources, batch_size):
     num_transitions = sources[3]
     sort_key = sentence_pair_key if len(
         num_transitions.shape) == 2 else single_sentence_key
-    order = sorted(zip(range(dataset_size), num_transitions),
+    order = sorted(zip(list(range(dataset_size)), num_transitions),
                    key=lambda x: sort_key(x[1]))
     order = list(reversed(order))
     order = [x[0] for x in order]
@@ -539,7 +538,7 @@ def BuildVocabularyForTextEmbeddingFile(path, types_in_data, core_vocabulary):
     with open(path, 'rU') as f:
         for line in f:
             spl = line.split(" ", 1)
-            word = unicode(spl[0].decode('UTF-8'))
+            word = spl[0]
             if word in types_in_data and word not in vocabulary:
                 vocabulary[word] = next_index
                 next_index += 1
@@ -556,12 +555,13 @@ def LoadEmbeddingsFromText(vocabulary, embedding_dim, path):
         (len(vocabulary), embedding_dim), dtype=np.float32)
     with open(path, 'r') as f:
         for line in f:
-            spl = line.split(" ")
-            if len(spl) < embedding_dim + 1:
-                # Header row or final row
-                continue
-            word = spl[0]
+            pre_spl = line.split(" ", maxsplit=1)
+            word = pre_spl[0]
             if word in vocabulary:
+                spl = line.split(" ")
+                if len(spl) < embedding_dim + 1:
+                    # Header row or final row
+                    continue
                 emb[vocabulary[word], :] = [
                     float(e) for e in spl[1:embedding_dim + 1]]
                 loaded += 1
@@ -588,7 +588,7 @@ class SimpleProgressBar(object):
             return
         sys.stdout.write('\r')
         pct = (i / float(total)) * 100
-        ii = i * self.bar_length / total
+        ii = i * self.bar_length // total
         fmt = "%s [%-{}s] %d%% %ds / %ds    ".format(self.bar_length)
         total_time = time.time() - self.begin
         expected = total_time / ((i + 1e-03) / float(total))

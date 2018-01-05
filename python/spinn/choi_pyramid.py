@@ -6,12 +6,11 @@ import numpy as np
 # PyTorch
 import torch
 import torch.nn as nn
-from torch.nn import init
 from torch.autograd import Variable
 import torch.nn.functional as F
 
-from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer, LayerNormalization
-from spinn.util.misc import Args, Vocab
+from spinn.util.blocks import Embed, to_gpu, MLP, Linear, LayerNormalization
+from spinn.util.misc import Vocab
 
 
 def build_model(data_manager, initial_embeddings, vocab_size,
@@ -19,23 +18,25 @@ def build_model(data_manager, initial_embeddings, vocab_size,
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
     model_cls = ChoiPyramid
 
-    return model_cls(model_dim=FLAGS.model_dim,
-                     word_embedding_dim=FLAGS.word_embedding_dim,
-                     vocab_size=vocab_size,
-                     initial_embeddings=initial_embeddings,
-                     num_classes=num_classes,
-                     embedding_keep_rate=FLAGS.embedding_keep_rate,
-                     use_sentence_pair=use_sentence_pair,
-                     use_difference_feature=FLAGS.use_difference_feature,
-                     use_product_feature=FLAGS.use_product_feature,
-                     classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
-                     mlp_dim=FLAGS.mlp_dim,
-                     num_mlp_layers=FLAGS.num_mlp_layers,
-                     mlp_ln=FLAGS.mlp_ln,
-                     composition_ln=FLAGS.composition_ln,
-                     context_args=context_args,
-                     trainable_temperature=FLAGS.pyramid_trainable_temperature,
-                     )
+    return model_cls(
+        model_dim=FLAGS.model_dim,
+        word_embedding_dim=FLAGS.word_embedding_dim,
+        vocab_size=vocab_size,
+        initial_embeddings=initial_embeddings,
+        fine_tune_loaded_embeddings=FLAGS.fine_tune_loaded_embeddings,
+        num_classes=num_classes,
+        embedding_keep_rate=FLAGS.embedding_keep_rate,
+        use_sentence_pair=use_sentence_pair,
+        use_difference_feature=FLAGS.use_difference_feature,
+        use_product_feature=FLAGS.use_product_feature,
+        classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
+        mlp_dim=FLAGS.mlp_dim,
+        num_mlp_layers=FLAGS.num_mlp_layers,
+        mlp_ln=FLAGS.mlp_ln,
+        composition_ln=FLAGS.composition_ln,
+        context_args=context_args,
+        trainable_temperature=FLAGS.pyramid_trainable_temperature,
+    )
 
 
 class ChoiPyramid(nn.Module):
@@ -46,6 +47,7 @@ class ChoiPyramid(nn.Module):
                  use_product_feature=None,
                  use_difference_feature=None,
                  initial_embeddings=None,
+                 fine_tune_loaded_embeddings=None,
                  num_classes=None,
                  embedding_keep_rate=None,
                  use_sentence_pair=False,
@@ -76,11 +78,12 @@ class ChoiPyramid(nn.Module):
         self.embed = Embed(
             word_embedding_dim,
             vocab.size,
-            vectors=vocab.vectors)
+            vectors=vocab.vectors,
+            fine_tune=fine_tune_loaded_embeddings)
 
         self.binary_tree_lstm = BinaryTreeLSTM(
             word_embedding_dim,
-            model_dim / 2,
+            model_dim // 2,
             False,
             composition_ln=composition_ln,
             trainable_temperature=trainable_temperature)
@@ -150,12 +153,12 @@ class ChoiPyramid(nn.Module):
         return output
 
     def get_features_dim(self):
-        features_dim = self.model_dim if self.use_sentence_pair else self.model_dim / 2
+        features_dim = self.model_dim if self.use_sentence_pair else self.model_dim // 2
         if self.use_sentence_pair:
             if self.use_difference_feature:
-                features_dim += self.model_dim / 2
+                features_dim += self.model_dim // 2
             if self.use_product_feature:
-                features_dim += self.model_dim / 2
+                features_dim += self.model_dim // 2
         return features_dim
 
     def build_features(self, h):
@@ -182,9 +185,9 @@ class ChoiPyramid(nn.Module):
 
         token_sequences = []
         batch_size = x.shape[0]
-        for s in (range(int(self.use_sentence_pair) + 1)
+        for s in (list(range(int(self.use_sentence_pair) + 1))
                   if not only_one else [0]):
-            for b in (range(batch_size) if not only_one else [0]):
+            for b in (list(range(batch_size)) if not only_one else [0]):
                 if self.use_sentence_pair:
                     token_sequence = [self.inverted_vocabulary[token]
                                       for token in x[b, :, s]]
@@ -239,7 +242,7 @@ class ChoiPyramid(nn.Module):
             x), volatile=not self.training)), lengths
 
     def wrap_sentence_pair(self, hh):
-        batch_size = hh.size(0) / 2
+        batch_size = hh.size(0) // 2
         h = ([hh[:batch_size], hh[batch_size:]])
         return h
 
@@ -267,10 +270,10 @@ class BinaryTreeLSTM(nn.Module):
             hidden_dim, composition_ln=composition_ln)
 
         # TODO: Add something to blocks to make this use case more elegant.
-        self.comp_query = Linear(
-            initializer=HeKaimingInitializer)(
+        self.comp_query = Linear()(
             in_features=hidden_dim,
-            out_features=1)
+            out_features=1,
+            bias=False)
         self.trainable_temperature = trainable_temperature
         if self.trainable_temperature:
             self.temperature_param = nn.Parameter(
@@ -341,7 +344,7 @@ class BinaryTreeLSTM(nn.Module):
         length_mask = sequence_mask(sequence_length=length,
                                     max_length=max_depth)
         select_masks = []
-        state = input.chunk(num_chunks=2, dim=2)
+        state = input.chunk(2, dim=2)
         nodes = []
         # For one or two-word trees where we never compute a temperature
         temperature_to_display = -1.0
@@ -449,7 +452,7 @@ def convert_to_one_hot(indices, num_classes):
 
 def masked_softmax(logits, mask=None):
     eps = 1e-20
-    probs = F.softmax(logits)
+    probs = F.softmax(logits, dim=1)
     if mask is not None:
         mask = mask.float()
         probs = probs * mask + eps
@@ -513,13 +516,10 @@ def sequence_mask(sequence_length, max_length=None):
 
 
 class BinaryTreeLSTMLayer(nn.Module):
-    # TODO: Unify with SimpleTreeLSTM
-
     def __init__(self, hidden_dim, composition_ln=False):
         super(BinaryTreeLSTMLayer, self).__init__()
         self.hidden_dim = hidden_dim
-        self.comp_linear = Linear(
-            initializer=HeKaimingInitializer)(
+        self.comp_linear = Linear()(
             in_features=2 * hidden_dim,
             out_features=5 * hidden_dim)
         self.composition_ln = composition_ln
@@ -553,7 +553,7 @@ class BinaryTreeLSTMLayer(nn.Module):
 
         hlr_cat = torch.cat([hl, hr], dim=2)
         treelstm_vector = apply_nd(fn=self.comp_linear, input=hlr_cat)
-        i, fl, fr, u, o = treelstm_vector.chunk(num_chunks=5, dim=2)
+        i, fl, fr, u, o = treelstm_vector.chunk(5, dim=2)
         c = (cl * (fl + 1).sigmoid() + cr * (fr + 1).sigmoid()
              + u.tanh() * i.sigmoid())
         h = o.sigmoid() * c.tanh()

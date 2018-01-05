@@ -3,8 +3,8 @@
 
 
 def bracketing(ts):
-    buf = range((len(ts) + 1) / 2 + 1)
-    buf = list(reversed(zip(buf[:-1], buf[1:])))
+    buf = list(range((len(ts) + 1) / 2 + 1))
+    buf = list(reversed(list(zip(buf[:-1], buf[1:]))))
     stack = []
     ret = []
     for t in ts:

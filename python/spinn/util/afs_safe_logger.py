@@ -1,7 +1,6 @@
 import datetime
 import sys
-import json
-import logging_pb2 as pb
+from . import logging_pb2 as pb
 import re
 
 

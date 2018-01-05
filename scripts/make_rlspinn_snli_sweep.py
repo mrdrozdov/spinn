@@ -51,7 +51,7 @@ gflags.DEFINE_boolean("ec2", False, "")
 
 FLAGS(sys.argv)
 
-print(FLAGS.FlagValuesDict())
+print((FLAGS.FlagValuesDict()))
 
 # - #
 
@@ -66,7 +66,6 @@ FIXED_PARAMETERS = {
     "eval_data_path":    FLAGS.eval_data_path,
     "embedding_data_path": FLAGS.embedding_data_path,
     "log_path": FLAGS.log_path,
-    "metrics_path": FLAGS.log_path,
     "ckpt_path":  FLAGS.log_path,
     "word_embedding_dim":   "300",
     "model_dim":   "600",
@@ -92,7 +91,7 @@ SWEEP_PARAMETERS = {
     "l2_lambda":          ("l2", EXP, 8e-7, 2e-5),
     "semantic_classifier_keep_rate": ("skr", LIN, 0.7, 0.95),  # NB: Keep rates may depend considerably on dims.
     "embedding_keep_rate": ("ekr", LIN, 0.7, 0.95),
-    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.5, 1.0),
+    "learning_rate_decay_when_no_progress": ("dec", EXP, 0.5, 1.0),
     "tracking_lstm_hidden_dim": ("tdim", EXP, 24, 128),
     "rl_weight":  ("rlwt", EXP, 0.00001, 0.1),
 }
@@ -194,6 +193,6 @@ for run_id in range(FLAGS.sweep_runs):
 
     flags += " \\\n --experiment_name " + name
 
-    command = "python2.7 -m spinn.models.rl_classifier " + flags
+    command = "python3 -m spinn.models.rl_classifier " + flags
 
     open(os.path.join(FLAGS.sweep_path, name + ".sh"), 'w').write(tpl.format(command=command))

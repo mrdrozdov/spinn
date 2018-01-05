@@ -7,19 +7,26 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
-from torch.nn.init import kaiming_normal
 
-from spinn.util.blocks import Embed, Linear, MLP
-from spinn.util.blocks import bundle, lstm, to_gpu, unbundle
-from spinn.util.blocks import LayerNormalization
+from spinn.util.blocks import Embed, Lift, MLP
+from spinn.util.blocks import to_gpu
 from spinn.util.misc import Example, Vocab
-from spinn.util.catalan import ShiftProbabilities
 
 from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
 
+# TODO/NOTE: This code contains some skeleton code for Tracking
+# LSTM/parsing support, but no full implementation.
 
-def build_model(data_manager, initial_embeddings, vocab_size,
-                num_classes, FLAGS, context_args, composition_args, **kwargs):
+
+def build_model(
+        data_manager,
+        initial_embeddings,
+        vocab_size,
+        num_classes,
+        FLAGS,
+        context_args,
+        composition_args,
+        **kwargs):
     model_cls = BaseModel
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
 
@@ -31,13 +38,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         fine_tune_loaded_embeddings=FLAGS.fine_tune_loaded_embeddings,
         num_classes=num_classes,
         embedding_keep_rate=FLAGS.embedding_keep_rate,
-        tracking_lstm_hidden_dim=FLAGS.tracking_lstm_hidden_dim,
-        transition_weight=FLAGS.transition_weight,
         use_sentence_pair=use_sentence_pair,
-        lateral_tracking=FLAGS.lateral_tracking,
-        tracking_ln=FLAGS.tracking_ln,
-        use_tracking_in_composition=FLAGS.use_tracking_in_composition,
-        predict_use_cell=FLAGS.predict_use_cell,
         use_difference_feature=FLAGS.use_difference_feature,
         use_product_feature=FLAGS.use_product_feature,
         classifier_keep_rate=FLAGS.semantic_classifier_keep_rate,
@@ -49,120 +50,19 @@ def build_model(data_manager, initial_embeddings, vocab_size,
     )
 
 
-class Tracker(nn.Module):
-    '''The tracker keeps a summary of the parsing process so far. This is the
-    "tracking LSTM" as described in the paper.'''
-
-    def __init__(
-            self,
-            size,
-            tracker_size,
-            lateral_tracking=True,
-            tracking_ln=True):
-        '''Args:
-            size: input size (parser hidden state) = FLAGS.model_dim
-            tracker_size: FLAGS.tracking_lstm_hidden_dim
-            (see FLAGS for the rest)'''
-        super(Tracker, self).__init__()
-
-        # Initialize layers.
-        if lateral_tracking:
-            self.buf = Linear()(size, 4 * tracker_size, bias=True)
-            self.stack1 = Linear()(size, 4 * tracker_size, bias=False)
-            self.stack2 = Linear()(size, 4 * tracker_size, bias=False)
-            self.lateral = Linear(initializer=kaiming_normal)(
-                tracker_size, 4 * tracker_size, bias=False)
-            self.state_size = tracker_size
-        else:
-            self.state_size = size * 3
-
-        if tracking_ln:
-            self.buf_ln = LayerNormalization(size)
-            self.stack1_ln = LayerNormalization(size)
-            self.stack2_ln = LayerNormalization(size)
-
-        self.lateral_tracking = lateral_tracking
-        self.tracking_ln = tracking_ln
-
-        self.reset_state()
-
-    def reset_state(self):
-        self.c = self.h = None
-
-    def forward(self, top_buf, top_stack_1, top_stack_2):
-        if self.tracking_ln:
-            top_buf = self.buf_ln(top_buf)
-            top_stack_1 = self.stack1_ln(top_stack_1)
-            top_stack_2 = self.stack2_ln(top_stack_2)
-
-        if self.lateral_tracking:
-            tracker_inp = self.buf(top_buf)
-            tracker_inp += self.stack1(top_stack_1)
-            tracker_inp += self.stack2(top_stack_2)
-
-            batch_size = tracker_inp.size(0)
-
-            if self.h is not None:
-                tracker_inp += self.lateral(self.h)
-            if self.c is None:
-                self.c = to_gpu(Variable(torch.from_numpy(
-                    np.zeros((batch_size, self.state_size),
-                             dtype=np.float32)),
-                    volatile=tracker_inp.volatile))
-
-            # Run tracking lstm.
-            self.c, self.h = lstm(self.c, tracker_inp)
-
-            return self.h, self.c
-        else:
-            return torch.cat([top_buf, top_stack_1, top_stack_2], 1), None
-
-    @property
-    def states(self):
-        return unbundle((self.c, self.h))
-
-    @states.setter
-    def states(self, state_iter):
-        if state_iter is not None:
-            state = bundle(state_iter)
-            self.c, self.h = state.c, state.h
-
-
-class SPINN(nn.Module):
-
-    def __init__(self, args, vocab, predict_use_cell):
-        super(SPINN, self).__init__()
+class LMS(nn.Module):
+    def __init__(self, args, vocab):
+        super(LMS, self).__init__()
 
         # Optional debug mode.
         self.debug = False
-
-        self.transition_weight = args.transition_weight
 
         self.wrap_items = args.wrap_items
         self.extract_h = args.extract_h
 
         # Reduce function for semantic composition.
         self.reduce = args.composition
-        if args.tracker_size is not None or args.use_internal_parser:
-            self.tracker = Tracker(
-                args.size,
-                args.tracker_size,
-                lateral_tracking=args.lateral_tracking,
-                tracking_ln=args.tracking_ln)
-            if args.transition_weight is not None:
-                # TODO: Might be interesting to try a different network here.
-                self.predict_use_cell = predict_use_cell
-                if self.tracker.lateral_tracking:
-                    tinp_size = self.tracker.state_size * \
-                        2 if predict_use_cell else self.tracker.state_size
-                else:
-                    tinp_size = self.tracker.state_size
-                self.transition_net = Linear()(
-                    tinp_size, 2)
-
         self.choices = np.array([T_SHIFT, T_REDUCE], dtype=np.int32)
-
-        self.shift_probabilities = ShiftProbabilities()
 
     def reset_state(self):
         self.memories = []
@@ -175,10 +75,11 @@ class SPINN(nn.Module):
         self.n_tokens = (
             example.tokens.data != 0).long().sum(
             1, keepdim=False).tolist()
+        # self.buffers_n = (example.tokens.data != 0).long().sum(1).view(-1).tolist()
 
         if self.debug:
             seq_length = example.tokens.size(1)
-            assert all(buf_n <= (seq_length + 1) // 2 for buf_n in self.n_tokens), \
+            assert all(buf_n <= (seq_length + 1) // 2 for buf_n in self.buffers_n), \
                 "All sentences (including cropped) must be the appropriate length."
 
         self.bufs = example.bufs
@@ -203,8 +104,6 @@ class SPINN(nn.Module):
         self.n_reduces = np.zeros(len(self.bufs), dtype=np.int32)
         self.n_steps = np.zeros(len(self.bufs), dtype=np.int32)
 
-        if hasattr(self, 'tracker'):
-            self.tracker.reset_state()
         if not hasattr(example, 'transitions'):
             # TODO: Support no transitions. In the meantime, must at least pass
             # dummy transitions.
@@ -253,7 +152,7 @@ class SPINN(nn.Module):
         return _preds, _invalid
 
     def predict_actions(self, transition_output):
-        transition_logdist = F.log_softmax(transition_output, dim=1)
+        transition_logdist = F.log_softmax(transition_output)
         transition_preds = transition_logdist.data.cpu().numpy().argmax(axis=1)
         return transition_logdist, transition_preds
 
@@ -323,7 +222,7 @@ class SPINN(nn.Module):
     def reduce_phase(self, lefts, rights, trackings, stacks):
         if len(stacks) > 0:
             reduced = iter(self.reduce(
-                lefts, rights, trackings))
+                lefts, rights))
             for stack in stacks:
                 new_stack_item = next(reduced)
                 stack.append(new_stack_item)
@@ -339,8 +238,6 @@ class SPINN(nn.Module):
         transition_loss = None
         transition_acc = 0.0
         num_transitions = inp_transitions.shape[1]
-        batch_size = inp_transitions.shape[0]
-        invalid_count = np.zeros(batch_size)
 
         # Transition Loop
         # ===============
@@ -379,71 +276,6 @@ class SPINN(nn.Module):
             self.memory['top_stack_2'] = self.wrap_items(
                 [stack[-2] if len(stack) > 1 else self.zeros for stack in self.stacks])
 
-            # Run if:
-            # A. We have a tracking component and,
-            # B. There is at least one transition that will not be skipped.
-            if hasattr(self, 'tracker') and sum(cant_skip) > 0:
-
-                # Get hidden output from the tracker. Used to predict
-                # transitions.
-                tracker_h, tracker_c = self.tracker(
-                    self.extract_h(self.memory['top_buf']),
-                    self.extract_h(self.memory['top_stack_1']),
-                    self.extract_h(self.memory['top_stack_2']))
-
-                if hasattr(self, 'transition_net'):
-                    transition_inp = [tracker_h]
-                    if self.tracker.lateral_tracking and self.predict_use_cell:
-                        transition_inp += [tracker_c]
-                    transition_inp = torch.cat(transition_inp, 1)
-
-                    transition_output = self.transition_net(transition_inp)
-
-                if hasattr(self, 'transition_net') and run_internal_parser:
-
-                    # Predict Actions
-                    # ===============
-
-                    # TODO: Mask before predicting. This should simplify things and reduce computation.
-                    # The downside is that in the Action Phase, need to be smarter about which stacks/bufs
-                    # are selected.
-                    transition_logdist, transition_preds = self.predict_actions(
-                        transition_output)
-
-                    # Distribution of transitions use to calculate transition
-                    # loss.
-                    self.memory["t_logprobs"] = transition_logdist
-
-                    # Given transitions.
-                    self.memory["t_given"] = transitions
-
-                    # Constrain to valid actions
-                    # ==========================
-
-                    validated_preds, invalid_mask = self.validate(
-                        transition_arr, transition_preds, self.stacks, self.bufs)
-                    if validate_transitions:
-                        transition_preds = validated_preds
-
-                    # Keep track of which predictions have been valid.
-                    self.memory["t_valid_mask"] = np.logical_not(invalid_mask)
-                    invalid_count += invalid_mask
-
-                    # If the given action is skip, then must skip.
-                    transition_preds[must_skip] = T_SKIP
-
-                    # Actual transition predictions. Used to measure transition
-                    # accuracy.
-                    self.memory["t_preds"] = transition_preds
-
-                    # Binary mask of examples that have a transition.
-                    self.memory["t_mask"] = cant_skip
-
-                    # If this FLAG is set, then use the predicted actions
-                    # rather than the given.
-                    if use_internal_parser:
-                        transition_arr = transition_preds.tolist()
-
             # Pre-Action Phase
             # ================
 
@@ -456,8 +288,11 @@ class SPINN(nn.Module):
             # For REDUCE
             r_stacks, r_lefts, r_rights, r_trackings = [], [], [], []
 
-            batch = list(zip(transition_arr, self.bufs, self.stacks, self.tracker.states if hasattr(
-                self, 'tracker') and self.tracker.h is not None else itertools.repeat(None)))
+            batch = list(zip(
+                transition_arr,
+                self.bufs,
+                self.stacks,
+                itertools.repeat(None)))
 
             for batch_idx, (transition, buf, stack,
                             tracking) in enumerate(batch):
@@ -499,42 +334,6 @@ class SPINN(nn.Module):
 
         # Loss Phase
         # ==========
-
-        if hasattr(self, 'tracker') and hasattr(self, 'transition_net'):
-            t_preds = np.concatenate([m['t_preds']
-                                      for m in self.memories if 't_preds' in m])
-            t_given = np.concatenate([m['t_given']
-                                      for m in self.memories if 't_given' in m])
-            t_mask = np.concatenate([m['t_mask']
-                                     for m in self.memories if 't_mask' in m])
-            t_logprobs = torch.cat([m['t_logprobs']
-                                    for m in self.memories if 't_logprobs' in m], 0)
-
-            # We compute accuracy and loss after all transitions have complete,
-            # since examples can have different lengths when not using skips.
-
-            # Transition Accuracy.
-            n = t_mask.shape[0]
-            n_skips = n - t_mask.sum()
-            n_total = n - n_skips
-            n_correct = (t_preds == t_given).sum() - n_skips
-            transition_acc = n_correct / float(n_total)
-
-            # Transition Loss.
-            index = to_gpu(
-                Variable(
-                    torch.from_numpy(
-                        np.arange(
-                            t_mask.shape[0])[t_mask])).long())
-            select_t_given = to_gpu(Variable(torch.from_numpy(
-                t_given[t_mask]), volatile=not self.training).long())
-            select_t_logprobs = torch.index_select(t_logprobs, 0, index)
-            transition_loss = nn.NLLLoss()(select_t_logprobs, select_t_given) * \
-                self.transition_weight
-
-            self.n_invalid = (invalid_count > 0).sum()
-            self.invalid = self.n_invalid / float(batch_size)
-
         self.loss_phase_hook()
 
         if self.debug:
@@ -559,15 +358,9 @@ class BaseModel(nn.Module):
                  fine_tune_loaded_embeddings=None,
                  num_classes=None,
                  embedding_keep_rate=None,
-                 tracking_lstm_hidden_dim=4,
-                 transition_weight=None,
                  encode_reverse=None,
                  encode_bidirectional=None,
                  encode_num_layers=None,
-                 lateral_tracking=None,
-                 tracking_ln=None,
-                 use_tracking_in_composition=None,
-                 predict_use_cell=None,
                  use_sentence_pair=False,
                  use_difference_feature=False,
                  use_product_feature=False,
@@ -581,14 +374,11 @@ class BaseModel(nn.Module):
                  ):
         super(BaseModel, self).__init__()
 
-        assert not (
-            use_tracking_in_composition and not lateral_tracking), "Lateral tracking must be on to use tracking in composition."
-
         self.use_sentence_pair = use_sentence_pair
         self.use_difference_feature = use_difference_feature
         self.use_product_feature = use_product_feature
 
-        self.hidden_dim = composition_args.size
+        self.hidden_dim = hidden_dim = model_dim
         self.wrap_items = composition_args.wrap_items
         self.extract_h = composition_args.extract_h
 
@@ -603,8 +393,8 @@ class BaseModel(nn.Module):
         vocab.vectors = initial_embeddings
 
         # Build parsing component.
-        self.spinn = self.build_spinn(
-            composition_args, vocab, predict_use_cell)
+        self.lms = self.build_lms(
+            composition_args, vocab)
 
         # Build classiifer.
         features_dim = self.get_features_dim()
@@ -628,13 +418,21 @@ class BaseModel(nn.Module):
 
         self.inverted_vocabulary = None
 
+        # Create Lift layer
+        self.lift = Lift(context_args.input_dim, model_dim * model_dim)
+
     def get_features_dim(self):
-        features_dim = self.hidden_dim * 2 if self.use_sentence_pair else self.hidden_dim
+        features_dim = (
+            self.hidden_dim *
+            self.hidden_dim *
+            2) if self.use_sentence_pair else (
+            self.hidden_dim *
+            self.hidden_dim)
         if self.use_sentence_pair:
             if self.use_difference_feature:
-                features_dim += self.hidden_dim
+                features_dim += (self.hidden_dim * self.hidden_dim)
             if self.use_product_feature:
-                features_dim += self.hidden_dim
+                features_dim += (self.hidden_dim * self.hidden_dim)
         return features_dim
 
     def build_features(self, h):
@@ -650,16 +448,16 @@ class BaseModel(nn.Module):
             features = h[0]
         return features
 
-    def build_spinn(self, args, vocab, predict_use_cell):
-        return SPINN(args, vocab, predict_use_cell)
+    def build_lms(self, args, vocab):
+        return LMS(args, vocab)
 
-    def run_spinn(
+    def run_lms(
             self,
             example,
             use_internal_parser,
             validate_transitions=True):
-        self.spinn.reset_state()
-        h_list, transition_acc, transition_loss = self.spinn(
+        self.lms.reset_state()
+        h_list, transition_acc, transition_loss = self.lms(
             example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
         h = self.wrap(h_list)
         return h, transition_acc, transition_loss
@@ -667,7 +465,13 @@ class BaseModel(nn.Module):
     def forward_hook(self, embeds, batch_size, seq_length):
         pass
 
-    def output_hook(self, output, sentences, transitions, y_batch=None):
+    def output_hook(
+            self,
+            output,
+            sentences,
+            transitions,
+            y_batch=None,
+            embeds=None):
         pass
 
     def forward(
@@ -692,10 +496,9 @@ class BaseModel(nn.Module):
             self.embedding_dropout_rate,
             training=self.training)
 
+        embeds = self.lift(embeds)
+
         # Make Buffers
-        # _embeds = torch.chunk(to_cpu(embeds), b, 0)
-        # _embeds = [torch.chunk(x, l, 0) for x in _embeds]
-        # buffers = [list(reversed(x)) for x in _embeds]
         ee = torch.chunk(embeds, b * l, 0)[::-1]
         bb = []
         for ii in range(b):
@@ -705,7 +508,7 @@ class BaseModel(nn.Module):
 
         example.bufs = buffers
 
-        h, transition_acc, transition_loss = self.run_spinn(
+        h, transition_acc, transition_loss = self.run_lms(
             example, use_internal_parser, validate_transitions)
 
         self.spinn_outp = h
@@ -718,7 +521,7 @@ class BaseModel(nn.Module):
 
         output = self.mlp(features)
 
-        self.output_hook(output, sentences, transitions, y_batch)
+        self.output_hook(output, sentences, transitions, y_batch, embeds)
 
         return output
 
@@ -783,36 +586,3 @@ class BaseModel(nn.Module):
         h_premise = self.extract_h(self.wrap_items(items[:batch_size]))
         h_hypothesis = self.extract_h(self.wrap_items(items[batch_size:]))
         return [h_premise, h_hypothesis]
-
-    def get_samples(self, x, vocabulary, only_one=False):
-        # n=-1: Show all samples.
-        if not self.inverted_vocabulary:
-            self.inverted_vocabulary = dict(
-                [(vocabulary[key], key) for key in vocabulary])
-
-        transitions, _ = self.spinn.get_transitions_per_example()
-
-        token_sequences = []
-        batch_size = x.shape[0]
-        for s in (list(range(int(self.use_sentence_pair) + 1))
-                  if not only_one else [0]):
-            for b in (list(range(batch_size)) if not only_one else [0]):
-                if self.use_sentence_pair:
-                    token_sequence = [self.inverted_vocabulary[token]
-                                      for token in x[b, :, s]]
-                else:
-                    token_sequence = [self.inverted_vocabulary[token]
-                                      for token in x[b, :]]
-
-                stack = []
-                token_sequence.reverse()
-                for transition in transitions[b + (s * batch_size)]:
-                    if transition == 0:
-                        stack.append(token_sequence.pop())
-                    if transition == 1:
-                        r = stack.pop()
-                        l = stack.pop()
-                        stack.append((l, r))
-                assert len(stack) == 1
-                token_sequences.append(stack[0])
-        return token_sequences

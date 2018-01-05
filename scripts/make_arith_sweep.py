@@ -39,7 +39,6 @@ FIXED_PARAMETERS = {
     "training_data_path":    FLAGS.training_data_path,
     "eval_data_path":    FLAGS.eval_data_path,
     "log_path": FLAGS.log_path,
-    "metrics_path": FLAGS.log_path,
     "ckpt_path":  FLAGS.log_path,
     "word_embedding_dim":   "40",
     "model_dim":   "64",
@@ -57,7 +56,7 @@ SWEEP_PARAMETERS = {
     "l2_lambda":          ("l2", EXP, 8e-7, 1e-4),
     "semantic_classifier_keep_rate": ("skr", LIN, 0.5, 0.95),  # NB: Keep rates may depend considerably on dims.
     "embedding_keep_rate": ("ekr", LIN, 1.0, 1.0),
-    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.25, 1.0),
+    "learning_rate_decay_when_no_progress": ("dec", EXP, 0.25, 1.0),
     "tracking_lstm_hidden_dim": ("tdim", EXP, 8, 24),
     "rl_weight":  ("rlwt", EXP, 0.000001, 0.0003),
     "transition_weight":  ("trwt", EXP, 1.0, 1.0),
@@ -67,11 +66,11 @@ sweep_name = "sweep_" + NAME + "_" + \
     FIXED_PARAMETERS["data_type"] + "_" + FIXED_PARAMETERS["model_type"]
 
 # - #
-print "# NAME: " + sweep_name
-print "# NUM RUNS: " + str(SWEEP_RUNS)
-print "# SWEEP PARAMETERS: " + str(SWEEP_PARAMETERS)
-print "# FIXED_PARAMETERS: " + str(FIXED_PARAMETERS)
-print
+print("# NAME: " + sweep_name)
+print("# NUM RUNS: " + str(SWEEP_RUNS))
+print("# SWEEP PARAMETERS: " + str(SWEEP_PARAMETERS))
+print("# FIXED_PARAMETERS: " + str(FIXED_PARAMETERS))
+print()
 
 for run_id in range(SWEEP_RUNS):
     params = {}
@@ -113,7 +112,7 @@ for run_id in range(SWEEP_RUNS):
 
     flags += " --experiment_name " + name
     if NYU_NON_PBS:
-        print "cd spinn/python; python2.7 -m spinn.models.supervised_classifier " + flags
+        print("cd spinn/python; python3 -m spinn.models.supervised_classifier " + flags)
     else:
-        print "SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh"
-    print
+        print("SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit.sh")
+    print()

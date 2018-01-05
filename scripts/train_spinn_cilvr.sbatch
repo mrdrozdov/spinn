@@ -1,19 +1,17 @@
 #!/bin/bash
 
-# Generic job script for all experiments.
+# Generic job script for all experiments on NYU CILVR machines.
 
-#SBATCH --partition=mhealth,...
 #SBATCH --gres=gpu:1
 #SBATCH --mem=16000
 #SBATCH -t24:00:00
+#SBATCH --constraint=gpu_12gb
 
-#PRINCE PRINCE_GPU_COMPUTE_MODE=default
 
 # Log what we're running and where.
 echo $SLURM_JOBID - `hostname` - $SPINN_FLAGS >> ~/spinn_machine_assignments.txt
 
-# Make sure we have access to HPC-managed libraries.
-module load python3/intel/3.6.3 pytorch/python3.6/0.3.0_4
+module load python-3.6
 
 # Default model.
 MODEL="spinn.models.supervised_classifier"

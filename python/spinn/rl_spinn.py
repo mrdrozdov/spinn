@@ -31,6 +31,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         word_embedding_dim=FLAGS.word_embedding_dim,
         vocab_size=vocab_size,
         initial_embeddings=initial_embeddings,
+        fine_tune_loaded_embeddings=FLAGS.fine_tune_loaded_embeddings,
         num_classes=num_classes,
         mlp_dim=FLAGS.mlp_dim,
         embedding_keep_rate=FLAGS.embedding_keep_rate,
@@ -68,7 +69,7 @@ class RLSPINN(SPINN):
 
     def predict_actions(self, transition_output):
         transition_output_t = transition_output / max(self.temperature, TINY)
-        transition_dist = F.softmax(transition_output_t)
+        transition_dist = F.softmax(transition_output_t, dim=1)
 
         if self.catalan:
             # Use the catalan distribution as a prior.
@@ -87,7 +88,7 @@ class RLSPINN(SPINN):
         if self.catalan and self.catalan_backprop:
             transition_logdist = torch.log(transition_dist + TINY)
         else:
-            transition_logdist = F.log_softmax(transition_output_t)
+            transition_logdist = F.log_softmax(transition_output_t, dim=1)
         shift_probs = transition_dist.data[:, 0]
 
         if self.training:
@@ -170,7 +171,7 @@ class BaseModel(_BaseModel):
             output, (hn, _) = self.v_rnn(x, (h0, c0))
             if self.use_sentence_pair:
                 hn = hn.squeeze()
-                h1, h2 = hn[:batch_size / 2], hn[batch_size / 2:]
+                h1, h2 = hn[:batch_size // 2], hn[batch_size // 2:]
                 hn_both = torch.cat([h1, h2], 1)
                 self.baseline_outp = self.v_mlp(hn_both.squeeze())
             else:
@@ -224,7 +225,7 @@ class BaseModel(_BaseModel):
             output = self.run_greedy(sentences, transitions)
 
             # Estimate Reward
-            probs = F.softmax(output).data.cpu()
+            probs = F.softmax(output, dim=1).data.cpu()
             target = torch.from_numpy(y_batch).long()
             approx_rewards = self.build_reward(
                 probs, target, rl_reward=self.rl_reward)
@@ -276,7 +277,7 @@ class BaseModel(_BaseModel):
 
         batch_size = advantage.size(0)
 
-        seq_length = t_preds.shape[0] / batch_size
+        seq_length = t_preds.shape[0] // batch_size
 
         a_index = np.arange(batch_size)
         a_index = a_index.reshape(1, -1).repeat(seq_length, axis=0).flatten()
@@ -321,7 +322,7 @@ class BaseModel(_BaseModel):
         if not self.training:
             return
 
-        probs = F.softmax(output).data.cpu()
+        probs = F.softmax(output, dim=1).data.cpu()
         target = torch.from_numpy(y_batch).long()
 
         # Get Reward.

@@ -72,7 +72,7 @@ class MockLogger(object):
 
 
 def t_is_valid(ts):
-    buf_len = (len(ts) + 1) / 2
+    buf_len = (len(ts) + 1) // 2
     buf = [1] * buf_len
     stack = []
 
@@ -346,7 +346,7 @@ class SSTTestCase(unittest.TestCase):
 
     def test_load(self):
         data_manager = load_sst_data
-        raw_data = data_manager.load_data(sst_data_path)
+        raw_data = data_manager.load_data(sst_data_path, eval_mode=True)
         assert len(raw_data) == 30
 
         seq_lengths = Counter([len(x['transitions']) for x in raw_data])
@@ -375,7 +375,7 @@ class SSTTestCase(unittest.TestCase):
         simple = False
 
         data_manager = load_sst_data
-        raw_data = data_manager.load_data(sst_data_path)
+        raw_data = data_manager.load_data(sst_data_path, eval_mode=True)
         data_sets = [(sst_data_path, raw_data)]
         vocabulary = util.BuildVocabulary(
             raw_data, data_sets, embedding_data_path, logger=MockLogger(),
@@ -504,7 +504,7 @@ class ArithmeticTestCase(unittest.TestCase):
 
     def xtest_structure_transitions_1(self):
         structure_transitions = load_simple_data.structure_transitions
-        tokens = map(str, '++000')
+        tokens = list(map(str, '++000'))
         transitions = [0, 0, 0, 0, 1, 1, 0, 1, 1]
         expected = [0, 0, 0, 0, 1, 3, 0, 1, 3]
         actual = structure_transitions(tokens, transitions)
@@ -513,7 +513,7 @@ class ArithmeticTestCase(unittest.TestCase):
 
     def xtest_structure_transitions_2(self):
         structure_transitions = load_simple_data.structure_transitions
-        tokens = map(str, '++000')
+        tokens = list(map(str, '++000'))
         transitions = [0, 0, 0, 1, 0, 1, 1, 0, 1]
         expected = [0, 0, 0, 1, 0, 3, 1, 0, 3]
         actual = structure_transitions(tokens, transitions)
@@ -754,7 +754,7 @@ class ListopsTestCase(unittest.TestCase):
     def test_spans(self):
         tokens = ['[MAX', '3', '[MAX', '1', '7', ']', ']']
         ts = '0010010101101'
-        transitions = map(int, ts)
+        transitions = list(map(int, ts))
         expected = set([(0, 2), (2, 4), (2, 5), (2, 6), (0, 6), (0, 7)])
         actual = load_listops_data.spans(transitions, tokens)
         actual = set([el.span for el in actual if el.tag != "leaf"])
@@ -765,7 +765,7 @@ class ListopsTestCase(unittest.TestCase):
     def test_strucure_spans(self):
         tokens = ['[MAX', '3', '[MAX', '1', '7', ']', ']']
         ts = '0010010101101'
-        transitions = map(int, ts)
+        transitions = list(map(int, ts))
         expected = set([(2, 6), (0, 7)])
         actual = load_listops_data.spans(transitions, tokens)
         actual = set([el.span for el in actual if el.tag == "struct"])

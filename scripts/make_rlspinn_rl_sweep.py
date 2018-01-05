@@ -48,7 +48,6 @@ FIXED_PARAMETERS = {
     "eval_interval_steps": "1000",
     "eval_seq_length":  "810",
     "log_path": FLAGS.log_path,
-    "metrics_path": FLAGS.log_path,
     "mlp_dim": "1024",
     "model_dim":   "300",
     "model_type":      "RLSPINN",
@@ -64,7 +63,7 @@ FIXED_PARAMETERS = {
     "transition_weight": "1.0",
     "use_internal_parser": "",
     "word_embedding_dim":   "300",
-    "learning_rate_decay_per_10k_steps": "0.906176807691",
+    "learning_rate_decay_when_no_progress": "0.906176807691",
     "semantic_classifier_keep_rate": "1.0",
     "embedding_keep_rate": "1.0",
     "gpu": "0",
@@ -86,11 +85,11 @@ sweep_name = "sweep_" + NAME + "_" + \
     FIXED_PARAMETERS["data_type"] + "_" + FIXED_PARAMETERS["model_type"]
 
 # - #
-print "# NAME: " + sweep_name
-print "# NUM RUNS: " + str(SWEEP_RUNS)
-print "# SWEEP PARAMETERS: " + str(SWEEP_PARAMETERS)
-print "# FIXED_PARAMETERS: " + str(FIXED_PARAMETERS)
-print
+print("# NAME: " + sweep_name)
+print("# NUM RUNS: " + str(SWEEP_RUNS))
+print("# SWEEP PARAMETERS: " + str(SWEEP_PARAMETERS))
+print("# FIXED_PARAMETERS: " + str(FIXED_PARAMETERS))
+print()
 
 for run_id in range(SWEEP_RUNS):
     params = {}
@@ -146,10 +145,10 @@ for run_id in range(SWEEP_RUNS):
 
     flags += " --experiment_name " + name
     cuda = run_id % 2
-    print "export CUDA_VISIBLE_DEVICES={}; export PYTHONPATH=./python; cd ~/Developer/spinn; ".format(cuda) + \
-        "nohup python -m spinn.models.rl_classifier {} &> nohup_{}.out &".format(flags, name)
+    print("export CUDA_VISIBLE_DEVICES={}; export PYTHONPATH=./python; cd ~/Developer/spinn; ".format(cuda) + \
+        "nohup python -m spinn.models.rl_classifier {} &> nohup_{}.out &".format(flags, name))
     # if NYU_NON_PBS:
-    #     print "cd spinn/python; python2.7 -m spinn.models.rl_classifier " + flags
+    #     print "cd spinn/python; python3 -m spinn.models.rl_classifier " + flags
     # else:
     #     print "SPINNMODEL=\"spinn.models.rl_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_cpu_only.sh"
-    print
+    print()

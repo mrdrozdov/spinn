@@ -40,7 +40,7 @@ def load_data(
             raise ValueError("Bad Label: {}".format(label))
 
     dataset = convert_unary_binary_bracketed_data(
-        path, keep_fn=keep_fn, convert_fn=convert_fn)
+        path, keep_fn=keep_fn, convert_fn=convert_fn, top_node_only=eval_mode)
     return dataset
 
 

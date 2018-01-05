@@ -98,20 +98,20 @@ def Analyze():
 
     # Print Report
     total = reports[0].shape[0]
-    print("{:>3} {:>6} {:>7}: {}".format("mid", "correct", "score", "filename"))
+    print(("{:>3} {:>6} {:>7}: {}".format("mid", "correct", "score", "filename")))
     for i, (fn, report) in enumerate(zip(report_files, reports)):
-        print("{:3} {:7} {:6.5f}: {}".format(i, report.correct.sum(), report.correct.sum() / float(total), fn))
-    print
+        print(("{:3} {:7} {:6.5f}: {}".format(i, report.correct.sum(), report.correct.sum() / float(total), fn)))
+    print()
 
     best = max(reports, key=lambda x: x.correct.sum())
-    print("{:>3} {:>3}: {:>6} {:>6} {:>6} {:>7}".format("m1", "m2", "common", "upside", "c+u", "score"))
+    print(("{:>3} {:>3}: {:>6} {:>6} {:>6} {:>7}".format("m1", "m2", "common", "upside", "c+u", "score")))
     for i1, i2, c, u in common:
-        print("{:3} {:3}: {:6} {:6} {:6} {:6.5f}".format(i1, i2, c, u, c + u, (c+u)/float(total)))
-    print
-    print("    all: {:6} {:6} {:6} {:6.5f}".format(all_common_correct, all_upside, all_common_correct + all_upside, (all_common_correct + all_upside)/float(total)))
-    print
-    print("Best:\t{:6} {:6.5f} {}".format(best.correct.sum(), best.correct.sum()/float(total), best.id))
-    print("Total:\t{:6}".format(total))
+        print(("{:3} {:3}: {:6} {:6} {:6} {:6.5f}".format(i1, i2, c, u, c + u, (c+u)/float(total))))
+    print()
+    print(("    all: {:6} {:6} {:6} {:6.5f}".format(all_common_correct, all_upside, all_common_correct + all_upside, (all_common_correct + all_upside)/float(total))))
+    print()
+    print(("Best:\t{:6} {:6.5f} {}".format(best.correct.sum(), best.correct.sum()/float(total), best.id)))
+    print(("Total:\t{:6}".format(total)))
 
     if FLAGS.ensemble:
         ensemble = list()
@@ -201,7 +201,7 @@ def Analyze():
         output += "\n mean: {mean}"
         output += "\n max: {max}"
         output += "\n vote: {vote_simple} {vote_weighted} ({ties}, {vote_ideal})"
-        print(output.format(
+        print((output.format(
             control=scores[control_idx]/float(total),
             mean=scores[mean_idx]/float(total),
             max=scores[max_idx]/float(total),
@@ -209,7 +209,7 @@ def Analyze():
             vote_weighted=scores[vote_weighted_idx]/float(total),
             ties=ties,
             vote_ideal=(scores[vote_ideal_idx])/float(total)
-            ))
+            )))
 
 
 if __name__ == '__main__':

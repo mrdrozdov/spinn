@@ -46,7 +46,6 @@ FIXED_PARAMETERS = {
     "eval_seq_length":  "3000",
     "gpu":  "0",
     "log_path": FLAGS.log_path,
-    "metrics_path": FLAGS.metrics_path,
     "mlp_dim": "16",
     "model_dim":   "32",
     "model_type":      "RLSPINN",
@@ -71,7 +70,7 @@ SWEEP_PARAMETERS = {
     "rl_weight":  ("rlwt", EXP, 40., 60.),
     "learning_rate":      ("lr", EXP, 0.004, 0.01),
     "l2_lambda":          ("l2", EXP, 2e-6, 8e-6),
-    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.7, 0.9),
+    "learning_rate_decay_when_no_progress": ("dec", EXP, 0.7, 0.9),
     "rl_epsilon": ("eps", LIN, 0.8, 1.),
     "rl_epsilon_decay": ("epsd", LIN, 8000, 10000),
     "rl_confidence_penalty": ("rlconf", EXP, 1.5, 3.),
@@ -82,11 +81,11 @@ sweep_name = "sweep_" + NAME + "_" + \
     FIXED_PARAMETERS["data_type"] + "_" + FIXED_PARAMETERS["model_type"]
 
 # - #
-print "# NAME: " + sweep_name
-print "# NUM RUNS: " + str(SWEEP_RUNS)
-print "# SWEEP PARAMETERS: " + str(SWEEP_PARAMETERS)
-print "# FIXED_PARAMETERS: " + str(FIXED_PARAMETERS)
-print
+print("# NAME: " + sweep_name)
+print("# NUM RUNS: " + str(SWEEP_RUNS))
+print("# SWEEP PARAMETERS: " + str(SWEEP_PARAMETERS))
+print("# FIXED_PARAMETERS: " + str(FIXED_PARAMETERS))
+print()
 
 for run_id in range(SWEEP_RUNS):
     params = {}
@@ -142,10 +141,10 @@ for run_id in range(SWEEP_RUNS):
 
     flags += " --experiment_name " + name
     cuda = run_id % 2
-    print "export CUDA_VISIBLE_DEVICES={}; export PYTHONPATH=./python; cd ~/Developer/spinn; ".format(cuda) + \
-        "nohup python -m spinn.models.rl_classifier {} &> nohup_{}.out &".format(flags, name)
+    print("export CUDA_VISIBLE_DEVICES={}; export PYTHONPATH=./python; cd ~/Developer/spinn; ".format(cuda) + \
+        "nohup python -m spinn.models.rl_classifier {} &> nohup_{}.out &".format(flags, name))
     # if NYU_NON_PBS:
-    #     print "cd spinn/python; python2.7 -m spinn.models.rl_classifier " + flags
+    #     print "cd spinn/python; python3 -m spinn.models.rl_classifier " + flags
     # else:
     #     print "SPINNMODEL=\"spinn.models.rl_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_cpu_only.sh"
-    print
+    print()

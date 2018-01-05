@@ -129,7 +129,7 @@ class VisdomUpdater(object):
                 break
             n = index + min(index + self.limit, len(table))
 
-            vals, steps = zip(*table[index:n])
+            vals, steps = list(zip(*table[index:n]))
             steps = np.array(steps)
             vals = np.array(vals)
 

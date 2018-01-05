@@ -1,20 +1,24 @@
 import unittest
 import numpy as np
 import tempfile
+import gflags
+import sys
 
 from spinn.spinn_core_model import BaseModel
+from spinn.models.base import get_flags
 
 import spinn.spinn_core_model
 import spinn.rl_spinn
-from spinn.util.blocks import ModelTrainer
+from spinn.util.trainer import ModelTrainer
 
 # PyTorch
 import torch
 import torch.nn as nn
-import torch.optim as optim
 
 from spinn.util.test import MockModel, default_args, get_batch, compare_models
+from spinn.util import afs_safe_logger
 
+FLAGS = gflags.FLAGS
 
 class SPINNTestCase(unittest.TestCase):
 
@@ -25,7 +29,7 @@ class SPINNTestCase(unittest.TestCase):
         # Save to and load from temporary file.
         temp = tempfile.NamedTemporaryFile()
         torch.save(model_to_save.state_dict(), temp.name)
-        model_to_load.load_state_dict(torch.load(temp.name, cpu=True))
+        model_to_load.load_state_dict(torch.load(temp.name))
 
         compare_models(model_to_save, model_to_load)
 
@@ -38,22 +42,31 @@ class SPINNTestCase(unittest.TestCase):
         model_to_save = MockModel(
             spinn.spinn_core_model.BaseModel,
             default_args())
-        opt_to_save = optim.SGD(model_to_save.parameters(), lr=0.1)
-        trainer_to_save = ModelTrainer(model_to_save, opt_to_save)
+
+        # Parse command line flags.
+        get_flags()
+        FLAGS(sys.argv)
+
+        log_temp = tempfile.NamedTemporaryFile()
+        ckpt_temp = tempfile.NamedTemporaryFile()
+
+        logger = afs_safe_logger.ProtoLogger(log_temp.name)
+        FLAGS.ckpt_path = '.'
+
+        trainer_to_save = ModelTrainer(model_to_save, logger, FLAGS)
 
         model_to_load = MockModel(spinn.rl_spinn.BaseModel, default_args())
-        opt_to_load = optim.SGD(model_to_load.parameters(), lr=0.1)
-        trainer_to_load = ModelTrainer(model_to_load, opt_to_load)
+        trainer_to_load = ModelTrainer(model_to_load, logger, FLAGS)
 
         # Save to and load from temporary file.
-        temp = tempfile.NamedTemporaryFile()
-        trainer_to_save.save(temp.name, 0, 0)
-        trainer_to_load.load(temp.name, cpu=True)
+        trainer_to_save.save(ckpt_temp.name)
+        trainer_to_load.load(ckpt_temp.name, cpu=True)
 
         compare_models(model_to_save, model_to_load)
 
         # Cleanup temporary file.
-        temp.close()
+        ckpt_temp.close()
+        log_temp.close()
 
     def test_init_models(self):
         MockModel(spinn.spinn_core_model.BaseModel, default_args())

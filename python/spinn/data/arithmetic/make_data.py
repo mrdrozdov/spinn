@@ -84,7 +84,7 @@ if __name__ == '__main__':
     dataset = ArithmeticData(NUMBERS)
     generator = dataset.generate_prefix_seqs(length)
 
-    for idx in tqdm(range(limit)):
+    for idx in tqdm(list(range(limit))):
 
         label = min(idx // label_size, len(data_type.LABELS) - 1)
         desired_length = min(
@@ -106,7 +106,7 @@ if __name__ == '__main__':
                 else:
                     exclude_dict[check_label].add(check)
 
-                print "{}\t{}".format(data_type.LABELS[label],
+                print("{}\t{}".format(data_type.LABELS[label],
                                       " ".join(dataset.convert_to_sexpr(seq)),
-                                      )
+                                      ))
                 break

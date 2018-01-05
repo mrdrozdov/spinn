@@ -11,8 +11,9 @@ PROD_MOD = "[PM"
 FL_SUM_MOD = "[FLSUM"
 END = "]"
 
-OPERATORS = [MIN, MAX, MED, SUM_MOD, FIRST, LAST, PROD_MOD, FL_SUM_MOD]
-VALUES = range(10)
+#OPERATORS = [MIN, MAX, MED, SUM_MOD, FIRST, LAST, PROD_MOD, FL_SUM_MOD]
+OPERATORS = [MIN, MAX, MED, SUM_MOD]  # , FIRST, LAST]
+VALUES = list(range(10))
 
 VALUE_P = 0.25
 MAX_ARGS = 6
@@ -98,4 +99,4 @@ while len(data) < DATA_POINTS:
         pass
 
 for example in data:
-    print str(to_value(example)) + '\t' + to_string(example)
+    print(str(to_value(example)) + '\t' + to_string(example))

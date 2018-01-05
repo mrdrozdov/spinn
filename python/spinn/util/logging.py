@@ -8,8 +8,6 @@ Log format convenience methods for training spinn.
 import numpy as np
 from spinn.util.blocks import flatten
 from spinn.util.misc import time_per_token
-from spinn.data import T_SHIFT, T_REDUCE, T_SKIP
-from tuner_utils.yellowfin import YFOptimizer
 
 
 class InspectModel(object):
@@ -68,7 +66,7 @@ def train_rl_accumulate(model, A, batch):
     A.add('adv_var_magnitude', model.stats['var_magnitude'])
 
 
-def stats(model, optimizer, A, step, log_entry):
+def stats(model, trainer, A, log_entry):
     im = inspect(model)
 
     if im.has_transition_loss:
@@ -79,15 +77,13 @@ def stats(model, optimizer, A, step, log_entry):
 
     time_metric = time_per_token(A.get('total_tokens'), A.get('total_time'))
 
-    log_entry.step = step
+    log_entry.step = trainer.step
     log_entry.class_accuracy = A.get_avg('class_acc')
     log_entry.cross_entropy_cost = A.get_avg('xent_cost')  # not actual mean
-    log_entry.l2_cost = A.get_avg('l2_cost')  # not actual mean
-    if not isinstance(optimizer, YFOptimizer):
-        log_entry.learning_rate = optimizer.lr
+    log_entry.learning_rate = trainer.learning_rate
     log_entry.time_per_token_seconds = time_metric
 
-    total_cost = log_entry.l2_cost + log_entry.cross_entropy_cost
+    total_cost = log_entry.cross_entropy_cost
     if im.has_transition_loss:
         log_entry.transition_accuracy = avg_trans_acc
         log_entry.transition_cost = model.transition_loss.data[0]
@@ -188,7 +184,7 @@ def train_format(log_entry, extra=False, rl=False):
     stats_str += " Acc: cl {class_acc:.5f} tr {transition_acc:.5f}"
 
     # Cost Component.
-    stats_str += " Cost: to {total_loss:.5f} xe {xent_loss:.5f} tr {transition_loss:.5f} reg {l2_loss:.5f}"
+    stats_str += " Cost: to {total_loss:.5f} xe {xent_loss:.5f} tr {transition_loss:.5f}"
     if log_entry.HasField('policy_cost'):
         stats_str += " po {policy_cost:.5f}"
     if log_entry.HasField('value_cost'):
@@ -252,7 +248,6 @@ def log_formatter(log_entry, extra=False, rl=False):
         'total_loss': log_entry.total_cost,
         'xent_loss': log_entry.cross_entropy_cost,
         'transition_loss': log_entry.transition_cost,
-        'l2_loss': log_entry.l2_cost,
         'policy_cost': log_entry.policy_cost,
         'value_cost': log_entry.value_cost,
         'time': log_entry.time_per_token_seconds,

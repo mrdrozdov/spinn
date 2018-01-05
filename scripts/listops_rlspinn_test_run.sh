@@ -19,7 +19,7 @@ FLAGS="
 --training_data_path spinn/data/listops/train_d20.tsv
 --rl_weight 0.095492504495
 --batch_size 64
---learning_rate_decay_per_10k_steps 0.514994481626
+--learning_rate_decay_when_no_progress 0.514994481626
 --mlp_dim 16
 --nouse_tracking_in_composition 
 --rl_baseline greedy

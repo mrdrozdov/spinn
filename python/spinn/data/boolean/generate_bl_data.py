@@ -29,7 +29,7 @@ def get_value_for_tree(tree):
             elif tree[2] == "or":
                 return left or right
             else:
-                print 'syntax error', tree
+                print('syntax error', tree)
     else:
         return tree
 

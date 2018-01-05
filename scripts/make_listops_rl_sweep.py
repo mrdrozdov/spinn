@@ -68,7 +68,7 @@ SWEEP_PARAMETERS = {
     "rl_weight":  ("rlwt", EXP, 0.5, 5.0),
     "learning_rate":      ("lr", EXP, 0.002, 0.02),
     "l2_lambda":          ("l2", EXP, 8e-7, 1e-5),
-    "learning_rate_decay_per_10k_steps": ("dec", EXP, 0.7, 1.0),
+    "learning_rate_decay_when_no_progress": ("dec", EXP, 0.7, 1.0),
     "rl_epsilon": ("eps", LIN, 0.1, 1.0),
     "rl_epsilon_decay": ("epsd", EXP, 1000, 1000000),
     "rl_confidence_penalty": ("rlconf", EXP, 0.00001, 0.01),
@@ -79,11 +79,11 @@ sweep_name = "sweep_" + NAME + "_" + \
     FIXED_PARAMETERS["data_type"] + "_" + FIXED_PARAMETERS["model_type"]
 
 # - #
-print "# NAME: " + sweep_name
-print "# NUM RUNS: " + str(SWEEP_RUNS)
-print "# SWEEP PARAMETERS: " + str(SWEEP_PARAMETERS)
-print "# FIXED_PARAMETERS: " + str(FIXED_PARAMETERS)
-print
+print("# NAME: " + sweep_name)
+print("# NUM RUNS: " + str(SWEEP_RUNS))
+print("# SWEEP PARAMETERS: " + str(SWEEP_PARAMETERS))
+print("# FIXED_PARAMETERS: " + str(FIXED_PARAMETERS))
+print()
 
 for run_id in range(SWEEP_RUNS):
     params = {}
@@ -139,7 +139,7 @@ for run_id in range(SWEEP_RUNS):
 
     flags += " --experiment_name " + name
     if NYU_NON_PBS:
-        print "cd spinn/python; python2.7 -m spinn.models.rl_classifier " + flags
+        print("cd spinn/python; python3 -m spinn.models.rl_classifier " + flags)
     else:
-        print "SPINNMODEL=\"spinn.models.rl_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_cpu_only.sh"
-    print
+        print("SPINNMODEL=\"spinn.models.rl_classifier\" SPINN_FLAGS=\"" + flags + "\" bash ../scripts/sbatch_submit_cpu_only.sh")
+    print()
