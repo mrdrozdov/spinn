@@ -428,6 +428,7 @@ class BinaryTreeLSTM(nn.Module):
                         weights = to_gpu(Variable(w_rand / w_rand.sum(1).unsqueeze(1)))
                     elif self.st_gumbel:
                         weights = st_gumbel_softmax(torch.cat(scores, dim=1), temperature)
+                        # TODO: get index/mask and don;t do a linear combination.
                     else:
                         weights = gumbel_softmax(torch.cat(scores, dim=1), temperature) # cat: batch, num_versions, out: batch, num_states
 
@@ -458,7 +459,7 @@ class BinaryTreeLSTM(nn.Module):
                                     max_length=max_depth)
 
         #select_masks = []
-        state = input.chunk(num_chunks=2, dim=2)
+        state = input.chunk(chunks=2, dim=2)
         #nodes = []
         # For one or two-word trees where we never compute a temperature
         temperature_to_display = -1.0
@@ -689,7 +690,7 @@ class BinaryTreeLSTMLayer(nn.Module):
 
         hlr_cat = torch.cat([hl, hr], dim=2)
         treelstm_vector = apply_nd(fn=self.comp_linear, input=hlr_cat)
-        i, fl, fr, u, o = treelstm_vector.chunk(num_chunks=5, dim=2)
+        i, fl, fr, u, o = treelstm_vector.chunk(chunks=5, dim=2)
         c = (cl * (fl + 1).sigmoid() + cr * (fr + 1).sigmoid()
              + u.tanh() * i.sigmoid())
         h = o.sigmoid() * c.tanh()
