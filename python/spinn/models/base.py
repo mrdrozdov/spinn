@@ -22,7 +22,11 @@ import spinn.spinn_core_model
 import spinn.plain_rnn
 import spinn.cbow
 import spinn.choi_pyramid
+import spinn.maillard_pyramid
+
+from tuner_utils.yellowfin import YFOptimizer
 import spinn.lms
+>>>>>>> upstream/master
 
 # PyTorch
 import torch
@@ -39,7 +43,7 @@ def log_path(FLAGS, load=False):
     return os.path.join(lp, en) + ".log"
 
 def sequential_only():
-    return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW" or FLAGS.model_type == "ChoiPyramid"
+    return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW" or FLAGS.model_type == "ChoiPyramid" or FLAGS.model_type == "Maillard"
 
 
 def pad_from_left():
@@ -299,7 +303,8 @@ def get_flags():
     # Model architecture settings.
     gflags.DEFINE_enum(
         "model_type", "RNN", [
-            "CBOW", "RNN", "SPINN", "RLSPINN", "ChoiPyramid", "LMS"], "")
+
+            "CBOW", "RNN", "SPINN", "RLSPINN", "ChoiPyramid", "Maillard", "LMS"], "")
     gflags.DEFINE_integer("gpu", -1, "")
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")
@@ -500,6 +505,38 @@ def get_flags():
         "otherwise use predicted transitions. Note that when predicting transitions but not using them, the "
         "reported predictions will look very odd / not valid.")  # TODO: Remove.
 
+    # Maillard Pyramid
+    gflags.DEFINE_boolean(
+        "cosine",
+        False,
+        "If true, use cosine similarity instead of dot product in measuring score for compositions.")
+    gflags.DEFINE_enum(
+        "parent_selection",
+        "gumbel",
+        ["gumbel",
+        "st-gumbel",
+        "softmax"],
+        "Which function to use to select or calculate the parent.")
+    gflags.DEFINE_boolean(
+        "right_branching",
+        False,
+        "Force right-branching composition.")
+    gflags.DEFINE_boolean(
+        "debug_branching",
+        False,
+        "use alternative style of right-branching composition.")
+    gflags.DEFINE_boolean(
+        "uniform_branching",
+        False,
+        "Uniform distribution instead of gumble softmax weighting during chart parsing.")
+    gflags.DEFINE_boolean(
+        "random_branching",
+        False,
+        "Random weighting instead of gumble softmax weighting during chart parsing.")
+    gflags.DEFINE_boolean(
+        "st_gumbel",
+        False,
+        "ST-gumble softmax weighting during chart parsing.")
 
 def flag_defaults(FLAGS, load_log_flags=False):
     if load_log_flags:
@@ -541,7 +578,7 @@ def flag_defaults(FLAGS, load_log_flags=False):
     if not FLAGS.sample_interval_steps:
         FLAGS.sample_interval_steps = FLAGS.statistics_interval_steps
 
-    if FLAGS.model_type in ["CBOW", "RNN", "ChoiPyramid", "LMS"]:
+    if FLAGS.model_type in ["CBOW", "RNN", "ChoiPyramid", "LMS", "Maillard"]:
         FLAGS.num_samples = 0
 
     if FLAGS.model_type == "LMS":
@@ -571,6 +608,8 @@ def init_model(
         build_model = spinn.rl_spinn.build_model
     elif FLAGS.model_type == "ChoiPyramid":
         build_model = spinn.choi_pyramid.build_model
+    elif FLAGS.model_type == "Maillard":
+        build_model = spinn.maillard_pyramid.build_model
     elif FLAGS.model_type == "LMS":
         build_model = spinn.lms.build_model
     else:

@@ -7,14 +7,18 @@ MED = "[MED"
 FIRST = "[FIRST"
 LAST = "[LAST"
 SUM_MOD = "[SM"
+PROD_MOD = "[PM"
+FL_SUM_MOD = "[FLSUM"
 END = "]"
 
+#OPERATORS = [MIN, MAX, MED, SUM_MOD, FIRST, LAST, PROD_MOD, FL_SUM_MOD]
 OPERATORS = [MIN, MAX, MED, SUM_MOD]  # , FIRST, LAST]
 VALUES = list(range(10))
 
 VALUE_P = 0.25
-MAX_ARGS = 5
-MAX_DEPTH = 20
+MAX_ARGS = 6
+MAX_DEPTH = 5
+MAX_SEQ_LEN = 35
 
 DATA_POINTS = 100000
 
@@ -72,6 +76,10 @@ def to_value(t):
             return int(np.median(l[1]))
         elif l[0] == SUM_MOD:
             return (np.sum(l[1]) % 10)
+        elif l[0] == PROD_MOD:
+            return (np.prod(l[1]) % 10)
+        elif l[0] == FL_SUM_MOD:
+            return (l[1][0] + l[1][1]) % 10
     # We've hit an unsaturated function and an argument.
     elif isinstance(l, tuple):
         return (l[0], l[1] + [r])
@@ -79,7 +87,16 @@ def to_value(t):
 
 data = set()
 while len(data) < DATA_POINTS:
-    data.add(generate_tree(1))
+    #data.add(generate_tree(1))
+    cur = generate_tree(1)
+    if type(cur) == tuple:
+        testl = str(cur[0]).replace("(", "").replace(")", "").replace(",", "").split()
+        if (len(testl) + 1) > MAX_SEQ_LEN:
+            pass
+        else:
+            data.add(cur)
+    else:
+        pass
 
 for example in data:
     print(str(to_value(example)) + '\t' + to_string(example))

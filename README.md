@@ -66,3 +66,4 @@ SPINN outputs metrics and statistics into a text [protocol buffer](https://devel
 Copyright 2017, New York University
 
 Available for open source use/redistribution. Terms TBD soon. Contact us with questions.
+

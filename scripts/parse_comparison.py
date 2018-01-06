@@ -29,6 +29,8 @@ LABEL_MAP = {'entailment': 0, 'neutral': 1, 'contradiction': 2}
 
 FLAGS = gflags.FLAGS
 
+def spaceify(parse):
+    return parse #.replace("(", "( ").replace(")", " )")
 
 def balance(parse, lowercase=False):
     # Modified to provided a "half-full" binary tree without padding.
@@ -94,6 +96,7 @@ def full_transitions(N, left_full=False, right_full=False):
 
 
 def tokenize_parse(parse):
+    parse = spaceify(parse)
     return [token for token in parse.split() if token not in ['(', ')']]
 
 
@@ -152,24 +155,35 @@ def average_depth(parse):
             current_depth -= 1
         else:
             depths.append(current_depth)
-    return float(sum(depths)) / len(depths)
+    if len(depths) == 0:
+        pass
+    else:
+        return float(sum(depths)) / len(depths)
 
 
 def corpus_average_depth(corpus):
     local_averages = []
     for key in corpus:
-        local_averages.append(average_depth(corpus[key]))
+        s = corpus[key]
+        if average_depth(s) is not None:
+            local_averages.append(average_depth(s))
+        else:
+            pass
     return float(sum(local_averages)) / len(local_averages)
 
 
 def average_length(parse):
+    parse = spaceify(parse)
     return len(parse.split())
 
 
 def corpus_average_length(corpus):
     local_averages = []
     for key in corpus:
-        local_averages.append(average_length(corpus[key]))
+        if average_length(s) is not None:
+            local_averages.append(average_length(s))
+        else:
+            pass
     return float(sum(local_averages)) / len(local_averages)
 
 
@@ -202,7 +216,8 @@ def corpus_stats(corpus_1, corpus_2, first_two=False, neg_pair=False):
             three_count += 1 
         if neg_pair:
             word_index = 0
-            tokens = corpus_1[key].split()
+            s = spaceify(corpus_1[key])
+            tokens = s.split()
             for token_index, token in enumerate(tokens):
                 if token in ['(', ')']:
                     continue
@@ -217,6 +232,26 @@ def corpus_stats(corpus_1, corpus_2, first_two=False, neg_pair=False):
     if neg_pair:
         stats = str(stats) + '\t' + str(neg_pair_count / neg_count)
     return stats
+
+def corpus_stats_labeled(corpus_unlabeled, corpus_labeled):
+    """ 
+    Note: If a few examples in one dataset are missing from the other (i.e., some examples from the source corpus were not included 
+      in a model corpus), the shorter dataset must be supplied as corpus_1.
+    """
+
+    correct = Counter()
+    total = Counter()
+
+    for key in corpus_labeled:     
+        c1 = to_indexed_contituents(corpus_unlabeled[key])
+        c2 = to_indexed_contituents_labeled(corpus_labeled[key])
+        if len(c2) == 0:
+            continue
+
+        ex_correct, ex_total = example_labeled_acc(c1, c2)
+        correct.update(ex_correct)
+        total.update(ex_total)
+    return correct, total
 
 
 def corpus_stats_labeled(corpus_unlabeled, corpus_labeled):
@@ -241,6 +276,9 @@ def corpus_stats_labeled(corpus_unlabeled, corpus_labeled):
 
 
 def to_indexed_contituents(parse):
+    if parse.count("(") != parse.count(")"):
+        print parse
+    parse = spaceify(parse)
     sp = parse.split()
     if len(sp) == 1:
         return set([(0, 1)])
@@ -252,6 +290,9 @@ def to_indexed_contituents(parse):
         if token == '(':
             backpointers.append(word_index)
         elif token == ')':
+            #if len(backpointers) == 0:
+            #    pass
+            #else:
             start = backpointers.pop()
             end = word_index
             constituent = (start, end)
@@ -260,6 +301,26 @@ def to_indexed_contituents(parse):
             word_index += 1
     return indexed_constituents
 
+def to_indexed_contituents_labeled(parse):
+    sp = re.findall(r'\([^ ]+| [^\(\) ]+|\)', parse)
+    if len(sp) == 1:
+        return set([(0, 1)])
+
+    backpointers = []
+    indexed_constituents = set()
+    word_index = 0
+    for index, token in enumerate(sp):
+        if token[0] == '(':
+            backpointers.append((word_index, token[1:]))
+        elif token == ')':
+            start, typ = backpointers.pop()
+            end = word_index
+            constituent = (start, end, typ)
+            if end - start > 1:
+                indexed_constituents.add(constituent)
+        else:
+            word_index += 1
+    return indexed_constituents
 
 def to_indexed_contituents_labeled(parse):
     sp = re.findall(r'\([^ ]+| [^\(\) ]+|\)', parse)
@@ -319,6 +380,20 @@ def read_nli_report(path):
             report[loaded_example['example_id'] + "_2"] = unpad(loaded_example['sent2_tree'])
     return report
 
+def read_nli_report_padded(path):
+    report = {}
+    with codecs.open(path, encoding='utf-8') as f:
+        for line in f:
+            try:
+                line = line.encode('UTF-8')
+            except UnicodeError as e:
+                print "ENCODING ERROR:", line, e
+                line = "{}"
+            loaded_example = json.loads(line)
+            report[loaded_example['example_id'] + "_1"] = loaded_example['sent1_tree']
+            report[loaded_example['example_id'] + "_2"] = loaded_example['sent2_tree']
+    return report
+
 def read_ptb_report(path):
     report = {}
     with codecs.open(path, encoding='utf-8') as f:
@@ -327,26 +402,30 @@ def read_ptb_report(path):
             report[loaded_example['example_id']] = unpad(loaded_example['sent1_tree'])
     return report
 
-
 def unpad(parse):
+    ok = ["(", ")", "_PAD"]
+    unpadded = []
     tokens = parse.split()
-    to_drop = 0
-    for i in range(len(tokens) - 1, -1, -1):
-        if tokens[i] == "_PAD":
-            to_drop += 1
-        elif tokens[i] == ")":
-            continue
-        else:
-            break
-    if to_drop == 0:
-        return parse
+    cur = [i for i in range(len(tokens)) if tokens[i] == "_PAD"]
+    
+    if len(cur) != 0:
+        if tokens[cur[0]-1] in ok:
+            unpad = tokens[:cur[0]-1]
+        else: 
+            unpad = tokens[:cur[0]]
     else:
-        return " ".join(tokens[to_drop:-2 * to_drop])
+        unpad = tokens
+    
+    sent = " ".join(unpad)
+    while sent.count("(") != sent.count(")"):
+        sent += " )"
+    
+    return sent
 
 
 def run():
     gt = {}
-    # gt_labeled = {} 
+    # gt_labeled = {} x
     with codecs.open(FLAGS.main_data_path, encoding='utf-8') as f:
         for line in f:
             loaded_example = json.loads(line)
@@ -363,6 +442,9 @@ def run():
             gt[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_binary_parse']
             # gt_labeled[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_parse']
             # gt_labeled[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_parse']
+
+            gt_labeled[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_parse']
+            gt_labeled[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_parse']
 
     lb = to_lb(gt)
     rb = to_rb(gt)
@@ -435,6 +517,9 @@ def run():
                 f1 = corpus_stats(reports[i], reports[j])
                 f1s.append(f1)
         print("Mean Self F1:\t" + str(sum(f1s) / len(f1s)))
+
+    correct = Counter()
+    total = Counter()
 
     for i, report in enumerate(reports):
         print(report_paths[i])

@@ -55,7 +55,7 @@ def evaluate(FLAGS, model, eval_set, log_entry,
     total_tokens = 0
     start = time.time()
 
-    if FLAGS.model_type in ["ChoiPyramid"]:
+    if FLAGS.model_type in ["ChoiPyramid", "Maillard"]:
         pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (
             trainer.step / 10000.0)
         if FLAGS.pyramid_temperature_cycle_length > 0.0:
@@ -81,9 +81,10 @@ def evaluate(FLAGS, model, eval_set, log_entry,
             store_parse_masks=show_sample,
             example_lengths=eval_num_transitions_batch)
 
-        # TODO: Restore support in Pyramid if using.
-        can_sample = FLAGS.model_type in ["ChoiPyramid"] or (
+        # TODO: Fix so that this works for Maillard!!
+        can_sample = FLAGS.model_type in ["ChoiPyramid", "Maillard"] or (
             FLAGS.model_type == "SPINN" and FLAGS.use_internal_parser)
+
         if show_sample and can_sample:
             tmp_samples = model.get_samples(
                 eval_X_batch, vocabulary, only_one=not FLAGS.write_eval_report)
@@ -117,10 +118,8 @@ def evaluate(FLAGS, model, eval_set, log_entry,
 
             if model.use_sentence_pair:
                 batch_size = pred.size(0)
-                sent1_transitions = transitions_per_example[:
-                                                            batch_size] if transitions_per_example is not None else None
-                sent2_transitions = transitions_per_example[batch_size:
-                                                            ] if transitions_per_example is not None else None
+                sent1_transitions = transitions_per_example[:batch_size] if transitions_per_example is not None else None
+                sent2_transitions = transitions_per_example[batch_size:] if transitions_per_example is not None else None
 
                 sent1_trees = tree_strs[:batch_size] if tree_strs is not None else None
                 sent2_trees = tree_strs[batch_size:
@@ -217,7 +216,7 @@ def train_loop(
         # Reset cached gradients.
         trainer.optimizer_zero_grad()
 
-        if FLAGS.model_type in ["ChoiPyramid"]:
+        if FLAGS.model_type in ["ChoiPyramid", "Maillard"]:
             pyramid_temperature_multiplier = FLAGS.pyramid_temperature_decay_per_10k_steps ** (
                 trainer.step / 10000.0)
             if FLAGS.pyramid_temperature_cycle_length > 0.0:
@@ -259,6 +258,7 @@ def train_loop(
             total_loss += transition_loss
         aux_loss = auxiliary_loss(model)
         total_loss += aux_loss
+        
         # Backward pass.
         total_loss.backward()
 
