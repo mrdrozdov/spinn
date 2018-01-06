@@ -646,44 +646,6 @@ def sequence_mask(sequence_length, max_length=None):
     seq_length_expand = sequence_length.unsqueeze(1)
     return seq_range_expand < seq_length_expand
 
-"""
-class BinaryTreeLSTMLayer(nn.Module):
-    # TODO: Unify with SimpleTreeLSTM
-
-    def __init__(self, hidden_dim, composition_ln=False):
-        super(BinaryTreeLSTMLayer, self).__init__()
-        self.hidden_dim = hidden_dim
-        self.comp_linear = Linear(
-            initializer=HeKaimingInitializer)(
-            in_features=2 * hidden_dim,
-            out_features=5 * hidden_dim)
-        self.composition_ln = composition_ln
-        if composition_ln:
-            self.left_h_ln = LayerNormalization(hidden_dim)
-            self.right_h_ln = LayerNormalization(hidden_dim)
-            self.left_c_ln = LayerNormalization(hidden_dim)
-            self.right_c_ln = LayerNormalization(hidden_dim)
-
-    def forward(self, l=None, r=None):
-
-
-        hl, cl = l
-        hr, cr = r
-
-        if self.composition_ln:
-            hl = self.left_h_ln(hl)
-            hr = self.right_h_ln(hr)
-            cl = self.left_c_ln(cl)
-            cr = self.right_c_ln(cr)
-
-        hlr_cat = torch.cat([hl, hr], dim=2)
-        treelstm_vector = apply_nd(fn=self.comp_linear, input=hlr_cat)
-        i, fl, fr, u, o = treelstm_vector.chunk(chunks=5, dim=2)
-        c = (cl * (fl + 1).sigmoid() + cr * (fr + 1).sigmoid()
-             + u.tanh() * i.sigmoid())
-        h = o.sigmoid() * c.tanh()
-        return h, c
-"""
 
 class BinaryTreeLSTMLayer(nn.Module):
     def __init__(self, hidden_dim, composition_ln=False):
