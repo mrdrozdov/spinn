@@ -10,7 +10,7 @@ from torch.nn import init
 from torch.autograd import Variable
 import torch.nn.functional as F
 
-from spinn.util.blocks import Embed, to_gpu, MLP, Linear, HeKaimingInitializer, LayerNormalization
+from spinn.util.blocks import Embed, to_gpu, MLP, Linear, LayerNormalization
 from spinn.util.misc import Args, Vocab
 
 
@@ -95,7 +95,7 @@ class Maillard(nn.Module):
 
         self.binary_tree_lstm = BinaryTreeLSTM(
             word_embedding_dim,
-            model_dim / 2,
+            model_dim // 2,
             False,
             composition_ln=composition_ln,
             trainable_temperature=trainable_temperature,
@@ -172,12 +172,12 @@ class Maillard(nn.Module):
         return output
 
     def get_features_dim(self):
-        features_dim = self.model_dim if self.use_sentence_pair else self.model_dim / 2
+        features_dim = self.model_dim if self.use_sentence_pair else self.model_dim // 2
         if self.use_sentence_pair:
             if self.use_difference_feature:
-                features_dim += self.model_dim / 2
+                features_dim += self.model_dim // 2
             if self.use_product_feature:
-                features_dim += self.model_dim / 2
+                features_dim += self.model_dim // 2
         return features_dim
 
     def build_features(self, h):
@@ -285,7 +285,7 @@ class Maillard(nn.Module):
             x), volatile=not self.training)), lengths
 
     def wrap_sentence_pair(self, hh):
-        batch_size = hh.size(0) / 2
+        batch_size = hh.size(0) // 2
         h = ([hh[:batch_size], hh[batch_size:]])
         return h
 
@@ -306,7 +306,6 @@ class BinaryTreeLSTM(nn.Module):
     def __init__(self, word_dim, hidden_dim, intra_attention,
                  composition_ln=False, trainable_temperature=False, right_branching=False, debug_branching=False, uniform_branching=False, random_branching=False, st_gumbel=False):
         super(BinaryTreeLSTM, self).__init__()
-        #self.binary_tree_lstm(emb, example_lengths_var, temperature_multiplier=pyramid_temperature_multiplier)
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
         self.intra_attention = intra_attention
@@ -319,8 +318,7 @@ class BinaryTreeLSTM(nn.Module):
         self.st_gumbel = st_gumbel
 
         # TODO: Add something to blocks to make this use case more elegant.
-        self.comp_query = Linear(
-            initializer=HeKaimingInitializer)(
+        self.comp_query = Linear()(
             in_features=hidden_dim,
             out_features=1)
 
@@ -551,7 +549,7 @@ def convert_to_one_hot(indices, num_classes):
 
 def masked_softmax(logits, mask=None):
     eps = 1e-20
-    probs = F.softmax(logits)
+    probs = F.softmax(logits, dim=1)
     if mask is not None:
         mask = mask.float()
         probs = probs * mask + eps
@@ -648,7 +646,7 @@ def sequence_mask(sequence_length, max_length=None):
     seq_length_expand = sequence_length.unsqueeze(1)
     return seq_range_expand < seq_length_expand
 
-
+"""
 class BinaryTreeLSTMLayer(nn.Module):
     # TODO: Unify with SimpleTreeLSTM
 
@@ -657,6 +655,41 @@ class BinaryTreeLSTMLayer(nn.Module):
         self.hidden_dim = hidden_dim
         self.comp_linear = Linear(
             initializer=HeKaimingInitializer)(
+            in_features=2 * hidden_dim,
+            out_features=5 * hidden_dim)
+        self.composition_ln = composition_ln
+        if composition_ln:
+            self.left_h_ln = LayerNormalization(hidden_dim)
+            self.right_h_ln = LayerNormalization(hidden_dim)
+            self.left_c_ln = LayerNormalization(hidden_dim)
+            self.right_c_ln = LayerNormalization(hidden_dim)
+
+    def forward(self, l=None, r=None):
+
+
+        hl, cl = l
+        hr, cr = r
+
+        if self.composition_ln:
+            hl = self.left_h_ln(hl)
+            hr = self.right_h_ln(hr)
+            cl = self.left_c_ln(cl)
+            cr = self.right_c_ln(cr)
+
+        hlr_cat = torch.cat([hl, hr], dim=2)
+        treelstm_vector = apply_nd(fn=self.comp_linear, input=hlr_cat)
+        i, fl, fr, u, o = treelstm_vector.chunk(chunks=5, dim=2)
+        c = (cl * (fl + 1).sigmoid() + cr * (fr + 1).sigmoid()
+             + u.tanh() * i.sigmoid())
+        h = o.sigmoid() * c.tanh()
+        return h, c
+"""
+
+class BinaryTreeLSTMLayer(nn.Module):
+    def __init__(self, hidden_dim, composition_ln=False):
+        super(BinaryTreeLSTMLayer, self).__init__()
+        self.hidden_dim = hidden_dim
+        self.comp_linear = Linear()(
             in_features=2 * hidden_dim,
             out_features=5 * hidden_dim)
         self.composition_ln = composition_ln
@@ -690,7 +723,7 @@ class BinaryTreeLSTMLayer(nn.Module):
 
         hlr_cat = torch.cat([hl, hr], dim=2)
         treelstm_vector = apply_nd(fn=self.comp_linear, input=hlr_cat)
-        i, fl, fr, u, o = treelstm_vector.chunk(chunks=5, dim=2)
+        i, fl, fr, u, o = treelstm_vector.chunk(5, dim=2)
         c = (cl * (fl + 1).sigmoid() + cr * (fr + 1).sigmoid()
              + u.tanh() * i.sigmoid())
         h = o.sigmoid() * c.tanh()
