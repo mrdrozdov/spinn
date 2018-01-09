@@ -23,6 +23,7 @@ import spinn.plain_rnn
 import spinn.cbow
 import spinn.choi_pyramid
 import spinn.maillard_pyramid
+import spinn.catalan_pyramid
 
 import spinn.lms
 
@@ -41,7 +42,7 @@ def log_path(FLAGS, load=False):
     return os.path.join(lp, en) + ".log"
 
 def sequential_only():
-    return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW" or FLAGS.model_type == "ChoiPyramid" or FLAGS.model_type == "Maillard"
+    return FLAGS.model_type == "RNN" or FLAGS.model_type == "CBOW" or FLAGS.model_type == "ChoiPyramid" or FLAGS.model_type == "Maillard" or FLAGS.model_type == "CatalanPyramid"
 
 
 def pad_from_left():
@@ -302,7 +303,7 @@ def get_flags():
     gflags.DEFINE_enum(
         "model_type", "RNN", [
 
-            "CBOW", "RNN", "SPINN", "RLSPINN", "ChoiPyramid", "Maillard", "LMS"], "")
+            "CBOW", "RNN", "SPINN", "RLSPINN", "ChoiPyramid", "Maillard", "LMS", "CatalanPyramid"], "")
     gflags.DEFINE_integer("gpu", -1, "")
     gflags.DEFINE_integer("model_dim", 8, "")
     gflags.DEFINE_integer("word_embedding_dim", 8, "")
@@ -576,7 +577,7 @@ def flag_defaults(FLAGS, load_log_flags=False):
     if not FLAGS.sample_interval_steps:
         FLAGS.sample_interval_steps = FLAGS.statistics_interval_steps
 
-    if FLAGS.model_type in ["CBOW", "RNN", "ChoiPyramid", "LMS", "Maillard"]:
+    if FLAGS.model_type in ["CBOW", "RNN", "ChoiPyramid", "LMS", "Maillard", "CatalanPyramid"]:
         FLAGS.num_samples = 0
 
     if FLAGS.model_type == "LMS":
@@ -610,6 +611,8 @@ def init_model(
         build_model = spinn.maillard_pyramid.build_model
     elif FLAGS.model_type == "LMS":
         build_model = spinn.lms.build_model
+    elif FLAGS.model_type == "CatalanPyramid":
+        build_model = spinn.catalan_pyramid.build_model
     else:
         raise NotImplementedError
 
