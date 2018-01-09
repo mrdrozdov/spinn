@@ -24,9 +24,7 @@ import spinn.cbow
 import spinn.choi_pyramid
 import spinn.maillard_pyramid
 
-from tuner_utils.yellowfin import YFOptimizer
 import spinn.lms
->>>>>>> upstream/master
 
 # PyTorch
 import torch
