@@ -310,8 +310,11 @@ class BinaryTreeLSTM(nn.Module):
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
         self.intra_attention = intra_attention
+        
+        low_dim = 20 # just for testing. remove hard code.
+
         self.treelstm_layer = BinaryTreeLSTMLayer(
-            hidden_dim, composition_ln=composition_ln)
+            low_dim, composition_ln=composition_ln) #CAT: low_dim from hidden_dim
         self.right_branching = right_branching
         self.debug_branching = debug_branching
         self.uniform_branching = uniform_branching
@@ -319,13 +322,11 @@ class BinaryTreeLSTM(nn.Module):
         self.st_gumbel = st_gumbel
 
         self.cat = Catalan()
-
-        low_dim = 20 # just for testing. remove hard code.
         self.reduce_dim = Linear()(in_features=hidden_dim, out_features=low_dim)
 
         # TODO: Add something to blocks to make this use case more elegant.
         self.comp_query = Linear()(
-            in_features=hidden_dim,
+            in_features=low_dim,
             out_features=1)
 
         self.trainable_temperature = trainable_temperature
@@ -456,6 +457,8 @@ class BinaryTreeLSTM(nn.Module):
             for row in range(1, length):
                 for col in range(length - row):
                     mask[row][col] = create_max_mask(all_weights[row][col])
+            
+            import pdb; pdb.set_trace()
             return chart[length-1][0][0], chart[length-1][0][1], mask
 
 
@@ -476,7 +479,7 @@ class BinaryTreeLSTM(nn.Module):
             nodes.append(state[0])
         """
 
-        h, c, masks = self.compute_compositions((h_low, c_low), length_mask, temperature_multiplier)
+        h, c, masks = self.compute_compositions((h_low, c_low), length_mask, temperature_multiplier=1.0)
         
         """
         if self.intra_attention:
