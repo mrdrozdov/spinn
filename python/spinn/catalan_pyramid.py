@@ -504,15 +504,31 @@ class BinaryTreeLSTM(nn.Module):
         parses = []
         for i in range(30): #TODO: temp hard code
             alpha = Variable(torch.ones(h_low.size(0)))
-            h, c, masks, alpha_w, transitions = self.compute_compositions((h_low, c_low), length_mask, alpha, temperature_multiplier=1.0)
+            h_out, c_out, masks, alpha_w, transitions = self.compute_compositions((h_low, c_low), length_mask, alpha, temperature_multiplier=1.0)
             alphas.append(alpha_w)
             parses.append(transitions.unsqueeze(1))
 
-        alpha_max, alpha_argmax = torch.cat(alphas, dim=1).topk(5) #TODO: hardcoded top k
-        parses = torch.cat(parses, dim=1).float()
-        alpha_hard = convert_to_top_k_hot(alpha_argmax, parses.size(1))
+        topk = 5
+        alpha_max, alpha_argmax = torch.cat(alphas, dim=1).topk(topk) #TODO: hardcoded top k
+        alpha_maxs = alpha_max.chunk(topk, dim=1)
+        alpha_args = alpha_argmax.chunk(topk, dim=1)
+        
+        parses = torch.cat(parses, dim=1)
 
-        parses_hard = torch.sum(torch.mul(alpha_hard.data, parses), 1).long()
+        h_in, c_in = state
+        cur = []
+        curt = []
+        for i in range(topk):
+            alpha_hard = convert_to_one_hot(alpha_args[i].squeeze(), parses.size(1))
+            parse_hard = torch.sum(torch.mul(alpha_hard.data, parses), 1).long()
+            cur.append(parse_hard)
+            curt.append(alpha_hard)
+            # weight: alpha_maxs[i]
+            # h,c = spinn
+        
+        #h, c = self.shift_reduce_tree(h_in, c_in, parse_hard)
+
+        # alpha_topk = convert_to_topk_hot(alpha_max, alpha_argmax, parses.size(1))
 
         import pdb; pdb.set_trace()
         
@@ -556,6 +572,12 @@ def dot_nd(query, candidates):
     output = output_flat.view(*cands_size[:-1])
     return output
 
+def get_binary_parse(parse):
+    parse_bin = torch.zeros(l.size())
+    for i in range(l.size(0)):
+        parse_bin[i] = bin(parse[i])[3:]
+    # redundant 1 pre-appended, to avoid loss of initial zeros
+    return parse_bin.unsqueeze(1)
 
 def convert_to_one_hot(indices, num_classes):
     """
@@ -575,7 +597,7 @@ def convert_to_one_hot(indices, num_classes):
                        .scatter_(1, indices.data, 1))
     return one_hot
 
-def convert_to_top_k_hot(indices, num_classes):
+def convert_to_topk_hot(weights, indices, num_classes):
     """
     Args:
         indices (Variable): A vector containing indices,
@@ -588,11 +610,11 @@ def convert_to_top_k_hot(indices, num_classes):
     """
 
     batch_size = indices.size(0)
-    indices = indices #.unsqueeze(1)
-    import pdb; pdb.set_trace()
-    one_hot = Variable(indices.data.new(batch_size, num_classes).zero_()
+    indices = indices
+    topk_hot = Variable(indices.data.new(batch_size, num_classes).zero_()
                        .scatter_(1, indices.data, 1))
-    return one_hot
+    weighted_topk = torch.mul(weights, topk_hotw)
+    return weighted_topk, topk_hot
 
 
 def masked_softmax(logits, mask=None):
@@ -707,6 +729,11 @@ def tr_compose(l, r):
         out_dec[i] = int(out_bin, 2)
     # redundant 1 pre-appended, to avoid loss of initial zeros
     return out_dec.unsqueeze(1)
+
+
+#def shift_reduce_tree(h, c, parse):
+
+
 
 class BinaryTreeLSTMLayer(nn.Module):
     def __init__(self, hidden_dim, composition_ln=False):
