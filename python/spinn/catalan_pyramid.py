@@ -248,13 +248,13 @@ class CatalanPyramid(nn.Module):
                 versions = []
                 for i in range(row):
                     versions.append(compose(chart[row-i-1][col], chart[i][row+col-i]))
-                max_ind = torch.max(self.mask_memory[row][col], dim=1)[1][index]
+                max_ind = torch.max(mask[row][col], dim=1)[1][index]
                 max_ind = int(max_ind.data.cpu().numpy())
                 chart[row][col] = versions[max_ind] #.gather(1, ids.view(-1,1))
                 choices[row][col] = versions
                 l = len(versions)
         
-        max_ind = torch.max(self.mask_memory[-1][-1], dim=1)[1][index]
+        max_ind = torch.max(mask[-1][-1], dim=1)[1][index]
         max_ind = int(max_ind.data.cpu().numpy())
         return choices[-1][-1][max_ind]
     
@@ -347,6 +347,7 @@ class BinaryTreeLSTM(nn.Module):
             self,
             state,
             mask,
+            alpha,
             temperature_multiplier=1.0):
         """
         (In a parallelized manner) Compute all compositions we will need 
@@ -379,7 +380,15 @@ class BinaryTreeLSTM(nn.Module):
         length_masks = mask.chunk(length, dim=1) # (batch,1), ...
         temperature = temperature_multiplier
 
-        c_n = self.cat.catalan(length - 1)
+        def tr_compose(l, r):
+            out_dec = torch.zeros(l.size())
+            for i in range(l.size(0)):
+                l_bin = bin(l[i])[3:] # strip pre-fix "0b1"
+                r_bin = bin(r[i])[3:] 
+                out_bin = "1" + l_bin + r_bin  + "1"
+                out_dec[i] = int(out_bin, 2)
+            # redundant 1 pre-appended, to avoid loss of initial zeros
+            return out_dec.unsqueeze(1)
         
 
         if self.debug_branching:
@@ -395,21 +404,30 @@ class BinaryTreeLSTM(nn.Module):
         else: 
             chart = [[]]
             all_weights = [[]]
+            mask = [[]]
+            transitions = [[]]
 
             for i in range(length):
                 chart[0].append((word_hiddens[i], word_cells[i]))
                 all_weights[0].append(None)
+                mask[0].append(None)
+                transitions[0].append(torch.ones(h.size(0)).long() * 2)
             for row in range(1, length):
                 chart.append([])
                 all_weights.append([])
+                mask.append([])
+                transitions.append([])
                 for col in range(length - row):
                     chart[row].append(None)
                     all_weights[row].append(None)
+                    mask[row].append(None)
+                    transitions[row].append(None)
 
             for row in range(1, length):
                 for col in range(length - row):
                     states = []
                     hiddens = []
+                    tr_versions = []
                     cells = []
                     scores = []
                     for i in range(row):
@@ -418,6 +436,7 @@ class BinaryTreeLSTM(nn.Module):
                         states.append(self.treelstm_layer(l=l, r=r))
                         hiddens.append(states[-1][0])
                         cells.append(states[-1][1])
+                        tr_versions.append(tr_compose(transitions[row-i-1][col], transitions[i][row+col-i]))
                         comp_weights = dot_nd(
                             query=self.comp_query.weight.squeeze(),
                             candidates=hiddens[-1]) # batch, 1
@@ -434,7 +453,11 @@ class BinaryTreeLSTM(nn.Module):
                         w_rand = torch.rand(torch.cat(scores, dim=1).size())
                         weights = to_gpu(Variable(w_rand / w_rand.sum(1).unsqueeze(1)))
                     elif self.st_gumbel:
-                        weights = st_gumbel_softmax(torch.cat(scores, dim=1), temperature)
+                        weights, w_max, w_argmax = st_gumbel_softmax(torch.cat(scores, dim=1), temperature)
+                        alpha *= w_max
+
+                        tr_new = torch.sum(torch.mul(weights.data, torch.cat(tr_versions, dim=1)), dim=1).long()
+
                         # TODO: get index/mask and don't do a linear combination.
                     else:
                         weights = gumbel_softmax(torch.cat(scores, dim=1), temperature) # cat: batch, num_versions, out: batch, num_states
@@ -444,7 +467,10 @@ class BinaryTreeLSTM(nn.Module):
 
                     chart[row][col] = (h_new.unsqueeze(1), c_new.unsqueeze(1))
                     all_weights[row][col] = weights
+                    mask[row][col] = create_max_mask(all_weights[row][col])
+                    transitions[row][col] = tr_new
 
+            """
             # TODO: FIX, place below into above code. replace all_weights.
             mask = [[]]
             for i in range(length):
@@ -457,9 +483,8 @@ class BinaryTreeLSTM(nn.Module):
             for row in range(1, length):
                 for col in range(length - row):
                     mask[row][col] = create_max_mask(all_weights[row][col])
-            
-            import pdb; pdb.set_trace()
-            return chart[length-1][0][0], chart[length-1][0][1], mask
+            """
+            return chart[length-1][0][0], chart[length-1][0][1], mask, alpha.unsqueeze(1), transitions[length-1][0]
 
 
     def forward(self, input, length, temperature_multiplier=None):
@@ -474,32 +499,23 @@ class BinaryTreeLSTM(nn.Module):
 
         # For one or two-word trees where we never compute a temperature
         temperature_to_display = -1.0
-        """
-        if self.intra_attention:
-            nodes.append(state[0])
-        """
 
-        h, c, masks = self.compute_compositions((h_low, c_low), length_mask, temperature_multiplier=1.0)
+        alphas = []
+        parses = []
+        for i in range(30): #TODO: temp hard code
+            alpha = Variable(torch.ones(h_low.size(0)))
+            h, c, masks, alpha_w, transitions = self.compute_compositions((h_low, c_low), length_mask, alpha, temperature_multiplier=1.0)
+            alphas.append(alpha_w)
+            parses.append(transitions.unsqueeze(1))
+
+        alpha_max, alpha_argmax = torch.cat(alphas, dim=1).topk(5) #TODO: hardcoded top k
+        parses = torch.cat(parses, dim=1).float()
+        alpha_hard = convert_to_top_k_hot(alpha_argmax, parses.size(1))
+
+        parses_hard = torch.sum(torch.mul(alpha_hard.data, parses), 1).long()
+
+        import pdb; pdb.set_trace()
         
-        """
-        if self.intra_attention:
-            att_mask = torch.cat([length_mask, length_mask[:, 1:]], dim=1)
-            att_mask = att_mask.float()
-            # nodes: (batch_size, num_tree_nodes, hidden_dim)
-            nodes = torch.cat(nodes, dim=1)
-            att_mask_expand = att_mask.unsqueeze(2)
-            nodes = nodes * att_mask_expand
-            # nodes_mean: (batch_size, hidden_dim, 1)
-            nodes_mean = nodes.mean(1).squeeze(1).unsqueeze(2)
-            # att_weights: (batch_size, num_tree_nodes)
-            att_weights = torch.bmm(nodes, nodes_mean).squeeze(2)
-            att_weights = masked_softmax(
-                logits=att_weights, mask=att_mask)
-            # att_weights_expand: (batch_size, num_tree_nodes, hidden_dim)
-            att_weights_expand = att_weights.unsqueeze(2)
-            # h: (batch_size, 1, 2 * hidden_dim)
-            h = (att_weights_expand * nodes).sum(1)
-        """
         assert h.size(1) == 1 and c.size(1) == 1
         return h.squeeze(1), c.squeeze(1), masks, temperature_to_display
 
@@ -559,6 +575,25 @@ def convert_to_one_hot(indices, num_classes):
                        .scatter_(1, indices.data, 1))
     return one_hot
 
+def convert_to_top_k_hot(indices, num_classes):
+    """
+    Args:
+        indices (Variable): A vector containing indices,
+            whose size is (batch_size,).
+        num_classes (Variable): The number of classes, which would be
+            the second dimension of the resulting one-hot matrix.
+
+    Returns:
+        result: The one-hot matrix of size (batch_size, num_classes).
+    """
+
+    batch_size = indices.size(0)
+    indices = indices #.unsqueeze(1)
+    import pdb; pdb.set_trace()
+    one_hot = Variable(indices.data.new(batch_size, num_classes).zero_()
+                       .scatter_(1, indices.data, 1))
+    return one_hot
+
 
 def masked_softmax(logits, mask=None):
     eps = 1e-20
@@ -606,11 +641,12 @@ def st_gumbel_softmax(logits, temperature=1.0, mask=None):
         temperature = 1.0
     y = masked_softmax(logits=y / temperature, mask=mask)
     y_argmax = y.max(1)[1]
+    y_max = y.max(1)[0]
     y_hard = convert_to_one_hot(
         indices=y_argmax,
         num_classes=y.size(1)).float()
     y = (y_hard - y).detach() + y
-    return y
+    return y, y_max, y_argmax
 
 def create_max_mask(y):
     y_argmax = y.max(1)[1]
@@ -659,6 +695,18 @@ def sequence_mask(sequence_length, max_length=None):
     seq_length_expand = sequence_length.unsqueeze(1)
     return seq_range_expand < seq_length_expand
 
+def tr_compose(l, r):
+    """
+    Given tensors of integeres, converts to binary, updated binary parse, returns updated list of integers
+    """
+    out_dec = torch.zeros(l.size())
+    for i in range(l.size(0)):
+        l_bin = bin(l[i])[3:] # strip pre-fix "0b1"
+        r_bin = bin(r[i])[3:] 
+        out_bin = "1" + l_bin + r_bin  + "1"
+        out_dec[i] = int(out_bin, 2)
+    # redundant 1 pre-appended, to avoid loss of initial zeros
+    return out_dec.unsqueeze(1)
 
 class BinaryTreeLSTMLayer(nn.Module):
     def __init__(self, hidden_dim, composition_ln=False):
