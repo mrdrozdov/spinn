@@ -160,7 +160,6 @@ class CatalanPyramid(nn.Module):
         embeds = self.reshape_input(embeds, batch_size, seq_length)
         embeds = self.encode(embeds)
         embeds = self.reshape_context(embeds, batch_size, seq_length)
-        #embeds = torch.cat([b.unsqueeze(0)for b in torch.chunk(embeds, batch_size, 0)], 0)
         embeds = F.dropout(
             embeds,
             self.embedding_dropout_rate,
@@ -193,8 +192,6 @@ class CatalanPyramid(nn.Module):
             Variable(torch.from_numpy(example_lengths))).long()
 
         # Chart-Parsing Choice
-        #hh, _, masks, temperature = self.binary_tree_lstm(
-        #    emb, example_lengths_var, temperature_multiplier=pyramid_temperature_multiplier)
         sr_transitions, weights, temperature = self.chart_parser(
             emb, example_lengths_var, temperature_multiplier=pyramid_temperature_multiplier)
 
@@ -213,22 +210,19 @@ class CatalanPyramid(nn.Module):
             buffers = bb[::-1]
             example.bufs = buffers
 
-            #h, transition_acc, transition_loss = self.spinn(
-            #    example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
             h, transition_acc, transition_loss = self.run_spinn(
                 example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
 
             h_versions.append(h)
 
-        import pdb; pdb.set_trace()
-
         # Linear combination
-        #weights, h_list
+        hs = torch.stack(h_versions, dim=1)
+        hh = torch.sum(torch.mul(hs, weights.unsqueeze(2)), dim=1)
 
         if self.training:
             self.temperature_to_display = temperature
 
-        h = self.wrap(hh) # h = self.wrap_spinn(hh)
+        h = self.wrap(hh)
         output = self.mlp(self.build_features(h))
 
         return output
@@ -264,6 +258,7 @@ class CatalanPyramid(nn.Module):
         h_list, transition_acc, transition_loss = self.spinn(
             example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
         h = self.wrap_spinn(h_list)
+        h = torch.cat(h, dim=0)
         return h, transition_acc, transition_loss
 
     # --- Sample printing ---
@@ -566,7 +561,10 @@ class ChartParser(nn.Module):
                         states.append(self.treelstm_layer(l=l, r=r))
                         hiddens.append(states[-1][0])
                         cells.append(states[-1][1])
-                        tr_versions.append(tr_compose(transitions[row-i-1][col], transitions[i][row+col-i]))
+                        try:
+                            tr_versions.append(tr_compose(transitions[row-i-1][col], transitions[i][row+col-i]))
+                        except:
+                            import pdb; pdb.set_trace()
                         comp_weights = dot_nd(
                             query=self.comp_query.weight.squeeze(),
                             candidates=hiddens[-1]) # batch, 1
@@ -616,7 +614,7 @@ class ChartParser(nn.Module):
 
         alphas = []
         parses = []
-        for i in range(30): #TODO: temp hard code. change to batch size.
+        for i in range(30): #TODO: temp hard code. change to batch size // 2
             alpha = Variable(torch.ones(h_low.size(0)))
             h, c, masks, alpha_w, transitions = self.compute_compositions((h_low, c_low), length_mask, alpha, temperature_multiplier=1.0)
             alphas.append(alpha_w)
@@ -641,7 +639,9 @@ class ChartParser(nn.Module):
         # assert h.size(1) == 1 and c.size(1) == 1
         # return h.squeeze(1), c.squeeze(1), masks, temperature_to_display
 
-        return binary_parses, alpha_max, temperature_to_display
+        alpha_weights = gumbel_softmax(alpha_max)
+
+        return binary_parses, alpha_weights, temperature_to_display
 
 
 def apply_nd(fn, input):
@@ -679,8 +679,6 @@ def dot_nd(query, candidates):
     output_flat = torch.mv(cands_flat, query)
     output = output_flat.view(*cands_size[:-1])
     return output
-
-#def update_binary_parse(l, r):
 
 def get_binary_parse(parse):
     #parse_bin = torch.zeros(parse.size())
@@ -846,10 +844,6 @@ def tr_compose(l, r):
         out_dec[i] = int(out_bin, 2)
     # redundant 1 pre-appended, to avoid loss of initial zeros
     return out_dec.unsqueeze(1)
-
-
-#def shift_reduce_tree(h, c, parse):
-
 
 
 class BinaryTreeLSTMLayer(nn.Module):
