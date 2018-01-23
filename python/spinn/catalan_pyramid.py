@@ -11,8 +11,10 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 
 from spinn.util.blocks import Embed, to_gpu, MLP, Linear, LayerNormalization
-from spinn.util.misc import Args, Vocab
+from spinn.util.misc import Args, Vocab, Example
 from spinn.util.catalan import Catalan
+
+from spinn.spinn_core_model import SPINN
 
 
 def build_model(data_manager, initial_embeddings, vocab_size,
@@ -40,7 +42,9 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      debug_branching=FLAGS.debug_branching,
                      uniform_branching=FLAGS.uniform_branching,
                      random_branching=FLAGS.random_branching,
-                     st_gumbel=FLAGS.st_gumbel
+                     st_gumbel=FLAGS.st_gumbel,
+                     composition_args=composition_args,
+                     predict_use_cell=FLAGS.predict_use_cell,
                      )
 
 
@@ -67,6 +71,8 @@ class CatalanPyramid(nn.Module):
                  uniform_branching=None,
                  random_branching=None,
                  st_gumbel=None,
+                 composition_args=None,
+                 predict_use_cell=None,
                  **kwargs
                  ):
         super(CatalanPyramid, self).__init__()
@@ -94,7 +100,7 @@ class CatalanPyramid(nn.Module):
             vocab.size,
             vectors=vocab.vectors)
 
-        self.binary_tree_lstm = BinaryTreeLSTM(
+        self.chart_parser = ChartParser(
             word_embedding_dim,
             model_dim // 2,
             False,
@@ -106,20 +112,31 @@ class CatalanPyramid(nn.Module):
             random_branching=random_branching,
             st_gumbel=st_gumbel)
 
+        # assert FLAGS.lateral_tracking == False
+        # TODO: move assertion flaag to base.
+
+        self.spinn = self.build_spinn(
+            composition_args, vocab, predict_use_cell)
+
         mlp_input_dim = self.get_features_dim()
 
         self.mlp = MLP(mlp_input_dim, mlp_dim, num_classes,
                        num_mlp_layers, mlp_ln, self.classifier_dropout_rate)
 
+        # SPINN vars
         self.encode = context_args.encoder
         self.reshape_input = context_args.reshape_input
         self.reshape_context = context_args.reshape_context
+        self.input_dim = context_args.input_dim
+        self.wrap_items = composition_args.wrap_items
+        self.extract_h = composition_args.extract_h
+
 
         # For sample printing and logging
         self.mask_memory = None
         self.inverted_vocabulary = None
         self.temperature_to_display = 0.0
-
+    
     def run_embed(self, x):
         batch_size, seq_length = x.size()
 
@@ -136,6 +153,24 @@ class CatalanPyramid(nn.Module):
 
         return embeds
 
+    def run_embed_spinn(self, x):
+        batch_size, seq_length = x.size()
+
+        embeds = self.embed(x)
+        embeds = self.reshape_input(embeds, batch_size, seq_length)
+        embeds = self.encode(embeds)
+        embeds = self.reshape_context(embeds, batch_size, seq_length)
+        #embeds = torch.cat([b.unsqueeze(0)for b in torch.chunk(embeds, batch_size, 0)], 0)
+        embeds = F.dropout(
+            embeds,
+            self.embedding_dropout_rate,
+            training=self.training)
+
+        return embeds
+
+    def build_spinn(self, args, vocab, predict_use_cell):
+        return SPINN(args, vocab, predict_use_cell)
+
     def forward(
             self,
             sentences,
@@ -144,6 +179,8 @@ class CatalanPyramid(nn.Module):
             example_lengths=None,
             store_parse_masks=False,
             pyramid_temperature_multiplier=None,
+            use_internal_parser=False,
+            validate_transitions=True,
             **kwargs):
         # Useful when investigating dynamic batching:
         # self.seq_lengths = sentences.shape[1] - (sentences == 0).sum(1)
@@ -155,19 +192,43 @@ class CatalanPyramid(nn.Module):
         example_lengths_var = to_gpu(
             Variable(torch.from_numpy(example_lengths))).long()
 
-        # TODO: chunk once, pass chunked embs to tree_lstm
-        hh, _, masks, temperature = self.binary_tree_lstm(
+        # Chart-Parsing Choice
+        #hh, _, masks, temperature = self.binary_tree_lstm(
+        #    emb, example_lengths_var, temperature_multiplier=pyramid_temperature_multiplier)
+        sr_transitions, weights, temperature = self.chart_parser(
             emb, example_lengths_var, temperature_multiplier=pyramid_temperature_multiplier)
 
-        self.mask_memory = masks
+        # Use SPINN with CP parses
+        embeds = self.run_embed_spinn(x)
+        b, l = x.size()[:2]
+        ee = torch.chunk(embeds, b * l, 0)[::-1]
+        
+        h_versions = []
+        for transition in sr_transitions:
+            example = self.unwrap_spinn(sentences, transition)
+            bb = []
+            for ii in range(b):
+                ex = list(ee[ii * l:(ii + 1) * l])
+                bb.append(ex)
+            buffers = bb[::-1]
+            example.bufs = buffers
+
+            #h, transition_acc, transition_loss = self.spinn(
+            #    example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
+            h, transition_acc, transition_loss = self.run_spinn(
+                example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
+
+            h_versions.append(h)
+
+        import pdb; pdb.set_trace()
+
+        # Linear combination
+        #weights, h_list
 
         if self.training:
             self.temperature_to_display = temperature
 
-        #if store_parse_masks:
-        #    self.mask_memory = [mask.data.cpu().numpy() for mask in masks]
-
-        h = self.wrap(hh)
+        h = self.wrap(hh) # h = self.wrap_spinn(hh)
         output = self.mlp(self.build_features(h))
 
         return output
@@ -193,6 +254,17 @@ class CatalanPyramid(nn.Module):
         else:
             features = h
         return features
+
+    def run_spinn(
+            self,
+            example,
+            use_internal_parser,
+            validate_transitions=True):
+        self.spinn.reset_state()
+        h_list, transition_acc, transition_loss = self.spinn(
+            example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
+        h = self.wrap_spinn(h_list)
+        return h, transition_acc, transition_loss
 
     # --- Sample printing ---
 
@@ -229,6 +301,7 @@ class CatalanPyramid(nn.Module):
     """
 
     def get_sample_merge_sequence(self, b, s, batch_size, sent):
+        # TODO: reqwrite for Catalan
         mask = self.mask_memory
         index = b + (s * batch_size)
         def compose(l, r):
@@ -270,6 +343,16 @@ class CatalanPyramid(nn.Module):
             return self.wrap_sentence_pair(hh)
         return self.wrap_sentence(hh)
 
+    def wrap_spinn(self, h_list):
+        if self.use_sentence_pair:
+            return self.wrap_sentence_pair_spinn(h_list)
+        return self.wrap_sentence_spinn(h_list)
+
+    def unwrap_spinn(self, sentences, transitions):
+        if self.use_sentence_pair:
+            return self.unwrap_sentence_pair_spinn(sentences, transitions)
+        return self.unwrap_sentence_spinn(sentences, transitions)
+
     # --- Sentence Specific ---
 
     def unwrap_sentence_pair(self, sentences, lengths=None):
@@ -285,10 +368,37 @@ class CatalanPyramid(nn.Module):
         return to_gpu(Variable(torch.from_numpy(
             x), volatile=not self.training)), lengths
 
+    def unwrap_sentence_pair_spinn(self, sentences, transitions):
+        # Build Tokens
+        x_prem = sentences[:, :, 0]
+        x_hyp = sentences[:, :, 1]
+        x = np.concatenate([x_prem, x_hyp], axis=0)
+
+        # Build Transitions
+        #t_prem = transitions[:, :, 0]
+        #t_hyp = transitions[:, :, 1]
+        #t = np.concatenate([t_prem, t_hyp], axis=0)
+        t = transitions
+
+        example = Example()
+        example.tokens = to_gpu(
+            Variable(
+                torch.from_numpy(x),
+                volatile=not self.training))
+        example.transitions = t
+
+        return example
+
     def wrap_sentence_pair(self, hh):
         batch_size = hh.size(0) // 2
         h = ([hh[:batch_size], hh[batch_size:]])
         return h
+
+    def wrap_sentence_pair_spinn(self, items):
+        batch_size = len(items) // 2
+        h_premise = self.extract_h(self.wrap_items(items[:batch_size]))
+        h_hypothesis = self.extract_h(self.wrap_items(items[batch_size:]))
+        return [h_premise, h_hypothesis]
 
     # --- Sentence Pair Specific ---
 
@@ -296,17 +406,37 @@ class CatalanPyramid(nn.Module):
         return to_gpu(Variable(torch.from_numpy(sentences),
                                volatile=not self.training)), lengths
 
+    def unwrap_sentence_spinn(self, sentences, transitions):
+        # Build Tokens
+        x = sentences
+
+        # Build Transitions
+        t = transitions
+
+        example = Example()
+        example.tokens = to_gpu(
+            Variable(
+                torch.from_numpy(x),
+                volatile=not self.training))
+        example.transitions = t
+
+        return example
+
     def wrap_sentence(self, hh):
         return hh
+
+    def wrap_sentence_spinn(self, items):
+        h = self.extract_h(self.wrap_items(items))
+        return [h]
 
     # --- From Choi's 'treelstm.py' ---
 
 
-class BinaryTreeLSTM(nn.Module):
+class ChartParser(nn.Module):
 
     def __init__(self, word_dim, hidden_dim, intra_attention,
                  composition_ln=False, trainable_temperature=False, right_branching=False, debug_branching=False, uniform_branching=False, random_branching=False, st_gumbel=False):
-        super(BinaryTreeLSTM, self).__init__()
+        super(ChartParser, self).__init__()
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
         self.intra_attention = intra_attention
@@ -396,8 +526,8 @@ class BinaryTreeLSTM(nn.Module):
             cells = word_cells
             (h, c) = (hiddens[-1], cells[-1])
             for i in range(length-1, -1, -1):
-                r = (h, c) #* length_masks[i+1]
-                l  = (hiddens[i], cells[i]) #* length_masks[i+1]
+                r = (h, c) 
+                l  = (hiddens[i], cells[i]) 
                 h, c = self.treelstm_layer(l=l, r=r)
             return h, c, None
 
@@ -457,8 +587,6 @@ class BinaryTreeLSTM(nn.Module):
                         alpha *= w_max
 
                         tr_new = torch.sum(torch.mul(weights.data, torch.cat(tr_versions, dim=1)), dim=1).long()
-
-                        # TODO: get index/mask and don't do a linear combination.
                     else:
                         weights = gumbel_softmax(torch.cat(scores, dim=1), temperature) # cat: batch, num_versions, out: batch, num_states
 
@@ -470,20 +598,6 @@ class BinaryTreeLSTM(nn.Module):
                     mask[row][col] = create_max_mask(all_weights[row][col])
                     transitions[row][col] = tr_new
 
-            """
-            # TODO: FIX, place below into above code. replace all_weights.
-            mask = [[]]
-            for i in range(length):
-                mask[0].append(None)
-            for row in range(1, length):
-                mask.append([])
-                for col in range(length - row):
-                    mask[row].append(None)
-
-            for row in range(1, length):
-                for col in range(length - row):
-                    mask[row][col] = create_max_mask(all_weights[row][col])
-            """
             return chart[length-1][0][0], chart[length-1][0][1], mask, alpha.unsqueeze(1), transitions[length-1][0]
 
 
@@ -502,38 +616,32 @@ class BinaryTreeLSTM(nn.Module):
 
         alphas = []
         parses = []
-        for i in range(30): #TODO: temp hard code
+        for i in range(30): #TODO: temp hard code. change to batch size.
             alpha = Variable(torch.ones(h_low.size(0)))
-            h_out, c_out, masks, alpha_w, transitions = self.compute_compositions((h_low, c_low), length_mask, alpha, temperature_multiplier=1.0)
+            h, c, masks, alpha_w, transitions = self.compute_compositions((h_low, c_low), length_mask, alpha, temperature_multiplier=1.0)
             alphas.append(alpha_w)
             parses.append(transitions.unsqueeze(1))
 
-        topk = 5
+        topk = 5 # TODO: hard coded. chose k by..? w/ track-rnn over sentence?
         alpha_max, alpha_argmax = torch.cat(alphas, dim=1).topk(topk) #TODO: hardcoded top k
         alpha_maxs = alpha_max.chunk(topk, dim=1)
         alpha_args = alpha_argmax.chunk(topk, dim=1)
         
         parses = torch.cat(parses, dim=1)
 
-        h_in, c_in = state
-        cur = []
-        curt = []
+        binary_parses = []
+        #alpha_weights = []
         for i in range(topk):
             alpha_hard = convert_to_one_hot(alpha_args[i].squeeze(), parses.size(1))
             parse_hard = torch.sum(torch.mul(alpha_hard.data, parses), 1).long()
-            cur.append(parse_hard)
-            curt.append(alpha_hard)
-            # weight: alpha_maxs[i]
-            # h,c = spinn
+            bin_parse = get_binary_parse(parse_hard)
+            binary_parses.append(bin_parse)
+            #alpha_weights.append(alpha_hard)
         
-        #h, c = self.shift_reduce_tree(h_in, c_in, parse_hard)
+        # assert h.size(1) == 1 and c.size(1) == 1
+        # return h.squeeze(1), c.squeeze(1), masks, temperature_to_display
 
-        # alpha_topk = convert_to_topk_hot(alpha_max, alpha_argmax, parses.size(1))
-
-        import pdb; pdb.set_trace()
-        
-        assert h.size(1) == 1 and c.size(1) == 1
-        return h.squeeze(1), c.squeeze(1), masks, temperature_to_display
+        return binary_parses, alpha_max, temperature_to_display
 
 
 def apply_nd(fn, input):
@@ -572,12 +680,21 @@ def dot_nd(query, candidates):
     output = output_flat.view(*cands_size[:-1])
     return output
 
+#def update_binary_parse(l, r):
+
 def get_binary_parse(parse):
-    parse_bin = torch.zeros(l.size())
-    for i in range(l.size(0)):
-        parse_bin[i] = bin(parse[i])[3:]
+    #parse_bin = torch.zeros(parse.size())
+    parse_len = len(bin(parse[0])[3:])
+    parse_bin = np.empty((0,parse_len))
+    for i in range(parse.size(0)):
+        #parse_bin[i] = bin(parse[i])[3:]
+        p_bin = bin(parse[i])[3:]
+        p_bin = list(p_bin)
+        p_bin = [int(p) for p in p_bin]
+        parse_bin = np.append(parse_bin, [p_bin], axis=0)
     # redundant 1 pre-appended, to avoid loss of initial zeros
-    return parse_bin.unsqueeze(1)
+    #return parse_bin.unsqueeze(1)
+    return parse_bin
 
 def convert_to_one_hot(indices, num_classes):
     """
