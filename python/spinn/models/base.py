@@ -504,7 +504,7 @@ def get_flags():
         "otherwise use predicted transitions. Note that when predicting transitions but not using them, the "
         "reported predictions will look very odd / not valid.")  # TODO: Remove.
 
-    # Maillard Pyramid
+    # Chart-Parsing Variables
     gflags.DEFINE_boolean(
         "cosine",
         False,
@@ -536,6 +536,22 @@ def get_flags():
         "st_gumbel",
         False,
         "ST-gumble softmax weighting during chart parsing.")
+    glfags.DEFINE_enum(
+        "composition_selection",
+        "st_gumbel",
+        ["right_branching",
+        "uniform_branching",
+        "random_branching",
+        "st_gumbel",
+        "gumbel"])
+    gflags.DEFINE_integer(
+        "low_dim", 
+        10, 
+        "The size of representation in chart-parser for choosing binary parses.")
+    gflags.DEFINE_integer(
+        "topk", 
+        5, 
+        "The number of parses to choose from chart-parser to use with SPINN.")
 
 def flag_defaults(FLAGS, load_log_flags=False):
     if load_log_flags:

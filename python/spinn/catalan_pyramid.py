@@ -45,6 +45,8 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      st_gumbel=FLAGS.st_gumbel,
                      composition_args=composition_args,
                      predict_use_cell=FLAGS.predict_use_cell,
+                     low_dim = FLAGS.low_dim,
+                     topk = FLAGS.topk,
                      )
 
 
@@ -73,6 +75,8 @@ class CatalanPyramid(nn.Module):
                  st_gumbel=None,
                  composition_args=None,
                  predict_use_cell=None,
+                 low_dim=None,
+                 topk=None,
                  **kwargs
                  ):
         super(CatalanPyramid, self).__init__()
@@ -81,6 +85,8 @@ class CatalanPyramid(nn.Module):
         self.use_difference_feature = use_difference_feature
         self.use_product_feature = use_product_feature
         self.model_dim = model_dim
+        self.low_dim = low_dim
+        self.topk = topk
         self.trainable_temperature = trainable_temperature
         self.right_branching = right_branching
         self.debug_branching = debug_branching
@@ -103,7 +109,7 @@ class CatalanPyramid(nn.Module):
         self.chart_parser = ChartParser(
             word_embedding_dim,
             model_dim // 2,
-            False,
+            low_dim,
             composition_ln=composition_ln,
             trainable_temperature=trainable_temperature,
             right_branching=right_branching,
@@ -191,10 +197,11 @@ class CatalanPyramid(nn.Module):
         batch_size, seq_len, model_dim = emb.data.size()
         example_lengths_var = to_gpu(
             Variable(torch.from_numpy(example_lengths))).long()
+        topk = self.topk
 
         # Chart-Parsing Choice
         sr_transitions, weights, temperature = self.chart_parser(
-            emb, example_lengths_var, temperature_multiplier=pyramid_temperature_multiplier)
+            emb, example_lengths_var, topk, temperature_multiplier=pyramid_temperature_multiplier)
 
         # Use SPINN with CP parses
         embeds = self.run_embed_spinn(x)
@@ -435,14 +442,12 @@ class CatalanPyramid(nn.Module):
 
 class ChartParser(nn.Module):
 
-    def __init__(self, word_dim, hidden_dim, intra_attention,
+    def __init__(self, word_dim, hidden_dim, low_dim,
                  composition_ln=False, trainable_temperature=False, right_branching=False, debug_branching=False, uniform_branching=False, random_branching=False, st_gumbel=False):
         super(ChartParser, self).__init__()
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
-        self.intra_attention = intra_attention
-        
-        low_dim = 20 # just for testing. remove hard code.
+        self.low_dim = low_dim
 
         self.treelstm_layer = BinaryTreeLSTMLayer(
             low_dim, composition_ln=composition_ln) #CAT: low_dim from hidden_dim
@@ -511,18 +516,6 @@ class ChartParser(nn.Module):
         length_masks = mask.chunk(length, dim=1) # (batch,1), ...
         temperature = temperature_multiplier
 
-        """
-        def tr_compose(l, r):
-            out_dec = torch.zeros(l.size())
-            for i in range(l.size(0)):
-                l_bin = bin(l[i])[3:] # strip pre-fix "0b1"
-                r_bin = bin(r[i])[3:] 
-                out_bin = "1" + l_bin + r_bin  + "1"
-                out_dec[i] = int(out_bin, 2)
-            # redundant 1 pre-appended, to avoid loss of initial zeros
-            return out_dec.unsqueeze(1)
-        """
-
         if self.debug_branching:
             hiddens = word_hiddens
             cells = word_cells
@@ -568,10 +561,8 @@ class ChartParser(nn.Module):
                         states.append(self.treelstm_layer(l=l, r=r))
                         hiddens.append(states[-1][0])
                         cells.append(states[-1][1])
-                        #try:
+
                         tr_versions.append(self.tr_compose(transitions[row-i-1][col], transitions[i][row+col-i]))
-                        #except:
-                        #    import pdb; pdb.set_trace()
                         comp_weights = dot_nd(
                             query=self.comp_query.weight.squeeze(),
                             candidates=hiddens[-1]) # batch, 1
@@ -583,14 +574,14 @@ class ChartParser(nn.Module):
                             weights[k, -1] = 1.0
                     elif self.uniform_branching:
                         l = torch.cat(scores, dim=1).size(1)
-                        weights = to_gpu(Variable(torch.ones(torch.cat( scores, dim=1).size()) / l ))
+                        weights = to_gpu(Variable(torch.ones(torch.cat(scores, dim=1).size()) / l ))
                     elif self.random_branching:
                         w_rand = torch.rand(torch.cat(scores, dim=1).size())
                         weights = to_gpu(Variable(w_rand / w_rand.sum(1).unsqueeze(1)))
                     elif self.st_gumbel:
                         weights, w_max, w_argmax = st_gumbel_softmax(torch.cat(scores, dim=1), temperature)
                         alpha *= w_max
-                        tr_new = torch.sum(torch.mul(weights.data.double(), torch.cat(tr_versions, dim=1)), dim=1) #.long() ?
+                        tr_new = torch.sum(torch.mul(weights.data.double(), torch.cat(tr_versions, dim=1)), dim=1)
                     else:
                         weights = gumbel_softmax(torch.cat(scores, dim=1), temperature) # cat: batch, num_versions, out: batch, num_states
 
@@ -601,7 +592,7 @@ class ChartParser(nn.Module):
                     all_weights[row][col] = weights
                     mask[row][col] = create_max_mask(all_weights[row][col])
                     transitions[row][col] = tr_new
-                    
+
             return chart[length-1][0][0], chart[length-1][0][1], mask, alpha.unsqueeze(1), transitions[length-1][0]
 
     def tr_compose(self, l, r):
@@ -613,14 +604,12 @@ class ChartParser(nn.Module):
             out_bin = "1" + l_bin + r_bin  + "1"
             out_fl = float(int(out_bin, 2))
             out_dec[i] = out_fl
-            if bin(int(out_dec[i]))[-1] == "0":
-                import pdb; pdb.set_trace()
-            # bunch of asserts checking parse sequence
-            #if len(out_fl) == length:
+            #if bin(int(out_dec[i]))[-1] == "0":
+            #    import pdb; pdb.set_trace()
         # redundant 1 pre-appended, to avoid loss of initial zeros
         return out_dec.unsqueeze(1)
 
-    def forward(self, input, length, temperature_multiplier=None):
+    def forward(self, input, length, topk, temperature_multiplier=None):
         max_depth = input.size(1)
         length_mask = sequence_mask(sequence_length=length,
                                     max_length=max_depth)
@@ -629,19 +618,28 @@ class ChartParser(nn.Module):
         state = input.chunk(chunks=2, dim=2)
         h_low = self.reduce_dim(state[0])
         c_low = self.reduce_dim(state[1])
+        batch_size = h_low.size(0) 
 
         # For one or two-word trees where we never compute a temperature
         temperature_to_display = -1.0
 
         alphas = []
         parses = []
-        for i in range(30): #TODO: temp hard code. change to batch size // 2
-            alpha = Variable(torch.ones(h_low.size(0)))
-            h, c, masks, alpha_w, transitions = self.compute_compositions((h_low, c_low), length_mask, alpha, temperature_multiplier=1.0)
-            alphas.append(alpha_w)
-            parses.append(transitions.unsqueeze(1))
 
-        topk = 5 # TODO: hard coded. chose k by..? w/ track-rnn over sentence?
+        num = batch_size // 2
+        h_long = [h_low] * (num)
+        h_long = torch.cat(h_long, 0)
+        c_long = [c_low] * (num)
+        c_long = torch.cat(c_long, 0)
+        length_mask_long = [length_mask] * (num)
+        length_mask_long = torch.cat(length_mask_long, 0)
+
+        alpha = Variable(torch.ones(h_long.size(0)))
+        h, c, masks, alpha_w, transitions = self.compute_compositions((h_long, c_long), length_mask_long, alpha, temperature_multiplier=1.0)
+        
+        alphas = alpha_w.chunk(num, dim=0)
+        parses = transitions.unsqueeze(1).chunk(num, dim=0)
+
         alpha_max, alpha_argmax = torch.cat(alphas, dim=1).topk(topk) #TODO: hardcoded top k
         alpha_maxs = alpha_max.chunk(topk, dim=1)
         alpha_args = alpha_argmax.chunk(topk, dim=1)
@@ -727,25 +725,6 @@ def convert_to_one_hot(indices, num_classes):
     one_hot = Variable(indices.data.new(batch_size, num_classes).zero_()
                        .scatter_(1, indices.data, 1))
     return one_hot
-
-def convert_to_topk_hot(weights, indices, num_classes):
-    """
-    Args:
-        indices (Variable): A vector containing indices,
-            whose size is (batch_size,).
-        num_classes (Variable): The number of classes, which would be
-            the second dimension of the resulting one-hot matrix.
-
-    Returns:
-        result: The one-hot matrix of size (batch_size, num_classes).
-    """
-
-    batch_size = indices.size(0)
-    indices = indices
-    topk_hot = Variable(indices.data.new(batch_size, num_classes).zero_()
-                       .scatter_(1, indices.data, 1))
-    weighted_topk = torch.mul(weights, topk_hotw)
-    return weighted_topk, topk_hot
 
 
 def masked_softmax(logits, mask=None):
@@ -848,10 +827,8 @@ def sequence_mask(sequence_length, max_length=None):
     seq_length_expand = sequence_length.unsqueeze(1)
     return seq_range_expand < seq_length_expand
 
+"""
 def tr_compose(l, r):
-    """
-    Given tensors of integeres, converts to binary, updated binary parse, returns updated list of integers
-    """
     out_dec = torch.zeros(l.size())
     for i in range(l.size(0)):
         l_bin = bin(l[i])[3:] # strip pre-fix "0b1"
@@ -860,7 +837,7 @@ def tr_compose(l, r):
         out_dec[i] = int(out_bin, 2)
     # redundant 1 pre-appended, to avoid loss of initial zeros
     return out_dec.unsqueeze(1)
-
+"""
 
 class BinaryTreeLSTMLayer(nn.Module):
     def __init__(self, hidden_dim, composition_ln=False):
