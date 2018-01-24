@@ -125,6 +125,7 @@ class CatalanPyramid(nn.Module):
 
         # SPINN vars
         self.encode = context_args.encoder
+        #self.encode = Linear()(word_embedding_dim, model_dim)
         self.reshape_input = context_args.reshape_input
         self.reshape_context = context_args.reshape_context
         self.input_dim = context_args.input_dim
@@ -223,6 +224,10 @@ class CatalanPyramid(nn.Module):
             self.temperature_to_display = temperature
 
         h = self.wrap(hh)
+
+        if h[0].sum().data[0] == 0:
+            import pdb; pdb.set_trace()
+        
         output = self.mlp(self.build_features(h))
 
         return output
@@ -240,6 +245,7 @@ class CatalanPyramid(nn.Module):
         if self.use_sentence_pair:
             h_prem, h_hyp = h
             features = [h_prem, h_hyp]
+            
             if self.use_difference_feature:
                 features.append(h_prem - h_hyp)
             if self.use_product_feature:
@@ -505,6 +511,7 @@ class ChartParser(nn.Module):
         length_masks = mask.chunk(length, dim=1) # (batch,1), ...
         temperature = temperature_multiplier
 
+        """
         def tr_compose(l, r):
             out_dec = torch.zeros(l.size())
             for i in range(l.size(0)):
@@ -514,7 +521,7 @@ class ChartParser(nn.Module):
                 out_dec[i] = int(out_bin, 2)
             # redundant 1 pre-appended, to avoid loss of initial zeros
             return out_dec.unsqueeze(1)
-        
+        """
 
         if self.debug_branching:
             hiddens = word_hiddens
@@ -561,10 +568,10 @@ class ChartParser(nn.Module):
                         states.append(self.treelstm_layer(l=l, r=r))
                         hiddens.append(states[-1][0])
                         cells.append(states[-1][1])
-                        try:
-                            tr_versions.append(tr_compose(transitions[row-i-1][col], transitions[i][row+col-i]))
-                        except:
-                            import pdb; pdb.set_trace()
+                        #try:
+                        tr_versions.append(self.tr_compose(transitions[row-i-1][col], transitions[i][row+col-i]))
+                        #except:
+                        #    import pdb; pdb.set_trace()
                         comp_weights = dot_nd(
                             query=self.comp_query.weight.squeeze(),
                             candidates=hiddens[-1]) # batch, 1
@@ -583,8 +590,7 @@ class ChartParser(nn.Module):
                     elif self.st_gumbel:
                         weights, w_max, w_argmax = st_gumbel_softmax(torch.cat(scores, dim=1), temperature)
                         alpha *= w_max
-
-                        tr_new = torch.sum(torch.mul(weights.data, torch.cat(tr_versions, dim=1)), dim=1).long()
+                        tr_new = torch.sum(torch.mul(weights.data.double(), torch.cat(tr_versions, dim=1)), dim=1) #.long() ?
                     else:
                         weights = gumbel_softmax(torch.cat(scores, dim=1), temperature) # cat: batch, num_versions, out: batch, num_states
 
@@ -595,9 +601,24 @@ class ChartParser(nn.Module):
                     all_weights[row][col] = weights
                     mask[row][col] = create_max_mask(all_weights[row][col])
                     transitions[row][col] = tr_new
-
+                    
             return chart[length-1][0][0], chart[length-1][0][1], mask, alpha.unsqueeze(1), transitions[length-1][0]
 
+    def tr_compose(self, l, r):
+        out_dec = torch.zeros(l.size()).double() 
+        # Double Tensor since it's 64 bit
+        for i in range(l.size(0)):
+            l_bin = bin(int(l[i]))[3:] # strip pre-fix "0b1"
+            r_bin = bin(int(r[i]))[3:] 
+            out_bin = "1" + l_bin + r_bin  + "1"
+            out_fl = float(int(out_bin, 2))
+            out_dec[i] = out_fl
+            if bin(int(out_dec[i]))[-1] == "0":
+                import pdb; pdb.set_trace()
+            # bunch of asserts checking parse sequence
+            #if len(out_fl) == length:
+        # redundant 1 pre-appended, to avoid loss of initial zeros
+        return out_dec.unsqueeze(1)
 
     def forward(self, input, length, temperature_multiplier=None):
         max_depth = input.size(1)
@@ -628,16 +649,11 @@ class ChartParser(nn.Module):
         parses = torch.cat(parses, dim=1)
 
         binary_parses = []
-        #alpha_weights = []
         for i in range(topk):
             alpha_hard = convert_to_one_hot(alpha_args[i].squeeze(), parses.size(1))
-            parse_hard = torch.sum(torch.mul(alpha_hard.data, parses), 1).long()
+            parse_hard = torch.sum(torch.mul(alpha_hard.data.double(), parses), 1).long()
             bin_parse = get_binary_parse(parse_hard)
             binary_parses.append(bin_parse)
-            #alpha_weights.append(alpha_hard)
-        
-        # assert h.size(1) == 1 and c.size(1) == 1
-        # return h.squeeze(1), c.squeeze(1), masks, temperature_to_display
 
         alpha_weights = gumbel_softmax(alpha_max)
 
@@ -682,11 +698,11 @@ def dot_nd(query, candidates):
 
 def get_binary_parse(parse):
     #parse_bin = torch.zeros(parse.size())
-    parse_len = len(bin(parse[0])[3:])
+    parse_len = len(bin(int(parse[0]))[3:])
     parse_bin = np.empty((0,parse_len))
     for i in range(parse.size(0)):
         #parse_bin[i] = bin(parse[i])[3:]
-        p_bin = bin(parse[i])[3:]
+        p_bin = bin(int(parse[i]))[3:]
         p_bin = list(p_bin)
         p_bin = [int(p) for p in p_bin]
         parse_bin = np.append(parse_bin, [p_bin], axis=0)

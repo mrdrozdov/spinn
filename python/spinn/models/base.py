@@ -668,6 +668,9 @@ def init_model(
     composition_args.wrap_items = lambda x: torch.cat(x, 0)
     composition_args.extract_h = lambda x: x
 
+    if FLAGS.model_type == "CatalanPyramid":
+        assert FLAGS.lateral_tracking == False
+
     if FLAGS.reduce == "treelstm":
         assert FLAGS.model_dim % 2 == 0, 'model_dim must be an even number.'
         assert FLAGS.model_type != 'LMS', 'Must use reduce=lms for LMS.'
