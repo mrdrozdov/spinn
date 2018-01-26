@@ -16,6 +16,7 @@ from spinn.util.catalan import Catalan
 
 from spinn.spinn_core_model import SPINN
 
+import time
 
 def build_model(data_manager, initial_embeddings, vocab_size,
                 num_classes, FLAGS, context_args, composition_args, **kwargs):
@@ -199,10 +200,13 @@ class CatalanPyramid(nn.Module):
             Variable(torch.from_numpy(example_lengths))).long()
         topk = self.topk
 
+        ch_start_time = time.time()
         # Chart-Parsing Choice
         sr_transitions, weights, temperature = self.chart_parser(
             emb, example_lengths_var, topk, temperature_multiplier=pyramid_temperature_multiplier)
+        ch_end_time = time.time()
 
+        sp_start_time = time.time()
         # Use SPINN with CP parses
         embeds = self.run_embed_spinn(x)
         b, l = x.size()[:2]
@@ -218,11 +222,22 @@ class CatalanPyramid(nn.Module):
             buffers = bb[::-1]
             example.bufs = buffers
 
+            sp1_start_time = time.time()
+            
             h, transition_acc, transition_loss = self.run_spinn(
                 example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
 
+            sp1_end_time = time.time()
+            
             h_versions.append(h)
 
+        sp_end_time = time.time()
+
+        print( "Chart time:", ch_end_time - ch_start_time )
+        print( "SPINN single time:", sp1_end_time - sp1_start_time )
+        print( "SPINN full time:", sp_end_time - sp_start_time)
+
+        mlp_start_time = time.time()
         # Linear combination
         hs = torch.stack(h_versions, dim=1)
         hh = torch.sum(torch.mul(hs, weights.unsqueeze(2)), dim=1)
@@ -232,6 +247,10 @@ class CatalanPyramid(nn.Module):
 
         h = self.wrap(hh)        
         output = self.mlp(self.build_features(h))
+
+        mlp_end_time = time.time()
+
+        print( "Lin+MLP time:", mlp_end_time - mlp_start_time )
 
         return output
 
@@ -631,8 +650,6 @@ class ChartParser(nn.Module):
         length_mask_long = torch.cat(length_mask_long, 0)
 
         alpha = to_gpu(Variable(torch.ones(h_long.size(0))))
-        #if length.is_cuda:
-        #    alpha = alpha.cuda()
         h, c, masks, alpha_w, transitions = self.compute_compositions((h_long, c_long), length_mask_long, alpha, temperature_multiplier=1.0)
         
         alphas = alpha_w.chunk(num, dim=0)
