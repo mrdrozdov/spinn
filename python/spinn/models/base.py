@@ -536,14 +536,6 @@ def get_flags():
         "st_gumbel",
         False,
         "ST-gumble softmax weighting during chart parsing.")
-    glfags.DEFINE_enum(
-        "composition_selection",
-        "st_gumbel",
-        ["right_branching",
-        "uniform_branching",
-        "random_branching",
-        "st_gumbel",
-        "gumbel"])
     gflags.DEFINE_integer(
         "low_dim", 
         10, 
