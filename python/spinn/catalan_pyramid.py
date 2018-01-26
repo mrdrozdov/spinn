@@ -230,11 +230,7 @@ class CatalanPyramid(nn.Module):
         if self.training:
             self.temperature_to_display = temperature
 
-        h = self.wrap(hh)
-
-        if h[0].sum().data[0] == 0:
-            import pdb; pdb.set_trace()
-        
+        h = self.wrap(hh)        
         output = self.mlp(self.build_features(h))
 
         return output
@@ -581,7 +577,6 @@ class ChartParser(nn.Module):
                     elif self.st_gumbel:
                         weights, w_max, w_argmax = st_gumbel_softmax(torch.cat(scores, dim=1), temperature)
                         alpha *= w_max
-                        import pdb; pdb.set_trace()
                         tr_new = torch.sum(torch.mul(weights.data.double(), torch.cat(tr_versions, dim=1)), dim=1)
                     else:
                         weights = gumbel_softmax(torch.cat(scores, dim=1), temperature) # cat: batch, num_versions, out: batch, num_states
