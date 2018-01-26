@@ -592,7 +592,7 @@ class ChartParser(nn.Module):
             return chart[length-1][0][0], chart[length-1][0][1], mask, alpha.unsqueeze(1), transitions[length-1][0]
 
     def tr_compose(self, l, r):
-        out_dec = torch.zeros(l.size()).double() 
+        out_dec = to_gpu(torch.zeros(l.size()).double())
         # Double Tensor since it's 64 bit
         for i in range(l.size(0)):
             l_bin = bin(int(l[i]))[3:] # strip pre-fix "0b1"
@@ -630,9 +630,9 @@ class ChartParser(nn.Module):
         length_mask_long = [length_mask] * (num)
         length_mask_long = torch.cat(length_mask_long, 0)
 
-        alpha = Variable(torch.ones(h_long.size(0)))
-        if length.is_cuda:
-            alpha = alpha.cuda()
+        alpha = to_gpu(Variable(torch.ones(h_long.size(0))))
+        #if length.is_cuda:
+        #    alpha = alpha.cuda()
         h, c, masks, alpha_w, transitions = self.compute_compositions((h_long, c_long), length_mask_long, alpha, temperature_multiplier=1.0)
         
         alphas = alpha_w.chunk(num, dim=0)
