@@ -43,6 +43,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      debug_branching=FLAGS.debug_branching,
                      uniform_branching=FLAGS.uniform_branching,
                      random_branching=FLAGS.random_branching,
+                     enforce_right=FLAGS.enforce_right,
                      st_gumbel=FLAGS.st_gumbel,
                      composition_args=composition_args,
                      predict_use_cell=FLAGS.predict_use_cell,
@@ -73,6 +74,7 @@ class CatalanPyramid(nn.Module):
                  debug_branching=None,
                  uniform_branching=None,
                  random_branching=None,
+                 enforce_right=None,
                  st_gumbel=None,
                  composition_args=None,
                  predict_use_cell=None,
@@ -94,6 +96,7 @@ class CatalanPyramid(nn.Module):
         self.uniform_branching = uniform_branching
         self.random_branching = random_branching
         self.st_gumbel = st_gumbel
+        self.enforce_right = enforce_right
 
         self.classifier_dropout_rate = 1. - classifier_keep_rate
         self.embedding_dropout_rate = 1. - embedding_keep_rate
@@ -200,13 +203,24 @@ class CatalanPyramid(nn.Module):
             Variable(torch.from_numpy(example_lengths))).long()
         topk = self.topk
 
-        ch_start_time = time.time()
-        # Chart-Parsing Choice
-        sr_transitions, weights, temperature = self.chart_parser(
-            emb, example_lengths_var, topk, temperature_multiplier=pyramid_temperature_multiplier)
-        ch_end_time = time.time()
+        #ch_start_time = time.time()
 
-        sp_start_time = time.time()
+        # Chart-Parsing Choice
+        #sp_start_time = time.time()
+        if self.enforce_right: 
+            max_length = 2 * seq_len - 1
+            shifts = [0. for i in range(max_length // 2 + 1)]
+            reduces = [1. for i in range(max_length // 2)]
+            right_branch = shifts + reduces
+            rb_parses = [right_branch for i in range(batch_size)]
+            sr_transitions = [np.asarray(rb_parses)]
+            temperature = -1.0 
+        else:
+            sr_transitions, weights, temperature = self.chart_parser(
+            emb, example_lengths_var, topk, temperature_multiplier=pyramid_temperature_multiplier)
+
+        #ch_end_time = time.time()
+
         # Use SPINN with CP parses
         embeds = self.run_embed_spinn(x)
         b, l = x.size()[:2]
@@ -222,25 +236,28 @@ class CatalanPyramid(nn.Module):
             buffers = bb[::-1]
             example.bufs = buffers
 
-            sp1_start_time = time.time()
+            #sp1_start_time = time.time()
             
             h, transition_acc, transition_loss = self.run_spinn(
                 example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
 
-            sp1_end_time = time.time()
+            #sp1_end_time = time.time()
             
             h_versions.append(h)
 
-        sp_end_time = time.time()
+        #sp_end_time = time.time()
 
-        print( "Chart time:", ch_end_time - ch_start_time )
-        print( "SPINN single time:", sp1_end_time - sp1_start_time )
-        print( "SPINN full time:", sp_end_time - sp_start_time)
+        #print( "Chart time:", ch_end_time - ch_start_time )
+        #print( "SPINN single time:", sp1_end_time - sp1_start_time )
+        #print( "SPINN full time:", sp_end_time - sp_start_time)
 
-        mlp_start_time = time.time()
+        #mlp_start_time = time.time()
         # Linear combination
-        hs = torch.stack(h_versions, dim=1)
-        hh = torch.sum(torch.mul(hs, weights.unsqueeze(2)), dim=1)
+        if self.enforce_right:
+            hh = h_versions[0]
+        else:
+            hs = torch.stack(h_versions, dim=1)
+            hh = torch.sum(torch.mul(hs, weights.unsqueeze(2)), dim=1)
 
         if self.training:
             self.temperature_to_display = temperature
@@ -248,9 +265,12 @@ class CatalanPyramid(nn.Module):
         h = self.wrap(hh)        
         output = self.mlp(self.build_features(h))
 
-        mlp_end_time = time.time()
+        #mlp_end_time = time.time()
 
-        print( "Lin+MLP time:", mlp_end_time - mlp_start_time )
+        #print( "Lin+MLP time:", mlp_end_time - mlp_start_time )
+
+        #print("output")
+        #output.register_hook(print)
 
         return output
 
