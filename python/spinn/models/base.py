@@ -544,6 +544,14 @@ def get_flags():
         "topk", 
         5, 
         "The number of parses to choose from chart-parser to use with SPINN.")
+    gflags.DEFINE_boolean(
+        "enforce_right",
+        False,
+        "Use right branching trees, don't run through Chart-Parser.")
+    #gflags.DEFINE_integer(
+    #    "num_parse", 
+    #    2, 
+    #    "The number of parses to choose from chart-parser to use with SPINN.")
 
 def flag_defaults(FLAGS, load_log_flags=False):
     if load_log_flags:
