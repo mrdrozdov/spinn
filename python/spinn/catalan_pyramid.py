@@ -206,7 +206,6 @@ class CatalanPyramid(nn.Module):
         #ch_start_time = time.time()
 
         # Chart-Parsing Choice
-        #sp_start_time = time.time()
         if self.enforce_right: 
             max_length = 2 * seq_len - 1
             shifts = [0. for i in range(max_length // 2 + 1)]
@@ -221,6 +220,7 @@ class CatalanPyramid(nn.Module):
 
         #ch_end_time = time.time()
 
+        #sp_start_time = time.time()
         # Use SPINN with CP parses
         embeds = self.run_embed_spinn(x)
         b, l = x.size()[:2]
@@ -364,6 +364,7 @@ class CatalanPyramid(nn.Module):
                 versions = []
                 for i in range(row):
                     versions.append(compose(chart[row-i-1][col], chart[i][row+col-i]))
+                import pdb; pdb.set_trace()
                 max_ind = torch.max(mask[row][col], dim=1)[1][index]
                 max_ind = int(max_ind.data.cpu().numpy())
                 chart[row][col] = versions[max_ind] #.gather(1, ids.view(-1,1))
@@ -514,12 +515,7 @@ class ChartParser(nn.Module):
         c = done_mask * new_c + (1 - done_mask) * old_c[:, :-1, :]
         return h, c
 
-    def compute_compositions(
-            self,
-            state,
-            mask,
-            alpha,
-            temperature_multiplier=1.0):
+    def compute_compositions(self,state,mask,alpha,temperature_multiplier=1.0):
         """
         (In a parallelized manner) Compute all compositions we will need 
         for the current step.
@@ -630,7 +626,178 @@ class ChartParser(nn.Module):
 
             return chart[length-1][0][0], chart[length-1][0][1], mask, alpha.unsqueeze(1), transitions[length-1][0]
 
+    def compute_compositions_np(self,state,mask,alpha,temperature_multiplier=1.0):
+        """
+        (In a parallelized manner) Compute all compositions we will need 
+        for the current step.
+        Input to || computation: (h,c) l and r.
+        Input to serial computation: list of (h,c) l and r.
+        don't pass full chart around. only values that'll be needed for computation
+
+        currently: passing full sentence at each laye. FIX!!
+
+        Example:
+        [['A', 'B', 'C', 'D', 'E', 'F', 'G', '.'],
+        ['AB', 'BC', 'CD', 'DE', 'EF', 'FG', 'G.'],
+        ['ABC', 'BCD', 'CDE', 'DEF', 'EFG', 'FG.'],
+        ['ABCD', 'BCDE', 'CDEF', 'DEFG', 'EFG.'],
+        ['ABCDE', 'BCDEF', 'CDEFG', 'DEFG.'],
+        ['ABCDEF', 'BCDEFG', 'CDEFG.'],
+        ['ABCDEFG', 'BCDEFG.'],
+        ['ABCDEFG.']]
+
+        TODO: do masking to prevent composing with padding.
+        """
+        # make sure are embeddigns
+        h, c = state # batch, length, dim
+        mask = mask # batch, length
+
+        length = h.size(1)
+        word_hiddens = h.chunk(length, dim=1)
+        word_cells = c.chunk(length, dim=1)
+        length_masks = mask.chunk(length, dim=1) # (batch,1), ...
+        temperature = temperature_multiplier
+
+        if self.debug_branching:
+            hiddens = word_hiddens
+            cells = word_cells
+            (h, c) = (hiddens[-1], cells[-1])
+            for i in range(length-1, -1, -1):
+                r = (h, c) 
+                l  = (hiddens[i], cells[i]) 
+                h, c = self.treelstm_layer(l=l, r=r)
+            return h, c, None
+
+        else: 
+            chart = [[]]
+            all_weights = [[]]
+            mask = [[]]
+            memory = [[]]
+            #transitions = [[]]
+
+            for i in range(length):
+                chart[0].append((word_hiddens[i], word_cells[i]))
+                all_weights[0].append(None)
+                mask[0].append(None)
+                memory[0].append(None)
+                #transitions[0].append(torch.ones(h.size(0)).long() * 2)
+            for row in range(1, length):
+                chart.append([])
+                all_weights.append([])
+                mask.append([])
+                memory.append([])
+                #transitions.append([])
+                for col in range(length - row):
+                    chart[row].append(None)
+                    all_weights[row].append(None)
+                    mask[row].append(None)
+                    memory[row].append(None)
+                    #transitions[row].append(None)
+
+            for row in range(1, length):
+                for col in range(length - row):
+                    states = []
+                    hiddens = []
+                    tr_versions = []
+                    cells = []
+                    scores = []
+                    for i in range(row):
+                        l = chart[row-i-1][col]
+                        r = chart[i][row+col-i]
+                        states.append(self.treelstm_layer(l=l, r=r))
+                        hiddens.append(states[-1][0])
+                        cells.append(states[-1][1])
+
+                        #tr_versions.append(self.tr_compose(transitions[row-i-1][col], transitions[i][row+col-i]))
+                        comp_weights = dot_nd(
+                            query=self.comp_query.weight.squeeze(),
+                            candidates=hiddens[-1]) # batch, 1
+                        scores.append(comp_weights) # [(batch, 1), ...]
+
+                    if self.right_branching:
+                        weights =  to_gpu(Variable(torch.zeros(torch.cat(scores, dim=1).size())))
+                        for k in range(weights.size(0)): 
+                            weights[k, -1] = 1.0
+                    elif self.uniform_branching:
+                        l = torch.cat(scores, dim=1).size(1)
+                        weights = to_gpu(Variable(torch.ones(torch.cat(scores, dim=1).size()) / l ))
+                    elif self.random_branching:
+                        w_rand = torch.rand(torch.cat(scores, dim=1).size())
+                        weights = to_gpu(Variable(w_rand / w_rand.sum(1).unsqueeze(1)))
+                    elif self.st_gumbel:
+                        weights, w_max, w_argmax = st_gumbel_softmax(torch.cat(scores, dim=1), temperature)
+                        alpha *= w_max
+                        #tr_new = torch.sum(torch.mul(weights.data.double(), torch.cat(tr_versions, dim=1)), dim=1)
+                    else:
+                        weights = gumbel_softmax(torch.cat(scores, dim=1), temperature) # cat: batch, num_versions, out: batch, num_states
+
+                    h_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(hiddens, dim=1)), dim=1)
+                    c_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(cells, dim=1)), dim=1) # batch, num_states, dim
+
+                    chart[row][col] = (h_new.unsqueeze(1), c_new.unsqueeze(1))
+                    all_weights[row][col] = weights
+                    mask[row][col] = create_max_mask(all_weights[row][col])
+                    #transitions[row][col] = tr_new
+                    memory[row][col] = w_argmax
+
+            # Use memory of choices to construct binary parse
+            transitions = [[]]
+            #compose_vec = np.ones((h.size(0),1))
+            compose_vec = torch.ones((h.size(0),1))
+            for i in range(length):
+                #transitions[0].append(torch.ones(h.size(0)).long() * 2)
+                #transitions[0].append(np.zeros((h.size(0),1)))
+                transitions[0].append(torch.zeros((h.size(0),1)))
+            for row in range(1, length):
+                transitions.append([])
+                for col in range(length - row):
+                    transitions[row].append(None)
+
+            for row in range(1, length):
+                for col in range(length - row):
+                    tr_versions = []
+                    # Following loops through batch! 
+                    # But it's a simple lookup
+                    for j in range(h.size(0)):
+                        for i in range(row):
+                            #tr_versions.append(self.tr_compose_np(transitions[row-i-1][col], transitions[i][row+col-i]))
+                            tr_versions.append(torch.stack([transitions[row-i-1][col], transitions[i][row+col-i], compose_vec], dim=1))
+                            import pdb; pdb.set_trace()
+                            """
+                            try:
+                                tr_versions.append(np.stack([transitions[row-i-1][col], transitions[i][row+col-i], compose_vec], axis=1))
+                                tr_versions.append(torch.stack([transitions[row-i-1][col], transitions[i][row+col-i], compose_vec], dim=1))
+                            except:
+                                import pdb; pdb.set_trace()
+                            """
+                        #tr_new = memory[row][col]
+                        index = memory[row][col].cpu().data.numpy()
+                        # Following loops through batch! 
+                        # But it's a simple lookup
+                        tr_new = []
+                        for i in range(h.size(0)):
+                            tr_select = tr_versions[index[i]]
+                            tr_new.append(tr_select[i])
+                        transitions[row][col] = np.asarray(tr_new)
+
+            import pdb; pdb.set_trace()
+            return chart[length-1][0][0], chart[length-1][0][1], mask, alpha.unsqueeze(1), transitions[length-1][0]
+
     def tr_compose(self, l, r):
+        out_dec = to_gpu(torch.zeros(l.size()).double())
+        # Double Tensor since it's 64 bit
+        for i in range(l.size(0)):
+            l_bin = bin(int(l[i]))[3:] # strip pre-fix "0b1"
+            r_bin = bin(int(r[i]))[3:] 
+            out_bin = "1" + l_bin + r_bin  + "1"
+            out_fl = float(int(out_bin, 2))
+            out_dec[i] = out_fl
+            #if bin(int(out_dec[i]))[-1] == "0":
+            #    import pdb; pdb.set_trace()
+        # redundant 1 pre-appended, to avoid loss of initial zeros
+        return out_dec.unsqueeze(1)
+
+    def tr_compose_np(self, l, r):
         out_dec = to_gpu(torch.zeros(l.size()).double())
         # Double Tensor since it's 64 bit
         for i in range(l.size(0)):
@@ -651,8 +818,8 @@ class ChartParser(nn.Module):
 
 
         state = input.chunk(chunks=2, dim=2)
-        h_low = self.reduce_dim(state[0])
-        c_low = self.reduce_dim(state[1])
+        h_low = to_gpu(self.reduce_dim(state[0]))
+        c_low = to_gpu(self.reduce_dim(state[1]))
         batch_size = h_low.size(0) 
 
         # For one or two-word trees where we never compute a temperature
