@@ -43,7 +43,7 @@ def spans(transitions, tokens=None):
     return nodes
 
 
-def load_data(path, lowercase=None):
+def load_data(path, lowercase=None, choose=lambda x: True, eval_mode=False):
     examples = []
     with open(path) as f:
         for example_id, line in enumerate(f):
