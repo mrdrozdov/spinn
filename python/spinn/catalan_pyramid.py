@@ -818,8 +818,8 @@ class ChartParser(nn.Module):
 
 
         state = input.chunk(chunks=2, dim=2)
-        h_low = to_gpu(self.reduce_dim(state[0]))
-        c_low = to_gpu(self.reduce_dim(state[1]))
+        h_low = self.reduce_dim(state[0])
+        c_low = self.reduce_dim(state[1])
         batch_size = h_low.size(0) 
 
         # For one or two-word trees where we never compute a temperature
