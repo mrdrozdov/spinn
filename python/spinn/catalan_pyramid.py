@@ -697,13 +697,13 @@ class ChartParser(nn.Module):
         alpha = to_gpu(Variable(torch.ones(h_long.size(0))))
         h, c, masks, alpha_w, transitions = self.compute_compositions((h_long, c_long), length_mask_long, alpha, temperature_multiplier=1.0)
         
-        alphas = alpha_w.cpu().chunk(num, dim=0)
+        alphas = alpha_w.chunk(num, dim=0)
         parses = torch.from_numpy(transitions)
         parses = parses.unsqueeze(1).chunk(num, dim=0)
 
         alpha_max, alpha_argmax = torch.cat(alphas, dim=1).topk(topk)
         alpha_maxs = alpha_max.chunk(topk, dim=1)
-        alpha_args = alpha_argmax.chunk(topk, dim=1)
+        alpha_args = alpha_argmax.cpu().chunk(topk, dim=1)
         
         parses = torch.cat(parses, dim=1)
 
