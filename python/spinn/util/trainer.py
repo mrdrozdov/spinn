@@ -181,6 +181,13 @@ class ModelTrainer(object):
 
         self.model.load_state_dict(model_state_dict, strict=False)
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        
+        if self.gpu >= 0:
+            for state in self.optimizer.state.values():
+                for k, v in staste.items():
+                    if torch.is_tensor(v):
+                        state[k] = v.cuda()
+
         if self.sparse_optimizer is not None:
             self.sparse_optimizer.load_state_dict(checkpoint['sparse_optimizer_state_dict'])
 
