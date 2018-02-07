@@ -181,10 +181,10 @@ class ModelTrainer(object):
 
         self.model.load_state_dict(model_state_dict, strict=False)
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        
+
         if self.gpu >= 0:
             for state in self.optimizer.state.values():
-                for k, v in staste.items():
+                for k, v in state.items():
                     if torch.is_tensor(v):
                         state[k] = v.cuda()
 
