@@ -144,7 +144,7 @@ class CatalanPyramid(nn.Module):
 
 
         # For sample printing and logging
-        self.mask_memory = None
+        self.parse_memory = None
         self.inverted_vocabulary = None
         self.temperature_to_display = 0.0
     
@@ -203,8 +203,6 @@ class CatalanPyramid(nn.Module):
             Variable(torch.from_numpy(example_lengths))).long()
         topk = self.topk
 
-        #ch_start_time = time.time()
-
         # Chart-Parsing Choice
         if self.enforce_right: 
             max_length = 2 * seq_len - 1
@@ -218,13 +216,11 @@ class CatalanPyramid(nn.Module):
             sr_transitions, weights, temperature = self.chart_parser(
             emb, example_lengths_var, topk, temperature_multiplier=pyramid_temperature_multiplier)
 
-        #ch_end_time = time.time()
-
-        #sp_start_time = time.time()
         # Use SPINN with CP parses
         embeds = self.run_embed_spinn(x)
         b, l = x.size()[:2]
         ee = torch.chunk(embeds, b * l, 0)[::-1]
+        self.parse_memory = sr_transitions
         
         h_versions = []
         for transition in sr_transitions:
@@ -235,23 +231,12 @@ class CatalanPyramid(nn.Module):
                 bb.append(ex)
             buffers = bb[::-1]
             example.bufs = buffers
-
-            #sp1_start_time = time.time()
             
             h, transition_acc, transition_loss = self.run_spinn(
                 example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
-
-            #sp1_end_time = time.time()
             
             h_versions.append(h)
 
-        #sp_end_time = time.time()
-
-        #print( "Chart time:", ch_end_time - ch_start_time )
-        #print( "SPINN single time:", sp1_end_time - sp1_start_time )
-        #print( "SPINN full time:", sp_end_time - sp_start_time)
-
-        #mlp_start_time = time.time()
         # Linear combination
         if self.enforce_right:
             hh = h_versions[0]
@@ -264,13 +249,6 @@ class CatalanPyramid(nn.Module):
 
         h = self.wrap(hh)        
         output = self.mlp(self.build_features(h))
-
-        #mlp_end_time = time.time()
-
-        #print( "Lin+MLP time:", mlp_end_time - mlp_start_time )
-
-        #print("output")
-        #output.register_hook(print)
 
         return output
 
@@ -312,17 +290,18 @@ class CatalanPyramid(nn.Module):
     # --- Sample printing ---
 
     def get_samples(self, x, vocabulary, only_one=False):
-        # TODO: Don't show padding.
-
+        # n=-1: Show all samples.
         if not self.inverted_vocabulary:
             self.inverted_vocabulary = dict(
                 [(vocabulary[key], key) for key in vocabulary])
 
+        transitions = self.parse_memory[0]
+
         token_sequences = []
         batch_size = x.shape[0]
-        for s in (range(int(self.use_sentence_pair) + 1)
+        for s in (list(range(int(self.use_sentence_pair) + 1))
                   if not only_one else [0]):
-            for b in (range(batch_size) if not only_one else [0]):
+            for b in (list(range(batch_size)) if not only_one else [0]):
                 if self.use_sentence_pair:
                     token_sequence = [self.inverted_vocabulary[token]
                                       for token in x[b, :, s]]
@@ -330,50 +309,18 @@ class CatalanPyramid(nn.Module):
                     token_sequence = [self.inverted_vocabulary[token]
                                       for token in x[b, :]]
 
-                token_sequences.append(self.get_sample_merge_sequence(b, s, batch_size, token_sequence))
+                stack = []
+                token_sequence.reverse()
+                for transition in transitions[b + (s * batch_size)]:
+                    if transition == 0:
+                        stack.append(token_sequence.pop())
+                    if transition == 1:
+                        r = stack.pop()                        
+                        l = stack.pop()
+                        stack.append((l, r))
+                assert len(stack) == 1
+                token_sequences.append(stack[0])
         return token_sequences
-
-    """
-    def get_sample_merge_sequence(self, b, s, batch_size):
-        merge_sequence = []
-        index = b + (s * batch_size)
-        for mask in self.mask_memory:
-            merge_sequence.append(np.argmax(mask[index, :]))
-        merge_sequence.append(0)
-        return merge_sequence
-    """
-
-    def get_sample_merge_sequence(self, b, s, batch_size, sent):
-        # TODO: reqwrite for Catalan
-        mask = self.mask_memory
-        index = b + (s * batch_size)
-        def compose(l, r):
-            return "( " + l + " " + r + " )"
-
-        chart = [sent]
-        choices = [sent]
-        for row in range(1, len(sent)): 
-            chart.append([])
-            choices.append([])
-            for col in range(len(sent) - row):
-                chart[row].append(None)
-                choices[row].append(None)
-        
-        for row in range(1, len(sent)): # = len(l_hiddens)
-            for col in range(len(sent) - row):
-                versions = []
-                for i in range(row):
-                    versions.append(compose(chart[row-i-1][col], chart[i][row+col-i]))
-                import pdb; pdb.set_trace()
-                max_ind = torch.max(mask[row][col], dim=1)[1][index]
-                max_ind = int(max_ind.data.cpu().numpy())
-                chart[row][col] = versions[max_ind] #.gather(1, ids.view(-1,1))
-                choices[row][col] = versions
-                l = len(versions)
-        
-        max_ind = torch.max(mask[-1][-1], dim=1)[1][index]
-        max_ind = int(max_ind.data.cpu().numpy())
-        return choices[-1][-1][max_ind]
     
     # --- Sentence Style Switches ---
 
@@ -654,22 +601,6 @@ class ChartParser(nn.Module):
 
             return chart[length-1][0][0], chart[length-1][0][1], mask, alpha.unsqueeze(1), transitions[length-1][0]
 
-    def tr_compose(self, l, r):
-        """
-        TODO: Edit or remove. Currently deprecated.
-        """
-        out_dec = to_gpu(torch.zeros(l.size()).double())
-        # Double Tensor since it's 64 bit
-        for i in range(l.size(0)):
-            l_bin = bin(int(l[i]))[3:] # strip pre-fix "0b1"
-            r_bin = bin(int(r[i]))[3:] 
-            out_bin = "1" + l_bin + r_bin  + "1"
-            out_fl = float(int(out_bin, 2))
-            out_dec[i] = out_fl
-        # redundant 1 pre-appended, to avoid loss of initial zeros
-        return out_dec.unsqueeze(1)
-
-
     def forward(self, input, length, topk, temperature_multiplier=None):
         max_depth = input.size(1)
         length_mask = sequence_mask(sequence_length=length,
@@ -711,7 +642,6 @@ class ChartParser(nn.Module):
         for i in range(topk):
             alpha_hard = convert_to_one_hot(alpha_args[i].squeeze(), parses.size(1))
             parse_hard = torch.sum(torch.mul(alpha_hard.data.double().unsqueeze(2), parses), 1).numpy()
-            #bin_parse = get_binary_parse(parse_hard)
             binary_parses.append(parse_hard)
 
         # Normalize weights
@@ -888,18 +818,6 @@ def sequence_mask(sequence_length, max_length=None):
         seq_range_expand = seq_range_expand.cuda()
     seq_length_expand = sequence_length.unsqueeze(1)
     return seq_range_expand < seq_length_expand
-
-"""
-def tr_compose(l, r):
-    out_dec = torch.zeros(l.size())
-    for i in range(l.size(0)):
-        l_bin = bin(l[i])[3:] # strip pre-fix "0b1"
-        r_bin = bin(r[i])[3:] 
-        out_bin = "1" + l_bin + r_bin  + "1"
-        out_dec[i] = int(out_bin, 2)
-    # redundant 1 pre-appended, to avoid loss of initial zeros
-    return out_dec.unsqueeze(1)
-"""
 
 class BinaryTreeLSTMLayer(nn.Module):
     def __init__(self, hidden_dim, composition_ln=False):
