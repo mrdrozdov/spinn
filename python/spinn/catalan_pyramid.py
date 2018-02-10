@@ -623,8 +623,7 @@ class ChartParser(nn.Module):
             num = batch_size // 2
         else:
             num = batch_size
-
-        import pdb; pdb.set_trace()
+            
         h_long = [h_low] * (num)
         h_long = torch.cat(h_long, 0)
         c_long = [c_low] * (num)
