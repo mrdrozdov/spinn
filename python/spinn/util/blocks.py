@@ -275,7 +275,7 @@ class Embed(nn.Module):
         super(Embed, self).__init__()
 
         if vectors is None:
-            self.embed = nn.Embedding(vocab_size, size)
+            self.embed = nn.Embedding(vocab_size, size, sparse=True)
         else:
             if fine_tune:
                 self.embed = nn.Embedding(vocab_size, size, sparse=True)
