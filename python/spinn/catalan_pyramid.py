@@ -120,7 +120,8 @@ class CatalanPyramid(nn.Module):
             debug_branching=debug_branching,
             uniform_branching=uniform_branching,
             random_branching=random_branching,
-            st_gumbel=st_gumbel)
+            st_gumbel=st_gumbel,
+            use_sentence_pair=use_sentence_pair)
 
         # assert FLAGS.lateral_tracking == False
         # TODO: move assertion flaag to base.
@@ -426,11 +427,12 @@ class CatalanPyramid(nn.Module):
 class ChartParser(nn.Module):
 
     def __init__(self, word_dim, hidden_dim, low_dim,
-                 composition_ln=False, trainable_temperature=False, right_branching=False, debug_branching=False, uniform_branching=False, random_branching=False, st_gumbel=False):
+                 composition_ln=False, trainable_temperature=False, right_branching=False, debug_branching=False, uniform_branching=False, random_branching=False, st_gumbel=False, use_sentence_pair=False):
         super(ChartParser, self).__init__()
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
         self.low_dim = low_dim
+        self.use_sentence_pair = use_sentence_pair
 
         self.treelstm_layer = BinaryTreeLSTMLayer(
             low_dim, composition_ln=composition_ln) #CAT: low_dim from hidden_dim
@@ -617,7 +619,12 @@ class ChartParser(nn.Module):
         alphas = []
         parses = []
 
-        num = batch_size // 2
+        if self.use_sentence_pair:
+            num = batch_size // 2
+        else:
+            num = batch_size
+
+        import pdb; pdb.set_trace()
         h_long = [h_low] * (num)
         h_long = torch.cat(h_long, 0)
         c_long = [c_low] * (num)
