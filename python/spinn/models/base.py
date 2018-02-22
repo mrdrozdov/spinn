@@ -511,31 +511,14 @@ def get_flags():
         "If true, use cosine similarity instead of dot product in measuring score for compositions.")
     gflags.DEFINE_enum(
         "parent_selection",
-        "gumbel",
-        ["gumbel",
-        "st-gumbel",
-        "softmax"],
-        "Which function to use to select or calculate the parent.")
-    gflags.DEFINE_boolean(
-        "right_branching",
-        False,
-        "Force right-branching composition.")
-    gflags.DEFINE_boolean(
-        "debug_branching",
-        False,
-        "use alternative style of right-branching composition.")
-    gflags.DEFINE_boolean(
-        "uniform_branching",
-        False,
-        "Uniform distribution instead of gumble softmax weighting during chart parsing.")
-    gflags.DEFINE_boolean(
-        "random_branching",
-        False,
-        "Random weighting instead of gumble softmax weighting during chart parsing.")
-    gflags.DEFINE_boolean(
         "st_gumbel",
-        False,
-        "ST-gumble softmax weighting during chart parsing.")
+        ["gumbel",
+        "st_gumbel",
+        "softmax",
+        "right_branching",
+        "uniform_branching",
+        "random_branching"],
+        "Which function to use to select or calculate the parent.")
     gflags.DEFINE_integer(
         "low_dim", 
         10, 

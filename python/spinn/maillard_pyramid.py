@@ -35,11 +35,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      composition_ln=FLAGS.composition_ln,
                      context_args=context_args,
                      trainable_temperature=FLAGS.pyramid_trainable_temperature,
-                     right_branching=FLAGS.right_branching,
-                     debug_branching=FLAGS.debug_branching,
-                     uniform_branching=FLAGS.uniform_branching,
-                     random_branching=FLAGS.random_branching,
-                     st_gumbel=FLAGS.st_gumbel
+                     parent_selection=FLAGS.parent_selection
                      )
 
 
@@ -61,11 +57,7 @@ class Maillard(nn.Module):
                  composition_ln=None,
                  context_args=None,
                  trainable_temperature=None,
-                 right_branching=None,
-                 debug_branching=None,
-                 uniform_branching=None,
-                 random_branching=None,
-                 st_gumbel=None,
+                 parent_selection=None,
                  **kwargs
                  ):
         super(Maillard, self).__init__()
@@ -75,11 +67,7 @@ class Maillard(nn.Module):
         self.use_product_feature = use_product_feature
         self.model_dim = model_dim
         self.trainable_temperature = trainable_temperature
-        self.right_branching = right_branching
-        self.debug_branching = debug_branching
-        self.uniform_branching = uniform_branching
-        self.random_branching = random_branching
-        self.st_gumbel = st_gumbel
+        self.parent_selection = parent_selection
 
         self.classifier_dropout_rate = 1. - classifier_keep_rate
         self.embedding_dropout_rate = 1. - embedding_keep_rate
@@ -99,11 +87,7 @@ class Maillard(nn.Module):
             False,
             composition_ln=composition_ln,
             trainable_temperature=trainable_temperature,
-            right_branching=right_branching,
-            debug_branching=debug_branching,
-            uniform_branching=uniform_branching,
-            random_branching=random_branching,
-            st_gumbel=st_gumbel)
+            parent_selection=parent_selection)
 
         mlp_input_dim = self.get_features_dim()
 
@@ -304,18 +288,14 @@ class Maillard(nn.Module):
 class BinaryTreeLSTM(nn.Module):
 
     def __init__(self, word_dim, hidden_dim, intra_attention,
-                 composition_ln=False, trainable_temperature=False, right_branching=False, debug_branching=False, uniform_branching=False, random_branching=False, st_gumbel=False):
+                 composition_ln=False, trainable_temperature=False, parent_selection=False):
         super(BinaryTreeLSTM, self).__init__()
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
         self.intra_attention = intra_attention
         self.treelstm_layer = BinaryTreeLSTMLayer(
             hidden_dim, composition_ln=composition_ln)
-        self.right_branching = right_branching
-        self.debug_branching = debug_branching
-        self.uniform_branching = uniform_branching
-        self.random_branching = random_branching
-        self.st_gumbel = st_gumbel
+        self.parent_selection = parent_selection
 
         # TODO: Add something to blocks to make this use case more elegant.
         self.comp_query = Linear()(
@@ -371,84 +351,77 @@ class BinaryTreeLSTM(nn.Module):
         word_cells = c.chunk(length, dim=1)
         length_masks = mask.chunk(length, dim=1) # (batch,1), ...
         temperature = temperature_multiplier
-        
 
-        if self.debug_branching:
-            hiddens = word_hiddens
-            cells = word_cells
-            (h, c) = (hiddens[-1], cells[-1])
-            for i in range(length-1, -1, -1):
-                r = (h, c) #* length_masks[i+1]
-                l  = (hiddens[i], cells[i]) #* length_masks[i+1]
-                h, c = self.treelstm_layer(l=l, r=r)
-            return h, c, None
+        chart = [[]]
+        all_weights = [[]]
 
-        else: 
-            chart = [[]]
-            all_weights = [[]]
+        for i in range(length):
+            chart[0].append((word_hiddens[i], word_cells[i]))
+            all_weights[0].append(None)
+        for row in range(1, length):
+            chart.append([])
+            all_weights.append([])
+            for col in range(length - row):
+                chart[row].append(None)
+                all_weights[row].append(None)
 
-            for i in range(length):
-                chart[0].append((word_hiddens[i], word_cells[i]))
-                all_weights[0].append(None)
-            for row in range(1, length):
-                chart.append([])
-                all_weights.append([])
-                for col in range(length - row):
-                    chart[row].append(None)
-                    all_weights[row].append(None)
+        for row in range(1, length):
+            for col in range(length - row):
+                states = []
+                hiddens = []
+                cells = []
+                scores = []
+                for i in range(row):
+                    l = chart[row-i-1][col]
+                    r = chart[i][row+col-i]
+                    states.append(self.treelstm_layer(l=l, r=r))
+                    hiddens.append(states[-1][0])
+                    cells.append(states[-1][1])
+                    #comp_weights = dot_nd(
+                    #    query=self.comp_query.weight.squeeze(),
+                    #    candidates=hiddens[-1]) # batch, 1
+                    comp_weights = cosine(
+                        query=self.comp_query.weight.squeeze(),
+                        candidates=hiddens[-1])
+                    scores.append(comp_weights) # [(batch, 1), ...]
 
-            for row in range(1, length):
-                for col in range(length - row):
-                    states = []
-                    hiddens = []
-                    cells = []
-                    scores = []
-                    for i in range(row):
-                        l = chart[row-i-1][col]
-                        r = chart[i][row+col-i]
-                        states.append(self.treelstm_layer(l=l, r=r))
-                        hiddens.append(states[-1][0])
-                        cells.append(states[-1][1])
-                        comp_weights = dot_nd(
-                            query=self.comp_query.weight.squeeze(),
-                            candidates=hiddens[-1]) # batch, 1
-                        scores.append(comp_weights) # [(batch, 1), ...]
+                if self.parent_selection == "right_branching":
+                    weights =  to_gpu(Variable(torch.zeros(torch.cat(scores, dim=1).size())))
+                    for k in range(weights.size(0)): 
+                        weights[k, -1] = 1.0
+                elif self.parent_selection == "uniform_branching":
+                    l = torch.cat(scores, dim=1).size(1)
+                    weights = to_gpu(Variable(torch.ones(torch.cat( scores, dim=1).size()) / l ))
+                elif self.parent_selection == "random_branching":
+                    w_rand = torch.rand(torch.cat(scores, dim=1).size())
+                    weights = to_gpu(Variable(w_rand / w_rand.sum(1).unsqueeze(1)))
+                elif self.parent_selection == "st_gumbel":
+                    weights = st_gumbel_softmax(torch.cat(scores, dim=1), temperature)
+                    # TODO: get index/mask and don;t do a linear combination.
+                elif self.parent_selection == "softmax":
+                    weights = masked_softmax(torch.cat(scores, dim=1) / temperature, None)               
+                else:
+                    weights = gumbel_softmax(torch.cat(scores, dim=1), temperature) # cat: batch, num_versions, out: batch, num_states
 
-                    if self.right_branching:
-                        weights =  to_gpu(Variable(torch.zeros(torch.cat(scores, dim=1).size())))
-                        for k in range(weights.size(0)): 
-                            weights[k, -1] = 1.0
-                    elif self.uniform_branching:
-                        l = torch.cat(scores, dim=1).size(1)
-                        weights = to_gpu(Variable(torch.ones(torch.cat( scores, dim=1).size()) / l ))
-                    elif self.random_branching:
-                        w_rand = torch.rand(torch.cat(scores, dim=1).size())
-                        weights = to_gpu(Variable(w_rand / w_rand.sum(1).unsqueeze(1)))
-                    elif self.st_gumbel:
-                        weights = st_gumbel_softmax(torch.cat(scores, dim=1), temperature)
-                        # TODO: get index/mask and don;t do a linear combination.
-                    else:
-                        weights = gumbel_softmax(torch.cat(scores, dim=1), temperature) # cat: batch, num_versions, out: batch, num_states
+                h_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(hiddens, dim=1)), dim=1)
+                c_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(cells, dim=1)), dim=1) # batch, num_states, dim
 
-                    h_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(hiddens, dim=1)), dim=1)
-                    c_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(cells, dim=1)), dim=1) # batch, num_states, dim
+                chart[row][col] = (h_new.unsqueeze(1), c_new.unsqueeze(1))
+                all_weights[row][col] = weights
 
-                    chart[row][col] = (h_new.unsqueeze(1), c_new.unsqueeze(1))
-                    all_weights[row][col] = weights
+        # TODO: FIX, place below into above code. replace all_weights.
+        mask = [[]]
+        for i in range(length):
+            mask[0].append(None)
+        for row in range(1, length):
+            mask.append([])
+            for col in range(length - row):
+                mask[row].append(None)
 
-            # TODO: FIX, place below into above code. replace all_weights.
-            mask = [[]]
-            for i in range(length):
-                mask[0].append(None)
-            for row in range(1, length):
-                mask.append([])
-                for col in range(length - row):
-                    mask[row].append(None)
-
-            for row in range(1, length):
-                for col in range(length - row):
-                    mask[row][col] = create_max_mask(all_weights[row][col])
-            return chart[length-1][0][0], chart[length-1][0][1], mask
+        for row in range(1, length):
+            for col in range(length - row):
+                mask[row][col] = create_max_mask(all_weights[row][col])
+        return chart[length-1][0][0], chart[length-1][0][1], mask
 
 
     def forward(self, input, length, temperature_multiplier=None):
@@ -524,6 +497,27 @@ def dot_nd(query, candidates):
     cands_size = candidates.size()
     cands_flat = candidates.view(-1, cands_size[-1])
     output_flat = torch.mv(cands_flat, query)
+    output = output_flat.view(*cands_size[:-1])
+    return output
+
+def cosine(query, candidates):
+    """
+    Perform a dot product between a query and n-dimensional candidates.
+
+    Args:
+        query (Variable): A vector to query, whose size is
+            (query_dim,)
+        candidates (Variable): A n-dimensional tensor to be multiplied
+            by query, whose size is (d0, d1, ..., dn, query_dim)
+
+    Returns:
+        output: The result of the dot product, whose size is
+            (d0, d1, ..., dn)
+    """
+
+    cands_size = candidates.size()
+    cands_flat = candidates.view(-1, cands_size[-1])
+    output_flat = torch.mv(cands_flat, query) / (torch.norm(cands_flat) * torch.norm(query))
     output = output_flat.view(*cands_size[:-1])
     return output
 
