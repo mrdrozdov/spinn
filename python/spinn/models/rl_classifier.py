@@ -92,7 +92,7 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         if FLAGS.write_eval_report:
             transitions_per_example, _ = model.spinn.get_transitions_per_example(
                 style="preds" if FLAGS.eval_report_use_preds else "given") if (
-                FLAGS.model_type == "SPINN" and FLAGS.use_internal_parser) else (
+                FLAGS.model_type == "RLSPINN" and FLAGS.use_internal_parser) else (
                 None, None)
 
             if model.use_sentence_pair:
@@ -158,7 +158,8 @@ def train_loop(
         trainer,
         training_data_iter,
         eval_iterators,
-        logger):
+        logger,
+	vocabulary):
     # Accumulate useful statistics.
     A = Accumulator(maxlen=FLAGS.deque_length)
 
@@ -323,7 +324,7 @@ def train_loop(
             should_log = True
             for index, eval_set in enumerate(eval_iterators):
                 acc, _ = evaluate(
-                    FLAGS, model, eval_set, log_entry, logger, trainer, eval_index=index)
+                    FLAGS, model, eval_set, log_entry, logger, trainer, eval_index=index, vocabulary=vocabulary, show_sample=True)
                 if  index == 0:
                     trainer.new_dev_accuracy(acc)
 
@@ -400,7 +401,8 @@ def run(only_forward=False):
             trainer,
             training_data_iter,
             eval_iterators,
-            logger)
+            logger,
+            vocabulary)
 
 
 if __name__ == '__main__':

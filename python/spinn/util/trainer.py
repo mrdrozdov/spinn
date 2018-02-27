@@ -57,7 +57,7 @@ class ModelTrainer(object):
         self.best_checkpoint_path = get_checkpoint_path(FLAGS, best=True)
 
         # Load checkpoint if available.
-        if FLAGS.load_best and os.path.isfile(best_checkpoint_path):
+        if FLAGS.load_best and os.path.isfile(self.best_checkpoint_path):
             self.logger.Log("Found best checkpoint, restoring.")
             self.load(self.best_checkpoint_path, cpu=FLAGS.gpu < 0)
             self.logger.Log(
