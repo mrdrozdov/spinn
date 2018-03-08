@@ -200,10 +200,9 @@ def corpus_stats(corpus_1, corpus_2, first_two=False, neg_pair=False):
     three_count = 0.0
     neg_pair_count = 0.0
     neg_count = 0.0
-    for key in corpus_2:     
+    for key in corpus_2:
         c1 = to_indexed_contituents(corpus_1[key])
         c2 = to_indexed_contituents(corpus_2[key])
-
         f1_accum += example_f1(c1, c2)
         count += 1
 
@@ -380,6 +379,14 @@ def read_nli_report(path):
             report[loaded_example['example_id'] + "_2"] = unpad(loaded_example['sent2_tree'])
     return report
 
+def read_sst_report(path):
+    report = {}
+    with codecs.open(path, encoding='utf-8') as f:
+        for line in f:
+            loaded_example = json.loads(line)
+            report[loaded_example['example_id'] + "_1"] = unpad(loaded_example['sent1_tree'])
+    return report
+
 def read_nli_report_padded(path):
     report = {}
     with codecs.open(path, encoding='utf-8') as f:
@@ -427,28 +434,44 @@ def run():
     gt = {}
     # gt_labeled = {} x
     with codecs.open(FLAGS.main_data_path, encoding='utf-8') as f:
-        for line in f:
-            loaded_example = json.loads(line)
-            if loaded_example["gold_label"] not in LABEL_MAP:
-                continue
-            if '512-4841' in loaded_example['sentence1_binary_parse'] \
-               or '512-8581' in loaded_example['sentence1_binary_parse'] \
-               or '412-4841' in loaded_example['sentence1_binary_parse'] \
-               or '512-4841' in loaded_example['sentence2_binary_parse'] \
-               or '512-8581' in loaded_example['sentence2_binary_parse'] \
-               or '412-4841' in loaded_example['sentence2_binary_parse']:
-               continue # Stanford parser tree binarizer doesn't handle phone numbers properly.
-            gt[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_binary_parse']
-            gt[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_binary_parse']
-            # gt_labeled[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_parse']
-            # gt_labeled[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_parse']
+        counter=0
+        for line in f:            
+            if FLAGS.data_type=="nli":
+                loaded_example = json.loads(line)
+                if loaded_example["gold_label"] not in LABEL_MAP:
+                    continue
+                if '512-4841' in loaded_example['sentence1_binary_parse'] \
+                   or '512-8581' in loaded_example['sentence1_binary_parse'] \
+                   or '412-4841' in loaded_example['sentence1_binary_parse'] \
+                   or '512-4841' in loaded_example['sentence2_binary_parse'] \
+                   or '512-8581' in loaded_example['sentence2_binary_parse'] \
+                   or '412-4841' in loaded_example['sentence2_binary_parse']:
+                   continue # Stanford parser tree binarizer doesn't handle phone numbers properly.
+                gt[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_binary_parse']
+                gt[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_binary_parse']
+                # gt_labeled[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_parse']
+                # gt_labeled[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_parse']
 
-            gt_labeled[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_parse']
-            gt_labeled[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_parse']
-
+                gt_labeled[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_parse']
+                gt_labeled[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_parse']
+            elif FLAGS.data_type=="sst":
+                line = line.strip()
+                stack=[]
+                words = line.replace(')', ' )')
+                words=words.split(' ')
+                for index, word in enumerate(words):
+                        if word[0] != "(":
+                            if word == ")":
+                                # Ignore unary merges
+                                if words[index - 1] == ")":
+                                    newg="( "+stack.pop()+" "+stack.pop()+" )"                    
+                                    stack.append(newg)
+                            else:
+                                stack.append(word)
+                gt[str(counter)+"_1"]=stack[0]
+                counter+=1               
     lb = to_lb(gt)
     rb = to_rb(gt)
-
     print("GT average depth", corpus_average_depth(gt))
 
     ptb = {}
@@ -500,8 +523,10 @@ def run():
         report_paths = glob.glob(FLAGS.main_report_path_template)
         for path in report_paths:
             print("Loading", path)
-            reports.append(read_nli_report(path))
-
+            if FLAGS.data_type=="nli":
+                reports.append(read_nli_report(path))
+            elif FLAGS.data_type=="sst":
+                reports.append(read_sst_report(path))
         if FLAGS.main_report_path_template != "_":
             ptb_report_paths = glob.glob(FLAGS.ptb_report_path_template)
             for path in ptb_report_paths:
@@ -562,6 +587,7 @@ if __name__ == '__main__':
     gflags.DEFINE_boolean("use_balanced_parses", False, "Replace all report trees with roughly-balanced binary trees. Report path template flags are not used when this is set.")
     gflags.DEFINE_boolean("first_two", False, "Show 'first two' and 'last two' metrics.")
     gflags.DEFINE_boolean("neg_pair", False, "Show 'neg_pair' metric.")
+    gflags.DEFINE_string("data_type", "nli", "Data Type")
     gflags.DEFINE_integer("print_latex", 0, "Print this many trees in LaTeX format for each report.")
 
     FLAGS(sys.argv)
