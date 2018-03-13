@@ -16,8 +16,6 @@ from spinn.util.catalan import Catalan
 
 from spinn.spinn_core_model import SPINN
 
-import time
-
 def build_model(data_manager, initial_embeddings, vocab_size,
                 num_classes, FLAGS, context_args, composition_args, **kwargs):
     use_sentence_pair = data_manager.SENTENCE_PAIR_DATA
@@ -39,16 +37,13 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      composition_ln=FLAGS.composition_ln,
                      context_args=context_args,
                      trainable_temperature=FLAGS.pyramid_trainable_temperature,
-                     right_branching=FLAGS.right_branching,
-                     debug_branching=FLAGS.debug_branching,
-                     uniform_branching=FLAGS.uniform_branching,
-                     random_branching=FLAGS.random_branching,
+                     parent_selection=FLAGS.parent_selection,
                      enforce_right=FLAGS.enforce_right,
-                     st_gumbel=FLAGS.st_gumbel,
                      composition_args=composition_args,
                      predict_use_cell=FLAGS.predict_use_cell,
                      low_dim = FLAGS.low_dim,
                      topk = FLAGS.topk,
+                     cp_num = FLAGS.cp_num
                      )
 
 
@@ -70,16 +65,13 @@ class CatalanPyramid(nn.Module):
                  composition_ln=None,
                  context_args=None,
                  trainable_temperature=None,
-                 right_branching=None,
-                 debug_branching=None,
-                 uniform_branching=None,
-                 random_branching=None,
                  enforce_right=None,
-                 st_gumbel=None,
+                 parent_selection=None,
                  composition_args=None,
                  predict_use_cell=None,
                  low_dim=None,
                  topk=None,
+                 cp_num=None,
                  **kwargs
                  ):
         super(CatalanPyramid, self).__init__()
@@ -90,12 +82,9 @@ class CatalanPyramid(nn.Module):
         self.model_dim = model_dim
         self.low_dim = low_dim
         self.topk = topk
+        self.cp_num = cp_num
         self.trainable_temperature = trainable_temperature
-        self.right_branching = right_branching
-        self.debug_branching = debug_branching
-        self.uniform_branching = uniform_branching
-        self.random_branching = random_branching
-        self.st_gumbel = st_gumbel
+        self.parent_selection = parent_selection
         self.enforce_right = enforce_right
 
         self.classifier_dropout_rate = 1. - classifier_keep_rate
@@ -116,16 +105,12 @@ class CatalanPyramid(nn.Module):
             low_dim,
             composition_ln=composition_ln,
             trainable_temperature=trainable_temperature,
-            right_branching=right_branching,
-            debug_branching=debug_branching,
-            uniform_branching=uniform_branching,
-            random_branching=random_branching,
-            st_gumbel=st_gumbel,
+            parent_selection=parent_selection,
             use_sentence_pair=use_sentence_pair)
 
         # assert FLAGS.lateral_tracking == False
-        # TODO: move assertion flaag to base.
-
+        # TODO: move assertion flag to base.
+        
         self.spinn = self.build_spinn(
             composition_args, vocab, predict_use_cell)
 
@@ -142,7 +127,6 @@ class CatalanPyramid(nn.Module):
         self.input_dim = context_args.input_dim
         self.wrap_items = composition_args.wrap_items
         self.extract_h = composition_args.extract_h
-
 
         # For sample printing and logging
         self.parse_memory = None
@@ -203,6 +187,7 @@ class CatalanPyramid(nn.Module):
         example_lengths_var = to_gpu(
             Variable(torch.from_numpy(example_lengths))).long()
         topk = self.topk
+        cp_num = self.cp_num
 
         # Chart-Parsing Choice
         if self.enforce_right: 
@@ -215,7 +200,7 @@ class CatalanPyramid(nn.Module):
             temperature = -1.0 
         else:
             sr_transitions, weights, temperature = self.chart_parser(
-            emb, example_lengths_var, topk, temperature_multiplier=pyramid_temperature_multiplier)
+            emb, example_lengths_var, topk, cp_num, temperature_multiplier=pyramid_temperature_multiplier)
 
         # Use SPINN with CP parses
         embeds = self.run_embed_spinn(x)
@@ -427,7 +412,7 @@ class CatalanPyramid(nn.Module):
 class ChartParser(nn.Module):
 
     def __init__(self, word_dim, hidden_dim, low_dim,
-                 composition_ln=False, trainable_temperature=False, right_branching=False, debug_branching=False, uniform_branching=False, random_branching=False, st_gumbel=False, use_sentence_pair=False):
+                 composition_ln=False, trainable_temperature=False, parent_selection=False, use_sentence_pair=False):
         super(ChartParser, self).__init__()
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
@@ -436,11 +421,7 @@ class ChartParser(nn.Module):
 
         self.treelstm_layer = BinaryTreeLSTMLayer(
             low_dim, composition_ln=composition_ln) #CAT: low_dim from hidden_dim
-        self.right_branching = right_branching
-        self.debug_branching = debug_branching
-        self.uniform_branching = uniform_branching
-        self.random_branching = random_branching
-        self.st_gumbel = st_gumbel
+        self.parent_selection = parent_selection
 
         self.cat = Catalan()
         self.reduce_dim = Linear()(in_features=hidden_dim, out_features=low_dim)
@@ -501,109 +482,100 @@ class ChartParser(nn.Module):
         length_masks = mask.chunk(length, dim=1) # (batch,1), ...
         temperature = temperature_multiplier
 
-        if self.debug_branching:
-            hiddens = word_hiddens
-            cells = word_cells
-            (h, c) = (hiddens[-1], cells[-1])
-            for i in range(length-1, -1, -1):
-                r = (h, c) 
-                l  = (hiddens[i], cells[i]) 
-                h, c = self.treelstm_layer(l=l, r=r)
-            return h, c, None
+        chart = [[]]
+        all_weights = [[]]
+        mask = [[]]
+        memory = [[]]
 
-        else: 
-            chart = [[]]
-            all_weights = [[]]
-            mask = [[]]
-            memory = [[]]
+        for i in range(length):
+            chart[0].append((word_hiddens[i], word_cells[i]))
+            all_weights[0].append(None)
+            mask[0].append(None)
+            memory[0].append(None)
+        for row in range(1, length):
+            chart.append([])
+            all_weights.append([])
+            mask.append([])
+            memory.append([])
+            for col in range(length - row):
+                chart[row].append(None)
+                all_weights[row].append(None)
+                mask[row].append(None)
+                memory[row].append(None)
 
-            for i in range(length):
-                chart[0].append((word_hiddens[i], word_cells[i]))
-                all_weights[0].append(None)
-                mask[0].append(None)
-                memory[0].append(None)
-            for row in range(1, length):
-                chart.append([])
-                all_weights.append([])
-                mask.append([])
-                memory.append([])
-                for col in range(length - row):
-                    chart[row].append(None)
-                    all_weights[row].append(None)
-                    mask[row].append(None)
-                    memory[row].append(None)
+        for row in range(1, length):
+            for col in range(length - row):
+                states = []
+                hiddens = []
+                tr_versions = []
+                cells = []
+                scores = []
+                for i in range(row):
+                    l = chart[row-i-1][col]
+                    r = chart[i][row+col-i]
+                    states.append(self.treelstm_layer(l=l, r=r))
+                    hiddens.append(states[-1][0])
+                    cells.append(states[-1][1])
 
-            for row in range(1, length):
-                for col in range(length - row):
-                    states = []
-                    hiddens = []
-                    tr_versions = []
-                    cells = []
-                    scores = []
-                    for i in range(row):
-                        l = chart[row-i-1][col]
-                        r = chart[i][row+col-i]
-                        states.append(self.treelstm_layer(l=l, r=r))
-                        hiddens.append(states[-1][0])
-                        cells.append(states[-1][1])
+                    comp_weights = dot_nd(
+                        query=self.comp_query.weight.squeeze(),
+                        candidates=hiddens[-1]) # batch, 1
+                    scores.append(comp_weights) # [(batch, 1), ...]
 
-                        comp_weights = dot_nd(
-                            query=self.comp_query.weight.squeeze(),
-                            candidates=hiddens[-1]) # batch, 1
-                        scores.append(comp_weights) # [(batch, 1), ...]
+                if self.parent_selection == "right_branching":
+                    weights =  to_gpu(Variable(torch.zeros(torch.cat(scores, dim=1).size())))
+                    for k in range(weights.size(0)): 
+                        weights[k, -1] = 1.0
+                elif self.parent_selection == "uniform_branching":
+                    l = torch.cat(scores, dim=1).size(1)
+                    weights = to_gpu(Variable(torch.ones(torch.cat(scores, dim=1).size()) / l ))
+                elif self.parent_selection == "random_branching":
+                    w_rand = torch.rand(torch.cat(scores, dim=1).size())
+                    weights = to_gpu(Variable(w_rand / w_rand.sum(1).unsqueeze(1)))
+                elif self.parent_selection == "st_gumbel":
+                    weights, w_max, w_argmax = st_gumbel_softmax(torch.cat(scores, dim=1), temperature)
+                    alpha *= w_max
+                elif self.parent_selection == "softmax":
+                    weights = masked_softmax(torch.cat(scores, dim=1) / temperature, None)  
+                else:
+                    weights = gumbel_softmax(torch.cat(scores, dim=1), temperature) # cat: batch, num_versions, out: batch, num_states
 
-                    if self.right_branching:
-                        weights =  to_gpu(Variable(torch.zeros(torch.cat(scores, dim=1).size())))
-                        for k in range(weights.size(0)): 
-                            weights[k, -1] = 1.0
-                    elif self.uniform_branching:
-                        l = torch.cat(scores, dim=1).size(1)
-                        weights = to_gpu(Variable(torch.ones(torch.cat(scores, dim=1).size()) / l ))
-                    elif self.random_branching:
-                        w_rand = torch.rand(torch.cat(scores, dim=1).size())
-                        weights = to_gpu(Variable(w_rand / w_rand.sum(1).unsqueeze(1)))
-                    elif self.st_gumbel:
-                        weights, w_max, w_argmax = st_gumbel_softmax(torch.cat(scores, dim=1), temperature)
-                        alpha *= w_max
-                    else:
-                        weights = gumbel_softmax(torch.cat(scores, dim=1), temperature) # cat: batch, num_versions, out: batch, num_states
+                h_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(hiddens, dim=1)), dim=1)
+                c_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(cells, dim=1)), dim=1) # batch, num_states, dim
 
-                    h_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(hiddens, dim=1)), dim=1)
-                    c_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(cells, dim=1)), dim=1) # batch, num_states, dim
+                chart[row][col] = (h_new.unsqueeze(1), c_new.unsqueeze(1))
+                all_weights[row][col] = weights
+                mask[row][col] = create_max_mask(all_weights[row][col])
+                memory[row][col] = w_argmax
 
-                    chart[row][col] = (h_new.unsqueeze(1), c_new.unsqueeze(1))
-                    all_weights[row][col] = weights
-                    mask[row][col] = create_max_mask(all_weights[row][col])
-                    memory[row][col] = w_argmax
+        # Use memory of choices to construct binary parse
+        transitions = [[]]
+        compose_vec = np.ones((h.size(0),1))
+        for i in range(length):
+            transitions[0].append(np.zeros((h.size(0),1)))
+        for row in range(1, length):
+            transitions.append([])
+            for col in range(length - row):
+                transitions[row].append(None)
 
-            # Use memory of choices to construct binary parse
-            transitions = [[]]
-            compose_vec = np.ones((h.size(0),1))
-            for i in range(length):
-                transitions[0].append(np.zeros((h.size(0),1)))
-            for row in range(1, length):
-                transitions.append([])
-                for col in range(length - row):
-                    transitions[row].append(None)
+        for row in range(1, length):
+            for col in range(length - row):
+                tr_versions = []
+                for i in range(row):
+                    tr_versions.append(np.concatenate([transitions[row-i-1][col], transitions[i][row+col-i], compose_vec], axis=1))
 
-            for row in range(1, length):
-                for col in range(length - row):
-                    tr_versions = []
-                    for i in range(row):
-                        tr_versions.append(np.concatenate([transitions[row-i-1][col], transitions[i][row+col-i], compose_vec], axis=1))
+                index = memory[row][col].cpu().data.numpy()
+                # Following loops through batch! 
+                # But it's a simple lookup
+                tr_new = []
+                for i in range(h.size(0)):
+                    tr_select = tr_versions[index[i]]
+                    tr_new.append(tr_select[i])
+                transitions[row][col] = np.asarray(tr_new)
 
-                    index = memory[row][col].cpu().data.numpy()
-                    # Following loops through batch! 
-                    # But it's a simple lookup
-                    tr_new = []
-                    for i in range(h.size(0)):
-                        tr_select = tr_versions[index[i]]
-                        tr_new.append(tr_select[i])
-                    transitions[row][col] = np.asarray(tr_new)
+        return chart[length-1][0][0], chart[length-1][0][1], mask, alpha.unsqueeze(1), transitions[length-1][0]
 
-            return chart[length-1][0][0], chart[length-1][0][1], mask, alpha.unsqueeze(1), transitions[length-1][0]
-
-    def forward(self, input, length, topk, temperature_multiplier=None):
+    def forward(self, input, length, topk, cp_num, temperature_multiplier=None):
         max_depth = input.size(1)
         length_mask = sequence_mask(sequence_length=length,
                                     max_length=max_depth)
@@ -619,11 +591,13 @@ class ChartParser(nn.Module):
         alphas = []
         parses = []
 
+        num = batch_size 
         if self.use_sentence_pair:
-            num = batch_size // 2
-        else:
-            num = batch_size
-            
+            num = num // 2
+
+        if cp_num is not None:
+            num  = cp_num
+
         h_long = [h_low] * (num)
         h_long = torch.cat(h_long, 0)
         c_long = [c_low] * (num)
@@ -631,9 +605,11 @@ class ChartParser(nn.Module):
         length_mask_long = [length_mask] * (num)
         length_mask_long = torch.cat(length_mask_long, 0)
 
+        #import pdb; pdb.set_trace()
+
         alpha = to_gpu(Variable(torch.ones(h_long.size(0))))
         h, c, masks, alpha_w, transitions = self.compute_compositions((h_long, c_long), length_mask_long, alpha, temperature_multiplier=1.0)
-        
+
         alphas = alpha_w.chunk(num, dim=0)
         parses = torch.from_numpy(transitions)
         parses = parses.unsqueeze(1).chunk(num, dim=0)
@@ -689,6 +665,27 @@ def dot_nd(query, candidates):
     cands_size = candidates.size()
     cands_flat = candidates.view(-1, cands_size[-1])
     output_flat = torch.mv(cands_flat, query)
+    output = output_flat.view(*cands_size[:-1])
+    return output
+
+def cosine(query, candidates):
+    """
+    Perform a cosine similarity between a query and n-dimensional candidates.
+
+    Args:
+        query (Variable): A vector to query, whose size is
+            (query_dim,)
+        candidates (Variable): A n-dimensional tensor to be multiplied
+            by query, whose size is (d0, d1, ..., dn, query_dim)
+
+    Returns:
+        output: The result of the dot product, whose size is
+            (d0, d1, ..., dn)
+    """
+
+    cands_size = candidates.size()
+    cands_flat = candidates.view(-1, cands_size[-1])
+    output_flat = torch.mv(cands_flat, query) / (torch.norm(cands_flat) * torch.norm(query))
     output = output_flat.view(*cands_size[:-1])
     return output
 

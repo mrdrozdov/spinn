@@ -499,7 +499,6 @@ class SPINN(nn.Module):
 
         # Loss Phase
         # ==========
-
         if hasattr(self, 'tracker') and hasattr(self, 'transition_net'):
             t_preds = np.concatenate([m['t_preds']
                                       for m in self.memories if 't_preds' in m])
@@ -810,7 +809,7 @@ class BaseModel(nn.Module):
                     if transition == 0:
                         stack.append(token_sequence.pop())
                     if transition == 1:
-                        r = stack.pop()
+                        r = stack.pop()                        
                         l = stack.pop()
                         stack.append((l, r))
                 assert len(stack) == 1

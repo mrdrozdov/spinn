@@ -81,7 +81,6 @@ def evaluate(FLAGS, model, eval_set, log_entry,
             store_parse_masks=show_sample,
             example_lengths=eval_num_transitions_batch)
 
-        # TODO: Fix so that it works for CatalanPyramid
         can_sample = FLAGS.model_type in ["ChoiPyramid", "Maillard", "CatalanPyramid"] or (
             FLAGS.model_type == "SPINN" and FLAGS.use_internal_parser)
 
