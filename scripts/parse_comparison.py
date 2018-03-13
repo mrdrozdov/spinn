@@ -530,7 +530,7 @@ def run():
                 print(to_latex(gt[sentence]))
                 print(to_latex(report[sentence]))
                 print()
-        print(str(corpus_stats(report, lb)) + '\t' + str(corpus_stats(report, rb)) + '\t' + str(corpus_stats(report, gt, first_two=FLAGS.first_two, neg_pair=FLAGS.neg_pair)) + '\t' + str(corpus_average_depth(report)))
+        print("Left:", str(corpus_stats(report, lb)) + '\t' + "Right:", str(corpus_stats(report, rb)) + '\t' + "Groud-truth", str(corpus_stats(report, gt, first_two=FLAGS.first_two, neg_pair=FLAGS.neg_pair)) + '\t' + "Tree depth:", str(corpus_average_depth(report)))
         
     correct = Counter()
     total = Counter()
