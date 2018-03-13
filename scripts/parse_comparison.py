@@ -232,26 +232,6 @@ def corpus_stats(corpus_1, corpus_2, first_two=False, neg_pair=False):
         stats = str(stats) + '\t' + str(neg_pair_count / neg_count)
     return stats
 
-def corpus_stats_labeled(corpus_unlabeled, corpus_labeled):
-    """ 
-    Note: If a few examples in one dataset are missing from the other (i.e., some examples from the source corpus were not included 
-      in a model corpus), the shorter dataset must be supplied as corpus_1.
-    """
-
-    correct = Counter()
-    total = Counter()
-
-    for key in corpus_labeled:     
-        c1 = to_indexed_contituents(corpus_unlabeled[key])
-        c2 = to_indexed_contituents_labeled(corpus_labeled[key])
-        if len(c2) == 0:
-            continue
-
-        ex_correct, ex_total = example_labeled_acc(c1, c2)
-        correct.update(ex_correct)
-        total.update(ex_total)
-    return correct, total
-
 
 def corpus_stats_labeled(corpus_unlabeled, corpus_labeled):
     """ 
@@ -296,27 +276,6 @@ def to_indexed_contituents(parse):
             end = word_index
             constituent = (start, end)
             indexed_constituents.add(constituent)
-        else:
-            word_index += 1
-    return indexed_constituents
-
-def to_indexed_contituents_labeled(parse):
-    sp = re.findall(r'\([^ ]+| [^\(\) ]+|\)', parse)
-    if len(sp) == 1:
-        return set([(0, 1)])
-
-    backpointers = []
-    indexed_constituents = set()
-    word_index = 0
-    for index, token in enumerate(sp):
-        if token[0] == '(':
-            backpointers.append((word_index, token[1:]))
-        elif token == ')':
-            start, typ = backpointers.pop()
-            end = word_index
-            constituent = (start, end, typ)
-            if end - start > 1:
-                indexed_constituents.add(constituent)
         else:
             word_index += 1
     return indexed_constituents
@@ -470,7 +429,7 @@ def run():
                                 stack.append(word)
                 gt[str(counter)+"_1"]=stack[0]
                 counter+=1               
-                
+
     lb = to_lb(gt)
     rb = to_rb(gt)
     print("GT average depth", corpus_average_depth(gt))
