@@ -277,7 +277,7 @@ def corpus_stats_labeled(corpus_unlabeled, corpus_labeled):
 
 def to_indexed_contituents(parse):
     if parse.count("(") != parse.count(")"):
-        print parse
+        print(parse)
     parse = spaceify(parse)
     sp = parse.split()
     if len(sp) == 1:
@@ -387,7 +387,7 @@ def read_nli_report_padded(path):
             try:
                 line = line.encode('UTF-8')
             except UnicodeError as e:
-                print "ENCODING ERROR:", line, e
+                print("ENCODING ERROR:", line, e)
                 line = "{}"
             loaded_example = json.loads(line)
             report[loaded_example['example_id'] + "_1"] = loaded_example['sent1_tree']
@@ -443,8 +443,8 @@ def run():
             # gt_labeled[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_parse']
             # gt_labeled[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_parse']
 
-            gt_labeled[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_parse']
-            gt_labeled[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_parse']
+            # gt_labeled[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_parse']
+            # gt_labeled[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_parse']
 
     lb = to_lb(gt)
     rb = to_rb(gt)
