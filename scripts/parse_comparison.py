@@ -434,27 +434,6 @@ def run():
     gt = {}
     # gt_labeled = {} x
     with codecs.open(FLAGS.main_data_path, encoding='utf-8') as f:
-<<<<<<< HEAD
-        for line in f:
-            loaded_example = json.loads(line)
-            if loaded_example["gold_label"] not in LABEL_MAP:
-                continue
-            if '512-4841' in loaded_example['sentence1_binary_parse'] \
-               or '512-8581' in loaded_example['sentence1_binary_parse'] \
-               or '412-4841' in loaded_example['sentence1_binary_parse'] \
-               or '512-4841' in loaded_example['sentence2_binary_parse'] \
-               or '512-8581' in loaded_example['sentence2_binary_parse'] \
-               or '412-4841' in loaded_example['sentence2_binary_parse']:
-               continue # Stanford parser tree binarizer doesn't handle phone numbers properly.
-            gt[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_binary_parse']
-            gt[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_binary_parse']
-            # gt_labeled[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_parse']
-            # gt_labeled[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_parse']
-
-            # gt_labeled[loaded_example['pairID'] + "_1"] = loaded_example['sentence1_parse']
-            # gt_labeled[loaded_example['pairID'] + "_2"] = loaded_example['sentence2_parse']
-
-=======
         counter=0
         for line in f:            
             if FLAGS.data_type=="nli":
@@ -491,7 +470,7 @@ def run():
                                 stack.append(word)
                 gt[str(counter)+"_1"]=stack[0]
                 counter+=1               
->>>>>>> 3705bc1e5540f29e95267d21ded14d16e4d865b9
+                
     lb = to_lb(gt)
     rb = to_rb(gt)
     print("GT average depth", corpus_average_depth(gt))
