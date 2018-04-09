@@ -54,6 +54,8 @@ class ModelTrainer(object):
         self.optimizer_reset(FLAGS.learning_rate)
 
         self.standard_checkpoint_path = get_checkpoint_path(FLAGS)
+        if FLAGS.save_all_ckpts:
+            self.standard_checkpoint_path = self.standard_checkpoint_path + str(self.step)
         self.best_checkpoint_path = get_checkpoint_path(FLAGS, best=True)
 
         # Load checkpoint if available.

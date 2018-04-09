@@ -536,6 +536,11 @@ def get_flags():
         False,
         "Use right branching trees, don't run through Chart-Parser.")
 
+    gflags.DEFINE_boolean(
+        "save_all_ckpts", 
+        False, 
+        "Save all checkpoints")
+
 def flag_defaults(FLAGS, load_log_flags=False):
     if load_log_flags:
         if FLAGS.load_log_path and os.path.exists(log_path(FLAGS, load=True)):
