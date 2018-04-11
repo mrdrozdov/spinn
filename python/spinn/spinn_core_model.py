@@ -46,6 +46,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         mlp_ln=FLAGS.mlp_ln,
         context_args=context_args,
         composition_args=composition_args,
+        rl_skip=rl_skip_bad_batch,
     )
 
 
@@ -576,6 +577,7 @@ class BaseModel(nn.Module):
                  classifier_keep_rate=None,
                  context_args=None,
                  composition_args=None,
+                 rl_skip=None,
                  **kwargs
                  ):
         super(BaseModel, self).__init__()
@@ -590,6 +592,7 @@ class BaseModel(nn.Module):
         self.hidden_dim = composition_args.size
         self.wrap_items = composition_args.wrap_items
         self.extract_h = composition_args.extract_h
+        self.rl_skip = rl_skip
 
         self.initial_embeddings = initial_embeddings
         self.word_embedding_dim = word_embedding_dim
@@ -717,7 +720,14 @@ class BaseModel(nn.Module):
 
         output = self.mlp(features)
 
-        self.output_hook(output, sentences, transitions, y_batch)
+        if self.rl_skip:
+            try:
+                self.output_hook(output, sentences, transitions, y_batch)
+            except: 
+                print("Skipping batch due to failure at output_hook")
+                pass
+        #else:
+        #    self.output_hook(output, sentences, transitions, y_batch)
 
         return output
 

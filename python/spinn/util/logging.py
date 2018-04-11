@@ -60,10 +60,12 @@ def train_rl_accumulate(model, A, batch):
     if im.has_value:
         A.add('value_cost', model.value_loss.data[0])
 
-    A.add('adv_mean', model.stats['mean'])
-    A.add('adv_mean_magnitude', model.stats['mean_magnitude'])
-    A.add('adv_var', model.stats['var'])
-    A.add('adv_var_magnitude', model.stats['var_magnitude'])
+    # If statement below is part of the rl_skip_bad_batch patch.
+    if hasattr(model, "stats"):
+        A.add('adv_mean', model.stats['mean'])
+        A.add('adv_mean_magnitude', model.stats['mean_magnitude'])
+        A.add('adv_var', model.stats['var'])
+        A.add('adv_var_magnitude', model.stats['var_magnitude'])
 
 
 def stats(model, trainer, A, log_entry):
