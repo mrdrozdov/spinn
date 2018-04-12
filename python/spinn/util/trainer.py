@@ -129,7 +129,9 @@ class ModelTrainer(object):
         self.logger.Log("Checkpointing.")
         if self.save_all:
             self.saveall_checkpoint_path = self.standard_checkpoint_path + str(self.step)
-        self.save(self.saveall_checkpoint_path)
+            self.save(self.saveall_checkpoint_path)
+        else:
+            self.save(self.standard_checkpoint_path)
 
     def save(self, filename):
         if the_gpu() >= 0:

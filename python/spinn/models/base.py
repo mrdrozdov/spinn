@@ -541,6 +541,11 @@ def get_flags():
         False, 
         "Save all checkpoints")
 
+    gflags.DEFINE_boolean(
+        "rl_skip_bad_batch", 
+        False, 
+        "Patch that skips batch when output hook fails")
+
 def flag_defaults(FLAGS, load_log_flags=False):
     if load_log_flags:
         if FLAGS.load_log_path and os.path.exists(log_path(FLAGS, load=True)):
