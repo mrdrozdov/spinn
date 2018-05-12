@@ -46,7 +46,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         mlp_ln=FLAGS.mlp_ln,
         context_args=context_args,
         composition_args=composition_args,
-        rl_skip=rl_skip_bad_batch,
+        rl_skip=FLAGS.rl_skip_bad_batch,
     )
 
 
@@ -709,7 +709,6 @@ class BaseModel(nn.Module):
 
         h, transition_acc, transition_loss = self.run_spinn(
             example, use_internal_parser, validate_transitions)
-
         self.spinn_outp = h
 
         self.transition_acc = transition_acc
@@ -726,8 +725,8 @@ class BaseModel(nn.Module):
             except: 
                 print("Skipping batch due to failure at output_hook")
                 pass
-        #else:
-        #    self.output_hook(output, sentences, transitions, y_batch)
+        else:
+            self.output_hook(output, sentences, transitions, y_batch)
 
         return output
 
