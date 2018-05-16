@@ -56,6 +56,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         rl_catalan=FLAGS.rl_catalan,
         rl_catalan_backprop=FLAGS.rl_catalan_backprop,
         rl_transition_acc_as_reward=FLAGS.rl_transition_acc_as_reward,
+        rl_value_size=FLAGS.rl_value_size,
         context_args=context_args,
         composition_args=composition_args,
     )
@@ -117,6 +118,7 @@ class BaseModel(_BaseModel):
                  rl_catalan=None,
                  rl_catalan_backprop=None,
                  rl_transition_acc_as_reward=None,
+                 rl_value_size=None,
                  **kwargs):
         super(BaseModel, self).__init__(**kwargs)
 
@@ -128,12 +130,12 @@ class BaseModel(_BaseModel):
         self.rl_weight = rl_weight
         self.rl_whiten = rl_whiten
         self.rl_valid = rl_valid
+        self.rl_value_size = rl_value_size
         self.spinn.catalan = rl_catalan
         self.spinn.catalan_backprop = rl_catalan_backprop
         self.rl_transition_acc_as_reward = rl_transition_acc_as_reward
 
         if self.rl_baseline == "value":
-            # TODO: Flag-ify constants. 1024D MLP likely too big.
             num_outputs = 2 if self.use_sentence_pair else 1
             self.v_dim = 100
             self.v_rnn_dim = self.v_dim
@@ -141,7 +143,7 @@ class BaseModel(_BaseModel):
             self.v_rnn = nn.LSTM(self.input_dim, self.v_rnn_dim,
                                  num_layers=1, batch_first=True)
             self.v_mlp = MLP(self.v_mlp_dim,
-                             mlp_dim=1024, num_classes=1, num_mlp_layers=2,
+                             mlp_dim=self.rl_value_size, num_classes=1, num_mlp_layers=2,
                              mlp_ln=True, classifier_dropout_rate=0.1)
 
         self.register_buffer('baseline', torch.FloatTensor([0.0]))
@@ -195,7 +197,6 @@ class BaseModel(_BaseModel):
         outputs = inference_model(sentences, transitions,
                                   use_internal_parser=True,
                                   validate_transitions=True)
-
         return outputs
 
     def build_reward(self, probs, target, rl_reward="standard"):
@@ -213,6 +214,7 @@ class BaseModel(_BaseModel):
         return rewards
 
     def build_baseline(self, rewards, sentences, transitions, y_batch=None):
+        #print(transitions)
         if self.rl_baseline == "ema":
             mu = self.rl_mu
             baseline = self.baseline[0]
@@ -262,7 +264,6 @@ class BaseModel(_BaseModel):
 
         # TODO: Many of these ops are on the cpu. Might be worth shifting to
         # GPU.
-
         t_preds = np.concatenate([m['t_preds']
                                   for m in self.spinn.memories if 't_preds' in m])
         t_mask = np.concatenate([m['t_mask']

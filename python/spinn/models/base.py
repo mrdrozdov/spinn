@@ -393,6 +393,7 @@ def get_flags():
                         "greedy",
                         "value"],
                        "Different configurations to approximate reward function.")
+    gflags.DEFINE_integer("rl_value_size", 128, "Size of MLP used in rl baseline \"value\"")
     gflags.DEFINE_enum("rl_reward", "standard", ["standard", "xent"],
                        "Different reward functions to use.")
     gflags.DEFINE_float("rl_weight", 1.0, "Hyperparam for REINFORCE loss.")
