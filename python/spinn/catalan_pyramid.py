@@ -667,14 +667,10 @@ class ChartParser(nn.Module):
         length_mask_long = [length_mask] * (num)
         length_mask_long = torch.cat(length_mask_long, 0)
 
-        import time
-        print(max_depth)
-
         alpha = to_gpu(Variable(torch.ones(h_long.size(0))))
         start = time.time()
         h, c, masks, alpha_w, transitions = self.compute_compositions((h_long, c_long), length_mask_long, alpha, self.multiproc, temperature_multiplier=1.0)
         end = time.time()
-        print(end - start, max_depth)
 
         alphas = alpha_w.chunk(num, dim=0)
         parses = torch.from_numpy(transitions)
