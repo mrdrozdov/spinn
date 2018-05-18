@@ -9,6 +9,7 @@ import torch.nn as nn
 from torch.nn import init
 from torch.autograd import Variable
 import torch.nn.functional as F
+import torch.multiprocessing as mp
 
 from spinn.util.blocks import Embed, to_gpu, MLP, Linear, LayerNormalization
 from spinn.util.misc import Args, Vocab, Example
@@ -41,9 +42,10 @@ def build_model(data_manager, initial_embeddings, vocab_size,
                      enforce_right=FLAGS.enforce_right,
                      composition_args=composition_args,
                      predict_use_cell=FLAGS.predict_use_cell,
-                     low_dim = FLAGS.low_dim,
-                     topk = FLAGS.topk,
-                     cp_num = FLAGS.cp_num
+                     low_dim=FLAGS.low_dim,
+                     topk=FLAGS.topk,
+                     cp_num=FLAGS.cp_num,
+                     multiproc=FLAGS.mp,
                      )
 
 
@@ -72,6 +74,7 @@ class CatalanPyramid(nn.Module):
                  low_dim=None,
                  topk=None,
                  cp_num=None,
+                 multiproc=None,
                  **kwargs
                  ):
         super(CatalanPyramid, self).__init__()
@@ -83,6 +86,7 @@ class CatalanPyramid(nn.Module):
         self.low_dim = low_dim
         self.topk = topk
         self.cp_num = cp_num
+        self.multiproc = multiproc
         self.trainable_temperature = trainable_temperature
         self.parent_selection = parent_selection
         self.enforce_right = enforce_right
@@ -103,6 +107,7 @@ class CatalanPyramid(nn.Module):
             word_embedding_dim,
             model_dim // 2,
             low_dim,
+            multiproc,
             composition_ln=composition_ln,
             trainable_temperature=trainable_temperature,
             parent_selection=parent_selection,
@@ -188,6 +193,7 @@ class CatalanPyramid(nn.Module):
             Variable(torch.from_numpy(example_lengths))).long()
         topk = self.topk
         cp_num = self.cp_num
+        multiproc = self.multiproc
 
         # Chart-Parsing Choice
         if self.enforce_right: 
@@ -222,6 +228,7 @@ class CatalanPyramid(nn.Module):
                 example, use_internal_parser=use_internal_parser, validate_transitions=validate_transitions)
             
             h_versions.append(h)
+
 
         # Linear combination
         if self.enforce_right:
@@ -411,12 +418,13 @@ class CatalanPyramid(nn.Module):
 
 class ChartParser(nn.Module):
 
-    def __init__(self, word_dim, hidden_dim, low_dim,
+    def __init__(self, word_dim, hidden_dim, low_dim, multiproc,
                  composition_ln=False, trainable_temperature=False, parent_selection=False, use_sentence_pair=False):
         super(ChartParser, self).__init__()
         self.word_dim = word_dim
         self.hidden_dim = hidden_dim
         self.low_dim = low_dim
+        self.multiproc = multiproc
         self.use_sentence_pair = use_sentence_pair
 
         self.treelstm_layer = BinaryTreeLSTMLayer(
@@ -450,6 +458,7 @@ class ChartParser(nn.Module):
         state,
         mask,
         alpha,
+        multiproc,
         temperature_multiplier=1.0):
         """
         (In a parallelized manner) Compute all compositions we will need 
@@ -503,50 +512,102 @@ class ChartParser(nn.Module):
                 mask[row].append(None)
                 memory[row].append(None)
 
+        def fill_in(queue, num, chart, comp_query, treelstm_layer, parent_selection, alpha, row, col):
+            states = []
+            hiddens = []
+            tr_versions = []
+            cells = []
+            scores = []
+            for i in range(row):
+                l = chart[row-i-1][col]
+                r = chart[i][row+col-i]
+                states.append(treelstm_layer(l=l, r=r))
+                hiddens.append(states[-1][0])
+                cells.append(states[-1][1])
+
+                comp_weights = dot_nd(
+                    query=comp_query.weight.squeeze(),
+                    candidates=hiddens[-1]) # batch, 1
+                scores.append(comp_weights) # [(batch, 1), ...]
+
+            if parent_selection == "st_gumbel":
+                weights, w_max, w_argmax = st_gumbel_softmax(torch.cat(scores, dim=1), temperature)
+                alpha *= w_max
+            elif parent_selection == "softmax":
+                weights = masked_softmax(torch.cat(scores, dim=1) / temperature, None)  
+            else:
+                weights = gumbel_softmax(torch.cat(scores, dim=1), temperature) # cat: batch, num_versions, out: batch, num_states
+
+            h_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(hiddens, dim=1)), dim=1)
+            c_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(cells, dim=1)), dim=1) # batch, num_states, dim
+
+            chart[row][col] = (h_new.unsqueeze(1), c_new.unsqueeze(1))
+            all_weights[row][col] = weights
+            mask[row][col] = create_max_mask(all_weights[row][col])
+            memory[row][col] = w_argmax
+
+            queue.put({num: [chart[row][col], mask[row][col], memory[row][col]]})
+            #return {num: [chart[row][col], all_weights[row][col], mask[row][col], memory[row][col]]}
+
         for row in range(1, length):
-            for col in range(length - row):
-                states = []
-                hiddens = []
-                tr_versions = []
-                cells = []
-                scores = []
-                for i in range(row):
-                    l = chart[row-i-1][col]
-                    r = chart[i][row+col-i]
-                    states.append(self.treelstm_layer(l=l, r=r))
-                    hiddens.append(states[-1][0])
-                    cells.append(states[-1][1])
+            if multiproc:
+                queue = mp.Queue()
+                processes = []
+                collect = []
+                
+                for col in range(length - row):
+                    p = mp.Process(target=fill_in, args=(queue, col, chart, self.comp_query, self.treelstm_layer, self.parent_selection, alpha, row, col))
+                    p.start()
+                    processes.append(p)
 
-                    comp_weights = dot_nd(
-                        query=self.comp_query.weight.squeeze(),
-                        candidates=hiddens[-1]) # batch, 1
-                    scores.append(comp_weights) # [(batch, 1), ...]
+                for p in processes:
+                    p.join()
 
-                if self.parent_selection == "right_branching":
-                    weights =  to_gpu(Variable(torch.zeros(torch.cat(scores, dim=1).size())))
-                    for k in range(weights.size(0)): 
-                        weights[k, -1] = 1.0
-                elif self.parent_selection == "uniform_branching":
-                    l = torch.cat(scores, dim=1).size(1)
-                    weights = to_gpu(Variable(torch.ones(torch.cat(scores, dim=1).size()) / l ))
-                elif self.parent_selection == "random_branching":
-                    w_rand = torch.rand(torch.cat(scores, dim=1).size())
-                    weights = to_gpu(Variable(w_rand / w_rand.sum(1).unsqueeze(1)))
-                elif self.parent_selection == "st_gumbel":
-                    weights, w_max, w_argmax = st_gumbel_softmax(torch.cat(scores, dim=1), temperature)
-                    alpha *= w_max
-                elif self.parent_selection == "softmax":
-                    weights = masked_softmax(torch.cat(scores, dim=1) / temperature, None)  
-                else:
-                    weights = gumbel_softmax(torch.cat(scores, dim=1), temperature) # cat: batch, num_versions, out: batch, num_states
+                collect = [queue.get() for p in processes]
+                results = {}
+                for i in range(len(collect)):
+                    results[list(collect[i])[0]] = list(collect[0].values())[0]
+                
+                for col in range(length - row):
+                    chart[row][col] = results[col][0]
+                    mask[row][col] = results[col][1]
+                    memory[row][col] = results[col][2]
+            
+            else:        
+                for col in range(length - row): 
+                    states = []
+                    hiddens = []
+                    tr_versions = []
+                    cells = []
+                    scores = []
+                    for i in range(row): # can parallelize here
+                        l = chart[row-i-1][col]
+                        r = chart[i][row+col-i]
+                        states.append(self.treelstm_layer(l=l, r=r))
+                        hiddens.append(states[-1][0])
+                        cells.append(states[-1][1])
 
-                h_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(hiddens, dim=1)), dim=1)
-                c_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(cells, dim=1)), dim=1) # batch, num_states, dim
+                        comp_weights = dot_nd(
+                            query=self.comp_query.weight.squeeze(),
+                            candidates=hiddens[-1]) # batch, 1
+                        scores.append(comp_weights) # [(batch, 1), ...]
 
-                chart[row][col] = (h_new.unsqueeze(1), c_new.unsqueeze(1))
-                all_weights[row][col] = weights
-                mask[row][col] = create_max_mask(all_weights[row][col])
-                memory[row][col] = w_argmax
+                    if self.parent_selection == "st_gumbel":
+                        weights, w_max, w_argmax = st_gumbel_softmax(torch.cat(scores, dim=1), temperature)
+                        alpha *= w_max
+                    elif self.parent_selection == "softmax":
+                        weights = masked_softmax(torch.cat(scores, dim=1) / temperature, None)  
+                    else:
+                        weights = gumbel_softmax(torch.cat(scores, dim=1), temperature) # cat: batch, num_versions, out: batch, num_states
+
+                    h_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(hiddens, dim=1)), dim=1)
+                    c_new = torch.sum(torch.mul(weights.unsqueeze(2), torch.cat(cells, dim=1)), dim=1) # batch, num_states, dim
+
+                    chart[row][col] = (h_new.unsqueeze(1), c_new.unsqueeze(1))
+                    all_weights[row][col] = weights
+                    mask[row][col] = create_max_mask(all_weights[row][col])
+                    memory[row][col] = w_argmax
+            
 
         # Use memory of choices to construct binary parse
         transitions = [[]]
@@ -583,6 +644,7 @@ class ChartParser(nn.Module):
         state = input.chunk(chunks=2, dim=2)
         h_low = self.reduce_dim(state[0])
         c_low = self.reduce_dim(state[1])
+
         batch_size = h_low.size(0) 
 
         # For one or two-word trees where we never compute a temperature
@@ -605,10 +667,14 @@ class ChartParser(nn.Module):
         length_mask_long = [length_mask] * (num)
         length_mask_long = torch.cat(length_mask_long, 0)
 
-        #import pdb; pdb.set_trace()
+        import time
+        print(max_depth)
 
         alpha = to_gpu(Variable(torch.ones(h_long.size(0))))
-        h, c, masks, alpha_w, transitions = self.compute_compositions((h_long, c_long), length_mask_long, alpha, temperature_multiplier=1.0)
+        start = time.time()
+        h, c, masks, alpha_w, transitions = self.compute_compositions((h_long, c_long), length_mask_long, alpha, self.multiproc, temperature_multiplier=1.0)
+        end = time.time()
+        print(end - start, max_depth)
 
         alphas = alpha_w.chunk(num, dim=0)
         parses = torch.from_numpy(transitions)

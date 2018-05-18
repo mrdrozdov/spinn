@@ -515,10 +515,7 @@ def get_flags():
         "st_gumbel",
         ["gumbel",
         "st_gumbel",
-        "softmax",
-        "right_branching",
-        "uniform_branching",
-        "random_branching"],
+        "softmax"],
         "Which function to use to select or calculate the parent.")
     gflags.DEFINE_integer(
         "low_dim", 
@@ -542,10 +539,16 @@ def get_flags():
         False, 
         "Save all checkpoints")
 
+    # Temporary flags
     gflags.DEFINE_boolean(
         "rl_skip_bad_batch", 
         False, 
         "Patch that skips batch when output hook fails")
+
+    gflags.DEFINE_boolean(
+        "mp", 
+        False, 
+        "Use multiprocessing with chart-parser")
 
 def flag_defaults(FLAGS, load_log_flags=False):
     if load_log_flags:
