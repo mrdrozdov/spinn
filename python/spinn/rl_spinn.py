@@ -282,8 +282,6 @@ class BaseModel(_BaseModel):
         a_index = np.arange(batch_size)
         a_index = a_index.reshape(1, -1).repeat(seq_length, axis=0).flatten()
 
-        t_mask = np.zeros((t_mask.shape[0]), dtype=bool)
-
         # Patch to handle no valid generated parses
         try:
             a_index = torch.from_numpy(a_index[t_mask]).long()
