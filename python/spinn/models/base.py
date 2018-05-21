@@ -541,11 +541,6 @@ def get_flags():
 
     # Temporary flags
     gflags.DEFINE_boolean(
-        "rl_skip_bad_batch", 
-        False, 
-        "Patch that skips batch when output hook fails")
-
-    gflags.DEFINE_boolean(
         "mp", 
         False, 
         "Use multiprocessing with chart-parser")

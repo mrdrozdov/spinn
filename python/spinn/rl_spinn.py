@@ -278,45 +278,57 @@ class BaseModel(_BaseModel):
 
         batch_size = advantage.size(0)
 
-        seq_length = t_preds.shape[0] // batch_size
-
+        seq_length = t_preds.shape[0] // batch_size 
         a_index = np.arange(batch_size)
         a_index = a_index.reshape(1, -1).repeat(seq_length, axis=0).flatten()
-        a_index = torch.from_numpy(a_index[t_mask]).long()
 
-        t_index = to_gpu(Variable(torch.from_numpy(
-            np.arange(t_mask.shape[0])[t_mask])).long())
+        t_mask = np.zeros((t_mask.shape[0]), dtype=bool)
 
-        self.stats = dict(
-            mean=advantage.mean(),
-            mean_magnitude=advantage.abs().mean(),
-            var=advantage.var(),
-            var_magnitude=advantage.abs().var()
-        )
+        # Patch to handle no valid generated parses
+        try:
+            a_index = torch.from_numpy(a_index[t_mask]).long()
+            # RuntimeError: the given numpy array has zero-sized dimensions. Zero-sized dimensions are not supported in PyTorch
+            # --> t_mask is all False. --> t_mask and t_valid_mask is empty set. --> proabbly t_val-d_mask all False
 
-        if self.use_sentence_pair:
-            # Handles the case of SNLI where each reward is used for two
-            # sentences.
-            advantage = torch.cat([advantage, advantage], 0)
+            t_index = to_gpu(Variable(torch.from_numpy(
+                np.arange(t_mask.shape[0])[t_mask])).long())
 
-        # Expand advantage.
-        advantage = torch.index_select(advantage, 0, a_index)
+            self.stats = dict(
+                mean=advantage.mean(),
+                mean_magnitude=advantage.abs().mean(),
+                var=advantage.var(),
+                var_magnitude=advantage.abs().var()
+            )
 
-        # Filter logits.
-        t_logprobs = torch.index_select(t_logprobs, 0, t_index)
+            if self.use_sentence_pair:
+                # Handles the case of SNLI where each reward is used for two
+                # sentences.
+                advantage = torch.cat([advantage, advantage], 0)
 
-        actions = to_gpu(Variable(torch.from_numpy(
-            t_preds[t_mask]).long().view(-1, 1), volatile=not self.training))
-        log_p_action = torch.gather(t_logprobs, 1, actions)
+            # Expand advantage.
+            advantage = torch.index_select(advantage, 0, a_index)
 
-        # NOTE: Not sure I understand why entropy is inside this
-        # multiplication. Investigate?
-        policy_losses = log_p_action.view(-1) * \
-            to_gpu(Variable(advantage, volatile=log_p_action.volatile))
-        policy_loss = -1. * torch.sum(policy_losses)
-        policy_loss /= log_p_action.size(0)
-        policy_loss *= self.rl_weight
+            # Filter logits.
+            t_logprobs = torch.index_select(t_logprobs, 0, t_index)
 
+            actions = to_gpu(Variable(torch.from_numpy(
+                t_preds[t_mask]).long().view(-1, 1), volatile=not self.training))
+            log_p_action = torch.gather(t_logprobs, 1, actions)
+
+            # NOTE: Not sure I understand why entropy is inside this
+            # multiplication. Investigate?
+            policy_losses = log_p_action.view(-1) * \
+                to_gpu(Variable(advantage, volatile=log_p_action.volatile))
+            policy_loss = -1. * torch.sum(policy_losses)
+            policy_loss /= log_p_action.size(0)
+            policy_loss *= self.rl_weight
+            print(policy_loss)
+        
+            import pdb; pdb.set_trace()
+        except:
+            print("No valid parses. Policy loss of -1 passed.")
+            policy_loss = to_gpu(Variable(torch.ones(1) * -1))
+            
         return policy_loss
 
     def output_hook(self, output, sentences, transitions, y_batch=None):
