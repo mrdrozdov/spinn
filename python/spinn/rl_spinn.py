@@ -322,9 +322,6 @@ class BaseModel(_BaseModel):
             policy_loss = -1. * torch.sum(policy_losses)
             policy_loss /= log_p_action.size(0)
             policy_loss *= self.rl_weight
-            print(policy_loss)
-        
-            import pdb; pdb.set_trace()
         except:
             print("No valid parses. Policy loss of -1 passed.")
             policy_loss = to_gpu(Variable(torch.ones(1) * -1))
