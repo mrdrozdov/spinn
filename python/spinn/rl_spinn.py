@@ -57,6 +57,7 @@ def build_model(data_manager, initial_embeddings, vocab_size,
         rl_catalan_backprop=FLAGS.rl_catalan_backprop,
         rl_transition_acc_as_reward=FLAGS.rl_transition_acc_as_reward,
         rl_value_size=FLAGS.rl_value_size,
+        rl_value_lstm=FLAGS.rl_value_lstm,
         context_args=context_args,
         composition_args=composition_args,
     )
@@ -119,6 +120,7 @@ class BaseModel(_BaseModel):
                  rl_catalan_backprop=None,
                  rl_transition_acc_as_reward=None,
                  rl_value_size=None,
+                 rl_value_lstm=None,
                  **kwargs):
         super(BaseModel, self).__init__(**kwargs)
 
@@ -131,13 +133,14 @@ class BaseModel(_BaseModel):
         self.rl_whiten = rl_whiten
         self.rl_valid = rl_valid
         self.rl_value_size = rl_value_size
+        self.rl_value_lstm = rl_value_lstm
         self.spinn.catalan = rl_catalan
         self.spinn.catalan_backprop = rl_catalan_backprop
         self.rl_transition_acc_as_reward = rl_transition_acc_as_reward
 
         if self.rl_baseline == "value":
             num_outputs = 2 if self.use_sentence_pair else 1
-            self.v_dim = 100
+            self.v_dim = self.rl_value_lstm
             self.v_rnn_dim = self.v_dim
             self.v_mlp_dim = self.v_dim * num_outputs
             self.v_rnn = nn.LSTM(self.input_dim, self.v_rnn_dim,
@@ -178,6 +181,7 @@ class BaseModel(_BaseModel):
                 self.baseline_outp = self.v_mlp(hn_both.squeeze())
             else:
                 self.baseline_outp = self.v_mlp(hn.squeeze())
+                #import pdb; pdb.set_trace()
 
     def run_greedy(self, sentences, transitions):
         inference_model_cls = BaseModel
@@ -210,7 +214,7 @@ class BaseModel(_BaseModel):
             rewards = -1 * torch.gather(log_inv_prob, 1, _target)
         else:
             raise NotImplementedError
-
+            
         return rewards
 
     def build_baseline(self, rewards, sentences, transitions, y_batch=None):
