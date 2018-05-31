@@ -29,6 +29,9 @@ LABEL_MAP = {'entailment': 0, 'neutral': 1, 'contradiction': 2}
 
 FLAGS = gflags.FLAGS
 
+mathops = ["[MAX", "[MIN", "[MED", "[SM"]
+full_list = mathops + [str(i) for i in range(10)] + ["-"]
+
 def spaceify(parse):
     return parse #.replace("(", "( ").replace(")", " )")
 
@@ -187,10 +190,12 @@ def corpus_average_length(corpus):
     return float(sum(local_averages)) / len(local_averages)
 
 
-def corpus_stats(corpus_1, corpus_2, first_two=False, neg_pair=False):
+def corpus_stats(corpus_1, corpus_2, first_two=False, neg_pair=False, const_parse=False):
     """ 
     Note: If a few examples in one dataset are missing from the other (i.e., some examples from the source corpus were not included 
       in a model corpus), the shorter dataset must be supplied as corpus_1.
+
+    corpus_1 is the report being evaluated (important for counting complete constituents)
     """
 
     f1_accum = 0.0
@@ -200,11 +205,18 @@ def corpus_stats(corpus_1, corpus_2, first_two=False, neg_pair=False):
     three_count = 0.0
     neg_pair_count = 0.0
     neg_count = 0.0
+    const_parsed_1 = 0
+    if const_parse:
+        const_parsed_2 = 0
+    else:
+        const_parsed_2 = 1
     for key in corpus_2:
-        c1 = to_indexed_contituents(corpus_1[key])
-        c2 = to_indexed_contituents(corpus_2[key])
+        c1, cp1 = to_indexed_contituents(corpus_1[key], const_parse)
+        c2, cp2 = to_indexed_contituents(corpus_2[key], const_parse)
         f1_accum += example_f1(c1, c2)
         count += 1
+        const_parsed_1 += cp1
+        const_parsed_2 += cp2
 
         if first_two and len(c1) > 1:
             if (0, 2) in c1:
@@ -230,7 +242,7 @@ def corpus_stats(corpus_1, corpus_2, first_two=False, neg_pair=False):
         stats = str(stats) + '\t' + str(first_two_count / three_count) + '\t' + str(last_two_count / three_count)
     if neg_pair:
         stats = str(stats) + '\t' + str(neg_pair_count / neg_count)
-    return stats
+    return stats, const_parsed_1 / const_parsed_2
 
 
 def corpus_stats_labeled(corpus_unlabeled, corpus_labeled):
@@ -242,7 +254,7 @@ def corpus_stats_labeled(corpus_unlabeled, corpus_labeled):
     correct = Counter()
     total = Counter()
 
-    for key in corpus_labeled:     
+    for key in corpus_labeled: 
         c1 = to_indexed_contituents(corpus_unlabeled[key])
         c2 = to_indexed_contituents_labeled(corpus_labeled[key])
         if len(c2) == 0:
@@ -254,7 +266,87 @@ def corpus_stats_labeled(corpus_unlabeled, corpus_labeled):
     return correct, total
 
 
-def to_indexed_contituents(parse):
+mathops = ["[MAX", "[MIN", "[MED", "[SM"]
+full_list = mathops + [str(i) for i in range(10)] + ["-"]
+def count_parse(parse, index, const_parsed=[]):
+    """
+    This is only for ListOps.
+    """
+    if "]" in parse:
+        after = parse[index:]
+        before = parse[:index]
+        between = after[: after.index("]")]
+        
+        nest_check = [m in between[1:] for m in mathops]
+        if True in nest_check:
+            op_i = nest_check.index(True)
+            nested_i = after[1:].index(mathops[op_i]) + 1
+            nested = after[nested_i : ]
+            c = count_parse(parse, index+nested_i, const_parsed)
+            cc = count_parse(parse, index, const_parsed)
+        else:
+            o_b = between.count("(")
+            c_b = between.count(")")
+
+            end = after.index("]")
+            cafter = after[end+1:]
+            stop = None
+            stop_list = []
+            for item in cafter:
+                stop_list.append(")" == item)
+                if stop_list[-1] == False:
+                    break
+
+            if False in stop_list:
+                stop = stop_list.index(False)
+            else:
+                stop = None
+            cafter = cafter[: stop]
+            c_a = cafter.count(")")
+
+
+            stop = None
+            stop_list = []
+            for item in before[::-1] :
+                stop_list.append("(" == item)
+                if stop_list[-1] == False:
+                    break
+
+            if False in stop_list:
+                stop = len(before) - stop_list.index(False) - 1
+            else:
+                stop = None
+            cbefore = before[stop:]
+            o_a = cbefore.count("(")
+
+
+            ints = sum(c.isdigit() for c in between) + between.count("-")
+            op = o_a + o_b
+            cl = c_a + c_b
+
+            if op >= ints and cl >= ints:
+                if op == ints+1 or cl == ints+1:
+                    const_parsed.append(1)
+            #    else:
+            #        import pdb; pdb.set_trace()
+            #else:   
+            #    import pdb; pdb.set_trace()
+            
+            if op == ints+1 == cl:
+                parse[index-len(cbefore)+1 : len(before)+len(between)+1+len(cafter)] = '-'
+            elif op == ints+1 and cl  > ints+1:
+                gap = cl - ints - 1
+                parse[index-len(cbefore)+1 : len(before)+len(between)+1+len(cafter)-gap] = '-'
+            elif cl == ints+1 and op  > ints+1:
+                gap = op - ints - 1
+                parse[index-len(cbefore)+1+gap : len(before)+len(between)+1+len(cafter)] = '-'
+            else:
+                parse[index-len(cbefore)+1 : len(before)+len(between)+1+len(cafter)] = '-'
+                #import pdb; pdb.set_trace()
+                
+    return sum(const_parsed)
+
+def to_indexed_contituents(parse, const_parse):
     if parse.count("(") != parse.count(")"):
         print(parse)
     parse = spaceify(parse)
@@ -265,6 +357,7 @@ def to_indexed_contituents(parse):
     backpointers = []
     indexed_constituents = set()
     word_index = 0
+    first_op = -1
     for index, token in enumerate(sp):
         if token == '(':
             backpointers.append(word_index)
@@ -276,9 +369,24 @@ def to_indexed_contituents(parse):
             end = word_index
             constituent = (start, end)
             indexed_constituents.add(constituent)
+        elif "[" in token:
+            if first_op == -1:
+                first_op = index
+            else:
+                pass
         else:
             word_index += 1
-    return indexed_constituents
+    
+    const_parsed = []
+    cp = 0
+    if const_parse:
+        cp = count_parse(sp, first_op, const_parsed)
+        max_count = parse.count("]")
+        #if const_parsed > max_count:
+        #    import pdb; pdb.set_trace()
+        #if const_parsed > 1:
+        #    import pdb; pdb.set_trace()
+    return indexed_constituents, cp
 
 def to_indexed_contituents_labeled(parse):
     sp = re.findall(r'\([^ ]+| [^\(\) ]+|\)', parse)
@@ -348,10 +456,16 @@ def read_sst_report(path):
 
 def read_listops_report(path):
     report = {}
+    correct = 0
+    num = 0
     with codecs.open(path, encoding='utf-8') as f:
         for line in f:
             loaded_example = json.loads(line)
             report[loaded_example['example_id']] = unpad(loaded_example['sent1_tree'])
+            num += 1
+            if loaded_example['truth'] == loaded_example['prediction']:
+                correct +=1
+    print("Accuracy = ", correct / num)
     return report
 
 def read_nli_report_padded(path):
@@ -543,7 +657,6 @@ def run():
 
     correct = Counter()
     total = Counter()
-
     for i, report in enumerate(reports):
         print(report_paths[i])
         if FLAGS.print_latex > 0:
@@ -553,7 +666,9 @@ def run():
                 print(to_latex(gt[sentence]))
                 print(to_latex(report[sentence]))
                 print()
-        print("Left:", str(corpus_stats(report, lb)) + '\t' + "Right:", str(corpus_stats(report, rb)) + '\t' + "Groud-truth", str(corpus_stats(report, gt, first_two=FLAGS.first_two, neg_pair=FLAGS.neg_pair)) + '\t' + "Tree depth:", str(corpus_average_depth(report)))
+
+        gtf1, gtcp = corpus_stats(report, gt, first_two=FLAGS.first_two, neg_pair=FLAGS.neg_pair, const_parse=True)
+        print("Left:", str(corpus_stats(report, lb)[0]) + '\t' + "Right:", str(corpus_stats(report, rb)[0]) + '\t' + "Groud-truth", str(gtf1) + '\t' + "Tree depth:", str(corpus_average_depth(report)), '\t', "Constituent parsed:", str(gtcp))
         
     correct = Counter()
     total = Counter()
