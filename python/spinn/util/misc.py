@@ -48,6 +48,130 @@ def time_per_token(num_tokens, total_time):
     return sum(total_time) / float(sum(num_tokens))
 
 
+def count_parse2(parse, index, const_parsed=[]):
+    """
+    To-do: this is more efficient than  count_parse() but is currently broken, fic it!
+
+    Compute Constituents Parsed metric for ListOps style examples.
+    """    
+    after = parse[index:]
+    before = parse[:index]
+    between = after[: after.index("]")]
+
+    o_b = between.count("(") # open, between
+    c_b = between.count(")") # close, between
+
+    end = after.index("]")
+    cafter = after[end+1:]
+    stop = None
+    stop_list = []
+    for item in cafter:
+        stop_list.append(")" == item)
+        if stop_list[-1] == False:
+            break
+
+    if False in stop_list:
+        stop = stop_list.index(False)
+    else:
+        stop = None
+    cafter = cafter[: stop]
+    c_a = cafter.count(")")
+
+    stop = None
+    stop_list = []
+    for item in before[::-1] :
+        stop_list.append("(" == item)
+        if stop_list[-1] == False:
+            break
+
+    if False in stop_list:
+        stop = len(before) - stop_list.index(False) - 1
+    else:
+        stop = None
+    cbefore = before[stop:]
+    o_a = cbefore.count("(")
+
+    ints = sum(c.isdigit() for c in between) + between.count("-")
+    op = o_a + o_b
+    cl = c_a + c_b
+
+    if op >= ints and cl >= ints:
+        if op == ints+1 or cl == ints+1:
+            const_parsed.append(1)
+
+    parse[index - o_a : index + len(between) + 1 + c_a] = '-'
+            
+    mathops = ["[MAX", "[MIN", "[MED", "[SM"]
+    some_ops = list(set(mathops) & set(parse))
+    ops_i = [parse[::-1].index(m) for m in some_ops]
+    if len(ops_i) != 0:
+        op_i = min([i for i in ops_i if i >= 0])
+        index = len(parse) - op_i - 1
+        count_parse2(parse, index, const_parsed)
+        
+    return sum(const_parsed)
+
+def count_parse(parse, index, const_parsed=[]):
+    """
+    Compute Constituents Parsed metric for ListOps style examples.
+    """
+    mathops = ["[MAX", "[MIN", "[MED", "[SM"]
+    if "]" in parse:
+        after = parse[index:]
+        before = parse[:index]
+        between = after[: after.index("]")]
+        
+        nest_check = [m in between[1:] for m in mathops]
+        if True in nest_check:
+            op_i = nest_check.index(True)
+            nested_i = after[1:].index(mathops[op_i]) + 1
+            nested = after[nested_i : ]
+            c = count_parse(parse, index+nested_i, const_parsed)
+            cc = count_parse(parse, index, const_parsed)
+        else:
+            o_b = between.count("(") # open, between
+            c_b = between.count(")") # close, between
+                
+            end = after.index("]")
+            cafter = after[end+1:]
+            stop = None
+            stop_list = []
+            for item in cafter:
+                stop_list.append(")" == item)
+                if stop_list[-1] == False:
+                    break
+
+            if False in stop_list:
+                stop = stop_list.index(False)
+            else:
+                stop = None
+            cafter = cafter[: stop]
+            c_a = cafter.count(")")
+
+            stop = None
+            stop_list = []
+            for item in before[::-1] :
+                stop_list.append("(" == item)
+                if stop_list[-1] == False:
+                    break
+
+            if False in stop_list:
+                stop = len(before) - stop_list.index(False) - 1
+            else:
+                stop = None
+            cbefore = before[stop:]
+            o_a = cbefore.count("(")
+
+            ints = sum(c.isdigit() for c in between) + between.count("-")
+            op = o_a + o_b
+            cl = c_a + c_b
+
+            if op >= ints and cl >= ints:
+                if op == ints+1 or cl == ints+1:
+                    const_parsed.append(1)
+            parse[index - o_a : index + len(between) + 1 + c_a] = '-'
+    return sum(const_parsed)
+
 class Accumulator(object):
     """Accumulator. Makes it easy to keep a trailing list of statistics."""
 
@@ -84,9 +208,13 @@ class EvalReporter(object):
                    sent1_transitions=None,
                    sent2_transitions=None,
                    sent1_trees=None,
-                   sent2_trees=None):
+                   sent2_trees=None,
+                   cp_metric=False):
         '''Saves a batch. Transforms the batch from column-centric information
         (information split by columns) to row-centric (by EvalSentence).'''
+        cp = 0
+        cp_max = 0
+        mathops = ["[MAX", "[MIN", "[MED", "[SM"]
 
         b = [preds.view(-1), target.view(-1), example_ids, output]
         for i, (pred, truth, eid, output) in enumerate(zip(*b)):
@@ -101,10 +229,20 @@ class EvalReporter(object):
                 sent['sent2_transitions'] = sent2_transitions[i].tolist()
             if sent1_trees is not None:
                 sent['sent1_tree'] = sent1_trees[i]
+                if cp_metric:
+                    parse =  sent1_trees[i].split()
+                    some_ops = list(set(mathops) & set(parse))
+                    ops_i = [parse.index(m) for m in some_ops]
+                    op_i = min([i for i in ops_i if i >= 0])
+                    cp_max += parse.count("]")
+                    cp += count_parse(parse, op_i, const_parsed=[])
             if sent2_trees is not None:
                 sent['sent2_tree'] = sent2_trees[i]
 
             self.report.append(sent)
+
+        if cp_metric:
+            return cp, cp_max
 
     def write_report(self, filename):
         '''Commits the report to a file.'''

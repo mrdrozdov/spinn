@@ -51,6 +51,8 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         enabled=FLAGS.show_progress_bar)
     progress_bar.step(0, total=total_batches)
     total_tokens = 0
+    cpt = 0
+    cpt_max = 0
     start = time.time()
 
     model.eval()
@@ -59,6 +61,7 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         eval_X_batch, eval_transitions_batch, eval_y_batch, eval_num_transitions_batch, eval_ids = batch
 
         # Run model.
+        np.set_printoptions(threshold=np.inf)
         output = model(eval_X_batch, eval_transitions_batch, eval_y_batch,
                        use_internal_parser=FLAGS.use_internal_parser,
                        validate_transitions=FLAGS.validate_transitions,
@@ -112,7 +115,21 @@ def evaluate(FLAGS, model, eval_set, log_entry,
                 sent1_trees = tree_strs if tree_strs is not None else None
                 sent2_trees = None
 
-            reporter.save_batch(
+            #cp_metric = True # Flagify this
+            if FLAGS.cp_metric:
+                cp, cp_max = reporter.save_batch(
+                    pred,
+                    target,
+                    eval_ids,
+                    output.data.cpu().numpy(),
+                    sent1_transitions,
+                    sent2_transitions,
+                    sent1_trees,
+                    sent2_trees, cp_metric=FLAGS.cp_metric)
+                cpt += cp
+                cpt_max += cp_max
+            else:
+                reporter.save_batch(
                 pred,
                 target,
                 eval_ids,
@@ -125,6 +142,9 @@ def evaluate(FLAGS, model, eval_set, log_entry,
         # Print Progress
         progress_bar.step(i + 1, total=total_batches)
     progress_bar.finish()
+    
+    cp_metric_value = cpt / cpt_max
+
     if tree_strs is not None:
         logger.Log('Sample: ' + tree_strs[0])
 
@@ -133,6 +153,8 @@ def evaluate(FLAGS, model, eval_set, log_entry,
 
     A.add('total_tokens', total_tokens)
     A.add('total_time', total_time)
+
+    logger.Log("Eval cp_acc: " + str(cp_metric_value))
 
     eval_stats(model, A, eval_log)
     eval_log.filename = filename
@@ -222,7 +244,7 @@ def train_loop(
                        use_internal_parser=FLAGS.use_internal_parser,
                        validate_transitions=FLAGS.validate_transitions
                        )
-
+        
         # Calculate class accuracy.
         target = torch.from_numpy(y_batch).long()
 
@@ -278,10 +300,12 @@ def train_loop(
         if trainer.step % FLAGS.sample_interval_steps == 0 and FLAGS.num_samples > 0:
             should_log = True
             model.train()
+
             model(X_batch, transitions_batch, y_batch,
-                  use_internal_parser=FLAGS.use_internal_parser,
-                  validate_transitions=FLAGS.validate_transitions
-                  )
+              use_internal_parser=FLAGS.use_internal_parser,
+              validate_transitions=FLAGS.validate_transitions
+              )
+
             tr_transitions_per_example, tr_strength = model.spinn.get_transitions_per_example(
             )
 
