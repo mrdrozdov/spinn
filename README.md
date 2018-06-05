@@ -7,7 +7,7 @@ This repository was used for the paper [A Fast Unified Model for Sentence Parsin
 Requirements:
 
 - Python 3.6
-- PyTorch 0.3
+- PyTorch 0.3 (Mac: http://download.pytorch.org/whl/torch-0.3.1-cp36-cp36m-macosx_10_7_x86_64.whl)
 - Additional dependencies listed in python/requirements.txt
 
 Install PyTorch based on instructions online: http://pytorch.org
